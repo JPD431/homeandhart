@@ -4,8 +4,10 @@ import { BRAND } from "./brand";
 function Logo() {
   return (
     <div className="flex flex-col">
-      <span className="text-xl font-semibold tracking-tight text-[#1a1a1a] sm:text-2xl">
-        Home<span className="italic text-[#1d4f91]">&</span>Heart
+      <span className="text-xl font-semibold tracking-tight sm:text-2xl">
+        <span style={{ color: "#111111" }}>Home</span>
+        <span style={{ color: "#1d4f91", fontStyle: "italic" }}>&#38;</span>
+        <span style={{ color: "#111111" }}>Heart</span>
       </span>
       <span className="mt-0.5 text-xs text-[#5c5c5c] sm:text-sm">
         Donde estés, estamos.
@@ -41,9 +43,12 @@ export default function Navbar() {
           <a href="#" className="transition-colors hover:text-[#1d4f91]">
             Cómo funciona
           </a>
-          <a href="#" className="transition-colors hover:text-[#1d4f91]">
+          <Link
+            href="/ser-proveedor"
+            className="transition-colors hover:text-[#1d4f91] no-underline"
+          >
             Ser proveedor
-          </a>
+          </Link>
         </nav>
         <div className="flex items-center gap-2 sm:gap-3">
           <Link

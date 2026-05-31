@@ -27,7 +27,7 @@ export default function DashboardPage() {
       <main className="mx-auto max-w-6xl px-4 py-12 sm:px-6 lg:px-8 lg:py-16">
         <header className="max-w-2xl">
           <h1 className="text-3xl font-bold tracking-tight text-[#1a1a1a] sm:text-4xl">
-            Bienvenida a Home&Heart
+            Bienvenida a Home<span style={{ color: "#1d4f91", fontStyle: "italic" }}>&</span>Heart
           </h1>
           <p className="mt-2 text-lg text-[#5c5c5c]">Tu panel de control</p>
         </header>
