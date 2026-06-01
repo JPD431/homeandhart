@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { BRAND } from "./brand";
 
@@ -61,11 +62,26 @@ function LocationIcon({ className }) {
 }
 
 export default function Hero() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState("todo");
   const [query, setQuery] = useState("");
 
   function handleSearch(e) {
     e.preventDefault();
+
+    const trimmed = query.trim();
+
+    if (!trimmed && activeTab === "todo") {
+      router.push("/buscar");
+      return;
+    }
+
+    const params = new URLSearchParams();
+    if (trimmed) params.set("ciudad", trimmed);
+    if (activeTab !== "todo") params.set("vertical", activeTab);
+
+    const qs = params.toString();
+    router.push(qs ? `/buscar?${qs}` : "/buscar");
   }
 
   return (
