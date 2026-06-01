@@ -2,7 +2,7 @@ import { Resend } from "resend";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-const FROM = "onboarding@resend.dev";
+const FROM = "soporte@homeandheartapp.com";
 const BRAND_PRIMARY = "#1d4f91";
 const BRAND_LIGHT = "#e8f0fb";
 
