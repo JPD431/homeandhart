@@ -1,22 +1,142 @@
-import Navbar from "@/app/components/Navbar";
-import { BRAND } from "@/app/components/brand";
+"use client";
 
-const CARDS = [
-  {
-    title: "Mis reservas",
-    description: "Consulta y gestiona tus reservas activas y pasadas.",
-  },
-  {
-    title: "Mis favoritos",
-    description: "Accede rápido a tus proveedores guardados.",
-  },
-  {
-    title: "Mi perfil",
-    description: "Actualiza tus datos personales y preferencias.",
-  },
-];
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import Navbar from "@/app/components/Navbar";
+import { BRAND, SERIF } from "@/app/components/brand";
+import { supabase } from "@/lib/supabase";
+
+const VERTICALS = {
+  alojamiento: { label: "Alojamiento", priceSuffix: "/ noche" },
+  ninos: { label: "Cuidado de niños", priceSuffix: "/ hora" },
+  mascotas: { label: "Cuidado de mascotas", priceSuffix: "/ día" },
+};
+
+const STATUS_STYLES = {
+  pendiente: { bg: "#fef3c7", color: "#92400e", label: "Pendiente" },
+  confirmada: { bg: BRAND.light, color: BRAND.primary, label: "Confirmada" },
+  completada: { bg: "#dcfce7", color: "#166534", label: "Completada" },
+  cancelada: { bg: "#f3f4f6", color: "#6b7280", label: "Cancelada" },
+};
+
+function Section({ title, children }) {
+  return (
+    <section
+      className="rounded-2xl border bg-white p-6 sm:p-8"
+      style={{ borderColor: BRAND.border }}
+    >
+      <h2
+        className="text-xl font-semibold text-[#1a1a1a]"
+        style={{ fontFamily: SERIF }}
+      >
+        {title}
+      </h2>
+      <div className="mt-5">{children}</div>
+    </section>
+  );
+}
+
+function StatusBadge({ status }) {
+  const key = status?.toLowerCase?.() ?? "pendiente";
+  const style = STATUS_STYLES[key] ?? STATUS_STYLES.pendiente;
+  return (
+    <span
+      className="rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize"
+      style={{ backgroundColor: style.bg, color: style.color }}
+    >
+      {style.label}
+    </span>
+  );
+}
+
+function formatPrice(precio, vertical) {
+  const config = VERTICALS[vertical] ?? VERTICALS.alojamiento;
+  if (precio == null || precio === "") return "Consultar";
+  return `${Number(precio)}€${config.priceSuffix}`;
+}
 
 export default function DashboardPage() {
+  const router = useRouter();
+  const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState(null);
+  const [services, setServices] = useState([]);
+  const [bookings, setBookings] = useState([]);
+
+  useEffect(() => {
+    async function loadDashboard() {
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError || !user) {
+        router.replace("/login");
+        return;
+      }
+
+      const { data: profileData } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", user.id)
+        .single();
+
+      setProfile(profileData ?? null);
+
+      if (profileData?.role === "proveedor") {
+        const { data: servicesData } = await supabase
+          .from("services")
+          .select("*")
+          .eq("proveedor_id", user.id);
+
+        const providerServices = servicesData ?? [];
+        setServices(providerServices);
+
+        const serviceIds = providerServices.map((s) => s.id);
+        if (serviceIds.length > 0) {
+          const { data: bookingsData } = await supabase
+            .from("bookings")
+            .select("*")
+            .in("service_id", serviceIds)
+            .order("created_at", { ascending: false });
+
+          setBookings(bookingsData ?? []);
+        } else {
+          setBookings([]);
+        }
+      } else {
+        const { data: bookingsData } = await supabase
+          .from("bookings")
+          .select("*")
+          .eq("cliente_id", user.id)
+          .order("created_at", { ascending: false });
+
+        setBookings(bookingsData ?? []);
+      }
+
+      setLoading(false);
+    }
+
+    loadDashboard();
+  }, [router]);
+
+  const isProvider = profile?.role === "proveedor";
+  const greetingName = profile?.nombre?.trim();
+
+  if (loading) {
+    return (
+      <div
+        className="min-h-screen font-sans"
+        style={{ backgroundColor: BRAND.warm }}
+      >
+        <Navbar />
+        <main className="mx-auto max-w-4xl px-4 py-16 text-center text-sm text-[#666]">
+          Cargando tu panel…
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div
       className="min-h-screen font-sans"
@@ -24,33 +144,230 @@ export default function DashboardPage() {
     >
       <Navbar />
 
-      <main className="mx-auto max-w-6xl px-4 py-12 sm:px-6 lg:px-8 lg:py-16">
-        <header className="max-w-2xl">
-          <h1 className="text-3xl font-bold tracking-tight text-[#1a1a1a] sm:text-4xl">
-            Bienvenida a Home<span style={{ color: "#1d4f91", fontStyle: "italic" }}>&</span>Heart
+      <main className="mx-auto max-w-4xl space-y-8 px-4 py-10 sm:px-6 lg:px-8 lg:py-12">
+        <header>
+          <h1
+            className="text-3xl font-bold text-[#1a1a1a] sm:text-4xl"
+            style={{ fontFamily: SERIF }}
+          >
+            {greetingName ? `Hola, ${greetingName}` : "Hola"}
           </h1>
-          <p className="mt-2 text-lg text-[#5c5c5c]">Tu panel de control</p>
+          <p className="mt-2 text-lg text-[#5c5c5c]">
+            {isProvider ? "Tu panel de proveedor" : "Tu panel de cliente"}
+          </p>
         </header>
 
-        <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {CARDS.map((card) => (
-            <article
-              key={card.title}
-              className="rounded-2xl border bg-white p-6 transition-shadow hover:shadow-md"
-              style={{ borderColor: BRAND.border }}
-            >
-              <h2
-                className="text-lg font-semibold"
-                style={{ color: BRAND.primary }}
+        {isProvider ? (
+          <>
+            <Section title="Mis servicios">
+              {services.length === 0 ? (
+                <div className="text-center">
+                  <p className="text-sm text-[#666]">
+                    Aún no has publicado ningún servicio.
+                  </p>
+                  <Link
+                    href="/ser-proveedor"
+                    className="mt-4 inline-block rounded-xl px-5 py-3 text-sm font-semibold text-white no-underline transition-opacity hover:opacity-90"
+                    style={{ backgroundColor: BRAND.primary }}
+                  >
+                    Publicar mi primer servicio
+                  </Link>
+                </div>
+              ) : (
+                <>
+                  <ul className="flex flex-col gap-3">
+                    {services.map((service) => {
+                      const vertical =
+                        VERTICALS[service.vertical] ?? VERTICALS.alojamiento;
+                      return (
+                        <li
+                          key={service.id}
+                          className="flex flex-col gap-2 rounded-xl border px-4 py-4 sm:flex-row sm:items-center sm:justify-between"
+                          style={{ borderColor: BRAND.border }}
+                        >
+                          <div>
+                            <p className="text-xs font-medium uppercase tracking-wide text-[#888]">
+                              {vertical.label}
+                            </p>
+                            <p className="font-semibold text-[#1a1a1a]">
+                              {service.titulo || vertical.label}
+                            </p>
+                          </div>
+                          <p
+                            className="text-lg font-bold"
+                            style={{ color: BRAND.primary }}
+                          >
+                            {formatPrice(service.precio, service.vertical)}
+                          </p>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  <Link
+                    href="/ser-proveedor"
+                    className="mt-5 inline-block rounded-xl px-5 py-2.5 text-sm font-semibold text-white no-underline transition-opacity hover:opacity-90"
+                    style={{ backgroundColor: BRAND.primary }}
+                  >
+                    Añadir servicio
+                  </Link>
+                </>
+              )}
+            </Section>
+
+            <Section title="Reservas recibidas">
+              {bookings.length === 0 ? (
+                <p className="text-sm text-[#666]">
+                  Aún no has recibido reservas.
+                </p>
+              ) : (
+                <ul className="flex flex-col gap-3">
+                  {bookings.map((booking) => (
+                    <li
+                      key={booking.id}
+                      className="flex flex-col gap-2 rounded-xl border px-4 py-4 sm:flex-row sm:items-center sm:justify-between"
+                      style={{ borderColor: BRAND.border }}
+                    >
+                      <div>
+                        <p className="font-medium text-[#1a1a1a]">
+                          Reserva #{booking.id?.slice?.(0, 8) ?? "—"}
+                        </p>
+                        {booking.fecha_inicio && (
+                          <p className="mt-0.5 text-xs text-[#888]">
+                            {booking.fecha_inicio}
+                            {booking.fecha_fin ? ` — ${booking.fecha_fin}` : ""}
+                          </p>
+                        )}
+                      </div>
+                      <StatusBadge status={booking.estado ?? booking.status} />
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Section>
+
+            <Section title="Mi perfil">
+              <dl className="space-y-3 text-sm">
+                <div>
+                  <dt className="text-xs font-medium uppercase tracking-wide text-[#888]">
+                    Nombre
+                  </dt>
+                  <dd className="mt-0.5 text-[#1a1a1a]">
+                    {[profile?.nombre, profile?.apellido]
+                      .filter(Boolean)
+                      .join(" ") || "—"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-medium uppercase tracking-wide text-[#888]">
+                    Ciudad
+                  </dt>
+                  <dd className="mt-0.5 text-[#1a1a1a]">
+                    {profile?.ciudad || profile?.location_zone || "—"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-medium uppercase tracking-wide text-[#888]">
+                    Descripción
+                  </dt>
+                  <dd className="mt-0.5 leading-relaxed text-[#5c5c5c]">
+                    {profile?.descripcion || "—"}
+                  </dd>
+                </div>
+              </dl>
+              <Link
+                href="/completar-perfil"
+                className="mt-5 inline-block rounded-xl border px-5 py-2.5 text-sm font-semibold no-underline transition-colors hover:bg-[#e8f0fb]"
+                style={{ borderColor: BRAND.primary, color: BRAND.primary }}
               >
-                {card.title}
-              </h2>
-              <p className="mt-2 text-sm leading-relaxed text-[#5c5c5c]">
-                {card.description}
+                Editar perfil
+              </Link>
+            </Section>
+          </>
+        ) : (
+          <>
+            <Section title="Mis reservas">
+              {bookings.length === 0 ? (
+                <div className="text-center">
+                  <p className="text-sm text-[#666]">
+                    Aún no tienes reservas. Empieza a explorar proveedores.
+                  </p>
+                  <Link
+                    href="/buscar"
+                    className="mt-4 inline-block rounded-xl px-5 py-3 text-sm font-semibold text-white no-underline transition-opacity hover:opacity-90"
+                    style={{ backgroundColor: BRAND.primary }}
+                  >
+                    Buscar proveedores
+                  </Link>
+                </div>
+              ) : (
+                <ul className="flex flex-col gap-3">
+                  {bookings.map((booking) => (
+                    <li
+                      key={booking.id}
+                      className="flex flex-col gap-2 rounded-xl border px-4 py-4 sm:flex-row sm:items-center sm:justify-between"
+                      style={{ borderColor: BRAND.border }}
+                    >
+                      <div>
+                        <p className="font-medium text-[#1a1a1a]">
+                          Reserva #{booking.id?.slice?.(0, 8) ?? "—"}
+                        </p>
+                        {booking.fecha_inicio && (
+                          <p className="mt-0.5 text-xs text-[#888]">
+                            {booking.fecha_inicio}
+                            {booking.fecha_fin ? ` — ${booking.fecha_fin}` : ""}
+                          </p>
+                        )}
+                      </div>
+                      <StatusBadge status={booking.estado ?? booking.status} />
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Section>
+
+            <Section title="Mis favoritos">
+              <p className="text-sm text-[#666]">
+                Próximamente podrás guardar tus proveedores favoritos.
               </p>
-            </article>
-          ))}
-        </div>
+            </Section>
+
+            <Section title="Mi perfil">
+              <dl className="space-y-3 text-sm">
+                <div>
+                  <dt className="text-xs font-medium uppercase tracking-wide text-[#888]">
+                    Nombre
+                  </dt>
+                  <dd className="mt-0.5 text-[#1a1a1a]">
+                    {profile?.nombre || "—"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-medium uppercase tracking-wide text-[#888]">
+                    Apellido
+                  </dt>
+                  <dd className="mt-0.5 text-[#1a1a1a]">
+                    {profile?.apellido || "—"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-medium uppercase tracking-wide text-[#888]">
+                    Ciudad
+                  </dt>
+                  <dd className="mt-0.5 text-[#1a1a1a]">
+                    {profile?.ciudad || profile?.location_zone || "—"}
+                  </dd>
+                </div>
+              </dl>
+              <Link
+                href="/completar-perfil"
+                className="mt-5 inline-block rounded-xl border px-5 py-2.5 text-sm font-semibold no-underline transition-colors hover:bg-[#e8f0fb]"
+                style={{ borderColor: BRAND.primary, color: BRAND.primary }}
+              >
+                Editar perfil
+              </Link>
+            </Section>
+          </>
+        )}
       </main>
     </div>
   );
