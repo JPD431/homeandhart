@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import Navbar from "@/app/components/Navbar";
 import { BRAND, SERIF } from "@/app/components/brand";
@@ -285,17 +286,26 @@ export default async function ProveedorPage({ params }) {
                         {formatPrice(service.precio, vertical.priceSuffix)}
                       </p>
                       <p className="mt-1 text-xs text-[#888]">{cancelLabel}</p>
+                      {service.reserva_inmediata ? (
+                        <span className="mt-2 inline-flex rounded-full bg-green-100 px-2.5 py-0.5 text-[11px] font-semibold text-green-800">
+                          Reserva inmediata ⚡
+                        </span>
+                      ) : (
+                        <span className="mt-2 inline-flex rounded-full bg-yellow-100 px-2.5 py-0.5 text-[11px] font-semibold text-yellow-800">
+                          Requiere confirmación 🕐
+                        </span>
+                      )}
                     </div>
                   </div>
 
                   <div className="mt-5 flex flex-col gap-2 sm:flex-row">
-                    <button
-                      type="button"
-                      className="flex-1 rounded-xl py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+                    <Link
+                      href={`/reservar/${service.id}`}
+                      className="flex-1 rounded-xl py-3 text-center text-sm font-semibold text-white no-underline transition-opacity hover:opacity-90"
                       style={{ backgroundColor: BRAND.primary }}
                     >
                       Reservar
-                    </button>
+                    </Link>
                     <button
                       type="button"
                       className="flex-1 rounded-xl border py-3 text-sm font-semibold transition-colors hover:bg-[#e8f0fb]"

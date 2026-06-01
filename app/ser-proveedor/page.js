@@ -30,9 +30,9 @@ const CANCEL_POLICIES = [
 ];
 
 const EMPTY_SERVICE_DETAILS = {
-  alojamiento: { precio: "", nru: "", cancelacion: "48h" },
-  ninos: { precio: "", edades: "", certificacion: "", cancelacion: "48h" },
-  mascotas: { precio: "", tipos: "", cancelacion: "48h" },
+  alojamiento: { precio: "", nru: "", cancelacion: "48h", reserva_inmediata: false },
+  ninos: { precio: "", edades: "", certificacion: "", cancelacion: "48h", reserva_inmediata: false },
+  mascotas: { precio: "", tipos: "", cancelacion: "48h", reserva_inmediata: false },
 };
 
 const DOCUMENT_CATALOG = {
@@ -166,6 +166,50 @@ function CancelPolicySelect({ value, onChange }) {
   );
 }
 
+function ReservaModeSelector({ value, onChange }) {
+  const isImmediate = value === true;
+
+  return (
+    <div className="sm:col-span-2">
+      <p className="mb-2 text-xs font-medium text-[#444]">Tipo de reserva</p>
+      <div className="flex flex-col gap-2">
+        <button
+          type="button"
+          onClick={() => onChange(false)}
+          className="rounded-xl border p-3 text-left transition-colors"
+          style={{
+            borderColor: !isImmediate ? BRAND.primary : BRAND.border,
+            backgroundColor: !isImmediate ? BRAND.light : "#fff",
+          }}
+        >
+          <span className="text-sm font-semibold text-[#1a1a1a]">
+            Con confirmación
+          </span>
+          <span className="mt-0.5 block text-xs text-[#666]">
+            Tú aceptas o rechazas cada reserva
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={() => onChange(true)}
+          className="rounded-xl border p-3 text-left transition-colors"
+          style={{
+            borderColor: isImmediate ? BRAND.primary : BRAND.border,
+            backgroundColor: isImmediate ? BRAND.light : "#fff",
+          }}
+        >
+          <span className="text-sm font-semibold text-[#1a1a1a]">
+            Reserva inmediata
+          </span>
+          <span className="mt-0.5 block text-xs text-[#666]">
+            El cliente reserva directamente sin esperar confirmación
+          </span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ServiceFields({ serviceId, details, onChange }) {
   function update(field, val) {
     onChange({ ...details, [field]: val });
@@ -208,6 +252,10 @@ function ServiceFields({ serviceId, details, onChange }) {
             onChange={(v) => update("cancelacion", v)}
           />
         </div>
+        <ReservaModeSelector
+          value={details.reserva_inmediata}
+          onChange={(v) => update("reserva_inmediata", v)}
+        />
       </div>
     );
   }
@@ -262,6 +310,10 @@ function ServiceFields({ serviceId, details, onChange }) {
             onChange={(v) => update("cancelacion", v)}
           />
         </div>
+        <ReservaModeSelector
+          value={details.reserva_inmediata}
+          onChange={(v) => update("reserva_inmediata", v)}
+        />
       </div>
     );
   }
@@ -304,6 +356,10 @@ function ServiceFields({ serviceId, details, onChange }) {
             onChange={(v) => update("cancelacion", v)}
           />
         </div>
+        <ReservaModeSelector
+          value={details.reserva_inmediata}
+          onChange={(v) => update("reserva_inmediata", v)}
+        />
       </div>
     );
   }
@@ -438,6 +494,7 @@ export default function SerProveedorPage() {
           cancellation_policy: details.cancelacion,
           ciudad: ciudad.trim(),
           disponible: true,
+          reserva_inmediata: details.reserva_inmediata === true,
         };
       });
 
