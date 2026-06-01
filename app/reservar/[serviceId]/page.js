@@ -112,6 +112,8 @@ export default function ReservarPage() {
   const [loading, setLoading] = useState(true);
   const [service, setService] = useState(null);
   const [userId, setUserId] = useState(null);
+  const [userEmail, setUserEmail] = useState(null);
+  const [perfilCliente, setPerfilCliente] = useState(null);
   const [fechaInicio, setFechaInicio] = useState("");
   const [fechaFin, setFechaFin] = useState("");
   const [hora, setHora] = useState("");
@@ -135,6 +137,15 @@ export default function ReservarPage() {
       }
 
       setUserId(user.id);
+      setUserEmail(user.email);
+
+      const { data: perfilClienteData } = await supabase
+        .from("profiles")
+        .select("nombre")
+        .eq("id", user.id)
+        .single();
+
+      setPerfilCliente(perfilClienteData);
 
       const { data, error } = await supabase
         .from("services")
@@ -248,6 +259,23 @@ export default function ReservarPage() {
       setErrorMessage(error.message);
       return;
     }
+
+    await fetch("/api/emails", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        tipo: "reserva_confirmada",
+        cliente_email: userEmail,
+        cliente_nombre: perfilCliente?.nombre || "Cliente",
+        proveedor_email: service.profiles?.email || userEmail,
+        proveedor_nombre: service.profiles?.nombre || "Proveedor",
+        servicio_titulo: service.titulo,
+        fecha_inicio: fechaInicio,
+        fecha_fin: fechaFin || fechaInicio,
+        precio_total: priceSummary.total.toString(),
+        mensaje: mensaje || "",
+      }),
+    });
 
     if (isImmediate) {
       setSuccessVariant("green");
