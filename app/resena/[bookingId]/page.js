@@ -5,7 +5,14 @@ import { useEffect, useState } from "react";
 import { BRAND, SERIF } from "@/app/components/brand";
 import { supabase } from "@/lib/supabase";
 
-const GOLD = "#c8922a";
+const VERTICAL_RATING = {
+  alojamiento: { color: "#1d4f91", submitLabel: "Valorar alojamiento" },
+  mascotas: { color: "#c47d1a", submitLabel: "Valorar cuidador" },
+  ninos: { color: "#0e7a5c", submitLabel: "Valorar niñera" },
+};
+
+const INACTIVE_COLOR = "#e0e0e0";
+const ICON_SIZE = 36;
 
 function Logo() {
   return (
@@ -17,51 +24,81 @@ function Logo() {
   );
 }
 
-function StarIcon({ filled, size = 32 }) {
+function RatingIcon({ vertical, filled, size = ICON_SIZE }) {
+  const color = filled
+    ? (VERTICAL_RATING[vertical] ?? VERTICAL_RATING.alojamiento).color
+    : INACTIVE_COLOR;
+
+  if (vertical === "mascotas") {
+    return (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill={color} aria-hidden>
+        <circle cx="7" cy="4" r="1.5" />
+        <circle cx="12" cy="3" r="1.5" />
+        <circle cx="17" cy="4" r="1.5" />
+        <circle cx="4.5" cy="8.5" r="1.5" />
+        <path d="M12 22c-3.5 0-7-2-7-6 0-2 1.5-3.5 3-4.5 1-.7 2.5-1 4-1s3 .3 4 1c1.5 1 3 2.5 3 4.5 0 4-3.5 6-7 6z" />
+      </svg>
+    );
+  }
+
+  if (vertical === "ninos") {
+    return (
+      <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden>
+        <path
+          d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"
+          fill={color}
+          stroke={color}
+          strokeWidth={1.5}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    );
+  }
+
   return (
     <svg
       width={size}
       height={size}
       viewBox="0 0 24 24"
-      fill={filled ? GOLD : "none"}
-      stroke={filled ? GOLD : "#ccc"}
+      fill="none"
+      stroke={color}
       strokeWidth={1.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
       aria-hidden
     >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M11.48 3.499a.562.562 0 0 1 1.04 0l2.125 5.111a.563.563 0 0 0 .475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 0 0-.182.557l1.285 5.385a.562.562 0 0 1-.84.61l-4.725-2.885a.562.562 0 0 0-.586 0L6.982 20.54a.562.562 0 0 1-.84-.61l1.285-5.386a.562.562 0 0 0-.182-.557l-4.204-3.602a.562.562 0 0 1 .321-.988l5.518-.442a.563.563 0 0 0 .475-.345L11.48 3.5Z"
-      />
+      <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+      <polyline points="9 22 9 12 15 12 15 22" />
     </svg>
   );
 }
 
-function StarRatingDisplay({ value }) {
+function RatingDisplay({ vertical, value }) {
   return (
     <div className="flex gap-1">
-      {[1, 2, 3, 4, 5].map((star) => (
-        <StarIcon key={star} filled={star <= value} />
+      {[1, 2, 3, 4, 5].map((n) => (
+        <RatingIcon key={n} vertical={vertical} filled={n <= value} />
       ))}
     </div>
   );
 }
 
-function StarSelector({ value, hover, onSelect, onHover, onLeave }) {
+function RatingSelector({ vertical, value, hover, onSelect, onHover, onLeave }) {
   return (
     <div className="flex justify-center gap-2" onMouseLeave={onLeave}>
-      {[1, 2, 3, 4, 5].map((star) => {
-        const active = (hover || value) >= star;
+      {[1, 2, 3, 4, 5].map((n) => {
+        const active = (hover || value) >= n;
         return (
           <button
-            key={star}
+            key={n}
             type="button"
-            onMouseEnter={() => onHover(star)}
-            onClick={() => onSelect(star)}
-            className="transition-transform hover:scale-110"
-            aria-label={`${star} estrella${star > 1 ? "s" : ""}`}
+            onMouseEnter={() => onHover(n)}
+            onClick={() => onSelect(n)}
+            className="transition-transform duration-200 ease-out hover:scale-110"
+            aria-label={`Valoración ${n} de 5`}
           >
-            <StarIcon filled={active} />
+            <RatingIcon vertical={vertical} filled={active} />
           </button>
         );
       })}
@@ -84,6 +121,7 @@ export default function ResenaPage() {
   const [errorMessage, setErrorMessage] = useState("");
   const [proveedorNombre, setProveedorNombre] = useState("");
   const [servicioTitulo, setServicioTitulo] = useState("");
+  const [vertical, setVertical] = useState("alojamiento");
   const [bookingMeta, setBookingMeta] = useState(null);
   const [existingReview, setExistingReview] = useState(null);
   const [valoracion, setValoracion] = useState(0);
@@ -130,7 +168,7 @@ export default function ResenaPage() {
 
       const { data: service } = await supabase
         .from("services")
-        .select("id, titulo, proveedor_id")
+        .select("id, titulo, proveedor_id, vertical")
         .eq("id", booking.service_id)
         .single();
 
@@ -155,6 +193,7 @@ export default function ResenaPage() {
         formatShortName(proveedor?.nombre, proveedor?.apellido) || "Proveedor",
       );
       setServicioTitulo(service?.titulo || "Servicio");
+      setVertical(service?.vertical || "alojamiento");
       setExistingReview(review);
       if (review) {
         setValoracion(review.valoracion);
@@ -235,7 +274,7 @@ export default function ResenaPage() {
               {proveedorNombre} · {servicioTitulo}
             </p>
             <div className="mt-6 flex justify-center">
-              <StarRatingDisplay value={existingReview.valoracion} />
+              <RatingDisplay vertical={vertical} value={existingReview.valoracion} />
             </div>
             {existingReview.comentario && (
               <p className="mt-4 rounded-xl bg-[#f7f5f2] px-4 py-3 text-sm leading-relaxed text-[#444]">
@@ -256,7 +295,8 @@ export default function ResenaPage() {
             </p>
 
             <form onSubmit={handleSubmit} className="mt-8 flex flex-col gap-6">
-              <StarSelector
+              <RatingSelector
+                vertical={vertical}
                 value={valoracion}
                 hover={hoverStar}
                 onSelect={setValoracion}
@@ -300,7 +340,10 @@ export default function ResenaPage() {
                 className="w-full rounded-xl py-3.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
                 style={{ backgroundColor: BRAND.primary }}
               >
-                {submitting ? "Enviando…" : "Enviar valoración"}
+                {submitting
+                  ? "Enviando…"
+                  : (VERTICAL_RATING[vertical] ?? VERTICAL_RATING.alojamiento)
+                      .submitLabel}
               </button>
             </form>
           </>
