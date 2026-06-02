@@ -1,36 +1,46 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { BRAND } from "@/app/components/brand";
 
-export default function LoginPage() {
-  const router = useRouter();
+function Logo() {
+  return (
+    <Link
+      href="/"
+      className="mb-6 inline-block text-xl font-semibold tracking-tight text-[#1a1a1a] no-underline"
+    >
+      Home<span className="italic text-[#1d4f91]">&</span>Heart
+    </Link>
+  );
+}
+
+export default function RecuperarContrasenaPage() {
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError("");
+    setSuccess(false);
     setLoading(true);
 
-    const { error: signInError } = await supabase.auth.signInWithPassword({
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(
       email,
-      password,
-    });
+      { redirectTo: `${window.location.origin}/nueva-contrasena` },
+    );
 
     setLoading(false);
 
-    if (signInError) {
-      setError(signInError.message);
+    if (resetError) {
+      setError(resetError.message);
       return;
     }
 
-    router.push("/dashboard");
+    setSuccess(true);
   }
 
   return (
@@ -42,14 +52,12 @@ export default function LoginPage() {
         className="w-full max-w-md rounded-2xl border bg-white p-8 shadow-sm sm:p-10"
         style={{ borderColor: BRAND.border }}
       >
-        <Link
-          href="/"
-          className="mb-6 inline-block text-xl font-semibold tracking-tight text-[#1a1a1a] no-underline"
-        >
-          Home<span className="italic text-[#1d4f91]">&</span>Heart
-        </Link>
+        <Logo />
 
-        <h1 className="text-2xl font-bold text-[#1a1a1a]">Iniciar sesión</h1>
+        <h1 className="text-2xl font-bold text-[#1a1a1a]">Recuperar contraseña</h1>
+        <p className="mt-2 text-sm text-[#666]">
+          Te enviaremos un email para restablecer tu contraseña
+        </p>
 
         <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4">
           <div>
@@ -71,24 +79,11 @@ export default function LoginPage() {
             />
           </div>
 
-          <div>
-            <label
-              htmlFor="password"
-              className="mb-1.5 block text-sm font-medium text-[#444]"
-            >
-              Contraseña
-            </label>
-            <input
-              id="password"
-              type="password"
-              required
-              autoComplete="current-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-xl border px-4 py-3 text-sm text-[#1a1a1a] outline-none focus:ring-2 focus:ring-[#1d4f91]/30"
-              style={{ borderColor: BRAND.border }}
-            />
-          </div>
+          {success && (
+            <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">
+              ¡Email enviado! Revisa tu bandeja de entrada.
+            </p>
+          )}
 
           {error && (
             <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -98,32 +93,21 @@ export default function LoginPage() {
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || success}
             className="mt-2 w-full rounded-xl py-3.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
             style={{ backgroundColor: BRAND.primary }}
           >
-            {loading ? "Iniciando sesión…" : "Iniciar sesión"}
+            {loading ? "Enviando…" : "Enviar instrucciones"}
           </button>
-
-          <p className="text-center">
-            <Link
-              href="/recuperar-contrasena"
-              className="text-sm font-medium no-underline hover:underline"
-              style={{ color: BRAND.primary }}
-            >
-              ¿Olvidaste tu contraseña?
-            </Link>
-          </p>
         </form>
 
         <p className="mt-6 text-center text-sm text-[#666]">
-          ¿No tienes cuenta?{" "}
           <Link
-            href="/registro"
+            href="/login"
             className="font-medium no-underline hover:underline"
             style={{ color: BRAND.primary }}
           >
-            Regístrate
+            Volver al inicio de sesión
           </Link>
         </p>
       </div>
