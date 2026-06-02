@@ -86,6 +86,39 @@ function clienteContactBlock(data) {
   </div>`;
 }
 
+function bundleDetailsBlock(data) {
+  const servicios = Array.isArray(data.servicios) ? data.servicios : [];
+  const rowsHtml = servicios
+    .map(
+      (svc) => `
+        <tr>
+          <td style="padding:8px 0;font-size:14px;color:#666;vertical-align:top;">${svc.titulo}</td>
+          <td style="padding:8px 0;font-size:14px;color:#222;font-weight:600;text-align:right;">${svc.precio} €</td>
+        </tr>
+        <tr>
+          <td colspan="2" style="padding:0 0 8px;font-size:12px;color:#888;">Proveedor: ${svc.proveedor_nombre}</td>
+        </tr>`,
+    )
+    .join("");
+
+  const subtotal = data.subtotal ? `${data.subtotal} €` : null;
+  const comision = data.comision ? `${data.comision} €` : null;
+  const total = data.precio_total ? `${data.precio_total} €` : null;
+
+  return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:20px 0 0;background-color:${BRAND_LIGHT};border-radius:8px;padding:16px 20px;">
+    <tr>
+      <td colspan="2" style="padding:0 0 8px;font-size:12px;font-weight:600;color:${BRAND_PRIMARY};text-transform:uppercase;letter-spacing:0.05em;">Servicios reservados</td>
+    </tr>
+    ${rowsHtml}
+    ${subtotal ? `<tr><td style="padding:8px 0;font-size:14px;color:#666;">Subtotal</td><td style="padding:8px 0;font-size:14px;color:#222;text-align:right;">${subtotal}</td></tr>` : ""}
+    ${comision ? `<tr><td style="padding:4px 0;font-size:12px;color:#888;">Gastos de gestión (14%)</td><td style="padding:4px 0;font-size:12px;color:#888;text-align:right;">${comision}</td></tr>` : ""}
+    ${total ? `<tr><td style="padding:8px 0;font-size:16px;font-weight:600;color:${BRAND_PRIMARY};">Total</td><td style="padding:8px 0;font-size:16px;font-weight:600;color:${BRAND_PRIMARY};text-align:right;">${total}</td></tr>` : ""}
+    <tr>
+      <td colspan="2" style="padding:8px 0 0;font-size:12px;color:#888;">Fechas: ${data.fecha_inicio}${data.fecha_fin && data.fecha_fin !== data.fecha_inicio ? ` — ${data.fecha_fin}` : ""}</td>
+    </tr>
+  </table>`;
+}
+
 function detailsBlock({ servicio_titulo, fecha_inicio, fecha_fin, precio_total }) {
   const rows = [
     ["Servicio", servicio_titulo],
@@ -112,9 +145,38 @@ function detailsBlock({ servicio_titulo, fecha_inicio, fecha_fin, precio_total }
 }
 
 function clienteEmailHtml(data) {
+  const isBundle = Array.isArray(data.servicios) && data.servicios.length > 0;
   const mensajeBlock = data.mensaje
     ? `<p style="margin:16px 0 0;font-size:14px;color:#444;line-height:1.6;"><strong>Tu mensaje:</strong> ${data.mensaje}</p>`
     : "";
+
+  if (isBundle) {
+    const contactBlocks = data.servicios
+      .map((svc) =>
+        proveedorContactBlock({
+          direccion_exacta: svc.direccion_exacta,
+          telefono_proveedor: svc.telefono_proveedor,
+          modalidad: svc.modalidad,
+        }).replace(
+          "Datos de contacto del proveedor:",
+          `Contacto — ${svc.proveedor_nombre}:`,
+        ),
+      )
+      .filter(Boolean)
+      .join("");
+
+    return emailLayout({
+      title: "¡Reserva confirmada! — Home&Heart",
+      bodyHtml: `
+        <h1 style="margin:0;font-size:22px;color:${BRAND_PRIMARY};font-weight:600;text-align:center;">¡Tu reserva está confirmada!</h1>
+        ${bundleDetailsBlock(data)}
+        ${mensajeBlock}
+        ${contactBlocks}
+        <p style="margin:20px 0 0;font-size:14px;color:#444;line-height:1.6;">
+          Un solo pago · distribuido automáticamente entre los proveedores. Hemos compartido tus datos de contacto para que puedan coordinarse contigo.
+        </p>`,
+    });
+  }
 
   return emailLayout({
     title: "¡Reserva confirmada! — Home&Heart",
@@ -157,14 +219,59 @@ async function sendReservaConfirmadaEmails(data) {
   const required = [
     "cliente_email",
     "cliente_nombre",
-    "proveedor_email",
-    "proveedor_nombre",
-    "servicio_titulo",
     "fecha_inicio",
     "precio_total",
   ];
 
   for (const field of required) {
+    if (!data[field]) {
+      return { error: `Falta el campo requerido: ${field}` };
+    }
+  }
+
+  const isBundle = Array.isArray(data.servicios) && data.servicios.length > 0;
+
+  if (isBundle) {
+    const clienteResult = await resend.emails.send({
+      from: FROM,
+      to: data.cliente_email,
+      subject: "¡Reserva confirmada! — Home&Heart",
+      html: clienteEmailHtml(data),
+    });
+
+    if (clienteResult.error) {
+      return { error: clienteResult.error.message };
+    }
+
+    const providerEmails = await Promise.all(
+      data.servicios.map((svc) =>
+        resend.emails.send({
+          from: FROM,
+          to: svc.proveedor_email || data.cliente_email,
+          subject: "Nueva reserva recibida — Home&Heart",
+          html: proveedorEmailHtml({
+            ...data,
+            servicio_titulo: svc.titulo,
+            proveedor_nombre: svc.proveedor_nombre,
+            precio_total: svc.precio,
+            direccion_exacta: svc.direccion_exacta,
+            telefono_proveedor: svc.telefono_proveedor,
+            modalidad: svc.modalidad,
+          }),
+        }),
+      ),
+    );
+
+    const providerError = providerEmails.find((r) => r.error);
+    if (providerError?.error) {
+      return { error: providerError.error.message };
+    }
+
+    return { success: true };
+  }
+
+  const legacyRequired = ["proveedor_email", "proveedor_nombre", "servicio_titulo"];
+  for (const field of legacyRequired) {
     if (!data[field]) {
       return { error: `Falta el campo requerido: ${field}` };
     }
