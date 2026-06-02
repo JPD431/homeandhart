@@ -67,6 +67,8 @@ function getOtherParticipant(conversation, userId) {
   };
 }
 
+const EMAIL_NOTIFICATION_COOLDOWN_MS = 30 * 60 * 1000;
+
 export default function ChatPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -87,7 +89,9 @@ export default function ChatPage() {
   const loadConversations = useCallback(async (uid) => {
     const { data, error } = await supabase
       .from("conversations")
-      .select("id, participant_a_id, participant_b_id, created_at")
+      .select(
+        "id, participant_a_id, participant_b_id, created_at, ultimo_email_notificacion",
+      )
       .or(`participant_a_id.eq.${uid},participant_b_id.eq.${uid}`)
       .order("created_at", { ascending: false });
 
@@ -326,6 +330,75 @@ export default function ChatPage() {
     }
 
     setDraft("");
+    maybeNotifyRecipient(selectedId, filteredContent);
+  }
+
+  async function maybeNotifyRecipient(conversationId, messageContent) {
+    if (!userId || !selectedConversation) return;
+
+    // -- ALTER TABLE conversations ADD COLUMN IF NOT EXISTS ultimo_email_notificacion timestamptz;
+    const recipientId =
+      selectedConversation.participant_a_id === userId
+        ? selectedConversation.participant_b_id
+        : selectedConversation.participant_a_id;
+
+    const { data: conversation } = await supabase
+      .from("conversations")
+      .select("ultimo_email_notificacion")
+      .eq("id", conversationId)
+      .single();
+
+    if (conversation?.ultimo_email_notificacion) {
+      const elapsed =
+        Date.now() - new Date(conversation.ultimo_email_notificacion).getTime();
+      if (elapsed < EMAIL_NOTIFICATION_COOLDOWN_MS) return;
+    }
+
+    const { data: recipientProfile } = await supabase
+      .from("profiles")
+      .select("email_contacto")
+      .eq("id", recipientId)
+      .single();
+
+    if (!recipientProfile?.email_contacto) return;
+
+    const { data: senderProfile } = await supabase
+      .from("profiles")
+      .select("nombre, apellido")
+      .eq("id", userId)
+      .single();
+
+    const remitenteNombre =
+      formatShortName(senderProfile?.nombre, senderProfile?.apellido) ||
+      "Un usuario";
+
+    const response = await fetch("/api/emails", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        tipo: "mensaje_nuevo",
+        destinatario: recipientProfile.email_contacto,
+        remitente_nombre: remitenteNombre,
+        mensaje_preview: messageContent,
+        chat_url: `${window.location.origin}/chat?conversation=${conversationId}`,
+      }),
+    });
+
+    if (response.ok) {
+      const now = new Date().toISOString();
+      await supabase
+        .from("conversations")
+        .update({ ultimo_email_notificacion: now })
+        .eq("id", conversationId);
+
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.id === conversationId
+            ? { ...c, ultimo_email_notificacion: now }
+            : c,
+        ),
+      );
+    }
   }
 
   function selectConversation(id) {

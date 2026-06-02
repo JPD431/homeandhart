@@ -365,6 +365,57 @@ async function sendSolicitudDocumentosEmail(data) {
   return { success: true };
 }
 
+function mensajePreview(text, max = 100) {
+  if (!text) return "";
+  if (text.length <= max) return text;
+  return `${text.slice(0, max).trim()}…`;
+}
+
+function mensajeNuevoEmailHtml(data) {
+  const chatUrl = data.chat_url || "https://homeandheart.es/chat";
+  const preview = mensajePreview(data.mensaje_preview || data.mensaje || "");
+
+  return emailLayout({
+    title: "Tienes un mensaje nuevo en Home&Heart",
+    bodyHtml: `
+      <h1 style="margin:0;font-size:22px;color:${BRAND_PRIMARY};font-weight:600;text-align:center;">Tienes un mensaje nuevo</h1>
+      <p style="margin:20px 0 0;font-size:14px;color:#444;line-height:1.6;">
+        <strong>${data.remitente_nombre || "Alguien"}</strong> te ha enviado un mensaje en Home&amp;Heart:
+      </p>
+      <div style="margin:16px 0 0;background-color:${BRAND_LIGHT};border-radius:8px;padding:16px 20px;">
+        <p style="margin:0;font-size:14px;color:#222;line-height:1.6;font-style:italic;">"${preview}"</p>
+      </div>
+      <p style="margin:24px 0 0;text-align:center;">
+        <a href="${chatUrl}" style="display:inline-block;background-color:${BRAND_PRIMARY};color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:12px 24px;border-radius:8px;">
+          Ver mensaje
+        </a>
+      </p>`,
+  });
+}
+
+async function sendMensajeNuevoEmail(data) {
+  const required = ["destinatario", "remitente_nombre"];
+
+  for (const field of required) {
+    if (!data[field]) {
+      return { error: `Falta el campo requerido: ${field}` };
+    }
+  }
+
+  const result = await resend.emails.send({
+    from: FROM,
+    to: data.destinatario,
+    subject: "Tienes un mensaje nuevo en Home&Heart",
+    html: mensajeNuevoEmailHtml(data),
+  });
+
+  if (result.error) {
+    return { error: result.error.message };
+  }
+
+  return { success: true };
+}
+
 export async function POST(request) {
   try {
     if (!process.env.RESEND_API_KEY) {
@@ -389,6 +440,16 @@ export async function POST(request) {
 
     if (tipo === "solicitud_documentos") {
       const result = await sendSolicitudDocumentosEmail(data);
+
+      if (result.error) {
+        return Response.json({ error: result.error }, { status: 400 });
+      }
+
+      return Response.json({ success: true });
+    }
+
+    if (tipo === "mensaje_nuevo") {
+      const result = await sendMensajeNuevoEmail(data);
 
       if (result.error) {
         return Response.json({ error: result.error }, { status: 400 });
