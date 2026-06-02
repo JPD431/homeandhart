@@ -123,6 +123,42 @@ function formatPrice(precio, suffix) {
   return `${Number(precio)}€${suffix}`;
 }
 
+const GOLD = "#c8922a";
+
+function StarRating({ value, size = 16 }) {
+  return (
+    <div className="flex gap-0.5">
+      {[1, 2, 3, 4, 5].map((star) => (
+        <svg
+          key={star}
+          width={size}
+          height={size}
+          viewBox="0 0 24 24"
+          fill={star <= value ? GOLD : "none"}
+          stroke={star <= value ? GOLD : "#ccc"}
+          strokeWidth={1.5}
+          aria-hidden
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M11.48 3.499a.562.562 0 0 1 1.04 0l2.125 5.111a.563.563 0 0 0 .475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 0 0-.182.557l1.285 5.385a.562.562 0 0 1-.84.61l-4.725-2.885a.562.562 0 0 0-.586 0L6.982 20.54a.562.562 0 0 1-.84-.61l1.285-5.386a.562.562 0 0 0-.182-.557l-4.204-3.602a.562.562 0 0 1 .321-.988l5.518-.442a.563.563 0 0 0 .475-.345L11.48 3.5Z"
+          />
+        </svg>
+      ))}
+    </div>
+  );
+}
+
+function formatReviewDate(value) {
+  if (!value) return "";
+  return new Date(value).toLocaleDateString("es-ES", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
 export default async function ProveedorPage({ params }) {
   const { id } = await params;
 
@@ -141,6 +177,45 @@ export default async function ProveedorPage({ params }) {
     .select("*")
     .eq("proveedor_id", id)
     .eq("disponible", true);
+
+  const { data: reviews } = await supabase
+    .from("reviews")
+    .select("id, valoracion, comentario, created_at, cliente_id")
+    .eq("proveedor_id", id)
+    .order("created_at", { ascending: false })
+    .limit(5);
+
+  const { data: allRatings } = await supabase
+    .from("reviews")
+    .select("valoracion")
+    .eq("proveedor_id", id);
+
+  const reviewCount = allRatings?.length ?? 0;
+  const averageRating =
+    reviewCount > 0
+      ? (
+          allRatings.reduce((sum, r) => sum + Number(r.valoracion), 0) /
+          reviewCount
+        ).toFixed(1)
+      : null;
+
+  let reviewsWithNames = [];
+  if (reviews?.length) {
+    const clienteIds = reviews.map((r) => r.cliente_id);
+    const { data: clientes } = await supabase
+      .from("profiles")
+      .select("id, nombre")
+      .in("id", clienteIds);
+
+    const namesMap = Object.fromEntries(
+      (clientes ?? []).map((c) => [c.id, c.nombre]),
+    );
+
+    reviewsWithNames = reviews.map((review) => ({
+      ...review,
+      cliente_nombre: namesMap[review.cliente_id] || "Cliente",
+    }));
+  }
 
   const fullName = [profile.nombre, profile.apellido].filter(Boolean).join(" ");
   const zone = profile.location_zone || profile.ciudad || "España";
@@ -229,6 +304,59 @@ export default async function ProveedorPage({ params }) {
             </p>
           )}
         </header>
+
+        <section
+          className="mt-8 rounded-2xl border bg-white p-6 sm:p-8"
+          style={{ borderColor: BRAND.border }}
+        >
+          <h2
+            className="text-xl font-bold text-[#1a1a1a] sm:text-2xl"
+            style={{ fontFamily: SERIF }}
+          >
+            Lo que dicen los clientes
+          </h2>
+
+          {reviewCount === 0 ? (
+            <p className="mt-4 text-sm text-[#666]">Aún no tiene valoraciones</p>
+          ) : (
+            <>
+              <div className="mt-4 flex flex-wrap items-end gap-3">
+                <p className="text-4xl font-bold" style={{ color: GOLD }}>
+                  {averageRating}
+                </p>
+                <div>
+                  <StarRating value={Math.round(Number(averageRating))} size={18} />
+                  <p className="mt-1 text-sm text-[#666]">
+                    {reviewCount} reseña{reviewCount > 1 ? "s" : ""}
+                  </p>
+                </div>
+              </div>
+
+              <ul className="mt-6 flex flex-col gap-4 border-t pt-6" style={{ borderColor: BRAND.border }}>
+                {reviewsWithNames.map((review) => (
+                  <li key={review.id}>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm font-semibold text-[#1a1a1a]">
+                        {review.cliente_nombre}
+                      </p>
+                      <p className="text-xs text-[#888]">
+                        {formatReviewDate(review.created_at)}
+                      </p>
+                    </div>
+                    <div className="mt-1">
+                      <StarRating value={review.valoracion} />
+                    </div>
+                    {review.comentario && (
+                      <p className="mt-2 text-sm leading-relaxed text-[#444]">
+                        {review.comentario}
+                      </p>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </section>
 
         {/* Servicios disponibles */}
         <section className="mt-8">

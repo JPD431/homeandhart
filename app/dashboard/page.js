@@ -62,6 +62,7 @@ export default function DashboardPage() {
   const [profile, setProfile] = useState(null);
   const [services, setServices] = useState([]);
   const [bookings, setBookings] = useState([]);
+  const [reviewedBookingIds, setReviewedBookingIds] = useState(new Set());
 
   useEffect(() => {
     async function loadDashboard() {
@@ -111,7 +112,22 @@ export default function DashboardPage() {
           .eq("cliente_id", user.id)
           .order("created_at", { ascending: false });
 
-        setBookings(bookingsData ?? []);
+        const clientBookings = bookingsData ?? [];
+        setBookings(clientBookings);
+
+        if (clientBookings.length > 0) {
+          const bookingIds = clientBookings.map((b) => b.id);
+          const { data: reviewsData } = await supabase
+            .from("reviews")
+            .select("booking_id")
+            .in("booking_id", bookingIds);
+
+          setReviewedBookingIds(
+            new Set((reviewsData ?? []).map((r) => r.booking_id)),
+          );
+        } else {
+          setReviewedBookingIds(new Set());
+        }
       }
 
       setLoading(false);
@@ -301,26 +317,47 @@ export default function DashboardPage() {
                 </div>
               ) : (
                 <ul className="flex flex-col gap-3">
-                  {bookings.map((booking) => (
-                    <li
-                      key={booking.id}
-                      className="flex flex-col gap-2 rounded-xl border px-4 py-4 sm:flex-row sm:items-center sm:justify-between"
-                      style={{ borderColor: BRAND.border }}
-                    >
-                      <div>
-                        <p className="font-medium text-[#1a1a1a]">
-                          Reserva #{booking.id?.slice?.(0, 8) ?? "—"}
-                        </p>
-                        {booking.fecha_inicio && (
-                          <p className="mt-0.5 text-xs text-[#888]">
-                            {booking.fecha_inicio}
-                            {booking.fecha_fin ? ` — ${booking.fecha_fin}` : ""}
+                  {bookings.map((booking) => {
+                    const estado = booking.estado ?? booking.status;
+                    const canReview =
+                      estado === "completada" &&
+                      !reviewedBookingIds.has(booking.id);
+
+                    return (
+                      <li
+                        key={booking.id}
+                        className="flex flex-col gap-2 rounded-xl border px-4 py-4 sm:flex-row sm:items-center sm:justify-between"
+                        style={{ borderColor: BRAND.border }}
+                      >
+                        <div>
+                          <p className="font-medium text-[#1a1a1a]">
+                            Reserva #{booking.id?.slice?.(0, 8) ?? "—"}
                           </p>
-                        )}
-                      </div>
-                      <StatusBadge status={booking.estado ?? booking.status} />
-                    </li>
-                  ))}
+                          {booking.fecha_inicio && (
+                            <p className="mt-0.5 text-xs text-[#888]">
+                              {booking.fecha_inicio}
+                              {booking.fecha_fin ? ` — ${booking.fecha_fin}` : ""}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <StatusBadge status={estado} />
+                          {canReview && (
+                            <Link
+                              href={`/resena/${booking.id}`}
+                              className="rounded-xl border px-3 py-1.5 text-xs font-semibold no-underline transition-colors hover:bg-[#e8f0fb]"
+                              style={{
+                                borderColor: BRAND.primary,
+                                color: BRAND.primary,
+                              }}
+                            >
+                              Valorar
+                            </Link>
+                          )}
+                        </div>
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </Section>
