@@ -6,12 +6,92 @@ import Navbar from "@/app/components/Navbar";
 import { BRAND, SERIF } from "@/app/components/brand";
 import { supabase } from "@/lib/supabase";
 
-const CANCEL_LABELS = {
-  "24h": "Cancelación gratuita hasta 24h antes",
-  "48h": "Hasta 48h antes",
-  "7d": "Hasta 7 días antes",
-  none: "Sin cancelación",
+const CANCEL_POLICIES = {
+  flexible: {
+    name: "Flexible",
+    description:
+      "Cancelación gratuita hasta 24h antes · 50% de reembolso dentro de las 24h previas",
+    tiers: [
+      { label: "Más de 24h antes del inicio", percent: 100 },
+      { label: "Menos de 24h antes del inicio", percent: 50 },
+      { label: "Tras el inicio del servicio", percent: 0 },
+    ],
+  },
+  moderada: {
+    name: "Moderada",
+    description:
+      "Cancelación gratuita hasta 3 días antes · 50% entre 3 días y 24h antes",
+    tiers: [
+      { label: "Más de 3 días antes del inicio", percent: 100 },
+      { label: "Entre 3 días y 24h antes del inicio", percent: 50 },
+      { label: "Menos de 24h antes o tras el inicio", percent: 0 },
+    ],
+  },
+  estricta: {
+    name: "Estricta",
+    description:
+      "Cancelación gratuita hasta 7 días antes · 50% entre 7 y 3 días antes",
+    tiers: [
+      { label: "Más de 7 días antes del inicio", percent: 100 },
+      { label: "Entre 7 y 3 días antes del inicio", percent: 50 },
+      { label: "Menos de 3 días antes o tras el inicio", percent: 0 },
+    ],
+  },
 };
+
+const LEGACY_CANCEL_POLICIES = {
+  "24h": "flexible",
+  "48h": "moderada",
+  "7d": "estricta",
+};
+
+function normalizeCancelPolicy(policy) {
+  return LEGACY_CANCEL_POLICIES[policy] ?? policy;
+}
+
+function getCancelPolicy(policyKey) {
+  const key = normalizeCancelPolicy(policyKey);
+  return CANCEL_POLICIES[key];
+}
+
+function getServiceStartDateTime(vertical, fechaInicio, hora) {
+  if (!fechaInicio) return null;
+  if (vertical === "ninos" && !hora) return null;
+  const [y, m, d] = fechaInicio.split("-").map(Number);
+  if (vertical === "ninos") {
+    const [hh, mm] = hora.split(":").map(Number);
+    return new Date(y, m - 1, d, hh, mm, 0, 0);
+  }
+  return new Date(y, m - 1, d, 0, 0, 0, 0);
+}
+
+/** Porcentaje de reembolso (0–100) si se cancela en cancelAt. */
+function getRefundPercent(policy, cancelAt, serviceStartAt) {
+  if (!serviceStartAt || cancelAt >= serviceStartAt) return 0;
+
+  const policyKey = normalizeCancelPolicy(policy);
+  if (policyKey === "none") return 0;
+
+  const hoursUntil =
+    (serviceStartAt.getTime() - cancelAt.getTime()) / (1000 * 60 * 60);
+  const daysUntil = hoursUntil / 24;
+
+  switch (policyKey) {
+    case "flexible":
+      if (hoursUntil > 24) return 100;
+      return 50;
+    case "moderada":
+      if (daysUntil > 3) return 100;
+      if (hoursUntil > 24) return 50;
+      return 0;
+    case "estricta":
+      if (daysUntil > 7) return 100;
+      if (daysUntil > 3) return 50;
+      return 0;
+    default:
+      return 0;
+  }
+}
 
 const VERTICALS = {
   alojamiento: {
@@ -304,9 +384,21 @@ export default function ReservarPage() {
   const verticalConfig = VERTICALS[vertical] ?? VERTICALS.alojamiento;
   const profile = service?.profiles ?? {};
   const unitPrice = Number(service?.precio) || 0;
-  const cancelLabel =
-    CANCEL_LABELS[service?.cancellation_policy] ??
-    service?.cancellation_policy;
+  const cancelPolicy = getCancelPolicy(service?.cancellation_policy);
+
+  const serviceStartAt = useMemo(
+    () => getServiceStartDateTime(vertical, fechaInicio, hora),
+    [vertical, fechaInicio, hora],
+  );
+
+  const refundPercentNow = useMemo(() => {
+    if (!serviceStartAt) return null;
+    return getRefundPercent(
+      service?.cancellation_policy,
+      new Date(),
+      serviceStartAt,
+    );
+  }, [service?.cancellation_policy, serviceStartAt]);
 
   const bundleServices = useMemo(
     () => complementaryServices.filter((s) => bundleIds.includes(s.id)),
@@ -565,15 +657,22 @@ export default function ReservarPage() {
               </div>
             </div>
 
-            <div className="mt-5 flex gap-3 rounded-xl bg-[#fef9c3] px-4 py-3">
-              <InfoIcon className="mt-0.5 h-5 w-5 shrink-0 text-[#ca8a04]" />
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-[#92400e]">
-                  Política de cancelación
-                </p>
-                <p className="mt-0.5 text-sm text-[#854d0e]">{cancelLabel}</p>
+            {cancelPolicy && (
+              <div className="mt-5 flex gap-3 rounded-xl bg-[#fef9c3] px-4 py-3">
+                <InfoIcon className="mt-0.5 h-5 w-5 shrink-0 text-[#ca8a04]" />
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[#92400e]">
+                    Política de cancelación
+                  </p>
+                  <p className="mt-0.5 text-sm font-semibold text-[#854d0e]">
+                    {cancelPolicy.name}
+                  </p>
+                  <p className="mt-0.5 text-sm leading-relaxed text-[#854d0e]">
+                    {cancelPolicy.description}
+                  </p>
+                </div>
               </div>
-            </div>
+            )}
           </aside>
 
           <form
@@ -828,6 +927,59 @@ export default function ReservarPage() {
               <span className="mt-6 inline-flex rounded-full bg-yellow-100 px-3 py-1 text-xs font-semibold text-yellow-800">
                 Requiere confirmación 🕐
               </span>
+            )}
+
+            {cancelPolicy && (
+              <div
+                className="mt-6 rounded-xl border-2 px-4 py-4"
+                style={{
+                  borderColor: verticalConfig.color,
+                  backgroundColor: verticalConfig.light,
+                }}
+              >
+                <p
+                  className="text-sm font-bold"
+                  style={{ color: verticalConfig.color }}
+                >
+                  Política de cancelación — {cancelPolicy.name}
+                </p>
+                <p className="mt-1 text-sm leading-relaxed text-[#444]">
+                  {cancelPolicy.description}
+                </p>
+                <ul className="mt-4 flex flex-col gap-2.5">
+                  {cancelPolicy.tiers.map((tier) => (
+                    <li
+                      key={tier.label}
+                      className="flex items-center justify-between gap-3 rounded-lg bg-white/80 px-3 py-2 text-sm"
+                    >
+                      <span className="text-[#444]">{tier.label}</span>
+                      <span
+                        className="shrink-0 font-bold tabular-nums"
+                        style={{ color: verticalConfig.color }}
+                      >
+                        {tier.percent}% reembolso
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                {refundPercentNow !== null && priceSummary.ready && (
+                  <p
+                    className="mt-4 border-t pt-3 text-sm font-medium"
+                    style={{
+                      borderColor: `${verticalConfig.color}33`,
+                      color: verticalConfig.color,
+                    }}
+                  >
+                    Si cancelaras ahora: {refundPercentNow}% de reembolso (
+                    {formatEuro(
+                      Math.round(
+                        (priceSummary.total * refundPercentNow) / 100 * 100,
+                      ) / 100,
+                    )}
+                    )
+                  </p>
+                )}
+              </div>
             )}
 
             <button

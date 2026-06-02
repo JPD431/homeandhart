@@ -7,12 +7,34 @@ import { supabase } from "@/lib/supabase";
 
 const DARK_BLUE = "#163a6b";
 
-const CANCEL_LABELS = {
-  "24h": "Cancelación gratuita hasta 24h antes",
-  "48h": "Hasta 48h antes",
-  "7d": "Hasta 7 días antes",
-  none: "Sin cancelación",
+const CANCEL_POLICIES = {
+  flexible: {
+    name: "Flexible",
+    description:
+      "Cancelación gratuita hasta 24h antes · 50% de reembolso dentro de las 24h previas",
+  },
+  moderada: {
+    name: "Moderada",
+    description:
+      "Cancelación gratuita hasta 3 días antes · 50% entre 3 días y 24h antes",
+  },
+  estricta: {
+    name: "Estricta",
+    description:
+      "Cancelación gratuita hasta 7 días antes · 50% entre 7 y 3 días antes",
+  },
 };
+
+const LEGACY_CANCEL_POLICIES = {
+  "24h": "flexible",
+  "48h": "moderada",
+  "7d": "estricta",
+};
+
+function getCancelPolicy(policyKey) {
+  const key = LEGACY_CANCEL_POLICIES[policyKey] ?? policyKey;
+  return CANCEL_POLICIES[key];
+}
 
 const VERTICALS = {
   alojamiento: {
@@ -381,9 +403,7 @@ export default async function ProveedorPage({ params }) {
               const vertical =
                 VERTICALS[service.vertical] ?? VERTICALS.alojamiento;
               const { Icon } = vertical;
-              const cancelLabel =
-                CANCEL_LABELS[service.cancellation_policy] ??
-                service.cancellation_policy;
+              const cancelPolicy = getCancelPolicy(service.cancellation_policy);
 
               return (
                 <li
@@ -414,7 +434,20 @@ export default async function ProveedorPage({ params }) {
                       >
                         {formatPrice(service.precio, vertical.priceSuffix)}
                       </p>
-                      <p className="mt-1 text-xs text-[#888]">{cancelLabel}</p>
+                      {cancelPolicy ? (
+                        <div className="mt-2">
+                          <p className="text-xs font-semibold text-[#444]">
+                            {cancelPolicy.name}
+                          </p>
+                          <p className="mt-0.5 text-xs leading-relaxed text-[#888]">
+                            {cancelPolicy.description}
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="mt-1 text-xs text-[#888]">
+                          {service.cancellation_policy}
+                        </p>
+                      )}
                       {service.reserva_inmediata ? (
                         <span className="mt-2 inline-flex rounded-full bg-green-100 px-2.5 py-0.5 text-[11px] font-semibold text-green-800">
                           Reserva inmediata ⚡

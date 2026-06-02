@@ -23,10 +23,24 @@ const LANGUAGES = [
 ];
 
 const CANCEL_POLICIES = [
-  { value: "24h", label: "Cancelación gratuita hasta 24h antes" },
-  { value: "48h", label: "Hasta 48h antes" },
-  { value: "7d", label: "Hasta 7 días antes" },
-  { value: "none", label: "Sin cancelación" },
+  {
+    value: "flexible",
+    label: "Flexible",
+    description:
+      "Cancelación gratuita hasta 24h antes · 50% de reembolso dentro de las 24h previas",
+  },
+  {
+    value: "moderada",
+    label: "Moderada",
+    description:
+      "Cancelación gratuita hasta 3 días antes · 50% entre 3 días y 24h antes",
+  },
+  {
+    value: "estricta",
+    label: "Estricta",
+    description:
+      "Cancelación gratuita hasta 7 días antes · 50% entre 7 y 3 días antes",
+  },
 ];
 
 const TITULO_PLACEHOLDERS = {
@@ -64,7 +78,7 @@ const EMPTY_SERVICE_DETAILS = {
     tipo_alojamiento: "",
     precio: "",
     nru: "",
-    cancelacion: "48h",
+    cancelacion: "moderada",
     reserva_inmediata: false,
     direccion_exacta: "",
     telefono_contacto: "",
@@ -74,7 +88,7 @@ const EMPTY_SERVICE_DETAILS = {
     precio: "",
     edades: "",
     certificacion: "",
-    cancelacion: "48h",
+    cancelacion: "moderada",
     reserva_inmediata: false,
     telefono_contacto: "",
     modalidad: "domicilio_cliente",
@@ -84,7 +98,7 @@ const EMPTY_SERVICE_DETAILS = {
     titulo: "",
     precio: "",
     tipos: "",
-    cancelacion: "48h",
+    cancelacion: "moderada",
     reserva_inmediata: false,
     telefono_contacto: "",
     modalidad: "domicilio_cliente",
@@ -239,7 +253,7 @@ function CancelPolicySelect({ value, onChange }) {
     >
       {CANCEL_POLICIES.map((policy) => (
         <option key={policy.value} value={policy.value}>
-          {policy.label}
+          {policy.label} — {policy.description}
         </option>
       ))}
     </select>

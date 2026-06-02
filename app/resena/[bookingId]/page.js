@@ -5,14 +5,30 @@ import { useEffect, useState } from "react";
 import { BRAND, SERIF } from "@/app/components/brand";
 import { supabase } from "@/lib/supabase";
 
-const VERTICAL_RATING = {
-  alojamiento: { color: "#1d4f91", submitLabel: "Valorar alojamiento" },
-  mascotas: { color: "#c47d1a", submitLabel: "Valorar cuidador" },
-  ninos: { color: "#0e7a5c", submitLabel: "Valorar niñera" },
+const INACTIVE = "#e0e0e0";
+const ICON_SIZE = 36;
+
+const VERTICAL_CONFIG = {
+  alojamiento: {
+    color: "#1d4f91",
+    submitLabel: "Valorar alojamiento",
+    unit: "casita",
+  },
+  mascotas: {
+    color: "#c47d1a",
+    submitLabel: "Valorar cuidador",
+    unit: "huella",
+  },
+  ninos: {
+    color: "#0e7a5c",
+    submitLabel: "Valorar niñera",
+    unit: "corazón",
+  },
 };
 
-const INACTIVE_COLOR = "#e0e0e0";
-const ICON_SIZE = 36;
+function getVerticalConfig(vertical) {
+  return VERTICAL_CONFIG[vertical] ?? VERTICAL_CONFIG.alojamiento;
+}
 
 function Logo() {
   return (
@@ -24,14 +40,19 @@ function Logo() {
   );
 }
 
-function RatingIcon({ vertical, filled, size = ICON_SIZE }) {
-  const color = filled
-    ? (VERTICAL_RATING[vertical] ?? VERTICAL_RATING.alojamiento).color
-    : INACTIVE_COLOR;
+function VerticalRatingIcon({ vertical, filled, size = ICON_SIZE }) {
+  const { color } = getVerticalConfig(vertical);
+  const activeColor = filled ? color : INACTIVE;
 
   if (vertical === "mascotas") {
     return (
-      <svg width={size} height={size} viewBox="0 0 24 24" fill={color} aria-hidden>
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill={activeColor}
+        aria-hidden
+      >
         <circle cx="7" cy="4" r="1.5" />
         <circle cx="12" cy="3" r="1.5" />
         <circle cx="17" cy="4" r="1.5" />
@@ -43,15 +64,14 @@ function RatingIcon({ vertical, filled, size = ICON_SIZE }) {
 
   if (vertical === "ninos") {
     return (
-      <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden>
-        <path
-          d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"
-          fill={color}
-          stroke={color}
-          strokeWidth={1.5}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill={activeColor}
+        aria-hidden
+      >
+        <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" />
       </svg>
     );
   }
@@ -61,8 +81,8 @@ function RatingIcon({ vertical, filled, size = ICON_SIZE }) {
       width={size}
       height={size}
       viewBox="0 0 24 24"
-      fill="none"
-      stroke={color}
+      fill={filled ? activeColor : "none"}
+      stroke={activeColor}
       strokeWidth={1.5}
       strokeLinecap="round"
       strokeLinejoin="round"
@@ -74,31 +94,44 @@ function RatingIcon({ vertical, filled, size = ICON_SIZE }) {
   );
 }
 
-function RatingDisplay({ vertical, value }) {
+function VerticalRatingDisplay({ vertical, value }) {
   return (
-    <div className="flex gap-1">
-      {[1, 2, 3, 4, 5].map((n) => (
-        <RatingIcon key={n} vertical={vertical} filled={n <= value} />
+    <div className="flex gap-1.5">
+      {[1, 2, 3, 4, 5].map((level) => (
+        <VerticalRatingIcon
+          key={level}
+          vertical={vertical}
+          filled={level <= value}
+        />
       ))}
     </div>
   );
 }
 
-function RatingSelector({ vertical, value, hover, onSelect, onHover, onLeave }) {
+function VerticalRatingSelector({
+  vertical,
+  value,
+  hover,
+  onSelect,
+  onHover,
+  onLeave,
+}) {
+  const { unit } = getVerticalConfig(vertical);
+
   return (
     <div className="flex justify-center gap-2" onMouseLeave={onLeave}>
-      {[1, 2, 3, 4, 5].map((n) => {
-        const active = (hover || value) >= n;
+      {[1, 2, 3, 4, 5].map((level) => {
+        const active = (hover || value) >= level;
         return (
           <button
-            key={n}
+            key={level}
             type="button"
-            onMouseEnter={() => onHover(n)}
-            onClick={() => onSelect(n)}
+            onMouseEnter={() => onHover(level)}
+            onClick={() => onSelect(level)}
             className="transition-transform duration-200 ease-out hover:scale-110"
-            aria-label={`Valoración ${n} de 5`}
+            aria-label={`${level} ${unit}${level > 1 ? "s" : ""}`}
           >
-            <RatingIcon vertical={vertical} filled={active} />
+            <VerticalRatingIcon vertical={vertical} filled={active} />
           </button>
         );
       })}
@@ -125,10 +158,12 @@ export default function ResenaPage() {
   const [bookingMeta, setBookingMeta] = useState(null);
   const [existingReview, setExistingReview] = useState(null);
   const [valoracion, setValoracion] = useState(0);
-  const [hoverStar, setHoverStar] = useState(0);
+  const [hoverRating, setHoverRating] = useState(0);
   const [comentario, setComentario] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
+
+  const verticalConfig = getVerticalConfig(vertical);
 
   useEffect(() => {
     async function load() {
@@ -210,7 +245,7 @@ export default function ResenaPage() {
     setErrorMessage("");
 
     if (!bookingMeta || valoracion < 1) {
-      setErrorMessage("Selecciona una valoración de 1 a 5 estrellas.");
+      setErrorMessage("Selecciona una valoración de 1 a 5.");
       return;
     }
 
@@ -274,7 +309,10 @@ export default function ResenaPage() {
               {proveedorNombre} · {servicioTitulo}
             </p>
             <div className="mt-6 flex justify-center">
-              <RatingDisplay vertical={vertical} value={existingReview.valoracion} />
+              <VerticalRatingDisplay
+                vertical={vertical}
+                value={existingReview.valoracion}
+              />
             </div>
             {existingReview.comentario && (
               <p className="mt-4 rounded-xl bg-[#f7f5f2] px-4 py-3 text-sm leading-relaxed text-[#444]">
@@ -295,13 +333,13 @@ export default function ResenaPage() {
             </p>
 
             <form onSubmit={handleSubmit} className="mt-8 flex flex-col gap-6">
-              <RatingSelector
+              <VerticalRatingSelector
                 vertical={vertical}
                 value={valoracion}
-                hover={hoverStar}
+                hover={hoverRating}
                 onSelect={setValoracion}
-                onHover={setHoverStar}
-                onLeave={() => setHoverStar(0)}
+                onHover={setHoverRating}
+                onLeave={() => setHoverRating(0)}
               />
 
               <div>
@@ -340,10 +378,7 @@ export default function ResenaPage() {
                 className="w-full rounded-xl py-3.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
                 style={{ backgroundColor: BRAND.primary }}
               >
-                {submitting
-                  ? "Enviando…"
-                  : (VERTICAL_RATING[vertical] ?? VERTICAL_RATING.alojamiento)
-                      .submitLabel}
+                {submitting ? "Enviando…" : verticalConfig.submitLabel}
               </button>
             </form>
           </>
