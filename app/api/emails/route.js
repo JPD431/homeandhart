@@ -394,17 +394,19 @@ function mensajeNuevoEmailHtml(data) {
 }
 
 async function sendMensajeNuevoEmail(data) {
-  const required = ["destinatario", "remitente_nombre"];
+  const destinatarioEmail = data.destinatario_email || data.destinatario;
 
-  for (const field of required) {
-    if (!data[field]) {
-      return { error: `Falta el campo requerido: ${field}` };
-    }
+  if (!destinatarioEmail) {
+    return { error: "Falta el campo requerido: destinatario_email" };
+  }
+
+  if (!data.remitente_nombre) {
+    return { error: "Falta el campo requerido: remitente_nombre" };
   }
 
   const result = await resend.emails.send({
     from: FROM,
-    to: data.destinatario,
+    to: destinatarioEmail,
     subject: "Tienes un mensaje nuevo en Home&Heart",
     html: mensajeNuevoEmailHtml(data),
   });

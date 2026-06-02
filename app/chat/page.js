@@ -337,30 +337,28 @@ export default function ChatPage() {
     if (!userId || !selectedConversation) return;
 
     // -- ALTER TABLE conversations ADD COLUMN IF NOT EXISTS ultimo_email_notificacion timestamptz;
-    const recipientId =
+    const otroParticipanteId =
       selectedConversation.participant_a_id === userId
         ? selectedConversation.participant_b_id
         : selectedConversation.participant_a_id;
 
-    const { data: conversation } = await supabase
-      .from("conversations")
-      .select("ultimo_email_notificacion")
-      .eq("id", conversationId)
-      .single();
+    const debeEnviarEmail = true; // temporal para testing
+    if (!debeEnviarEmail) return;
 
-    if (conversation?.ultimo_email_notificacion) {
-      const elapsed =
-        Date.now() - new Date(conversation.ultimo_email_notificacion).getTime();
-      if (elapsed < EMAIL_NOTIFICATION_COOLDOWN_MS) return;
-    }
-
-    const { data: recipientProfile } = await supabase
+    const { data: otroParticipanteProfile } = await supabase
       .from("profiles")
       .select("email_contacto")
-      .eq("id", recipientId)
+      .eq("id", otroParticipanteId)
       .single();
 
-    if (!recipientProfile?.email_contacto) return;
+    const emailDestinatario = otroParticipanteProfile?.email_contacto;
+
+    console.log("userId:", userId);
+    console.log("selectedConversation:", selectedConversation);
+    console.log("otroParticipanteId:", otroParticipanteId);
+    console.log("emailDestinatario:", emailDestinatario);
+
+    if (!emailDestinatario) return;
 
     const { data: senderProfile } = await supabase
       .from("profiles")
@@ -372,12 +370,14 @@ export default function ChatPage() {
       formatShortName(senderProfile?.nombre, senderProfile?.apellido) ||
       "Un usuario";
 
+    console.log("Enviando notificacion email a:", emailDestinatario);
+
     const response = await fetch("/api/emails", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         tipo: "mensaje_nuevo",
-        destinatario: recipientProfile.email_contacto,
+        destinatario_email: emailDestinatario,
         remitente_nombre: remitenteNombre,
         mensaje_preview: messageContent,
         chat_url: `${window.location.origin}/chat?conversation=${conversationId}`,
