@@ -29,8 +29,15 @@ const CANCEL_POLICIES = [
   { value: "none", label: "Sin cancelación" },
 ];
 
+const TITULO_PLACEHOLDERS = {
+  alojamiento: "Ej: Apartamento luminoso en el centro de Madrid",
+  ninos: "Ej: Niñera certificada con experiencia en bebés",
+  mascotas: "Ej: Cuidador de perros con jardín en Salamanca",
+};
+
 const EMPTY_SERVICE_DETAILS = {
   alojamiento: {
+    titulo: "",
     precio: "",
     nru: "",
     cancelacion: "48h",
@@ -39,6 +46,7 @@ const EMPTY_SERVICE_DETAILS = {
     telefono_contacto: "",
   },
   ninos: {
+    titulo: "",
     precio: "",
     edades: "",
     certificacion: "",
@@ -49,6 +57,7 @@ const EMPTY_SERVICE_DETAILS = {
     direccion_exacta: "",
   },
   mascotas: {
+    titulo: "",
     precio: "",
     tipos: "",
     cancelacion: "48h",
@@ -287,6 +296,25 @@ function ReservaModeSelector({ value, onChange }) {
   );
 }
 
+function TituloAnuncioField({ serviceId, value, onChange }) {
+  return (
+    <div className="sm:col-span-2">
+      <label className="mb-1.5 block text-xs font-medium text-[#444]">
+        Título de tu anuncio
+      </label>
+      <input
+        type="text"
+        required
+        placeholder={TITULO_PLACEHOLDERS[serviceId]}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={inputClass}
+        style={{ borderColor: BRAND.border }}
+      />
+    </div>
+  );
+}
+
 function ServiceFields({ serviceId, details, onChange }) {
   function update(field, val) {
     onChange({ ...details, [field]: val });
@@ -295,6 +323,11 @@ function ServiceFields({ serviceId, details, onChange }) {
   if (serviceId === "alojamiento") {
     return (
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        <TituloAnuncioField
+          serviceId={serviceId}
+          value={details.titulo}
+          onChange={(v) => update("titulo", v)}
+        />
         <div>
           <label className="mb-1.5 block text-xs font-medium text-[#444]">
             Precio / noche (€)
@@ -369,6 +402,11 @@ function ServiceFields({ serviceId, details, onChange }) {
   if (serviceId === "ninos") {
     return (
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        <TituloAnuncioField
+          serviceId={serviceId}
+          value={details.titulo}
+          onChange={(v) => update("titulo", v)}
+        />
         <div>
           <label className="mb-1.5 block text-xs font-medium text-[#444]">
             Precio / hora (€)
@@ -460,6 +498,11 @@ function ServiceFields({ serviceId, details, onChange }) {
   if (serviceId === "mascotas") {
     return (
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        <TituloAnuncioField
+          serviceId={serviceId}
+          value={details.titulo}
+          onChange={(v) => update("titulo", v)}
+        />
         <div>
           <label className="mb-1.5 block text-xs font-medium text-[#444]">
             Precio / día (€)
@@ -656,15 +699,10 @@ export default function SerProveedorPage() {
       // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS modalidad text;
       const serviceRows = selectedServices.map((serviceId) => {
         const details = serviceDetails[serviceId];
-        const titulos = {
-          alojamiento: `Alojamiento en ${ciudad.trim()}`,
-          ninos: `Cuidado de niños en ${ciudad.trim()}`,
-          mascotas: `Cuidado de mascotas en ${ciudad.trim()}`,
-        };
         return {
           proveedor_id: user.id,
           vertical: serviceId,
-          titulo: titulos[serviceId],
+          titulo: details.titulo.trim(),
           precio: details.precio ? Number(details.precio) : null,
           cancellation_policy: details.cancelacion,
           ciudad: ciudad.trim(),
