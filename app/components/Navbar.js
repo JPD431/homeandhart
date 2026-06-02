@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { BRAND } from "./brand";
+import ChatNavLink from "./ChatNavLink";
 
 function Logo() {
   return (
@@ -51,6 +52,7 @@ export default function Navbar() {
           </Link>
         </nav>
         <div className="flex items-center gap-2 sm:gap-3">
+          <ChatNavLink />
           <Link
             href="/login"
             className="hidden rounded-lg px-4 py-2 text-sm font-medium text-[#444] no-underline transition-colors hover:bg-[#f7f5f2] sm:inline-block"

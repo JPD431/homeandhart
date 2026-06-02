@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import Navbar from "@/app/components/Navbar";
+import PreguntarButton from "@/app/components/PreguntarButton";
 import { BRAND, SERIF } from "@/app/components/brand";
 import { supabase } from "@/lib/supabase";
 
@@ -306,16 +307,14 @@ export default async function ProveedorPage({ params }) {
                     >
                       Reservar
                     </Link>
-                    <button
-                      type="button"
-                      className="flex-1 rounded-xl border py-3 text-sm font-semibold transition-colors hover:bg-[#e8f0fb]"
+                    <PreguntarButton
+                      proveedorId={id}
+                      className="flex-1 rounded-xl border py-3 text-sm font-semibold transition-colors hover:bg-[#e8f0fb] disabled:opacity-60"
                       style={{
                         borderColor: BRAND.primary,
                         color: BRAND.primary,
                       }}
-                    >
-                      Preguntar
-                    </button>
+                    />
                   </div>
                 </li>
               );
@@ -329,13 +328,13 @@ export default async function ProveedorPage({ params }) {
         className="fixed inset-x-0 bottom-0 border-t bg-white p-4 md:hidden"
         style={{ borderColor: BRAND.border }}
       >
-        <button
-          type="button"
-          className="w-full rounded-xl py-3.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+        <PreguntarButton
+          proveedorId={id}
+          className="w-full rounded-xl py-3.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
           style={{ backgroundColor: DARK_BLUE }}
         >
           Contactar al proveedor
-        </button>
+        </PreguntarButton>
       </div>
     </div>
   );

@@ -178,6 +178,8 @@ function SimulatedMap({ results, hoveredIndex, onPinHover, onPinLeave }) {
 }
 
 function ServiceCard({ service, index, isHovered, onHover, onLeave }) {
+  const router = useRouter();
+  const [preguntando, setPreguntando] = useState(false);
   const profile = service.profiles ?? {};
   const theme = VERTICAL_THEME[service.vertical] ?? VERTICAL_THEME.alojamiento;
   const { Icon } = theme;
@@ -185,6 +187,50 @@ function ServiceCard({ service, index, isHovered, onHover, onLeave }) {
   const zone = getServiceZone(service, profile);
   const subtype = getSubtypeLabel(service);
   const languages = Array.isArray(profile.idiomas) ? profile.idiomas : [];
+
+  async function handlePreguntar() {
+    setPreguntando(true);
+
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      setPreguntando(false);
+      router.push("/login");
+      return;
+    }
+
+    const { data: existing } = await supabase
+      .from("conversations")
+      .select("id")
+      .or(
+        `and(participant_a_id.eq.${user.id},participant_b_id.eq.${proveedorId}),and(participant_a_id.eq.${proveedorId},participant_b_id.eq.${user.id})`,
+      )
+      .maybeSingle();
+
+    if (existing?.id) {
+      router.push(`/chat?conversation=${existing.id}`);
+      setPreguntando(false);
+      return;
+    }
+
+    const { data: created, error } = await supabase
+      .from("conversations")
+      .upsert({
+        participant_a_id: user.id,
+        participant_b_id: proveedorId,
+      })
+      .select("id")
+      .single();
+
+    setPreguntando(false);
+
+    if (error || !created) return;
+
+    router.push(`/chat?conversation=${created.id}`);
+  }
 
   return (
     <li
@@ -286,6 +332,15 @@ function ServiceCard({ service, index, isHovered, onHover, onLeave }) {
           >
             Ver perfil
           </Link>
+          <button
+            type="button"
+            onClick={handlePreguntar}
+            disabled={preguntando}
+            className="flex-1 rounded-xl border py-2.5 text-center text-sm font-semibold transition-opacity hover:opacity-90 disabled:cursor-wait disabled:opacity-60"
+            style={{ borderColor: theme.color, color: theme.color }}
+          >
+            {preguntando ? "…" : "Preguntar 💬"}
+          </button>
           <Link
             href={`/reservar/${service.id}`}
             className="flex-1 rounded-xl py-2.5 text-center text-sm font-semibold text-white no-underline transition-opacity hover:opacity-90"
