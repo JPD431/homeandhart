@@ -35,9 +35,33 @@ const TITULO_PLACEHOLDERS = {
   mascotas: "Ej: Cuidador de perros con jardín en Salamanca",
 };
 
+const TIPO_ALOJAMIENTO_OPTIONS = [
+  {
+    value: "completo",
+    label: "Alojamiento completo — piso o casa entera",
+  },
+  {
+    value: "habitacion_privada",
+    label: "Habitación privada — habitación propia en piso compartido",
+  },
+  {
+    value: "habitacion_compartida",
+    label: "Habitación compartida — compartes la habitación",
+  },
+  {
+    value: "habitacion_hotel",
+    label: "Habitación de hotel",
+  },
+  {
+    value: "otros",
+    label: "Otros",
+  },
+];
+
 const EMPTY_SERVICE_DETAILS = {
   alojamiento: {
     titulo: "",
+    tipo_alojamiento: "",
     precio: "",
     nru: "",
     cancelacion: "48h",
@@ -315,6 +339,36 @@ function TituloAnuncioField({ serviceId, value, onChange }) {
   );
 }
 
+function TipoAlojamientoSelector({ value, onChange }) {
+  return (
+    <div className="sm:col-span-2">
+      <input type="hidden" required value={value || ""} readOnly />
+      <p className="mb-2 text-xs font-medium text-[#444]">Tipo de alojamiento</p>
+      <div className="flex flex-col gap-2">
+        {TIPO_ALOJAMIENTO_OPTIONS.map((option) => {
+          const selected = value === option.value;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => onChange(option.value)}
+              className="rounded-xl border p-3 text-left transition-colors"
+              style={{
+                borderColor: selected ? BRAND.primary : BRAND.border,
+                backgroundColor: selected ? BRAND.light : "#fff",
+              }}
+            >
+              <span className="text-sm font-semibold text-[#1a1a1a]">
+                {option.label}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function ServiceFields({ serviceId, details, onChange }) {
   function update(field, val) {
     onChange({ ...details, [field]: val });
@@ -327,6 +381,10 @@ function ServiceFields({ serviceId, details, onChange }) {
           serviceId={serviceId}
           value={details.titulo}
           onChange={(v) => update("titulo", v)}
+        />
+        <TipoAlojamientoSelector
+          value={details.tipo_alojamiento}
+          onChange={(v) => update("tipo_alojamiento", v)}
         />
         <div>
           <label className="mb-1.5 block text-xs font-medium text-[#444]">
@@ -697,6 +755,7 @@ export default function SerProveedorPage() {
       // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS direccion_exacta text;
       // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS telefono_contacto text;
       // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS modalidad text;
+      // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS tipo_alojamiento text;
       const serviceRows = selectedServices.map((serviceId) => {
         const details = serviceDetails[serviceId];
         return {
@@ -712,6 +771,8 @@ export default function SerProveedorPage() {
           telefono_contacto: details.telefono_contacto?.trim() || null,
           modalidad:
             serviceId === "alojamiento" ? null : details.modalidad || null,
+          tipo_alojamiento:
+            serviceId === "alojamiento" ? details.tipo_alojamiento || null : null,
         };
       });
 
