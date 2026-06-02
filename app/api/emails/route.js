@@ -42,6 +42,50 @@ function emailLayout({ title, bodyHtml }) {
 </html>`;
 }
 
+function formatModalidad(modalidad) {
+  const labels = {
+    domicilio_cliente: "En domicilio del cliente — yo me desplazo",
+    domicilio_proveedor: "En mi domicilio — el cliente se desplaza",
+    ambas: "Ambas opciones disponibles",
+  };
+  return labels[modalidad] || modalidad;
+}
+
+function proveedorContactBlock(data) {
+  const lines = [];
+
+  if (data.direccion_exacta) {
+    lines.push(`📍 Dirección: ${data.direccion_exacta}`);
+  }
+  if (data.telefono_proveedor) {
+    lines.push(`📞 Teléfono: ${data.telefono_proveedor}`);
+  }
+  if (data.modalidad) {
+    lines.push(`🏠 Modalidad: ${formatModalidad(data.modalidad)}`);
+  }
+
+  if (lines.length === 0) return "";
+
+  const linesHtml = lines
+    .map(
+      (line) =>
+        `<p style="margin:8px 0 0;font-size:14px;color:#222;line-height:1.6;">${line}</p>`,
+    )
+    .join("");
+
+  return `<div style="margin:20px 0 0;background-color:#e8f0fb;border-radius:8px;padding:16px 20px;">
+    <p style="margin:0;font-size:14px;font-weight:600;color:${BRAND_PRIMARY};">Datos de contacto del proveedor:</p>
+    ${linesHtml}
+  </div>`;
+}
+
+function clienteContactBlock(data) {
+  return `<div style="margin:20px 0 0;background-color:#e8f0fb;border-radius:8px;padding:16px 20px;">
+    <p style="margin:0;font-size:14px;font-weight:600;color:${BRAND_PRIMARY};">Datos de contacto del cliente:</p>
+    <p style="margin:8px 0 0;font-size:14px;color:#222;line-height:1.6;">📞 Email: ${data.cliente_email}</p>
+  </div>`;
+}
+
 function detailsBlock({ servicio_titulo, fecha_inicio, fecha_fin, precio_total }) {
   const rows = [
     ["Servicio", servicio_titulo],
@@ -81,6 +125,7 @@ function clienteEmailHtml(data) {
         Proveedor: <strong>${data.proveedor_nombre}</strong>
       </p>
       ${mensajeBlock}
+      ${proveedorContactBlock(data)}
       <p style="margin:20px 0 0;font-size:14px;color:#444;line-height:1.6;">
         Hemos compartido tus datos de contacto con el proveedor para que pueda coordinarse contigo.
       </p>`,
@@ -101,6 +146,7 @@ function proveedorEmailHtml(data) {
         Cliente: <strong>${data.cliente_nombre}</strong>
       </p>
       ${mensajeBlock}
+      ${clienteContactBlock(data)}
       <p style="margin:20px 0 0;font-size:14px;color:#444;line-height:1.6;">
         El cliente recibirá tus datos de contacto para coordinarse.
       </p>`,

@@ -274,6 +274,9 @@ export default function ReservarPage() {
         fecha_fin: fechaFin || fechaInicio,
         precio_total: priceSummary.total.toString(),
         mensaje: mensaje || "",
+        direccion_exacta: service.direccion_exacta,
+        telefono_proveedor: service.telefono_contacto,
+        modalidad: service.modalidad,
       }),
     });
 
