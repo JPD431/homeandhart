@@ -154,6 +154,29 @@ function getRequiredDocuments(selectedServices) {
   return docs;
 }
 
+const STORAGE_BUCKET = "documentos";
+
+const DOC_PROFILE_FIELDS = {
+  dni_propietario: "doc_dni_url",
+  dni_nie: "doc_dni_url",
+  certificado_antecedentes: "doc_antecedentes_url",
+  certificado_delitos_sexuales: "doc_antecedentes_sexuales_url",
+};
+
+async function uploadDocumentToStorage(userId, docId, file) {
+  const ext = file.name.includes(".") ? file.name.split(".").pop() : "pdf";
+  const filePath = `${userId}/${docId}-${Date.now()}.${ext}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .upload(filePath, file, { upsert: true, contentType: file.type });
+
+  if (uploadError) throw uploadError;
+
+  const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(filePath);
+  return data.publicUrl;
+}
+
 const inputClass =
   "w-full rounded-xl border px-4 py-3 text-sm text-[#1a1a1a] outline-none focus:ring-2 focus:ring-[#1d4f91]/30";
 
@@ -734,6 +757,25 @@ export default function SerProveedorPage() {
       return;
     }
 
+    const docUrls = {};
+    for (const [docId, file] of Object.entries(documentFiles)) {
+      const field = DOC_PROFILE_FIELDS[docId];
+      if (!field || !file) continue;
+
+      try {
+        docUrls[field] = await uploadDocumentToStorage(user.id, docId, file);
+      } catch (uploadErr) {
+        setSubmitting(false);
+        setErrorMessage(
+          uploadErr.message || "Error al subir la documentación.",
+        );
+        return;
+      }
+    }
+
+    // -- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS doc_dni_url text;
+    // -- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS doc_antecedentes_url text;
+    // -- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS doc_antecedentes_sexuales_url text;
     const { error: profileError } = await supabase.from("profiles").upsert({
       id: user.id,
       role: "proveedor",
@@ -743,6 +785,7 @@ export default function SerProveedorPage() {
       descripcion: sobreTi.trim(),
       location_zone: ciudad.trim(),
       idiomas: selectedLanguages,
+      ...docUrls,
     });
 
     if (profileError) {
