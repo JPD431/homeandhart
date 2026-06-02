@@ -44,7 +44,7 @@ export default function RegistroPage() {
 
     setLoading(true);
 
-    const { error: signUpError } = await supabase.auth.signUp({
+    const { data, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -52,12 +52,21 @@ export default function RegistroPage() {
       },
     });
 
-    setLoading(false);
-
     if (signUpError) {
+      setLoading(false);
       setError(signUpError.message);
       return;
     }
+
+    if (data.user) {
+      await supabase.from("profiles").upsert({
+        id: data.user.id,
+        email_contacto: email,
+        role,
+      });
+    }
+
+    setLoading(false);
 
     router.push("/completar-perfil");
   }

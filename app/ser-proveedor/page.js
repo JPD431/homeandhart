@@ -785,6 +785,7 @@ export default function SerProveedorPage() {
       descripcion: sobreTi.trim(),
       location_zone: ciudad.trim(),
       idiomas: selectedLanguages,
+      email_contacto: user.email,
       ...docUrls,
     });
 
