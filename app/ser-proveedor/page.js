@@ -30,9 +30,33 @@ const CANCEL_POLICIES = [
 ];
 
 const EMPTY_SERVICE_DETAILS = {
-  alojamiento: { precio: "", nru: "", cancelacion: "48h", reserva_inmediata: false },
-  ninos: { precio: "", edades: "", certificacion: "", cancelacion: "48h", reserva_inmediata: false },
-  mascotas: { precio: "", tipos: "", cancelacion: "48h", reserva_inmediata: false },
+  alojamiento: {
+    precio: "",
+    nru: "",
+    cancelacion: "48h",
+    reserva_inmediata: false,
+    direccion_exacta: "",
+    telefono_contacto: "",
+  },
+  ninos: {
+    precio: "",
+    edades: "",
+    certificacion: "",
+    cancelacion: "48h",
+    reserva_inmediata: false,
+    telefono_contacto: "",
+    modalidad: "domicilio_cliente",
+    direccion_exacta: "",
+  },
+  mascotas: {
+    precio: "",
+    tipos: "",
+    cancelacion: "48h",
+    reserva_inmediata: false,
+    telefono_contacto: "",
+    modalidad: "domicilio_cliente",
+    direccion_exacta: "",
+  },
 };
 
 const DOCUMENT_CATALOG = {
@@ -166,6 +190,59 @@ function CancelPolicySelect({ value, onChange }) {
   );
 }
 
+function FieldNote({ children }) {
+  return <p className="mt-1 text-xs text-[#888]">{children}</p>;
+}
+
+function ModalidadServiceSelector({ serviceId, value, onChange }) {
+  const enMiDomicilioLabel =
+    serviceId === "mascotas"
+      ? "En mi domicilio — el cliente trae la mascota"
+      : "En mi domicilio — el cliente trae al niño";
+
+  const options = [
+    {
+      value: "domicilio_cliente",
+      label: "En domicilio del cliente — yo me desplazo",
+    },
+    {
+      value: "domicilio_proveedor",
+      label: enMiDomicilioLabel,
+    },
+    {
+      value: "ambas",
+      label: "Ambas opciones disponibles",
+    },
+  ];
+
+  return (
+    <div className="sm:col-span-2">
+      <p className="mb-2 text-xs font-medium text-[#444]">Modalidad de servicio</p>
+      <div className="flex flex-col gap-2">
+        {options.map((option) => {
+          const selected = value === option.value;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => onChange(option.value)}
+              className="rounded-xl border p-3 text-left transition-colors"
+              style={{
+                borderColor: selected ? BRAND.primary : BRAND.border,
+                backgroundColor: selected ? BRAND.light : "#fff",
+              }}
+            >
+              <span className="text-sm font-semibold text-[#1a1a1a]">
+                {option.label}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function ReservaModeSelector({ value, onChange }) {
   const isImmediate = value === true;
 
@@ -252,6 +329,35 @@ function ServiceFields({ serviceId, details, onChange }) {
             onChange={(v) => update("cancelacion", v)}
           />
         </div>
+        <div className="sm:col-span-2">
+          <label className="mb-1.5 block text-xs font-medium text-[#444]">
+            Dirección exacta del alojamiento
+          </label>
+          <input
+            type="text"
+            value={details.direccion_exacta}
+            onChange={(e) => update("direccion_exacta", e.target.value)}
+            className={inputClass}
+            style={{ borderColor: BRAND.border }}
+          />
+          <FieldNote>
+            Solo se comparte con el cliente cuando la reserva está confirmada.
+            Nunca aparece en tu perfil público.
+          </FieldNote>
+        </div>
+        <div className="sm:col-span-2">
+          <label className="mb-1.5 block text-xs font-medium text-[#444]">
+            Teléfono de contacto
+          </label>
+          <input
+            type="text"
+            value={details.telefono_contacto}
+            onChange={(e) => update("telefono_contacto", e.target.value)}
+            className={inputClass}
+            style={{ borderColor: BRAND.border }}
+          />
+          <FieldNote>Solo se comparte al confirmar la reserva.</FieldNote>
+        </div>
         <ReservaModeSelector
           value={details.reserva_inmediata}
           onChange={(v) => update("reserva_inmediata", v)}
@@ -310,6 +416,39 @@ function ServiceFields({ serviceId, details, onChange }) {
             onChange={(v) => update("cancelacion", v)}
           />
         </div>
+        <div className="sm:col-span-2">
+          <label className="mb-1.5 block text-xs font-medium text-[#444]">
+            Teléfono de contacto
+          </label>
+          <input
+            type="text"
+            value={details.telefono_contacto}
+            onChange={(e) => update("telefono_contacto", e.target.value)}
+            className={inputClass}
+            style={{ borderColor: BRAND.border }}
+          />
+        </div>
+        <ModalidadServiceSelector
+          serviceId="ninos"
+          value={details.modalidad}
+          onChange={(v) => update("modalidad", v)}
+        />
+        {(details.modalidad === "domicilio_proveedor" ||
+          details.modalidad === "ambas") && (
+          <div className="sm:col-span-2">
+            <label className="mb-1.5 block text-xs font-medium text-[#444]">
+              Dirección de tu domicilio
+            </label>
+            <input
+              type="text"
+              value={details.direccion_exacta}
+              onChange={(e) => update("direccion_exacta", e.target.value)}
+              className={inputClass}
+              style={{ borderColor: BRAND.border }}
+            />
+            <FieldNote>Solo se comparte al confirmar la reserva.</FieldNote>
+          </div>
+        )}
         <ReservaModeSelector
           value={details.reserva_inmediata}
           onChange={(v) => update("reserva_inmediata", v)}
@@ -356,6 +495,39 @@ function ServiceFields({ serviceId, details, onChange }) {
             onChange={(v) => update("cancelacion", v)}
           />
         </div>
+        <div className="sm:col-span-2">
+          <label className="mb-1.5 block text-xs font-medium text-[#444]">
+            Teléfono de contacto
+          </label>
+          <input
+            type="text"
+            value={details.telefono_contacto}
+            onChange={(e) => update("telefono_contacto", e.target.value)}
+            className={inputClass}
+            style={{ borderColor: BRAND.border }}
+          />
+        </div>
+        <ModalidadServiceSelector
+          serviceId="mascotas"
+          value={details.modalidad}
+          onChange={(v) => update("modalidad", v)}
+        />
+        {(details.modalidad === "domicilio_proveedor" ||
+          details.modalidad === "ambas") && (
+          <div className="sm:col-span-2">
+            <label className="mb-1.5 block text-xs font-medium text-[#444]">
+              Dirección de tu domicilio
+            </label>
+            <input
+              type="text"
+              value={details.direccion_exacta}
+              onChange={(e) => update("direccion_exacta", e.target.value)}
+              className={inputClass}
+              style={{ borderColor: BRAND.border }}
+            />
+            <FieldNote>Solo se comparte al confirmar la reserva.</FieldNote>
+          </div>
+        )}
         <ReservaModeSelector
           value={details.reserva_inmediata}
           onChange={(v) => update("reserva_inmediata", v)}
@@ -479,6 +651,9 @@ export default function SerProveedorPage() {
     }
 
     if (selectedServices.length > 0) {
+      // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS direccion_exacta text;
+      // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS telefono_contacto text;
+      // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS modalidad text;
       const serviceRows = selectedServices.map((serviceId) => {
         const details = serviceDetails[serviceId];
         const titulos = {
@@ -495,6 +670,10 @@ export default function SerProveedorPage() {
           ciudad: ciudad.trim(),
           disponible: true,
           reserva_inmediata: details.reserva_inmediata === true,
+          direccion_exacta: details.direccion_exacta?.trim() || null,
+          telefono_contacto: details.telefono_contacto?.trim() || null,
+          modalidad:
+            serviceId === "alojamiento" ? null : details.modalidad || null,
         };
       });
 
