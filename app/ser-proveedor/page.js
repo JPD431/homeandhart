@@ -154,7 +154,7 @@ function getRequiredDocuments(selectedServices) {
   return docs;
 }
 
-const STORAGE_BUCKET = "documentos";
+const STORAGE_BUCKET = "Documentos";
 
 const DOC_PROFILE_FIELDS = {
   dni_propietario: "doc_dni_url",

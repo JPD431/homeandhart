@@ -303,6 +303,68 @@ async function sendReservaConfirmadaEmails(data) {
   return { success: true };
 }
 
+const AMBER = "#c47d1a";
+
+function solicitudDocumentosEmailHtml(data) {
+  const documentos = Array.isArray(data.documentos) ? data.documentos : [];
+  const listaHtml = documentos
+    .map(
+      (doc) =>
+        `<li style="margin:6px 0;font-size:14px;color:#222;line-height:1.5;">${doc}</li>`,
+    )
+    .join("");
+
+  const mensajeBlock = data.mensaje
+    ? `<p style="margin:16px 0 0;font-size:14px;color:#444;line-height:1.6;"><strong>Mensaje del equipo:</strong> ${data.mensaje}</p>`
+    : "";
+
+  const perfilUrl = data.perfil_url || "https://homeandheart.es/ser-proveedor";
+
+  return emailLayout({
+    title: "Home&Heart — Necesitamos documentación adicional",
+    bodyHtml: `
+      <h1 style="margin:0;font-size:22px;color:${BRAND_PRIMARY};font-weight:600;text-align:center;">Necesitamos documentación adicional</h1>
+      <p style="margin:20px 0 0;font-size:14px;color:#444;line-height:1.6;">
+        Hola <strong>${data.proveedor_nombre || "proveedor"}</strong>,
+      </p>
+      <p style="margin:12px 0 0;font-size:14px;color:#444;line-height:1.6;">
+        Para completar la revisión de tu perfil en Home&amp;Heart, necesitamos que nos envíes la siguiente documentación:
+      </p>
+      <ul style="margin:16px 0 0;padding-left:20px;background-color:#fdf3e3;border-radius:8px;padding:16px 20px 16px 36px;">
+        ${listaHtml}
+      </ul>
+      ${mensajeBlock}
+      <p style="margin:24px 0 0;text-align:center;">
+        <a href="${perfilUrl}" style="display:inline-block;background-color:${AMBER};color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:12px 24px;border-radius:8px;">
+          Actualizar mi perfil
+        </a>
+      </p>`,
+  });
+}
+
+async function sendSolicitudDocumentosEmail(data) {
+  const required = ["destinatario", "documentos"];
+
+  for (const field of required) {
+    if (!data[field] || (field === "documentos" && data.documentos.length === 0)) {
+      return { error: `Falta el campo requerido: ${field}` };
+    }
+  }
+
+  const result = await resend.emails.send({
+    from: FROM,
+    to: data.destinatario,
+    subject: data.asunto || "Home&Heart — Necesitamos documentación adicional",
+    html: solicitudDocumentosEmailHtml(data),
+  });
+
+  if (result.error) {
+    return { error: result.error.message };
+  }
+
+  return { success: true };
+}
+
 export async function POST(request) {
   try {
     if (!process.env.RESEND_API_KEY) {
@@ -317,6 +379,16 @@ export async function POST(request) {
 
     if (tipo === "reserva_confirmada") {
       const result = await sendReservaConfirmadaEmails(data);
+
+      if (result.error) {
+        return Response.json({ error: result.error }, { status: 400 });
+      }
+
+      return Response.json({ success: true });
+    }
+
+    if (tipo === "solicitud_documentos") {
+      const result = await sendSolicitudDocumentosEmail(data);
 
       if (result.error) {
         return Response.json({ error: result.error }, { status: 400 });

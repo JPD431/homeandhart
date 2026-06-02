@@ -36,6 +36,51 @@ const PROVIDER_DOCUMENTS = [
   },
 ];
 
+const STORAGE_BUCKET = "Documentos";
+const SIGNED_URL_TTL = 3600;
+const AMBER = "#c47d1a";
+
+const REQUESTABLE_DOCUMENTS = [
+  { id: "dni_nie", label: "DNI o NIE vigente" },
+  { id: "antecedentes", label: "Certificado de antecedentes penales" },
+  { id: "delitos_sexuales", label: "Certificado de delitos de naturaleza sexual" },
+  { id: "nru", label: "NRU (solo alojamiento)", alojamientoOnly: true },
+  { id: "seguro_rc", label: "Seguro de responsabilidad civil" },
+  { id: "primeros_auxilios", label: "Certificado de primeros auxilios" },
+  { id: "titulacion", label: "Titulación o formación profesional" },
+  { id: "foto_perfil", label: "Foto de perfil real y reciente" },
+];
+
+function extractStoragePath(storedValue) {
+  if (!storedValue) return null;
+
+  const publicMatch =
+    storedValue.match(/\/object\/public\/Documentos\/(.+)$/i) ||
+    storedValue.match(/\/object\/public\/documentos\/(.+)$/i);
+  if (publicMatch) {
+    return decodeURIComponent(publicMatch[1].split("?")[0]);
+  }
+
+  const signedMatch = storedValue.match(/\/object\/sign\/Documentos\/(.+?)(\?|$)/i);
+  if (signedMatch) {
+    return decodeURIComponent(signedMatch[1]);
+  }
+
+  return storedValue.replace(/^\/+/, "");
+}
+
+async function getDocumentSignedUrl(storedValue) {
+  const path = extractStoragePath(storedValue);
+  if (!path) return null;
+
+  const { data, error } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .createSignedUrl(path, SIGNED_URL_TTL);
+
+  if (error) throw error;
+  return data.signedUrl;
+}
+
 function FileIcon({ className }) {
   return (
     <svg
@@ -56,13 +101,35 @@ function FileIcon({ className }) {
 }
 
 function ProviderDocuments({ provider }) {
+  const [loadingDoc, setLoadingDoc] = useState(null);
+  const [docError, setDocError] = useState("");
   const available = PROVIDER_DOCUMENTS.filter((doc) => provider[doc.urlKey]);
+
+  async function handleOpenDocument(urlKey, storedValue) {
+    setLoadingDoc(urlKey);
+    setDocError("");
+
+    try {
+      const signedUrl = await getDocumentSignedUrl(storedValue);
+      if (signedUrl) {
+        window.open(signedUrl, "_blank", "noopener,noreferrer");
+      }
+    } catch (err) {
+      setDocError(err.message || "No se pudo abrir el documento.");
+    } finally {
+      setLoadingDoc(null);
+    }
+  }
 
   return (
     <div className="mt-4">
       <p className="text-xs font-semibold uppercase tracking-wide text-[#888]">
         Documentación aportada
       </p>
+
+      {docError && (
+        <p className="mt-1 text-xs text-red-600">{docError}</p>
+      )}
 
       {available.length === 0 ? (
         <p className="mt-1 text-sm text-[#888]">
@@ -72,20 +139,22 @@ function ProviderDocuments({ provider }) {
         <ul className="mt-2 flex flex-col gap-2">
           {available.map((doc) => (
             <li key={doc.urlKey}>
-              <a
-                href={provider[doc.urlKey]}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2.5 text-sm no-underline transition-colors hover:bg-[#fafafa]"
+              <button
+                type="button"
+                disabled={loadingDoc === doc.urlKey}
+                onClick={() => handleOpenDocument(doc.urlKey, provider[doc.urlKey])}
+                className="flex w-full flex-wrap items-center gap-2 rounded-xl border px-3 py-2.5 text-left text-sm transition-colors hover:bg-[#fafafa] disabled:cursor-wait disabled:opacity-70"
                 style={{ borderColor: BRAND.border, color: BRAND.primary }}
               >
                 <FileIcon className="h-5 w-5 shrink-0" />
                 <span className="font-medium text-[#1a1a1a]">{doc.name}</span>
-                <span className="text-[#666]">· {doc.linkLabel}</span>
+                <span className="text-[#666]">
+                  · {loadingDoc === doc.urlKey ? "Abriendo…" : doc.linkLabel}
+                </span>
                 <span className="ml-auto rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold text-green-700">
                   Subido ✓
                 </span>
-              </a>
+              </button>
             </li>
           ))}
         </ul>
@@ -127,7 +196,12 @@ export default function AdminPage() {
   const [activeTab, setActiveTab] = useState("pendientes");
   const [rejectingId, setRejectingId] = useState(null);
   const [rejectReason, setRejectReason] = useState("");
+  const [requestingDocsId, setRequestingDocsId] = useState(null);
+  const [selectedDocuments, setSelectedDocuments] = useState([]);
+  const [requestMessage, setRequestMessage] = useState("");
+  const [requestSending, setRequestSending] = useState(null);
   const [actionLoading, setActionLoading] = useState(null);
+  const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
 
   const loadData = useCallback(async () => {
@@ -257,6 +331,75 @@ export default function AdminPage() {
     await loadData();
   }
 
+  function toggleDocumentSelection(docId) {
+    setSelectedDocuments((prev) =>
+      prev.includes(docId) ? prev.filter((id) => id !== docId) : [...prev, docId],
+    );
+  }
+
+  function openDocumentRequest(providerId) {
+    setRejectingId(null);
+    setRejectReason("");
+    setRequestingDocsId(providerId);
+    setSelectedDocuments([]);
+    setRequestMessage("");
+    setSuccessMessage("");
+  }
+
+  async function handleSendDocumentRequest(provider) {
+    if (selectedDocuments.length === 0) {
+      setErrorMessage("Selecciona al menos un documento para solicitar.");
+      return;
+    }
+
+    if (!provider.email_contacto) {
+      setErrorMessage("Este proveedor no tiene email de contacto registrado.");
+      return;
+    }
+
+    const documentLabels = selectedDocuments.map(
+      (id) => REQUESTABLE_DOCUMENTS.find((d) => d.id === id)?.label || id,
+    );
+
+    setRequestSending(provider.id);
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    try {
+      const response = await fetch("/api/emails", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tipo: "solicitud_documentos",
+          destinatario: provider.email_contacto,
+          proveedor_nombre: fullName(provider),
+          documentos: documentLabels,
+          mensaje: requestMessage.trim() || "",
+          asunto: "Home&Heart — Necesitamos documentación adicional",
+          perfil_url: `${window.location.origin}/ser-proveedor`,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || result.error) {
+        setErrorMessage(result.error || "No se pudo enviar la solicitud.");
+        return;
+      }
+
+      setSuccessMessage(
+        `Solicitud enviada a ${provider.email_contacto}`,
+      );
+      setRequestingDocsId(null);
+      setSelectedDocuments([]);
+      setRequestMessage("");
+    } catch {
+      setErrorMessage("Error de conexión al enviar la solicitud.");
+    } finally {
+      setRequestSending(null);
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen font-sans" style={{ backgroundColor: BRAND.warm }}>
@@ -294,7 +437,10 @@ export default function AdminPage() {
                 onClick={() => {
                   setActiveTab(tab.id);
                   setRejectingId(null);
+                  setRequestingDocsId(null);
                   setRejectReason("");
+                  setSelectedDocuments([]);
+                  setRequestMessage("");
                 }}
                 className="rounded-full border px-4 py-2 text-sm font-medium transition-colors"
                 style={{
@@ -324,6 +470,12 @@ export default function AdminPage() {
           </p>
         )}
 
+        {successMessage && (
+          <p className="mt-4 rounded-lg bg-green-50 px-4 py-3 text-sm text-green-700">
+            {successMessage}
+          </p>
+        )}
+
         {filteredProviders.length === 0 ? (
           <p
             className="mt-8 rounded-2xl border bg-white px-6 py-10 text-center text-sm text-[#666]"
@@ -339,7 +491,12 @@ export default function AdminPage() {
                 ? provider.idiomas
                 : [];
               const isRejecting = rejectingId === provider.id;
+              const isRequestingDocs = requestingDocsId === provider.id;
               const isBusy = actionLoading === provider.id;
+              const hasAlojamiento = services.some((s) => s.vertical === "alojamiento");
+              const availableDocuments = REQUESTABLE_DOCUMENTS.filter(
+                (doc) => !doc.alojamientoOnly || hasAlojamiento,
+              );
 
               return (
                 <li
@@ -469,6 +626,73 @@ export default function AdminPage() {
                             </button>
                           </div>
                         </div>
+                      ) : isRequestingDocs ? (
+                        <div className="flex flex-col gap-3">
+                          <p className="text-xs font-medium text-[#444]">
+                            Documentos a solicitar
+                          </p>
+                          <div className="flex flex-col gap-2">
+                            {availableDocuments.map((doc) => {
+                              const checked = selectedDocuments.includes(doc.id);
+                              return (
+                                <label
+                                  key={doc.id}
+                                  className="flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm"
+                                  style={{
+                                    borderColor: checked ? AMBER : BRAND.border,
+                                    backgroundColor: checked ? "#fdf3e3" : "#fff",
+                                  }}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={() => toggleDocumentSelection(doc.id)}
+                                    className="accent-[#c47d1a]"
+                                  />
+                                  <span className="text-[#444]">{doc.label}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                          <div>
+                            <label className="text-xs font-medium text-[#444]">
+                              Mensaje adicional (opcional)
+                            </label>
+                            <textarea
+                              rows={3}
+                              value={requestMessage}
+                              onChange={(e) => setRequestMessage(e.target.value)}
+                              placeholder="Añade instrucciones o contexto para el proveedor…"
+                              className="mt-1.5 w-full rounded-xl border px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-[#c47d1a]/30"
+                              style={{ borderColor: BRAND.border }}
+                            />
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              disabled={requestSending === provider.id}
+                              onClick={() => handleSendDocumentRequest(provider)}
+                              className="rounded-xl px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                              style={{ backgroundColor: AMBER }}
+                            >
+                              {requestSending === provider.id
+                                ? "Enviando…"
+                                : "Enviar solicitud"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setRequestingDocsId(null);
+                                setSelectedDocuments([]);
+                                setRequestMessage("");
+                              }}
+                              className="rounded-xl border px-4 py-2 text-sm font-medium text-[#666]"
+                              style={{ borderColor: BRAND.border }}
+                            >
+                              Cancelar
+                            </button>
+                          </div>
+                        </div>
                       ) : (
                         <div className="flex flex-wrap gap-2">
                           <button
@@ -485,10 +709,20 @@ export default function AdminPage() {
                             onClick={() => {
                               setRejectingId(provider.id);
                               setRejectReason("");
+                              setRequestingDocsId(null);
                             }}
                             className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
                           >
                             Rechazar ✗
+                          </button>
+                          <button
+                            type="button"
+                            disabled={isBusy}
+                            onClick={() => openDocumentRequest(provider.id)}
+                            className="rounded-xl px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                            style={{ backgroundColor: AMBER }}
+                          >
+                            Solicitar documentos 📎
                           </button>
                         </div>
                       )}
