@@ -208,6 +208,15 @@ function formatEuro(amount) {
   return `${Number(amount).toFixed(2)}€`;
 }
 
+function getCardBrandLabel(brand) {
+  const labels = {
+    visa: "Visa",
+    mastercard: "Mastercard",
+    amex: "American Express",
+  };
+  return labels[brand] ?? (brand ? brand.charAt(0).toUpperCase() + brand.slice(1) : "Tarjeta");
+}
+
 function calculateServiceBasePrice(svc, { fechaInicio, fechaFin, duracionHoras, mainVertical }) {
   const unitPrice = Number(svc?.precio) || 0;
   if (!unitPrice) return { base: 0, detail: "", ready: false };
@@ -275,10 +284,98 @@ function buildBookingPayload({
   };
 }
 
+function SavedCardCheckout({
+  precioTotal,
+  paymentMethod,
+  stripeCustomerId,
+  userId,
+  metadata,
+  onPaymentSuccess,
+  onUseNewCard,
+  disabled,
+}) {
+  const [paying, setPaying] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handlePayWithSaved() {
+    setPaying(true);
+    setError("");
+
+    try {
+      const intentRes = await fetch("/api/stripe/create-payment-intent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: precioTotal,
+          customer: stripeCustomerId,
+          payment_method: paymentMethod.id,
+          confirm_saved: true,
+          metadata: {
+            service_id: String(metadata.service_id),
+            cliente_id: String(metadata.cliente_id),
+            grupo_reserva: String(metadata.grupo_reserva),
+          },
+        }),
+      });
+      const intentData = await intentRes.json();
+
+      if (!intentRes.ok || intentData.error) {
+        throw new Error(intentData.error || "No se pudo procesar el pago.");
+      }
+
+      await onPaymentSuccess(intentData.paymentIntentId);
+    } catch (err) {
+      setError(err.message || "Error al procesar el pago.");
+    } finally {
+      setPaying(false);
+    }
+  }
+
+  return (
+    <div className="mt-6">
+      <div
+        className="rounded-xl border px-4 py-4"
+        style={{ borderColor: BRAND.border, backgroundColor: BRAND.light }}
+      >
+        <p className="text-sm font-semibold text-[#1a1a1a]">
+          {getCardBrandLabel(paymentMethod.card?.brand)} ····{" "}
+          {paymentMethod.card?.last4}
+        </p>
+      </div>
+      {error && (
+        <p className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </p>
+      )}
+      <button
+        type="button"
+        disabled={paying || disabled}
+        onClick={handlePayWithSaved}
+        className="mt-4 w-full rounded-xl py-3.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+        style={{ backgroundColor: BRAND.primary }}
+      >
+        {paying ? "Procesando pago…" : "Pagar con esta tarjeta"}
+      </button>
+      <button
+        type="button"
+        onClick={onUseNewCard}
+        className="mt-3 w-full text-center text-sm font-medium no-underline hover:underline"
+        style={{ color: BRAND.primary }}
+      >
+        Usar otra tarjeta
+      </button>
+    </div>
+  );
+}
+
 function CheckoutForm({
   precioTotal,
   paymentIntentId,
   metadata,
+  stripeCustomerId,
+  userId,
+  userEmail,
+  clienteNombre,
   onPaymentSuccess,
   disabled,
 }) {
@@ -329,9 +426,46 @@ function CheckoutForm({
     }
 
     const confirmedId = paymentIntent?.id || paymentIntentId;
+    const paymentMethodId =
+      typeof paymentIntent?.payment_method === "string"
+        ? paymentIntent.payment_method
+        : paymentIntent?.payment_method?.id;
 
     try {
       await onPaymentSuccess(confirmedId);
+
+      let customerId = stripeCustomerId;
+      if (!customerId) {
+        const customerRes = await fetch("/api/stripe/customer", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: userEmail,
+            nombre: clienteNombre || "Cliente",
+          }),
+        });
+        const customerData = await customerRes.json();
+        if (customerRes.ok && customerData.customer_id) {
+          customerId = customerData.customer_id;
+        }
+      }
+
+      if (paymentMethodId && customerId) {
+        await fetch("/api/stripe/customer", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "attach",
+            payment_method_id: paymentMethodId,
+            customer_id: customerId,
+          }),
+        });
+
+        await supabase
+          .from("profiles")
+          .update({ stripe_customer_id: customerId })
+          .eq("id", userId);
+      }
     } catch (err) {
       setError(err.message || "Error al guardar la reserva.");
     } finally {
@@ -383,6 +517,11 @@ export default function ReservarPage() {
   const [paymentIntentId, setPaymentIntentId] = useState(null);
   const [grupoReserva, setGrupoReserva] = useState(null);
   const [paymentIntentLoading, setPaymentIntentLoading] = useState(false);
+  const [stripeCustomerId, setStripeCustomerId] = useState(null);
+  const [savedPaymentMethods, setSavedPaymentMethods] = useState([]);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(null);
+  const [useNewCard, setUseNewCard] = useState(false);
+  const [paymentMethodsLoading, setPaymentMethodsLoading] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -401,11 +540,47 @@ export default function ReservarPage() {
 
       const { data: perfilClienteData } = await supabase
         .from("profiles")
-        .select("nombre")
+        .select("nombre, apellido, stripe_customer_id")
         .eq("id", user.id)
         .single();
 
       setPerfilCliente(perfilClienteData);
+
+      setPaymentMethodsLoading(true);
+      try {
+        const nombre = [perfilClienteData?.nombre, perfilClienteData?.apellido]
+          .filter(Boolean)
+          .join(" ");
+        const customerRes = await fetch("/api/stripe/customer", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: user.email,
+            nombre: nombre || "Cliente",
+            customer_id: perfilClienteData?.stripe_customer_id || undefined,
+          }),
+        });
+        const customerData = await customerRes.json();
+
+        if (customerRes.ok && customerData.customer_id) {
+          setStripeCustomerId(customerData.customer_id);
+          setSavedPaymentMethods(customerData.paymentMethods ?? []);
+          setSelectedPaymentMethod(customerData.paymentMethods?.[0] ?? null);
+          setUseNewCard(!(customerData.paymentMethods?.length > 0));
+
+          if (customerData.customer_id !== perfilClienteData?.stripe_customer_id) {
+            await supabase
+              .from("profiles")
+              .update({ stripe_customer_id: customerData.customer_id })
+              .eq("id", user.id);
+          }
+        }
+      } catch {
+        setSavedPaymentMethods([]);
+        setUseNewCard(true);
+      } finally {
+        setPaymentMethodsLoading(false);
+      }
 
       const { data, error } = await supabase
         .from("services")
@@ -587,6 +762,13 @@ export default function ReservarPage() {
     const grupo = crypto.randomUUID();
     setGrupoReserva(grupo);
 
+    if (savedPaymentMethods.length > 0 && !useNewCard) {
+      setClientSecret(null);
+      setPaymentIntentId(null);
+      setPaymentIntentLoading(false);
+      return;
+    }
+
     let cancelled = false;
     setPaymentIntentLoading(true);
 
@@ -597,6 +779,7 @@ export default function ReservarPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             amount: priceSummary.total,
+            customer: stripeCustomerId || undefined,
             metadata: {
               service_id: String(serviceId),
               cliente_id: String(userId),
@@ -623,7 +806,16 @@ export default function ReservarPage() {
     return () => {
       cancelled = true;
     };
-  }, [priceSummary.ready, priceSummary.total, userId, serviceId, bundleIds]);
+  }, [
+    priceSummary.ready,
+    priceSummary.total,
+    userId,
+    serviceId,
+    bundleIds,
+    useNewCard,
+    savedPaymentMethods.length,
+    stripeCustomerId,
+  ]);
 
   const completeBooking = useCallback(
     async (confirmedPaymentIntentId) => {
@@ -1138,24 +1330,57 @@ export default function ReservarPage() {
             )}
 
             {priceSummary.ready && priceSummary.total > 0 ? (
-              paymentIntentLoading ? (
+              paymentMethodsLoading || paymentIntentLoading ? (
                 <p className="mt-6 text-center text-sm text-[#666]">
                   Preparando formulario de pago…
                 </p>
+              ) : savedPaymentMethods.length > 0 &&
+                !useNewCard &&
+                selectedPaymentMethod &&
+                paymentMetadata &&
+                stripeCustomerId ? (
+                <SavedCardCheckout
+                  precioTotal={priceSummary.total}
+                  paymentMethod={selectedPaymentMethod}
+                  stripeCustomerId={stripeCustomerId}
+                  userId={userId}
+                  metadata={paymentMetadata}
+                  onPaymentSuccess={completeBooking}
+                  onUseNewCard={() => setUseNewCard(true)}
+                  disabled={!!successMessage}
+                />
               ) : clientSecret && paymentMetadata ? (
-                <Elements
-                  key={clientSecret}
-                  stripe={stripePromise}
-                  options={{ clientSecret }}
-                >
-                  <CheckoutForm
-                    precioTotal={priceSummary.total}
-                    paymentIntentId={paymentIntentId}
-                    metadata={paymentMetadata}
-                    onPaymentSuccess={completeBooking}
-                    disabled={!!successMessage}
-                  />
-                </Elements>
+                <>
+                  <Elements
+                    key={clientSecret}
+                    stripe={stripePromise}
+                    options={{ clientSecret }}
+                  >
+                    <CheckoutForm
+                      precioTotal={priceSummary.total}
+                      paymentIntentId={paymentIntentId}
+                      metadata={paymentMetadata}
+                      stripeCustomerId={stripeCustomerId}
+                      userId={userId}
+                      userEmail={userEmail}
+                      clienteNombre={[perfilCliente?.nombre, perfilCliente?.apellido]
+                        .filter(Boolean)
+                        .join(" ")}
+                      onPaymentSuccess={completeBooking}
+                      disabled={!!successMessage}
+                    />
+                  </Elements>
+                  {savedPaymentMethods.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setUseNewCard(false)}
+                      className="mt-3 w-full text-center text-sm font-medium no-underline hover:underline"
+                      style={{ color: BRAND.primary }}
+                    >
+                      Usar tarjeta guardada
+                    </button>
+                  )}
+                </>
               ) : (
                 <p className="mt-6 text-center text-sm text-red-600">
                   No se pudo cargar el pago. Revisa las fechas e inténtalo de nuevo.

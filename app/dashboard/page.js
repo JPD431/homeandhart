@@ -1,11 +1,22 @@
 "use client";
 
+import { loadStripe } from "@stripe/stripe-js";
+import {
+  Elements,
+  PaymentElement,
+  useElements,
+  useStripe,
+} from "@stripe/react-stripe-js";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import Navbar from "@/app/components/Navbar";
 import { BRAND, SERIF } from "@/app/components/brand";
 import { supabase } from "@/lib/supabase";
+
+const stripePromise = loadStripe(
+  process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
+);
 
 const VERTICALS = {
   alojamiento: { label: "Alojamiento", priceSuffix: "/ noche" },
@@ -25,6 +36,76 @@ const STATUS_STYLES = {
 // -- ALTER TABLE bookings ADD COLUMN IF NOT EXISTS confirmacion_cliente boolean DEFAULT false;
 // -- ALTER TABLE bookings ADD COLUMN IF NOT EXISTS incidencia_descripcion text;
 // -- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS stripe_account_id text;
+// -- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS stripe_customer_id text;
+
+function getCardBrandLabel(brand) {
+  const labels = {
+    visa: "Visa",
+    mastercard: "Mastercard",
+    amex: "American Express",
+  };
+  return labels[brand] ?? (brand ? brand.charAt(0).toUpperCase() + brand.slice(1) : "Tarjeta");
+}
+
+function AddCardForm({ onSuccess, onCancel }) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (!stripe || !elements) return;
+
+    setSaving(true);
+    setError("");
+
+    const { error: confirmError } = await stripe.confirmSetup({
+      elements,
+      confirmParams: {
+        return_url: `${window.location.origin}/dashboard`,
+      },
+      redirect: "if_required",
+    });
+
+    setSaving(false);
+
+    if (confirmError) {
+      setError(confirmError.message);
+      return;
+    }
+
+    onSuccess();
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="mt-4 flex flex-col gap-3">
+      <PaymentElement />
+      {error && (
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
+      )}
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <button
+          type="submit"
+          disabled={!stripe || saving}
+          className="rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+          style={{ backgroundColor: BRAND.primary }}
+        >
+          {saving ? "Guardando…" : "Guardar tarjeta"}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={saving}
+          className="rounded-xl border px-4 py-2.5 text-sm font-semibold text-[#666] transition-colors hover:bg-[#f7f5f2]"
+          style={{ borderColor: BRAND.border }}
+        >
+          Cancelar
+        </button>
+      </div>
+    </form>
+  );
+}
 
 function getBookingEstado(booking) {
   return booking.estado ?? booking.status;
@@ -164,6 +245,12 @@ export default function DashboardPage() {
   const [bookingFeedback, setBookingFeedback] = useState({});
   const [connectingStripe, setConnectingStripe] = useState(false);
   const [connectError, setConnectError] = useState("");
+  const [stripeCustomerId, setStripeCustomerId] = useState(null);
+  const [savedPaymentMethods, setSavedPaymentMethods] = useState([]);
+  const [paymentMethodsLoading, setPaymentMethodsLoading] = useState(false);
+  const [showAddCard, setShowAddCard] = useState(false);
+  const [setupClientSecret, setSetupClientSecret] = useState(null);
+  const [paymentMethodError, setPaymentMethodError] = useState("");
 
   async function completeBookingWithCapture(booking, allBookings) {
     const proveedores = await buildProveedoresForPayment(booking, allBookings);
@@ -281,6 +368,39 @@ export default function DashboardPage() {
         } else {
           setReviewedBookingIds(new Set());
         }
+
+        setPaymentMethodsLoading(true);
+        try {
+          const nombre = [profileData?.nombre, profileData?.apellido]
+            .filter(Boolean)
+            .join(" ");
+          const customerRes = await fetch("/api/stripe/customer", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              email: user.email,
+              nombre: nombre || "Cliente",
+              customer_id: profileData?.stripe_customer_id || undefined,
+            }),
+          });
+          const customerData = await customerRes.json();
+
+          if (customerRes.ok && customerData.customer_id) {
+            setStripeCustomerId(customerData.customer_id);
+            setSavedPaymentMethods(customerData.paymentMethods ?? []);
+
+            if (customerData.customer_id !== profileData?.stripe_customer_id) {
+              await supabase
+                .from("profiles")
+                .update({ stripe_customer_id: customerData.customer_id })
+                .eq("id", user.id);
+            }
+          }
+        } catch {
+          setSavedPaymentMethods([]);
+        } finally {
+          setPaymentMethodsLoading(false);
+        }
       }
 
       setLoading(false);
@@ -389,6 +509,104 @@ export default function DashboardPage() {
       }));
     } finally {
       setActionLoadingId(null);
+    }
+  }
+
+  async function ensureStripeCustomer() {
+    if (stripeCustomerId) return stripeCustomerId;
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user || !profile?.id) return null;
+
+    const nombre = [profile.nombre, profile.apellido].filter(Boolean).join(" ");
+    const res = await fetch("/api/stripe/customer", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: profile.email_contacto || user.email,
+        nombre: nombre || "Cliente",
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) return null;
+
+    setStripeCustomerId(data.customer_id);
+    await supabase
+      .from("profiles")
+      .update({ stripe_customer_id: data.customer_id })
+      .eq("id", profile.id);
+
+    return data.customer_id;
+  }
+
+  async function handleAddCard() {
+    setPaymentMethodError("");
+    setPaymentMethodsLoading(true);
+
+    try {
+      const customerId = await ensureStripeCustomer();
+      if (!customerId) throw new Error("No se pudo crear el cliente de Stripe.");
+
+      const res = await fetch("/api/stripe/customer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "setup_intent",
+          customer_id: customerId,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        throw new Error(data.error || "No se pudo iniciar el alta de tarjeta.");
+      }
+
+      setSetupClientSecret(data.clientSecret);
+      setShowAddCard(true);
+    } catch (err) {
+      setPaymentMethodError(err.message);
+    } finally {
+      setPaymentMethodsLoading(false);
+    }
+  }
+
+  async function handleDeleteCard(paymentMethodId) {
+    setPaymentMethodError("");
+
+    try {
+      const res = await fetch("/api/stripe/customer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "detach",
+          payment_method_id: paymentMethodId,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        throw new Error(data.error || "No se pudo eliminar la tarjeta.");
+      }
+
+      setSavedPaymentMethods((prev) =>
+        prev.filter((pm) => pm.id !== paymentMethodId),
+      );
+    } catch (err) {
+      setPaymentMethodError(err.message);
+    }
+  }
+
+  async function refreshPaymentMethods() {
+    if (!stripeCustomerId) return;
+
+    const res = await fetch("/api/stripe/customer", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ customer_id: stripeCustomerId }),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      setSavedPaymentMethods(data.paymentMethods ?? []);
     }
   }
 
@@ -846,6 +1064,81 @@ export default function DashboardPage() {
                   </dd>
                 </div>
               </dl>
+
+              <div
+                className="mt-6 border-t pt-6"
+                style={{ borderColor: BRAND.border }}
+              >
+                <h3 className="text-base font-semibold text-[#1a1a1a]">
+                  Métodos de pago
+                </h3>
+
+                {paymentMethodError && (
+                  <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+                    {paymentMethodError}
+                  </p>
+                )}
+
+                {paymentMethodsLoading ? (
+                  <p className="mt-3 text-sm text-[#666]">Cargando tarjetas…</p>
+                ) : savedPaymentMethods.length === 0 ? (
+                  <p className="mt-2 text-sm text-[#666]">
+                    No tienes tarjetas guardadas.
+                  </p>
+                ) : (
+                  <ul className="mt-3 flex flex-col gap-2">
+                    {savedPaymentMethods.map((pm) => (
+                      <li
+                        key={pm.id}
+                        className="flex items-center justify-between gap-3 rounded-xl border px-4 py-3"
+                        style={{ borderColor: BRAND.border }}
+                      >
+                        <span className="text-sm font-medium text-[#1a1a1a]">
+                          {getCardBrandLabel(pm.card?.brand)} ···· {pm.card?.last4}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteCard(pm.id)}
+                          className="text-sm font-semibold text-red-600 hover:underline"
+                        >
+                          Eliminar
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {showAddCard && setupClientSecret ? (
+                  <Elements
+                    key={setupClientSecret}
+                    stripe={stripePromise}
+                    options={{ clientSecret: setupClientSecret }}
+                  >
+                    <AddCardForm
+                      onSuccess={async () => {
+                        setShowAddCard(false);
+                        setSetupClientSecret(null);
+                        await refreshPaymentMethods();
+                      }}
+                      onCancel={() => {
+                        setShowAddCard(false);
+                        setSetupClientSecret(null);
+                      }}
+                    />
+                  </Elements>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={paymentMethodsLoading}
+                    onClick={handleAddCard}
+                    className="mt-4 rounded-xl border px-5 py-2.5 text-sm font-semibold no-underline transition-colors hover:bg-[#e8f0fb] disabled:opacity-60"
+                    style={{ borderColor: BRAND.primary, color: BRAND.primary }}
+                  >
+                    Añadir tarjeta
+                  </button>
+                )}
+              </div>
+
               <Link
                 href="/completar-perfil"
                 className="mt-5 inline-block rounded-xl border px-5 py-2.5 text-sm font-semibold no-underline transition-colors hover:bg-[#e8f0fb]"
