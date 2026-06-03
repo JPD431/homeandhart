@@ -123,11 +123,6 @@ function getActiveTabColor(verticalParam) {
   return VERTICAL_THEME[verticalParam]?.color ?? BRAND.primary;
 }
 
-function formatPricePill(precio, suffix) {
-  if (precio == null || precio === "") return "—";
-  return `${Number(precio)}€`;
-}
-
 function getMarkerCoords(service, index) {
   const madridLat = 40.4168;
   const madridLng = -3.7038;
@@ -184,7 +179,10 @@ function MapaResultados({ results, hoveredIndex, onPinHover, onPinLeave }) {
         const profile = service.profiles ?? {};
         const theme = VERTICAL_THEME[service.vertical] ?? VERTICAL_THEME.alojamiento;
         const coords = getMarkerCoords(service, index);
-        const price = formatPricePill(service.precio, theme.priceSuffix);
+        const price =
+          service.precio != null && service.precio !== ""
+            ? `${service.precio}€`
+            : "—";
         const providerName =
           formatShortName(profile.nombre, profile.apellido) || "Proveedor";
         const serviceType = service.titulo || theme.label;
@@ -516,7 +514,10 @@ export default function BuscarPage() {
       }
 
       if (ciudadParam.trim()) {
-        query = query.ilike("ciudad", `%${ciudadParam.trim()}%`);
+        const ciudad = ciudadParam.trim();
+        query = query.or(
+          `ciudad.ilike.%${ciudad}%,location_zone.ilike.%${ciudad}%`,
+        );
       }
 
       const { data, error: fetchError } = await query;

@@ -55,6 +55,39 @@ const LOCATION_ZONE_PLACEHOLDERS = {
   mascotas: "Ej: Malasaña, Lavapiés, Chamartín...",
 };
 
+async function geocodeBarrio(barrio, ciudad) {
+  const query = `${barrio}, ${ciudad}, España`;
+  const response = await fetch(
+    `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${process.env.NEXT_PUBLIC_MAPBOX_TOKEN}&limit=1&country=es`,
+  );
+  const data = await response.json();
+  if (data.features?.length > 0) {
+    const [lng, lat] = data.features[0].center;
+    return { lat, lng };
+  }
+  return null;
+}
+
+async function geocodeLocationZonesForServices(selectedIds, detailsByService, ciudad) {
+  const result = { ...detailsByService };
+  await Promise.all(
+    selectedIds.map(async (serviceId) => {
+      const details = result[serviceId];
+      const barrio = details.location_zone?.trim();
+      if (!barrio || !ciudad) return;
+      const coords = await geocodeBarrio(barrio, ciudad);
+      if (coords) {
+        result[serviceId] = {
+          ...details,
+          location_lat: coords.lat,
+          location_lng: coords.lng,
+        };
+      }
+    }),
+  );
+  return result;
+}
+
 const TIPO_ALOJAMIENTO_OPTIONS = [
   {
     value: "completo",
@@ -82,6 +115,8 @@ const EMPTY_SERVICE_DETAILS = {
   alojamiento: {
     titulo: "",
     location_zone: "",
+    location_lat: null,
+    location_lng: null,
     tipo_alojamiento: "",
     precio: "",
     nru: "",
@@ -93,6 +128,8 @@ const EMPTY_SERVICE_DETAILS = {
   ninos: {
     titulo: "",
     location_zone: "",
+    location_lat: null,
+    location_lng: null,
     precio: "",
     edades: "",
     certificacion: "",
@@ -105,6 +142,8 @@ const EMPTY_SERVICE_DETAILS = {
   mascotas: {
     titulo: "",
     location_zone: "",
+    location_lat: null,
+    location_lng: null,
     precio: "",
     tipos: "",
     cancelacion: "moderada",
@@ -385,7 +424,7 @@ function TituloAnuncioField({ serviceId, value, onChange }) {
   );
 }
 
-function LocationZoneField({ serviceId, value, onChange }) {
+function LocationZoneField({ serviceId, value, onChange, onBlur }) {
   const isAlojamiento = serviceId === "alojamiento";
 
   return (
@@ -398,6 +437,7 @@ function LocationZoneField({ serviceId, value, onChange }) {
         placeholder={LOCATION_ZONE_PLACEHOLDERS[serviceId]}
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        onBlur={onBlur}
         className={inputClass}
         style={{ borderColor: BRAND.border }}
       />
@@ -440,10 +480,14 @@ function TipoAlojamientoSelector({ value, onChange }) {
   );
 }
 
-function ServiceFields({ serviceId, details, onChange }) {
+function ServiceFields({ serviceId, details, onChange, onLocationZoneBlur }) {
   function update(field, val) {
     onChange({ ...details, [field]: val });
   }
+
+  const locationZoneBlur = onLocationZoneBlur
+    ? () => onLocationZoneBlur(serviceId)
+    : undefined;
 
   if (serviceId === "alojamiento") {
     return (
@@ -457,6 +501,7 @@ function ServiceFields({ serviceId, details, onChange }) {
           serviceId={serviceId}
           value={details.location_zone}
           onChange={(v) => update("location_zone", v)}
+          onBlur={locationZoneBlur}
         />
         <TipoAlojamientoSelector
           value={details.tipo_alojamiento}
@@ -545,6 +590,7 @@ function ServiceFields({ serviceId, details, onChange }) {
           serviceId={serviceId}
           value={details.location_zone}
           onChange={(v) => update("location_zone", v)}
+          onBlur={locationZoneBlur}
         />
         <div>
           <label className="mb-1.5 block text-xs font-medium text-[#444]">
@@ -646,6 +692,7 @@ function ServiceFields({ serviceId, details, onChange }) {
           serviceId={serviceId}
           value={details.location_zone}
           onChange={(v) => update("location_zone", v)}
+          onBlur={locationZoneBlur}
         />
         <div>
           <label className="mb-1.5 block text-xs font-medium text-[#444]">
@@ -766,6 +813,26 @@ export default function SerProveedorPage() {
     setServiceDetails((prev) => ({ ...prev, [serviceId]: details }));
   }
 
+  async function handleLocationZoneBlur(serviceId) {
+    const details = serviceDetails[serviceId];
+    const barrio = details.location_zone?.trim();
+    const ciudadTrimmed = ciudad.trim();
+    if (!barrio || !ciudadTrimmed) {
+      updateServiceDetails(serviceId, {
+        ...details,
+        location_lat: null,
+        location_lng: null,
+      });
+      return;
+    }
+    const coords = await geocodeBarrio(barrio, ciudadTrimmed);
+    updateServiceDetails(serviceId, {
+      ...details,
+      location_lat: coords?.lat ?? null,
+      location_lng: coords?.lng ?? null,
+    });
+  }
+
   function handleProfilePhoto(e) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -863,16 +930,25 @@ export default function SerProveedorPage() {
       // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS telefono_contacto text;
       // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS modalidad text;
       // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS tipo_alojamiento text;
+      const ciudadTrimmed = ciudad.trim();
+      const detailsForInsert = await geocodeLocationZonesForServices(
+        selectedServices,
+        serviceDetails,
+        ciudadTrimmed,
+      );
+
       const serviceRows = selectedServices.map((serviceId) => {
-        const details = serviceDetails[serviceId];
+        const details = detailsForInsert[serviceId];
         return {
           proveedor_id: user.id,
           vertical: serviceId,
           titulo: details.titulo.trim(),
           precio: details.precio ? Number(details.precio) : null,
           cancellation_policy: details.cancelacion,
-          ciudad: ciudad.trim(),
+          ciudad: ciudadTrimmed,
           location_zone: details.location_zone?.trim() || null,
+          location_lat: details.location_lat ?? null,
+          location_lng: details.location_lng ?? null,
           disponible: true,
           reserva_inmediata: details.reserva_inmediata === true,
           direccion_exacta: details.direccion_exacta?.trim() || null,
@@ -1091,6 +1167,7 @@ export default function SerProveedorPage() {
                 <ServiceFields
                   serviceId={serviceId}
                   details={serviceDetails[serviceId]}
+                  onLocationZoneBlur={handleLocationZoneBlur}
                   onChange={(details) =>
                     updateServiceDetails(serviceId, details)
                   }
