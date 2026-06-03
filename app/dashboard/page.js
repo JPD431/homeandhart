@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import Navbar from "@/app/components/Navbar";
 import { BRAND, SERIF } from "@/app/components/brand";
@@ -24,6 +24,7 @@ const STATUS_STYLES = {
 
 // -- ALTER TABLE bookings ADD COLUMN IF NOT EXISTS confirmacion_cliente boolean DEFAULT false;
 // -- ALTER TABLE bookings ADD COLUMN IF NOT EXISTS incidencia_descripcion text;
+// -- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS stripe_account_id text;
 
 function getBookingEstado(booking) {
   return booking.estado ?? booking.status;
@@ -48,17 +49,69 @@ function needsClientConfirmation(booking) {
   return false;
 }
 
-async function capturePayment(paymentIntentId) {
+async function capturePayment(paymentIntentId, proveedores) {
   const res = await fetch("/api/stripe/capture-payment", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ paymentIntentId }),
+    body: JSON.stringify({ paymentIntentId, proveedores }),
   });
   const data = await res.json();
   if (!res.ok || data.error) {
     throw new Error(data.error || "No se pudo liberar el pago.");
   }
   return data;
+}
+
+async function buildProveedoresForPayment(booking, allBookings) {
+  const related = allBookings.filter(
+    (b) =>
+      b.payment_intent_id &&
+      b.payment_intent_id === booking.payment_intent_id,
+  );
+  if (related.length === 0) return [];
+
+  const serviceIds = [...new Set(related.map((b) => b.service_id).filter(Boolean))];
+  if (serviceIds.length === 0) return [];
+
+  const { data: services } = await supabase
+    .from("services")
+    .select("id, proveedor_id")
+    .in("id", serviceIds);
+
+  if (!services?.length) return [];
+
+  const proveedorIds = [
+    ...new Set(services.map((s) => s.proveedor_id).filter(Boolean)),
+  ];
+
+  const { data: profiles } = await supabase
+    .from("profiles")
+    .select("id, stripe_account_id")
+    .in("id", proveedorIds);
+
+  const proveedores = [];
+
+  for (const proveedorId of proveedorIds) {
+    const profile = profiles?.find((p) => p.id === proveedorId);
+    if (!profile?.stripe_account_id) continue;
+
+    const serviceIdsForProvider = services
+      .filter((s) => s.proveedor_id === proveedorId)
+      .map((s) => s.id);
+
+    const amount = related
+      .filter((b) => serviceIdsForProvider.includes(b.service_id))
+      .reduce((sum, b) => sum + (Number(b.precio_total) || 0), 0);
+
+    if (amount > 0) {
+      proveedores.push({
+        stripe_account_id: profile.stripe_account_id,
+        amount,
+      });
+    }
+  }
+
+  return proveedores;
 }
 
 function Section({ title, children }) {
@@ -99,6 +152,7 @@ function formatPrice(precio, vertical) {
 
 export default function DashboardPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState(null);
   const [services, setServices] = useState([]);
@@ -108,16 +162,24 @@ export default function DashboardPage() {
   const [incidentText, setIncidentText] = useState("");
   const [actionLoadingId, setActionLoadingId] = useState(null);
   const [bookingFeedback, setBookingFeedback] = useState({});
+  const [connectingStripe, setConnectingStripe] = useState(false);
+  const [connectError, setConnectError] = useState("");
 
-  async function completeBookingWithCapture(booking) {
-    await capturePayment(booking.payment_intent_id);
+  async function completeBookingWithCapture(booking, allBookings) {
+    const proveedores = await buildProveedoresForPayment(booking, allBookings);
+    await capturePayment(booking.payment_intent_id, proveedores);
+
+    const relatedIds = allBookings
+      .filter((b) => b.payment_intent_id === booking.payment_intent_id)
+      .map((b) => b.id);
+
     const { error } = await supabase
       .from("bookings")
       .update({
         estado: "completada",
         confirmacion_cliente: true,
       })
-      .eq("id", booking.id);
+      .in("id", relatedIds);
 
     if (error) throw new Error(error.message);
   }
@@ -133,9 +195,13 @@ export default function DashboardPage() {
 
     if (eligible.length === 0) return clientBookings;
 
+    const capturedPaymentIntents = new Set();
+
     for (const booking of eligible) {
+      if (capturedPaymentIntents.has(booking.payment_intent_id)) continue;
+      capturedPaymentIntents.add(booking.payment_intent_id);
       try {
-        await completeBookingWithCapture(booking);
+        await completeBookingWithCapture(booking, clientBookings);
       } catch {
         // Siguiente reserva si una falla
       }
@@ -232,10 +298,10 @@ export default function DashboardPage() {
     });
 
     try {
-      await completeBookingWithCapture(booking);
+      await completeBookingWithCapture(booking, bookings);
       setBookings((prev) =>
         prev.map((b) =>
-          b.id === booking.id
+          b.payment_intent_id === booking.payment_intent_id
             ? { ...b, estado: "completada", confirmacion_cliente: true }
             : b,
         ),
@@ -326,8 +392,55 @@ export default function DashboardPage() {
     }
   }
 
+  async function handleConnectBankAccount() {
+    setConnectError("");
+    setConnectingStripe(true);
+
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user || !profile?.id) {
+        throw new Error("No se pudo identificar tu cuenta.");
+      }
+
+      const email = profile.email_contacto || user.email;
+      if (!email) {
+        throw new Error("Añade un email en tu perfil para conectar Stripe.");
+      }
+
+      const res = await fetch("/api/stripe/connect/create-account", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          proveedor_id: profile.id,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        throw new Error(data.error || "No se pudo iniciar la conexión con Stripe.");
+      }
+
+      const { error: updateError } = await supabase
+        .from("profiles")
+        .update({ stripe_account_id: data.accountId })
+        .eq("id", profile.id);
+
+      if (updateError) throw new Error(updateError.message);
+
+      window.location.href = data.url;
+    } catch (err) {
+      setConnectError(err.message);
+      setConnectingStripe(false);
+    }
+  }
+
   const isProvider = profile?.role === "proveedor";
   const greetingName = profile?.nombre?.trim();
+  const stripeReturn = searchParams.get("stripe");
 
   if (loading) {
     return (
@@ -417,6 +530,46 @@ export default function DashboardPage() {
                     Añadir servicio
                   </Link>
                 </>
+              )}
+            </Section>
+
+            <Section title="Cuenta bancaria">
+              {profile?.stripe_account_id ? (
+                <p className="text-sm font-semibold text-green-700">
+                  Cuenta bancaria conectada ✓
+                </p>
+              ) : (
+                <>
+                  <p className="text-sm text-[#666]">
+                    Conecta tu cuenta para recibir los pagos de tus reservas.
+                  </p>
+                  {connectError && (
+                    <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+                      {connectError}
+                    </p>
+                  )}
+                  <button
+                    type="button"
+                    disabled={connectingStripe}
+                    onClick={handleConnectBankAccount}
+                    className="mt-4 rounded-xl px-5 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                    style={{ backgroundColor: BRAND.primary }}
+                  >
+                    {connectingStripe
+                      ? "Conectando…"
+                      : "Conectar cuenta bancaria 🏦"}
+                  </button>
+                </>
+              )}
+              {stripeReturn === "success" && profile?.stripe_account_id && (
+                <p className="mt-3 text-sm text-green-700">
+                  Configuración de Stripe completada correctamente.
+                </p>
+              )}
+              {stripeReturn === "refresh" && !profile?.stripe_account_id && (
+                <p className="mt-3 text-sm text-[#666]">
+                  Puedes reintentar la conexión cuando quieras.
+                </p>
               )}
             </Section>
 
