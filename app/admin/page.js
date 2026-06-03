@@ -10,6 +10,7 @@ const TABS = [
   { id: "pendientes", label: "Pendientes de verificar" },
   { id: "verificados", label: "Verificados" },
   { id: "rechazados", label: "Rechazados" },
+  { id: "ingresos", label: "Ingresos" },
 ];
 
 const VERTICALS = {
@@ -163,6 +164,20 @@ function ProviderDocuments({ provider }) {
   );
 }
 
+function getTransferidoProveedor(precioTotal) {
+  const precio = Number(precioTotal) || 0;
+  return (precio / 1.14) * 0.96;
+}
+
+function getComisionHH(precioTotal) {
+  const precio = Number(precioTotal) || 0;
+  return precio - getTransferidoProveedor(precio);
+}
+
+function formatEuroAdmin(amount) {
+  return `${Number(amount).toFixed(2)}€`;
+}
+
 function formatPrice(precio, vertical) {
   const config = VERTICALS[vertical] ?? VERTICALS.alojamiento;
   if (precio == null || precio === "") return "Consultar";
@@ -203,6 +218,7 @@ export default function AdminPage() {
   const [actionLoading, setActionLoading] = useState(null);
   const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [completedBookings, setCompletedBookings] = useState([]);
 
   const loadData = useCallback(async () => {
     setErrorMessage("");
@@ -260,6 +276,34 @@ export default function AdminPage() {
       setServicesByProvider({});
     }
 
+    const { data: bookingsData, error: bookingsError } = await supabase
+      .from("bookings")
+      .select(
+        `
+        id,
+        precio_total,
+        fecha_inicio,
+        created_at,
+        cliente_id,
+        service_id,
+        profiles:cliente_id (
+          nombre,
+          apellido
+        ),
+        services:service_id (
+          titulo
+        )
+      `,
+      )
+      .eq("estado", "completada")
+      .order("created_at", { ascending: false });
+
+    if (bookingsError) {
+      setErrorMessage(bookingsError.message);
+    } else {
+      setCompletedBookings(bookingsData ?? []);
+    }
+
     setLoading(false);
   }, [router]);
 
@@ -268,12 +312,35 @@ export default function AdminPage() {
   }, [loadData]);
 
   const counts = useMemo(() => {
-    const result = { pendientes: 0, verificados: 0, rechazados: 0 };
+    const result = { pendientes: 0, verificados: 0, rechazados: 0, ingresos: 0 };
     for (const p of providers) {
       result[getProviderStatus(p)] += 1;
     }
+    result.ingresos = completedBookings.length;
     return result;
-  }, [providers]);
+  }, [providers, completedBookings]);
+
+  const revenueSummary = useMemo(() => {
+    let totalCobrado = 0;
+    let totalTransferido = 0;
+
+    for (const booking of completedBookings) {
+      const precio = Number(booking.precio_total) || 0;
+      totalCobrado += precio;
+      totalTransferido += getTransferidoProveedor(precio);
+    }
+
+    return {
+      totalCobrado,
+      totalTransferido,
+      comisionNeta: totalCobrado - totalTransferido,
+    };
+  }, [completedBookings]);
+
+  const latestCompletedBookings = useMemo(
+    () => completedBookings.slice(0, 10),
+    [completedBookings],
+  );
 
   const filteredProviders = useMemo(
     () => providers.filter((p) => getProviderStatus(p) === activeTab),
@@ -476,7 +543,132 @@ export default function AdminPage() {
           </p>
         )}
 
-        {filteredProviders.length === 0 ? (
+        {activeTab === "ingresos" ? (
+          <div className="mt-6">
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div
+                className="rounded-2xl border bg-white p-6"
+                style={{ borderColor: BRAND.border }}
+              >
+                <p className="text-xs font-semibold uppercase tracking-wide text-[#888]">
+                  Total cobrado a clientes
+                </p>
+                <p
+                  className="mt-3 text-3xl font-bold sm:text-4xl"
+                  style={{ color: BRAND.primary }}
+                >
+                  {formatEuroAdmin(revenueSummary.totalCobrado)}
+                </p>
+              </div>
+              <div
+                className="rounded-2xl border bg-white p-6"
+                style={{ borderColor: BRAND.border }}
+              >
+                <p className="text-xs font-semibold uppercase tracking-wide text-[#888]">
+                  Total transferido a proveedores
+                </p>
+                <p
+                  className="mt-3 text-3xl font-bold sm:text-4xl"
+                  style={{ color: BRAND.primary }}
+                >
+                  {formatEuroAdmin(revenueSummary.totalTransferido)}
+                </p>
+              </div>
+              <div
+                className="rounded-2xl border bg-white p-6"
+                style={{ borderColor: BRAND.border }}
+              >
+                <p className="text-xs font-semibold uppercase tracking-wide text-[#888]">
+                  Comisión neta H&H
+                </p>
+                <p
+                  className="mt-3 text-3xl font-bold sm:text-4xl"
+                  style={{ color: BRAND.primary }}
+                >
+                  {formatEuroAdmin(revenueSummary.comisionNeta)}
+                </p>
+              </div>
+            </div>
+
+            {latestCompletedBookings.length === 0 ? (
+              <p
+                className="mt-6 rounded-2xl border bg-white px-6 py-10 text-center text-sm text-[#666]"
+                style={{ borderColor: BRAND.border }}
+              >
+                Aún no hay reservas completadas.
+              </p>
+            ) : (
+              <div
+                className="mt-6 overflow-x-auto rounded-2xl border bg-white"
+                style={{ borderColor: BRAND.border }}
+              >
+                <table className="w-full min-w-[720px] text-left text-sm">
+                  <thead>
+                    <tr
+                      className="border-b text-xs font-semibold uppercase tracking-wide text-[#888]"
+                      style={{ borderColor: BRAND.border }}
+                    >
+                      <th className="px-4 py-3">Fecha</th>
+                      <th className="px-4 py-3">Cliente</th>
+                      <th className="px-4 py-3">Servicio</th>
+                      <th className="px-4 py-3 text-right">Cobrado al cliente</th>
+                      <th className="px-4 py-3 text-right">Transferido al proveedor</th>
+                      <th className="px-4 py-3 text-right">Comisión H&H</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {latestCompletedBookings.map((booking) => {
+                      const precio = Number(booking.precio_total) || 0;
+                      const transferido = getTransferidoProveedor(precio);
+                      const comision = getComisionHH(precio);
+                      const cliente = booking.profiles;
+                      const clienteNombre = cliente
+                        ? [cliente.nombre, cliente.apellido].filter(Boolean).join(" ")
+                        : "—";
+                      const fecha = booking.fecha_inicio
+                        ? formatDate(`${booking.fecha_inicio}T12:00:00`)
+                        : formatDate(booking.created_at);
+
+                      return (
+                        <tr
+                          key={booking.id}
+                          className="border-b last:border-b-0"
+                          style={{ borderColor: BRAND.border }}
+                        >
+                          <td className="px-4 py-3 text-[#444]">{fecha || "—"}</td>
+                          <td className="px-4 py-3 font-medium text-[#1a1a1a]">
+                            {clienteNombre}
+                          </td>
+                          <td className="px-4 py-3 text-[#444]">
+                            {booking.services?.titulo || "—"}
+                          </td>
+                          <td
+                            className="px-4 py-3 text-right font-semibold"
+                            style={{ color: BRAND.primary }}
+                          >
+                            {formatEuroAdmin(precio)}
+                          </td>
+                          <td
+                            className="px-4 py-3 text-right font-semibold"
+                            style={{ color: BRAND.primary }}
+                          >
+                            {formatEuroAdmin(transferido)}
+                          </td>
+                          <td
+                            className="px-4 py-3 text-right font-semibold"
+                            style={{ color: BRAND.primary }}
+                          >
+                            {formatEuroAdmin(comision)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        ) : filteredProviders.length === 0 ? (
           <p
             className="mt-8 rounded-2xl border bg-white px-6 py-10 text-center text-sm text-[#666]"
             style={{ borderColor: BRAND.border }}

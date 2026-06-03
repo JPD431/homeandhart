@@ -24,8 +24,6 @@ export async function POST(request) {
 
     if (confirm_saved && customer && payment_method) {
       intentParams.payment_method = payment_method;
-      intentParams.confirm = true;
-      intentParams.off_session = true;
     }
 
     const paymentIntent = await stripe.paymentIntents.create(intentParams);

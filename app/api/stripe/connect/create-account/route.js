@@ -8,10 +8,12 @@ export async function POST(request) {
 
     const account = await stripe.accounts.create({
       type: "express",
+      country: "ES",
       email,
       capabilities: {
         transfers: { requested: true },
       },
+      business_type: "individual",
       metadata: { proveedor_id },
     });
 

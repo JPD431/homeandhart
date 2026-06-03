@@ -323,7 +323,23 @@ function SavedCardCheckout({
         throw new Error(intentData.error || "No se pudo procesar el pago.");
       }
 
-      await onPaymentSuccess(intentData.paymentIntentId);
+      const stripe = await stripePromise;
+      if (!stripe) {
+        throw new Error("Stripe no está disponible.");
+      }
+
+      const { error: confirmError, paymentIntent } =
+        await stripe.confirmCardPayment(intentData.clientSecret, {
+          payment_method: paymentMethod.id,
+        });
+
+      if (confirmError) {
+        throw new Error(confirmError.message);
+      }
+
+      await onPaymentSuccess(
+        paymentIntent?.id || intentData.paymentIntentId,
+      );
     } catch (err) {
       setError(err.message || "Error al procesar el pago.");
     } finally {
@@ -742,6 +758,8 @@ export default function ReservarPage() {
     };
   }, [service, selectedServices, vertical, fechaInicio, fechaFin, duracionHoras]);
 
+  const precioTotal = priceSummary.ready ? priceSummary.total : 0;
+
   const paymentMetadata = useMemo(() => {
     if (!userId || !serviceId || !grupoReserva) return null;
     return {
@@ -752,7 +770,7 @@ export default function ReservarPage() {
   }, [userId, serviceId, grupoReserva]);
 
   useEffect(() => {
-    if (!priceSummary.ready || priceSummary.total <= 0 || !userId || !serviceId) {
+    if (precioTotal <= 0 || !userId || !serviceId) {
       setClientSecret(null);
       setPaymentIntentId(null);
       setGrupoReserva(null);
@@ -771,6 +789,8 @@ export default function ReservarPage() {
 
     let cancelled = false;
     setPaymentIntentLoading(true);
+    setClientSecret(null);
+    setPaymentIntentId(null);
 
     async function createIntent() {
       try {
@@ -778,7 +798,7 @@ export default function ReservarPage() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            amount: priceSummary.total,
+            amount: precioTotal,
             customer: stripeCustomerId || undefined,
             metadata: {
               service_id: String(serviceId),
@@ -807,11 +827,9 @@ export default function ReservarPage() {
       cancelled = true;
     };
   }, [
-    priceSummary.ready,
-    priceSummary.total,
+    precioTotal,
     userId,
     serviceId,
-    bundleIds,
     useNewCard,
     savedPaymentMethods.length,
     stripeCustomerId,

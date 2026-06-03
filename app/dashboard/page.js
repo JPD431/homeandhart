@@ -144,52 +144,83 @@ async function capturePayment(paymentIntentId, proveedores) {
 }
 
 async function buildProveedoresForPayment(booking, allBookings) {
-  const related = allBookings.filter(
+  const reservasGrupo = allBookings.filter(
     (b) =>
       b.payment_intent_id &&
       b.payment_intent_id === booking.payment_intent_id,
   );
-  if (related.length === 0) return [];
+  console.log("Reservas del grupo:", reservasGrupo);
 
-  const serviceIds = [...new Set(related.map((b) => b.service_id).filter(Boolean))];
-  if (serviceIds.length === 0) return [];
+  if (reservasGrupo.length === 0) return [];
 
-  const { data: services } = await supabase
-    .from("services")
-    .select("id, proveedor_id")
-    .in("id", serviceIds);
-
-  if (!services?.length) return [];
-
-  const proveedorIds = [
-    ...new Set(services.map((s) => s.proveedor_id).filter(Boolean)),
+  const serviciosIds = [
+    ...new Set(reservasGrupo.map((b) => b.service_id).filter(Boolean)),
   ];
+  console.log("Servicios de las reservas:", serviciosIds);
 
-  const { data: profiles } = await supabase
-    .from("profiles")
-    .select("id, stripe_account_id")
-    .in("id", proveedorIds);
+  if (serviciosIds.length === 0) return [];
+
+  const { data: services, error: servicesError } = await supabase
+    .from("services")
+    .select(
+      `
+      id,
+      proveedor_id,
+      profiles!proveedor_id (
+        id,
+        stripe_account_id
+      )
+    `,
+    )
+    .in("id", serviciosIds);
+
+  if (servicesError) {
+    console.log("Error al cargar servicios/proveedores:", servicesError);
+    return [];
+  }
+
+  console.log("Servicios con perfiles:", services);
 
   const proveedores = [];
+  const processedProveedorIds = new Set();
 
-  for (const proveedorId of proveedorIds) {
-    const profile = profiles?.find((p) => p.id === proveedorId);
-    if (!profile?.stripe_account_id) continue;
+  for (const service of services ?? []) {
+    const proveedorId = service.proveedor_id;
+    const profile = service.profiles;
+    const stripeAccountId = profile?.stripe_account_id;
 
-    const serviceIdsForProvider = services
+    if (!proveedorId || processedProveedorIds.has(proveedorId)) continue;
+
+    if (!stripeAccountId) {
+      console.log(
+        "Proveedor sin stripe_account_id:",
+        proveedorId,
+        profile,
+      );
+      processedProveedorIds.add(proveedorId);
+      continue;
+    }
+
+    const serviceIdsForProvider = (services ?? [])
       .filter((s) => s.proveedor_id === proveedorId)
       .map((s) => s.id);
 
-    const amount = related
+    const amount = reservasGrupo
       .filter((b) => serviceIdsForProvider.includes(b.service_id))
-      .reduce((sum, b) => sum + (Number(b.precio_total) || 0), 0);
+      .reduce((sum, b) => {
+        const precioBase = (Number(b.precio_total) || 0) / 1.14; // quitar 14% cliente
+        const netoProveedor = precioBase * 0.96; // quitar 4% comision H&H
+        return sum + netoProveedor;
+      }, 0);
 
     if (amount > 0) {
       proveedores.push({
-        stripe_account_id: profile.stripe_account_id,
+        stripe_account_id: stripeAccountId,
         amount,
       });
     }
+
+    processedProveedorIds.add(proveedorId);
   }
 
   return proveedores;
@@ -254,6 +285,8 @@ export default function DashboardPage() {
 
   async function completeBookingWithCapture(booking, allBookings) {
     const proveedores = await buildProveedoresForPayment(booking, allBookings);
+    console.log("Intentando liberar pago:", booking.payment_intent_id);
+    console.log("Proveedores:", proveedores);
     await capturePayment(booking.payment_intent_id, proveedores);
 
     const relatedIds = allBookings
@@ -287,11 +320,11 @@ export default function DashboardPage() {
     for (const booking of eligible) {
       if (capturedPaymentIntents.has(booking.payment_intent_id)) continue;
       capturedPaymentIntents.add(booking.payment_intent_id);
-      try {
-        await completeBookingWithCapture(booking, clientBookings);
-      } catch {
-        // Siguiente reserva si una falla
-      }
+      // try {
+      //   await completeBookingWithCapture(booking, clientBookings);
+      // } catch {
+      //   // Siguiente reserva si una falla
+      // }
     }
 
     const { data: refreshed } = await supabase
@@ -352,7 +385,7 @@ export default function DashboardPage() {
           .order("created_at", { ascending: false });
 
         let clientBookings = bookingsData ?? [];
-        clientBookings = await runAutoCaptureForBookings(clientBookings, user.id);
+        // clientBookings = await runAutoCaptureForBookings(clientBookings, user.id);
         setBookings(clientBookings);
 
         if (clientBookings.length > 0) {
