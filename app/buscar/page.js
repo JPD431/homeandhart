@@ -1,11 +1,15 @@
 "use client";
 
 import Link from "next/link";
+import mapboxgl from "mapbox-gl";
+import "mapbox-gl/dist/mapbox-gl.css";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Navbar from "@/app/components/Navbar";
 import { BRAND } from "@/app/components/brand";
 import { supabase } from "@/lib/supabase";
+
+mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
 
 const FILTER_TABS = [
   { id: "todo", label: "Todo" },
@@ -114,66 +118,153 @@ function getSubtypeLabel(service) {
   return null;
 }
 
-function getPinPosition(index) {
-  const top = 10 + ((index * 37 + 17) % 62);
-  const left = 6 + ((index * 53 + 23) % 72);
-  return { top: `${top}%`, left: `${left}%` };
-}
-
 function getActiveTabColor(verticalParam) {
   if (verticalParam === "todo") return BRAND.primary;
   return VERTICAL_THEME[verticalParam]?.color ?? BRAND.primary;
 }
 
-function SimulatedMap({ results, hoveredIndex, onPinHover, onPinLeave }) {
-  return (
-    <div
-      className="relative h-full min-h-[200px] overflow-hidden rounded-xl lg:rounded-none lg:rounded-l-xl"
-      style={{
-        backgroundColor: "#e8f0fb",
-        backgroundImage: `
-          linear-gradient(rgba(29, 79, 145, 0.06) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(29, 79, 145, 0.06) 1px, transparent 1px),
-          linear-gradient(135deg, #e8f0fb 0%, #dce8f8 50%, #e8f0fb 100%)
-        `,
-        backgroundSize: "32px 32px, 32px 32px, 100% 100%",
-      }}
-    >
-      {results.map((service, index) => {
+function formatPricePill(precio, suffix) {
+  if (precio == null || precio === "") return "—";
+  return `${Number(precio)}€`;
+}
+
+function getMarkerCoords(service, index) {
+  const madridLat = 40.4168;
+  const madridLng = -3.7038;
+  const offset = 0.01;
+
+  const lat =
+    service.location_lat || madridLat + (index % 5 - 2) * offset;
+  const lng =
+    service.location_lng ||
+    madridLng + (Math.floor(index / 5) % 5 - 2) * offset;
+
+  return [Number(lng), Number(lat)];
+}
+
+function MapaResultados({ results, hoveredIndex, onPinHover, onPinLeave }) {
+  const mapContainerRef = useRef(null);
+  const mapRef = useRef(null);
+  const markersRef = useRef([]);
+
+  useEffect(() => {
+    if (!mapContainerRef.current || mapRef.current) return;
+
+    const map = new mapboxgl.Map({
+      container: mapContainerRef.current,
+      center: [-3.7038, 40.4168],
+      zoom: 11,
+      style: "mapbox://styles/mapbox/light-v11",
+    });
+
+    map.addControl(new mapboxgl.NavigationControl(), "top-right");
+    mapRef.current = map;
+
+    return () => {
+      markersRef.current.forEach(({ marker }) => marker.remove());
+      markersRef.current = [];
+      map.remove();
+      mapRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    function clearMarkers() {
+      markersRef.current.forEach(({ marker }) => marker.remove());
+      markersRef.current = [];
+    }
+
+    function addMarkers() {
+      clearMarkers();
+
+      results.forEach((service, index) => {
         const profile = service.profiles ?? {};
         const theme = VERTICAL_THEME[service.vertical] ?? VERTICAL_THEME.alojamiento;
-        const zone = getServiceZone(service, profile);
-        const pos = getPinPosition(index);
-        const isActive = hoveredIndex === index;
+        const coords = getMarkerCoords(service, index);
+        const price = formatPricePill(service.precio, theme.priceSuffix);
+        const providerName =
+          formatShortName(profile.nombre, profile.apellido) || "Proveedor";
+        const serviceType = service.titulo || theme.label;
 
-        return (
-          <button
-            key={service.id}
-            type="button"
-            className="absolute z-10 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-bold shadow-md transition-transform"
-            style={{
-              top: pos.top,
-              left: pos.left,
-              backgroundColor: isActive ? theme.color : "#fff",
-              color: isActive ? "#fff" : theme.color,
-              border: `2px solid ${theme.color}`,
-              transform: isActive
-                ? "translate(-50%, calc(-50% - 2px)) scale(1.08)"
-                : "translate(-50%, -50%)",
-            }}
-            onMouseEnter={() => onPinHover(index)}
-            onMouseLeave={onPinLeave}
-          >
-            {formatPrice(service.precio, theme.priceSuffix).replace("/ noche", "").replace("/ hora", "").replace("/ día", "")}
-            <span className="ml-1 font-normal opacity-80">· {zone}</span>
-          </button>
-        );
-      })}
+        const el = document.createElement("div");
+        el.className = "map-price-marker";
+        el.style.cssText = `
+          background-color: ${theme.color};
+          color: #fff;
+          padding: 5px 10px;
+          border-radius: 9999px;
+          font-size: 12px;
+          font-weight: 700;
+          line-height: 1;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+          cursor: pointer;
+          transition: transform 0.2s ease;
+          white-space: nowrap;
+        `;
+        el.textContent = price;
 
-      <p className="absolute bottom-3 left-0 right-0 text-center text-[10px] text-[#666]/80">
-        Ubicación aproximada · zona/barrio
-      </p>
-    </div>
+        const popup = new mapboxgl.Popup({
+          offset: 20,
+          closeButton: true,
+          closeOnClick: false,
+        }).setHTML(`
+          <div style="font-family: system-ui, sans-serif; padding: 2px 0;">
+            <p style="margin: 0 0 4px; font-size: 14px; font-weight: 700; color: ${theme.color};">${price}</p>
+            <p style="margin: 0 0 4px; font-size: 13px; color: #1a1a1a;">${providerName}</p>
+            <p style="margin: 0; font-size: 12px; color: #666;">${serviceType}</p>
+          </div>
+        `);
+
+        const marker = new mapboxgl.Marker({ element: el, anchor: "center" })
+          .setLngLat(coords)
+          .setPopup(popup)
+          .addTo(map);
+
+        el.addEventListener("mouseenter", () => onPinHover(index));
+        el.addEventListener("mouseleave", onPinLeave);
+        el.addEventListener("click", (e) => {
+          e.stopPropagation();
+          map.flyTo({ center: coords, zoom: 14, duration: 800 });
+          marker.togglePopup();
+        });
+
+        markersRef.current.push({ marker, element: el, index });
+      });
+
+      if (results.length > 0) {
+        const bounds = new mapboxgl.LngLatBounds();
+        results.forEach((service, index) => {
+          bounds.extend(getMarkerCoords(service, index));
+        });
+        map.fitBounds(bounds, { padding: 48, maxZoom: 14, duration: 0 });
+      }
+    }
+
+    if (map.loaded()) {
+      addMarkers();
+    } else {
+      map.once("load", addMarkers);
+    }
+
+    return clearMarkers;
+  }, [results, onPinHover, onPinLeave]);
+
+  useEffect(() => {
+    markersRef.current.forEach(({ element, index }) => {
+      const isActive = hoveredIndex === index;
+      element.style.transform = isActive ? "scale(1.2)" : "scale(1)";
+      element.style.zIndex = isActive ? "10" : "1";
+    });
+  }, [hoveredIndex]);
+
+  return (
+    <div
+      ref={mapContainerRef}
+      className="h-full min-h-[200px] w-full overflow-hidden rounded-xl lg:rounded-none lg:rounded-l-xl"
+    />
   );
 }
 
@@ -403,6 +494,8 @@ export default function BuscarPage() {
           tipo_alojamiento,
           modalidad,
           location_zone,
+          location_lat,
+          location_lng,
           ciudad,
           proveedor_id,
           profiles!inner (
@@ -532,7 +625,7 @@ export default function BuscarPage() {
         {/* Mapa — móvil 200px, desktop 45% */}
         <div className="h-[200px] shrink-0 lg:h-auto lg:w-[45%] lg:min-h-[calc(100vh-180px)] lg:p-4 lg:pr-2">
           {!loading && results.length > 0 ? (
-            <SimulatedMap
+            <MapaResultados
               results={results}
               hoveredIndex={hoveredIndex}
               onPinHover={setHoveredIndex}

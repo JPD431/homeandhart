@@ -49,6 +49,12 @@ const TITULO_PLACEHOLDERS = {
   mascotas: "Ej: Cuidador de perros con jardín en Salamanca",
 };
 
+const LOCATION_ZONE_PLACEHOLDERS = {
+  alojamiento: "Ej: Salamanca, Centro, Malasaña...",
+  ninos: "Ej: Salamanca, Retiro, Chamberí...",
+  mascotas: "Ej: Malasaña, Lavapiés, Chamartín...",
+};
+
 const TIPO_ALOJAMIENTO_OPTIONS = [
   {
     value: "completo",
@@ -75,6 +81,7 @@ const TIPO_ALOJAMIENTO_OPTIONS = [
 const EMPTY_SERVICE_DETAILS = {
   alojamiento: {
     titulo: "",
+    location_zone: "",
     tipo_alojamiento: "",
     precio: "",
     nru: "",
@@ -85,6 +92,7 @@ const EMPTY_SERVICE_DETAILS = {
   },
   ninos: {
     titulo: "",
+    location_zone: "",
     precio: "",
     edades: "",
     certificacion: "",
@@ -96,6 +104,7 @@ const EMPTY_SERVICE_DETAILS = {
   },
   mascotas: {
     titulo: "",
+    location_zone: "",
     precio: "",
     tipos: "",
     cancelacion: "moderada",
@@ -376,6 +385,31 @@ function TituloAnuncioField({ serviceId, value, onChange }) {
   );
 }
 
+function LocationZoneField({ serviceId, value, onChange }) {
+  const isAlojamiento = serviceId === "alojamiento";
+
+  return (
+    <div className="sm:col-span-2">
+      <label className="mb-1.5 block text-xs font-medium text-[#444]">
+        {isAlojamiento ? "Barrio" : "Barrio o zona donde operas"}
+      </label>
+      <input
+        type="text"
+        placeholder={LOCATION_ZONE_PLACEHOLDERS[serviceId]}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={inputClass}
+        style={{ borderColor: BRAND.border }}
+      />
+      {!isAlojamiento && (
+        <FieldNote>
+          Aparecerá en el mapa de búsqueda como ubicación aproximada
+        </FieldNote>
+      )}
+    </div>
+  );
+}
+
 function TipoAlojamientoSelector({ value, onChange }) {
   return (
     <div className="sm:col-span-2">
@@ -418,6 +452,11 @@ function ServiceFields({ serviceId, details, onChange }) {
           serviceId={serviceId}
           value={details.titulo}
           onChange={(v) => update("titulo", v)}
+        />
+        <LocationZoneField
+          serviceId={serviceId}
+          value={details.location_zone}
+          onChange={(v) => update("location_zone", v)}
         />
         <TipoAlojamientoSelector
           value={details.tipo_alojamiento}
@@ -501,6 +540,11 @@ function ServiceFields({ serviceId, details, onChange }) {
           serviceId={serviceId}
           value={details.titulo}
           onChange={(v) => update("titulo", v)}
+        />
+        <LocationZoneField
+          serviceId={serviceId}
+          value={details.location_zone}
+          onChange={(v) => update("location_zone", v)}
         />
         <div>
           <label className="mb-1.5 block text-xs font-medium text-[#444]">
@@ -597,6 +641,11 @@ function ServiceFields({ serviceId, details, onChange }) {
           serviceId={serviceId}
           value={details.titulo}
           onChange={(v) => update("titulo", v)}
+        />
+        <LocationZoneField
+          serviceId={serviceId}
+          value={details.location_zone}
+          onChange={(v) => update("location_zone", v)}
         />
         <div>
           <label className="mb-1.5 block text-xs font-medium text-[#444]">
@@ -823,6 +872,7 @@ export default function SerProveedorPage() {
           precio: details.precio ? Number(details.precio) : null,
           cancellation_policy: details.cancelacion,
           ciudad: ciudad.trim(),
+          location_zone: details.location_zone?.trim() || null,
           disponible: true,
           reserva_inmediata: details.reserva_inmediata === true,
           direccion_exacta: details.direccion_exacta?.trim() || null,
