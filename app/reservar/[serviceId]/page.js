@@ -1,10 +1,21 @@
 "use client";
 
+import { loadStripe } from "@stripe/stripe-js";
+import {
+  Elements,
+  PaymentElement,
+  useElements,
+  useStripe,
+} from "@stripe/react-stripe-js";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Navbar from "@/app/components/Navbar";
 import { BRAND, SERIF } from "@/app/components/brand";
 import { supabase } from "@/lib/supabase";
+
+const stripePromise = loadStripe(
+  process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
+);
 
 const CANCEL_POLICIES = {
   flexible: {
@@ -243,6 +254,7 @@ function buildBookingPayload({
   mensaje,
   precioTotal,
   grupoReserva,
+  paymentIntentId,
 }) {
   const v = svc.vertical;
   const isImmediate = svc.reserva_inmediata === true;
@@ -258,7 +270,93 @@ function buildBookingPayload({
     precio_total: precioTotal,
     estado: isImmediate ? "confirmada" : "pendiente",
     grupo_reserva: grupoReserva,
+    // -- ALTER TABLE bookings ADD COLUMN IF NOT EXISTS payment_intent_id text;
+    payment_intent_id: paymentIntentId,
   };
+}
+
+function CheckoutForm({
+  precioTotal,
+  paymentIntentId,
+  metadata,
+  onPaymentSuccess,
+  disabled,
+}) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [paying, setPaying] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (!stripe || !elements) return;
+
+    setPaying(true);
+    setError("");
+
+    const intentRes = await fetch("/api/stripe/create-payment-intent", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        amount: precioTotal,
+        metadata: {
+          service_id: String(metadata.service_id),
+          cliente_id: String(metadata.cliente_id),
+          grupo_reserva: String(metadata.grupo_reserva),
+        },
+      }),
+    });
+    const intentData = await intentRes.json();
+
+    if (!intentRes.ok || intentData.error) {
+      setPaying(false);
+      setError(intentData.error || "No se pudo iniciar el pago.");
+      return;
+    }
+
+    const { error: confirmError, paymentIntent } = await stripe.confirmPayment({
+      elements,
+      confirmParams: {
+        return_url: `${window.location.origin}/dashboard`,
+      },
+      redirect: "if_required",
+    });
+
+    if (confirmError) {
+      setPaying(false);
+      setError(confirmError.message);
+      return;
+    }
+
+    const confirmedId = paymentIntent?.id || paymentIntentId;
+
+    try {
+      await onPaymentSuccess(confirmedId);
+    } catch (err) {
+      setError(err.message || "Error al guardar la reserva.");
+    } finally {
+      setPaying(false);
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="mt-6">
+      <PaymentElement />
+      {error && (
+        <p className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </p>
+      )}
+      <button
+        type="submit"
+        disabled={!stripe || paying || disabled}
+        className="mt-4 w-full rounded-xl py-3.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+        style={{ backgroundColor: BRAND.primary }}
+      >
+        {paying ? "Procesando pago…" : `Pagar ${precioTotal.toFixed(2)}€`}
+      </button>
+    </form>
+  );
 }
 
 export default function ReservarPage() {
@@ -278,10 +376,13 @@ export default function ReservarPage() {
   const [hora, setHora] = useState("");
   const [duracionHoras, setDuracionHoras] = useState("");
   const [mensaje, setMensaje] = useState("");
-  const [submitting, setSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
   const [successVariant, setSuccessVariant] = useState("green");
   const [errorMessage, setErrorMessage] = useState("");
+  const [clientSecret, setClientSecret] = useState(null);
+  const [paymentIntentId, setPaymentIntentId] = useState(null);
+  const [grupoReserva, setGrupoReserva] = useState(null);
+  const [paymentIntentLoading, setPaymentIntentLoading] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -466,108 +567,163 @@ export default function ReservarPage() {
     };
   }, [service, selectedServices, vertical, fechaInicio, fechaFin, duracionHoras]);
 
+  const paymentMetadata = useMemo(() => {
+    if (!userId || !serviceId || !grupoReserva) return null;
+    return {
+      service_id: serviceId,
+      cliente_id: userId,
+      grupo_reserva: grupoReserva,
+    };
+  }, [userId, serviceId, grupoReserva]);
+
+  useEffect(() => {
+    if (!priceSummary.ready || priceSummary.total <= 0 || !userId || !serviceId) {
+      setClientSecret(null);
+      setPaymentIntentId(null);
+      setGrupoReserva(null);
+      return;
+    }
+
+    const grupo = crypto.randomUUID();
+    setGrupoReserva(grupo);
+
+    let cancelled = false;
+    setPaymentIntentLoading(true);
+
+    async function createIntent() {
+      try {
+        const res = await fetch("/api/stripe/create-payment-intent", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            amount: priceSummary.total,
+            metadata: {
+              service_id: String(serviceId),
+              cliente_id: String(userId),
+              grupo_reserva: grupo,
+            },
+          }),
+        });
+        const data = await res.json();
+        if (cancelled) return;
+        if (!res.ok || data.error) {
+          setClientSecret(null);
+          setPaymentIntentId(null);
+          setErrorMessage(data.error || "No se pudo preparar el pago.");
+          return;
+        }
+        setClientSecret(data.clientSecret);
+        setPaymentIntentId(data.paymentIntentId);
+      } finally {
+        if (!cancelled) setPaymentIntentLoading(false);
+      }
+    }
+
+    createIntent();
+    return () => {
+      cancelled = true;
+    };
+  }, [priceSummary.ready, priceSummary.total, userId, serviceId, bundleIds]);
+
+  const completeBooking = useCallback(
+    async (confirmedPaymentIntentId) => {
+      if (!userId || !service || !grupoReserva) {
+        throw new Error("Datos de reserva incompletos.");
+      }
+
+      if (!priceSummary.ready || priceSummary.total <= 0) {
+        throw new Error("Completa las fechas o la duración para calcular el precio.");
+      }
+
+      const dateContext = {
+        fechaInicio,
+        fechaFin,
+        duracionHoras,
+        mainVertical: vertical,
+      };
+
+      const bookingRows = selectedServices.map((svc) => {
+        const calc = calculateServiceBasePrice(svc, dateContext);
+        return buildBookingPayload({
+          svc,
+          userId,
+          fechaInicio,
+          fechaFin,
+          hora,
+          duracionHoras,
+          mensaje,
+          precioTotal: applyClientPrice(calc.base),
+          grupoReserva,
+          paymentIntentId: confirmedPaymentIntentId,
+        });
+      });
+
+      const { error } = await supabase.from("bookings").insert(bookingRows);
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      const emailServicios = selectedServices.map((svc) => {
+        const calc = calculateServiceBasePrice(svc, dateContext);
+        return {
+          titulo: svc.titulo || VERTICALS[svc.vertical]?.label,
+          proveedor_nombre: svc.profiles?.nombre || "Proveedor",
+          proveedor_email: svc.profiles?.email || userEmail,
+          precio: applyClientPrice(calc.base).toFixed(2),
+          direccion_exacta: svc.direccion_exacta,
+          telefono_proveedor: svc.telefono_contacto,
+          modalidad: svc.modalidad,
+        };
+      });
+
+      await fetch("/api/emails", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tipo: "reserva_confirmada",
+          cliente_email: userEmail,
+          cliente_nombre: perfilCliente?.nombre || "Cliente",
+          proveedor_email: service.profiles?.email || userEmail,
+          proveedor_nombre: service.profiles?.nombre || "Proveedor",
+          servicio_titulo: service.titulo,
+          fecha_inicio: fechaInicio,
+          fecha_fin: fechaFin || fechaInicio,
+          precio_total: priceSummary.total.toFixed(2),
+          subtotal: priceSummary.subtotal.toFixed(2),
+          comision: priceSummary.commission.toFixed(2),
+          mensaje: mensaje || "",
+          direccion_exacta: service.direccion_exacta,
+          telefono_proveedor: service.telefono_contacto,
+          modalidad: service.modalidad,
+          servicios: emailServicios,
+        }),
+      });
+
+      router.push("/dashboard");
+    },
+    [
+      userId,
+      service,
+      grupoReserva,
+      priceSummary,
+      selectedServices,
+      fechaInicio,
+      fechaFin,
+      hora,
+      duracionHoras,
+      mensaje,
+      vertical,
+      userEmail,
+      perfilCliente,
+      router,
+    ],
+  );
+
   function toggleBundleService(id) {
     setBundleIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
     );
-  }
-
-  async function handleConfirm(e) {
-    e.preventDefault();
-    setErrorMessage("");
-    setSuccessMessage("");
-
-    if (!userId || !service) return;
-
-    if (!priceSummary.ready || priceSummary.total <= 0) {
-      setErrorMessage("Completa las fechas o la duración para calcular el precio.");
-      return;
-    }
-
-    setSubmitting(true);
-
-    const isImmediate = service.reserva_inmediata === true;
-    // -- ALTER TABLE bookings ADD COLUMN IF NOT EXISTS grupo_reserva uuid DEFAULT gen_random_uuid();
-    const grupoReserva = crypto.randomUUID();
-
-    const dateContext = { fechaInicio, fechaFin, duracionHoras, mainVertical: vertical };
-
-    const bookingRows = selectedServices.map((svc) => {
-      const calc = calculateServiceBasePrice(svc, dateContext);
-      return buildBookingPayload({
-        svc,
-        userId,
-        fechaInicio,
-        fechaFin,
-        hora,
-        duracionHoras,
-        mensaje,
-        precioTotal: applyClientPrice(calc.base),
-        grupoReserva,
-      });
-    });
-
-    const { error } = await supabase.from("bookings").insert(bookingRows);
-
-    if (error) {
-      setSubmitting(false);
-      setErrorMessage(error.message);
-      return;
-    }
-
-    const emailServicios = selectedServices.map((svc) => {
-      const calc = calculateServiceBasePrice(svc, dateContext);
-      return {
-        titulo: svc.titulo || VERTICALS[svc.vertical]?.label,
-        proveedor_nombre: svc.profiles?.nombre || "Proveedor",
-        proveedor_email: svc.profiles?.email || userEmail,
-        precio: applyClientPrice(calc.base).toFixed(2),
-        direccion_exacta: svc.direccion_exacta,
-        telefono_proveedor: svc.telefono_contacto,
-        modalidad: svc.modalidad,
-      };
-    });
-
-    await fetch("/api/emails", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        tipo: "reserva_confirmada",
-        cliente_email: userEmail,
-        cliente_nombre: perfilCliente?.nombre || "Cliente",
-        proveedor_email: service.profiles?.email || userEmail,
-        proveedor_nombre: service.profiles?.nombre || "Proveedor",
-        servicio_titulo: service.titulo,
-        fecha_inicio: fechaInicio,
-        fecha_fin: fechaFin || fechaInicio,
-        precio_total: priceSummary.total.toFixed(2),
-        subtotal: priceSummary.subtotal.toFixed(2),
-        comision: priceSummary.commission.toFixed(2),
-        mensaje: mensaje || "",
-        direccion_exacta: service.direccion_exacta,
-        telefono_proveedor: service.telefono_contacto,
-        modalidad: service.modalidad,
-        servicios: emailServicios,
-      }),
-    });
-
-    setSubmitting(false);
-
-    if (isImmediate) {
-      setSuccessVariant("green");
-      setSuccessMessage(
-        "¡Reserva confirmada! Recibirás los detalles por email.",
-      );
-    } else {
-      setSuccessVariant("blue");
-      setSuccessMessage(
-        "¡Solicitud enviada! El proveedor confirmará tu reserva pronto.",
-      );
-    }
-
-    setTimeout(() => {
-      router.push("/dashboard");
-    }, 2000);
   }
 
   if (loading) {
@@ -675,8 +831,7 @@ export default function ReservarPage() {
             )}
           </aside>
 
-          <form
-            onSubmit={handleConfirm}
+          <div
             className="rounded-2xl border bg-white p-6 sm:p-7"
             style={{ borderColor: BRAND.border }}
           >
@@ -982,15 +1137,36 @@ export default function ReservarPage() {
               </div>
             )}
 
-            <button
-              type="submit"
-              disabled={submitting || !!successMessage}
-              className="mt-6 w-full rounded-xl py-3.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-              style={{ backgroundColor: verticalConfig.color }}
-            >
-              {submitting ? "Enviando…" : "Confirmar reserva"}
-            </button>
-          </form>
+            {priceSummary.ready && priceSummary.total > 0 ? (
+              paymentIntentLoading ? (
+                <p className="mt-6 text-center text-sm text-[#666]">
+                  Preparando formulario de pago…
+                </p>
+              ) : clientSecret && paymentMetadata ? (
+                <Elements
+                  key={clientSecret}
+                  stripe={stripePromise}
+                  options={{ clientSecret }}
+                >
+                  <CheckoutForm
+                    precioTotal={priceSummary.total}
+                    paymentIntentId={paymentIntentId}
+                    metadata={paymentMetadata}
+                    onPaymentSuccess={completeBooking}
+                    disabled={!!successMessage}
+                  />
+                </Elements>
+              ) : (
+                <p className="mt-6 text-center text-sm text-red-600">
+                  No se pudo cargar el pago. Revisa las fechas e inténtalo de nuevo.
+                </p>
+              )
+            ) : (
+              <p className="mt-6 text-center text-sm text-[#888]">
+                Completa las fechas para habilitar el pago.
+              </p>
+            )}
+          </div>
         </div>
       </main>
     </div>
