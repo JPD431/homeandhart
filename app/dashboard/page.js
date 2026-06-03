@@ -16,9 +16,50 @@ const VERTICALS = {
 const STATUS_STYLES = {
   pendiente: { bg: "#fef3c7", color: "#92400e", label: "Pendiente" },
   confirmada: { bg: BRAND.light, color: BRAND.primary, label: "Confirmada" },
+  en_curso: { bg: "#e0e7ff", color: "#3730a3", label: "En curso" },
   completada: { bg: "#dcfce7", color: "#166534", label: "Completada" },
+  incidencia: { bg: "#fee2e2", color: "#b91c1c", label: "Incidencia" },
   cancelada: { bg: "#f3f4f6", color: "#6b7280", label: "Cancelada" },
 };
+
+// -- ALTER TABLE bookings ADD COLUMN IF NOT EXISTS confirmacion_cliente boolean DEFAULT false;
+// -- ALTER TABLE bookings ADD COLUMN IF NOT EXISTS incidencia_descripcion text;
+
+function getBookingEstado(booking) {
+  return booking.estado ?? booking.status;
+}
+
+function isFechaFinPast24h(fechaFin) {
+  if (!fechaFin) return false;
+  const end = new Date(`${fechaFin}T23:59:59`);
+  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+  return end.getTime() < cutoff;
+}
+
+function needsClientConfirmation(booking) {
+  if (booking.confirmacion_cliente) return false;
+  if (!booking.payment_intent_id) return false;
+  const estado = getBookingEstado(booking);
+  if (estado === "incidencia" || estado === "cancelada" || estado === "pendiente") {
+    return false;
+  }
+  if (estado === "en_curso") return true;
+  if (estado === "completada") return true;
+  return false;
+}
+
+async function capturePayment(paymentIntentId) {
+  const res = await fetch("/api/stripe/capture-payment", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ paymentIntentId }),
+  });
+  const data = await res.json();
+  if (!res.ok || data.error) {
+    throw new Error(data.error || "No se pudo liberar el pago.");
+  }
+  return data;
+}
 
 function Section({ title, children }) {
   return (
@@ -63,6 +104,51 @@ export default function DashboardPage() {
   const [services, setServices] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [reviewedBookingIds, setReviewedBookingIds] = useState(new Set());
+  const [incidentBookingId, setIncidentBookingId] = useState(null);
+  const [incidentText, setIncidentText] = useState("");
+  const [actionLoadingId, setActionLoadingId] = useState(null);
+  const [bookingFeedback, setBookingFeedback] = useState({});
+
+  async function completeBookingWithCapture(booking) {
+    await capturePayment(booking.payment_intent_id);
+    const { error } = await supabase
+      .from("bookings")
+      .update({
+        estado: "completada",
+        confirmacion_cliente: true,
+      })
+      .eq("id", booking.id);
+
+    if (error) throw new Error(error.message);
+  }
+
+  async function runAutoCaptureForBookings(clientBookings, userId) {
+    const eligible = clientBookings.filter(
+      (b) =>
+        getBookingEstado(b) === "confirmada" &&
+        !b.confirmacion_cliente &&
+        b.payment_intent_id &&
+        isFechaFinPast24h(b.fecha_fin),
+    );
+
+    if (eligible.length === 0) return clientBookings;
+
+    for (const booking of eligible) {
+      try {
+        await completeBookingWithCapture(booking);
+      } catch {
+        // Siguiente reserva si una falla
+      }
+    }
+
+    const { data: refreshed } = await supabase
+      .from("bookings")
+      .select("*")
+      .eq("cliente_id", userId)
+      .order("created_at", { ascending: false });
+
+    return refreshed ?? clientBookings;
+  }
 
   useEffect(() => {
     async function loadDashboard() {
@@ -112,7 +198,8 @@ export default function DashboardPage() {
           .eq("cliente_id", user.id)
           .order("created_at", { ascending: false });
 
-        const clientBookings = bookingsData ?? [];
+        let clientBookings = bookingsData ?? [];
+        clientBookings = await runAutoCaptureForBookings(clientBookings, user.id);
         setBookings(clientBookings);
 
         if (clientBookings.length > 0) {
@@ -135,6 +222,109 @@ export default function DashboardPage() {
 
     loadDashboard();
   }, [router]);
+
+  async function handleConfirmService(booking) {
+    setActionLoadingId(booking.id);
+    setBookingFeedback((prev) => {
+      const next = { ...prev };
+      delete next[booking.id];
+      return next;
+    });
+
+    try {
+      await completeBookingWithCapture(booking);
+      setBookings((prev) =>
+        prev.map((b) =>
+          b.id === booking.id
+            ? { ...b, estado: "completada", confirmacion_cliente: true }
+            : b,
+        ),
+      );
+      setBookingFeedback((prev) => ({
+        ...prev,
+        [booking.id]: {
+          type: "released",
+          message: "¡Pago liberado al proveedor!",
+        },
+      }));
+      setIncidentBookingId(null);
+    } catch (err) {
+      setBookingFeedback((prev) => ({
+        ...prev,
+        [booking.id]: { type: "error", message: err.message },
+      }));
+    } finally {
+      setActionLoadingId(null);
+    }
+  }
+
+  async function handleSubmitIncident(booking) {
+    const descripcion = incidentText.trim();
+    if (!descripcion) return;
+
+    setActionLoadingId(booking.id);
+    setBookingFeedback((prev) => {
+      const next = { ...prev };
+      delete next[booking.id];
+      return next;
+    });
+
+    try {
+      const { error } = await supabase
+        .from("bookings")
+        .update({
+          estado: "incidencia",
+          incidencia_descripcion: descripcion,
+        })
+        .eq("id", booking.id);
+
+      if (error) throw new Error(error.message);
+
+      await fetch("/api/emails", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tipo: "incidencia",
+          booking_id: booking.id,
+          cliente_nombre:
+            [profile?.nombre, profile?.apellido].filter(Boolean).join(" ") ||
+            "Cliente",
+          fecha_inicio: booking.fecha_inicio,
+          fecha_fin: booking.fecha_fin,
+          descripcion,
+        }),
+      });
+
+      setBookings((prev) =>
+        prev.map((b) =>
+          b.id === booking.id
+            ? {
+                ...b,
+                estado: "incidencia",
+                incidencia_descripcion: descripcion,
+              }
+            : b,
+        ),
+      );
+      setBookingFeedback((prev) => ({
+        ...prev,
+        [booking.id]: {
+          type: "incident",
+          message:
+            "Incidencia registrada. Nuestro equipo la revisará en menos de 24h.",
+        },
+      }));
+      setIncidentBookingId(null);
+      setIncidentText("");
+    } catch (err) {
+      setBookingFeedback((prev) => ({
+        ...prev,
+        [booking.id]: { type: "error", message: err.message },
+      }));
+    } finally {
+      setActionLoadingId(null);
+    }
+  }
 
   const isProvider = profile?.role === "proveedor";
   const greetingName = profile?.nombre?.trim();
@@ -316,45 +506,153 @@ export default function DashboardPage() {
                   </Link>
                 </div>
               ) : (
-                <ul className="flex flex-col gap-3">
+                <ul className="flex flex-col gap-4">
                   {bookings.map((booking) => {
-                    const estado = booking.estado ?? booking.status;
+                    const estado = getBookingEstado(booking);
+                    const showConfirmation = needsClientConfirmation(booking);
+                    const feedback = bookingFeedback[booking.id];
+                    const isIncidentOpen = incidentBookingId === booking.id;
+                    const isLoading = actionLoadingId === booking.id;
                     const canReview =
                       estado === "completada" &&
+                      booking.confirmacion_cliente &&
                       !reviewedBookingIds.has(booking.id);
+                    const showReviewAfterRelease = feedback?.type === "released";
 
                     return (
                       <li
                         key={booking.id}
-                        className="flex flex-col gap-2 rounded-xl border px-4 py-4 sm:flex-row sm:items-center sm:justify-between"
+                        className="flex flex-col gap-3 rounded-xl border px-4 py-4"
                         style={{ borderColor: BRAND.border }}
                       >
-                        <div>
-                          <p className="font-medium text-[#1a1a1a]">
-                            Reserva #{booking.id?.slice?.(0, 8) ?? "—"}
-                          </p>
-                          {booking.fecha_inicio && (
-                            <p className="mt-0.5 text-xs text-[#888]">
-                              {booking.fecha_inicio}
-                              {booking.fecha_fin ? ` — ${booking.fecha_fin}` : ""}
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                          <div>
+                            <p className="font-medium text-[#1a1a1a]">
+                              Reserva #{booking.id?.slice?.(0, 8) ?? "—"}
                             </p>
-                          )}
+                            {booking.fecha_inicio && (
+                              <p className="mt-0.5 text-xs text-[#888]">
+                                {booking.fecha_inicio}
+                                {booking.fecha_fin ? ` — ${booking.fecha_fin}` : ""}
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <StatusBadge status={estado} />
+                            {canReview && !showReviewAfterRelease && (
+                              <Link
+                                href={`/resena/${booking.id}`}
+                                className="rounded-xl border px-3 py-1.5 text-xs font-semibold no-underline transition-colors hover:bg-[#e8f0fb]"
+                                style={{
+                                  borderColor: BRAND.primary,
+                                  color: BRAND.primary,
+                                }}
+                              >
+                                Valorar
+                              </Link>
+                            )}
+                          </div>
                         </div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <StatusBadge status={estado} />
-                          {canReview && (
-                            <Link
-                              href={`/resena/${booking.id}`}
-                              className="rounded-xl border px-3 py-1.5 text-xs font-semibold no-underline transition-colors hover:bg-[#e8f0fb]"
-                              style={{
-                                borderColor: BRAND.primary,
-                                color: BRAND.primary,
-                              }}
+
+                        {showConfirmation && !isIncidentOpen && (
+                          <div className="flex flex-col gap-2 sm:flex-row">
+                            <button
+                              type="button"
+                              disabled={isLoading}
+                              onClick={() => handleConfirmService(booking)}
+                              className="flex-1 rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                              style={{ backgroundColor: "#16a34a" }}
                             >
-                              Valorar
-                            </Link>
-                          )}
-                        </div>
+                              {isLoading ? "Procesando…" : "✅ Todo fue bien"}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isLoading}
+                              onClick={() => {
+                                setIncidentBookingId(booking.id);
+                                setIncidentText("");
+                                setBookingFeedback((prev) => {
+                                  const next = { ...prev };
+                                  delete next[booking.id];
+                                  return next;
+                                });
+                              }}
+                              className="flex-1 rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                              style={{ backgroundColor: "#dc2626" }}
+                            >
+                              ⚠️ Hubo un problema
+                            </button>
+                          </div>
+                        )}
+
+                        {showConfirmation && isIncidentOpen && (
+                          <div className="flex flex-col gap-3 rounded-xl border border-red-200 bg-red-50/50 p-4">
+                            <label
+                              htmlFor={`incident-${booking.id}`}
+                              className="text-sm font-medium text-[#444]"
+                            >
+                              Describe el problema
+                            </label>
+                            <textarea
+                              id={`incident-${booking.id}`}
+                              rows={3}
+                              value={incidentText}
+                              onChange={(e) => setIncidentText(e.target.value)}
+                              className="w-full resize-y rounded-xl border border-red-200 bg-white px-4 py-3 text-sm text-[#1a1a1a] outline-none focus:ring-2 focus:ring-red-200"
+                            />
+                            <div className="flex flex-col gap-2 sm:flex-row">
+                              <button
+                                type="button"
+                                disabled={isLoading || !incidentText.trim()}
+                                onClick={() => handleSubmitIncident(booking)}
+                                className="rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                                style={{ backgroundColor: "#dc2626" }}
+                              >
+                                {isLoading ? "Enviando…" : "Enviar incidencia"}
+                              </button>
+                              <button
+                                type="button"
+                                disabled={isLoading}
+                                onClick={() => {
+                                  setIncidentBookingId(null);
+                                  setIncidentText("");
+                                }}
+                                className="rounded-xl border px-4 py-2.5 text-sm font-semibold text-[#666] transition-colors hover:bg-white"
+                                style={{ borderColor: BRAND.border }}
+                              >
+                                Cancelar
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {feedback?.type === "released" && (
+                          <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">
+                            {feedback.message}
+                          </p>
+                        )}
+
+                        {feedback?.type === "incident" && (
+                          <p className="rounded-lg bg-[#e8f0fb] px-3 py-2 text-sm text-[#1d4f91]">
+                            {feedback.message}
+                          </p>
+                        )}
+
+                        {feedback?.type === "error" && (
+                          <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+                            {feedback.message}
+                          </p>
+                        )}
+
+                        {(showReviewAfterRelease || canReview) && (
+                          <Link
+                            href={`/resena/${booking.id}`}
+                            className="inline-flex w-full justify-center rounded-xl px-4 py-2.5 text-sm font-semibold text-white no-underline transition-opacity hover:opacity-90 sm:w-auto"
+                            style={{ backgroundColor: BRAND.primary }}
+                          >
+                            Dejar una valoración
+                          </Link>
+                        )}
                       </li>
                     );
                   })}

@@ -460,6 +460,32 @@ export async function POST(request) {
       return Response.json({ success: true });
     }
 
+    if (tipo === "incidencia") {
+      const adminEmail = process.env.ADMIN_EMAIL || FROM;
+      const result = await resend.emails.send({
+        from: FROM,
+        to: adminEmail,
+        subject: "Incidencia en reserva — Home&Heart",
+        html: emailLayout({
+          title: "Incidencia en reserva",
+          bodyHtml: `
+            <h1 style="margin:0 0 16px;font-size:20px;color:${BRAND_PRIMARY};">Nueva incidencia reportada</h1>
+            <p style="margin:0 0 8px;font-size:14px;line-height:1.6;"><strong>Reserva:</strong> ${data.booking_id ?? "—"}</p>
+            <p style="margin:0 0 8px;font-size:14px;line-height:1.6;"><strong>Cliente:</strong> ${data.cliente_nombre ?? "—"}</p>
+            <p style="margin:0 0 8px;font-size:14px;line-height:1.6;"><strong>Fechas:</strong> ${data.fecha_inicio ?? "—"}${data.fecha_fin ? ` — ${data.fecha_fin}` : ""}</p>
+            <p style="margin:16px 0 0;font-size:14px;line-height:1.6;"><strong>Descripción:</strong></p>
+            <p style="margin:8px 0 0;font-size:14px;line-height:1.6;color:#444;">${(data.descripcion ?? "").replace(/</g, "&lt;")}</p>
+          `,
+        }),
+      });
+
+      if (result.error) {
+        return Response.json({ error: result.error.message }, { status: 400 });
+      }
+
+      return Response.json({ success: true });
+    }
+
     return Response.json(
       { error: `Tipo de email no soportado: ${tipo}` },
       { status: 400 },
