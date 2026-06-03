@@ -282,6 +282,63 @@ export default function DashboardPage() {
   const [showAddCard, setShowAddCard] = useState(false);
   const [setupClientSecret, setSetupClientSecret] = useState(null);
   const [paymentMethodError, setPaymentMethodError] = useState("");
+  const [showRoleSwitchModal, setShowRoleSwitchModal] = useState(false);
+  const [roleSwitchLoading, setRoleSwitchLoading] = useState(false);
+  const [roleSwitchError, setRoleSwitchError] = useState("");
+
+  async function handleBecomeProvider() {
+    if (!profile?.id) return;
+
+    setRoleSwitchLoading(true);
+    setRoleSwitchError("");
+
+    const { error } = await supabase
+      .from("profiles")
+      .update({ role: "proveedor" })
+      .eq("id", profile.id);
+
+    setRoleSwitchLoading(false);
+
+    if (error) {
+      setRoleSwitchError(error.message);
+      return;
+    }
+
+    window.location.reload();
+  }
+
+  async function handleConfirmSwitchToClient() {
+    if (!profile?.id) return;
+
+    setRoleSwitchLoading(true);
+    setRoleSwitchError("");
+
+    const { error: profileError } = await supabase
+      .from("profiles")
+      .update({ role: "cliente" })
+      .eq("id", profile.id);
+
+    if (profileError) {
+      setRoleSwitchLoading(false);
+      setRoleSwitchError(profileError.message);
+      return;
+    }
+
+    const { error: servicesError } = await supabase
+      .from("services")
+      .update({ disponible: false })
+      .eq("proveedor_id", profile.id);
+
+    setRoleSwitchLoading(false);
+    setShowRoleSwitchModal(false);
+
+    if (servicesError) {
+      setRoleSwitchError(servicesError.message);
+      return;
+    }
+
+    window.location.reload();
+  }
 
   async function completeBookingWithCapture(booking, allBookings) {
     const proveedores = await buildProveedoresForPayment(booking, allBookings);
@@ -884,9 +941,19 @@ export default function DashboardPage() {
                   </dd>
                 </div>
               </dl>
+              <button
+                type="button"
+                disabled={roleSwitchLoading}
+                onClick={() => setShowRoleSwitchModal(true)}
+                className="mt-5 w-full rounded-xl border px-5 py-2.5 text-sm font-semibold text-[#666] transition-colors hover:bg-[#f7f5f2] disabled:opacity-60 sm:w-auto"
+                style={{ borderColor: BRAND.border }}
+              >
+                {roleSwitchLoading ? "Procesando…" : "Cambiar a modo cliente"}
+              </button>
+
               <Link
                 href="/completar-perfil"
-                className="mt-5 inline-block rounded-xl border px-5 py-2.5 text-sm font-semibold no-underline transition-colors hover:bg-[#e8f0fb]"
+                className="mt-3 inline-block rounded-xl border px-5 py-2.5 text-sm font-semibold no-underline transition-colors hover:bg-[#e8f0fb]"
                 style={{ borderColor: BRAND.primary, color: BRAND.primary }}
               >
                 Editar perfil
@@ -1172,9 +1239,31 @@ export default function DashboardPage() {
                 )}
               </div>
 
+              <button
+                type="button"
+                disabled={roleSwitchLoading}
+                onClick={handleBecomeProvider}
+                className="mt-5 w-full rounded-xl border px-5 py-2.5 text-sm font-semibold transition-colors hover:opacity-90 disabled:opacity-60 sm:w-auto"
+                style={{
+                  borderColor: BRAND.primary,
+                  backgroundColor: BRAND.light,
+                  color: BRAND.primary,
+                }}
+              >
+                {roleSwitchLoading
+                  ? "Procesando…"
+                  : "Quiero ser proveedor también →"}
+              </button>
+
+              {roleSwitchError && !showRoleSwitchModal && (
+                <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+                  {roleSwitchError}
+                </p>
+              )}
+
               <Link
                 href="/completar-perfil"
-                className="mt-5 inline-block rounded-xl border px-5 py-2.5 text-sm font-semibold no-underline transition-colors hover:bg-[#e8f0fb]"
+                className="mt-3 inline-block rounded-xl border px-5 py-2.5 text-sm font-semibold no-underline transition-colors hover:bg-[#e8f0fb]"
                 style={{ borderColor: BRAND.primary, color: BRAND.primary }}
               >
                 Editar perfil
@@ -1183,6 +1272,52 @@ export default function DashboardPage() {
           </>
         )}
       </main>
+
+      {showRoleSwitchModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div
+            className="w-full max-w-md rounded-2xl border bg-white p-6 shadow-lg"
+            style={{ borderColor: BRAND.border }}
+          >
+            <p className="text-lg font-semibold text-[#1a1a1a]">
+              ¿Seguro que quieres cambiar a modo cliente?
+            </p>
+            <p className="mt-2 text-sm leading-relaxed text-[#666]">
+              Tu perfil de proveedor y servicios se desactivarán temporalmente.
+            </p>
+
+            {roleSwitchError && (
+              <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+                {roleSwitchError}
+              </p>
+            )}
+
+            <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                disabled={roleSwitchLoading}
+                onClick={() => {
+                  setShowRoleSwitchModal(false);
+                  setRoleSwitchError("");
+                }}
+                className="rounded-xl border px-4 py-2.5 text-sm font-semibold text-[#666] transition-colors hover:bg-[#f7f5f2] disabled:opacity-60"
+                style={{ borderColor: BRAND.border }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={roleSwitchLoading}
+                onClick={handleConfirmSwitchToClient}
+                className="rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                style={{ backgroundColor: BRAND.primary }}
+              >
+                {roleSwitchLoading ? "Procesando…" : "Confirmar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
