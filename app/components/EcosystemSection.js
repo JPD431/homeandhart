@@ -1,3 +1,7 @@
+"use client";
+
+import { useLang } from "@/app/lib/LangContext";
+import { useTranslation } from "@/app/lib/i18n";
 import { BRAND, SERIF } from "./brand";
 
 function LodgingIcon({ className }) {
@@ -59,7 +63,7 @@ function PetCareIcon({ className }) {
 
 const ECOSYSTEM = [
   {
-    title: "Alojamiento",
+    titleKey: "alojamiento",
     description:
       "Apartamentos con NRU registrado. Sin sorpresas al llegar.",
     items: [
@@ -70,7 +74,7 @@ const ECOSYSTEM = [
     Icon: LodgingIcon,
   },
   {
-    title: "Cuidado de niños",
+    titleKey: "ninos",
     description:
       "Niñeras certificadas con antecedentes verificados. En tu ciudad o mientras viajas.",
     items: [
@@ -81,7 +85,7 @@ const ECOSYSTEM = [
     Icon: ChildcareIcon,
   },
   {
-    title: "Cuidado de mascotas",
+    titleKey: "mascotas",
     description:
       "Cuidadores verificados para que tu mascota esté bien mientras tú disfrutas.",
     items: [
@@ -94,6 +98,9 @@ const ECOSYSTEM = [
 ];
 
 export default function EcosystemSection() {
+  const { lang } = useLang();
+  const t = useTranslation(lang);
+
   return (
     <section
       className="px-4 py-16 text-white sm:px-6 sm:py-20 lg:px-8 lg:py-24"
@@ -107,32 +114,32 @@ export default function EcosystemSection() {
               className="text-[11px] font-semibold uppercase tracking-[0.2em] sm:text-xs"
               style={{ color: "rgba(255, 255, 255, 0.5)" }}
             >
-              el ecosistema
+              {t.ecosystem.label}
             </p>
             <h2
               id="ecosystem-heading"
               className="mt-4 text-2xl leading-snug text-white sm:text-3xl lg:text-4xl xl:text-[2.5rem] xl:leading-tight"
               style={{ fontFamily: SERIF }}
             >
-              Todo lo que tu familia necesita,{" "}
-              <span className="italic opacity-75">en un solo lugar.</span>
+              {t.ecosystem.titulo}
             </h2>
           </div>
           <p
             className="text-base leading-relaxed sm:text-lg lg:pb-1"
             style={{ color: "rgba(255, 255, 255, 0.6)" }}
           >
-            Tanto si viajas como si lo necesitas en casa. El primer ecosistema
-            de cuidado familiar completo.
+            {t.ecosystem.subtitulo}
           </p>
         </div>
 
         <div className="mt-12 grid gap-5 md:grid-cols-3 md:gap-6 lg:mt-14">
           {ECOSYSTEM.map((service) => {
             const { Icon } = service;
+            const title =
+              t.footer[service.titleKey] || t.hero[service.titleKey];
             return (
               <article
-                key={service.title}
+                key={service.titleKey}
                 className="flex flex-col rounded-2xl border border-[rgba(255,255,255,0.25)] bg-[rgba(255,255,255,0.15)] p-7 transition-colors duration-300 hover:bg-[rgba(255,255,255,0.12)]"
               >
                 <span
@@ -151,7 +158,7 @@ export default function EcosystemSection() {
                   className="mt-4 text-xl text-white sm:text-2xl"
                   style={{ fontFamily: SERIF }}
                 >
-                  {service.title}
+                  {title}
                 </h3>
                 <p
                   className="mt-2 text-sm leading-relaxed sm:text-base"

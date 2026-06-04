@@ -11,19 +11,15 @@ function normalizeServiceId(serviceId) {
 }
 
 async function traducir(texto) {
-  if (!texto?.trim()) return texto || "";
-  const res = await fetch("https://translate.terraprint.co/translate", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      q: texto,
-      source: "es",
-      target: "en",
-      format: "text",
-    }),
-  });
-  const data = await res.json();
-  return data.translatedText || texto;
+  if (!texto) return texto;
+  try {
+    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=es&tl=en&dt=t&q=${encodeURIComponent(texto)}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    return data[0].map((item) => item[0]).join("");
+  } catch {
+    return texto;
+  }
 }
 
 async function traducirCamposServicio(service) {

@@ -1,37 +1,8 @@
+"use client";
+
+import { useLang } from "@/app/lib/LangContext";
+import { useTranslation } from "@/app/lib/i18n";
 import { BRAND, SERIF } from "./brand";
-
-const DARK_BLUE = "#163a6b";
-
-const PLATFORM_LINKS = [
-  "Cómo funciona",
-  "Alojamiento",
-  "Cuidado de niños",
-  "Cuidado de mascotas",
-  "Paquetes",
-];
-
-const ABOUT_LINKS = [
-  "Quiénes somos",
-  "Nuestros valores",
-  "Para proveedores",
-  "Prensa",
-  "Contacto",
-];
-
-const LEGAL_LINKS = [
-  "Términos de uso",
-  "Privacidad",
-  "Cookies",
-  "RGPD",
-  "Aviso legal",
-];
-
-const LANGUAGES = [
-  { code: "ES", active: true },
-  { code: "EN", active: false },
-  { code: "FR", active: false },
-  { code: "DE", active: false },
-];
 
 function FooterColumn({ title, links }) {
   return (
@@ -39,12 +10,12 @@ function FooterColumn({ title, links }) {
       <p className="text-xs font-bold text-[#111]">{title}</p>
       <ul className="mt-3 flex flex-col gap-2">
         {links.map((link) => (
-          <li key={link}>
+          <li key={link.label}>
             <a
-              href="#"
+              href={link.href}
               className="text-xs text-[#888] transition-colors hover:text-[#1d4f91]"
             >
-              {link}
+              {link.label}
             </a>
           </li>
         ))}
@@ -54,6 +25,27 @@ function FooterColumn({ title, links }) {
 }
 
 export default function Footer() {
+  const { lang } = useLang();
+  const t = useTranslation(lang);
+
+  const serviciosLinks = [
+    { label: t.footer.alojamiento, href: "#" },
+    { label: t.footer.ninos, href: "#" },
+    { label: t.footer.mascotas, href: "#" },
+  ];
+
+  const empresaLinks = [
+    { label: t.footer.nosotros, href: "#" },
+    { label: t.footer.comoFunciona, href: "#" },
+    { label: t.footer.contacto, href: "#" },
+  ];
+
+  const legalLinks = [
+    { label: t.footer.terminos, href: "#" },
+    { label: t.footer.privacidad, href: "#" },
+    { label: t.footer.cookies, href: "#" },
+  ];
+
   return (
     <footer
       className="bg-white"
@@ -74,17 +66,16 @@ export default function Footer() {
             className="mt-2 text-[11px] italic text-[#888]"
             style={{ fontFamily: SERIF }}
           >
-            Donde estés, estamos.
+            {t.footer.slogan}
           </p>
           <p className="mt-3 text-xs leading-relaxed text-[#888]">
-            El ecosistema completo para tu familia — tanto si viajas como si lo
-            necesitas en tu ciudad.
+            {t.ecosystem.subtitulo}
           </p>
         </div>
 
-        <FooterColumn title="Plataforma" links={PLATFORM_LINKS} />
-        <FooterColumn title="Nosotros" links={ABOUT_LINKS} />
-        <FooterColumn title="Legal" links={LEGAL_LINKS} />
+        <FooterColumn title={t.footer.servicios} links={serviciosLinks} />
+        <FooterColumn title={t.footer.empresa} links={empresaLinks} />
+        <FooterColumn title={t.footer.legal} links={legalLinks} />
       </div>
 
       <div
@@ -96,32 +87,11 @@ export default function Footer() {
         }}
       >
         <p className="text-[11px] text-[#888]">
-          © 2025 Home&Heart · Todos los derechos reservados
+          © 2025 Home&Heart · {t.footer.derechos}
         </p>
         <p className="text-[11px] text-[#888]">
           Madrid · Estonia (jurisdicción legal)
         </p>
-        <div className="flex gap-2">
-          {LANGUAGES.map((lang) => (
-            <button
-              key={lang.code}
-              type="button"
-              className="rounded-md px-2.5 py-1 text-[11px] transition-opacity hover:opacity-80"
-              style={
-                lang.active
-                  ? {
-                      backgroundColor: BRAND.light,
-                      color: DARK_BLUE,
-                      fontWeight: 500,
-                    }
-                  : { color: "#888" }
-              }
-              aria-current={lang.active ? "true" : undefined}
-            >
-              {lang.code}
-            </button>
-          ))}
-        </div>
       </div>
     </footer>
   );

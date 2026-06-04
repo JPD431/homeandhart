@@ -1,3 +1,7 @@
+"use client";
+
+import { useLang } from "@/app/lib/LangContext";
+import { useTranslation } from "@/app/lib/i18n";
 import { BRAND, SERIF } from "./brand";
 
 const VALUES = [
@@ -10,6 +14,9 @@ const VALUES = [
 ];
 
 export default function NosotrosSection() {
+  const { lang } = useLang();
+  const t = useTranslation(lang);
+
   return (
     <section
       className="text-[#1a1a1a]"
@@ -21,7 +28,6 @@ export default function NosotrosSection() {
           className="grid items-center lg:grid-cols-2"
           style={{ gap: "64px" }}
         >
-          {/* Columna izquierda */}
           <div>
             <p
               className="text-[11px] uppercase"
@@ -31,26 +37,20 @@ export default function NosotrosSection() {
                 letterSpacing: "0.1em",
               }}
             >
-              nosotros
+              {t.footer.nosotros}
             </p>
             <h2
               id="nosotros-heading"
               className="mt-4 leading-snug text-[#1a1a1a]"
               style={{ fontFamily: SERIF, fontSize: "30px" }}
             >
-              Nació de saber que faltaba algo
+              {t.nosotros.titulo}
             </h2>
             <p
               className="mt-5 text-[14px] text-[#5c5c5c]"
               style={{ lineHeight: 1.8 }}
             >
-              Home&Heart surge porque viajar o vivir con familia y mascota
-              debería ser simple y tranquilo — no un rompecabezas de webs,
-              grupos de WhatsApp y llamadas sin respuesta. Somos una plataforma
-              de confianza que une alojamiento, cuidado de niños y cuidado de
-              mascotas en un solo lugar, con proveedores verificados y un
-              proceso diseñado para que lo importante sea disfrutar, no
-              gestionar.
+              {t.nosotros.subtitulo}
             </p>
             <a
               href="#"
@@ -61,7 +61,6 @@ export default function NosotrosSection() {
             </a>
           </div>
 
-          {/* Columna derecha — FAMILY */}
           <div className="grid grid-cols-3 grid-rows-2 gap-3 sm:gap-4">
             {VALUES.map((value) => (
               <article
