@@ -76,6 +76,30 @@ function getServiceStartDateTime(vertical, fechaInicio, hora) {
   return new Date(y, m - 1, d, 0, 0, 0, 0);
 }
 
+function validateBookingDates(vertical, fechaInicio, hora) {
+  if (!fechaInicio) return null;
+
+  const hoyStr = new Date().toISOString().split("T")[0];
+  if (fechaInicio < hoyStr) {
+    return "La fecha de inicio no puede ser en el pasado";
+  }
+
+  if (hora) {
+    const ahora = new Date();
+    const hoyStrLocal = `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, "0")}-${String(ahora.getDate()).padStart(2, "0")}`;
+    if (fechaInicio === hoyStrLocal) {
+      const [h, m] = hora.split(":").map(Number);
+      const horaSeleccionada = h * 60 + m;
+      const horaActual = ahora.getHours() * 60 + ahora.getMinutes();
+      if (horaSeleccionada <= horaActual) {
+        return `La hora ${hora} ya ha pasado. Por favor elige una hora futura.`;
+      }
+    }
+  }
+
+  return null;
+}
+
 /** Porcentaje de reembolso (0–100) si se cancela en cancelAt. */
 function getRefundPercent(policy, cancelAt, serviceStartAt) {
   if (!serviceStartAt || cancelAt >= serviceStartAt) return 0;
@@ -292,6 +316,7 @@ function SavedCardCheckout({
   metadata,
   onPaymentSuccess,
   onUseNewCard,
+  getBookingDateError,
   disabled,
 }) {
   const [paying, setPaying] = useState(false);
@@ -300,6 +325,13 @@ function SavedCardCheckout({
   async function handlePayWithSaved() {
     setPaying(true);
     setError("");
+
+    const dateError = getBookingDateError?.();
+    if (dateError) {
+      setError(dateError);
+      setPaying(false);
+      return;
+    }
 
     try {
       const intentRes = await fetch("/api/stripe/create-payment-intent", {
@@ -393,6 +425,11 @@ function CheckoutForm({
   userEmail,
   clienteNombre,
   onPaymentSuccess,
+  vertical,
+  fechaInicio,
+  hora,
+  setErrorMessage,
+  service,
   disabled,
 }) {
   const stripe = useStripe();
@@ -402,10 +439,74 @@ function CheckoutForm({
 
   async function handleSubmit(e) {
     e.preventDefault();
+    console.log(
+      "handleSubmit - vertical:",
+      vertical,
+      "fechaInicio:",
+      fechaInicio,
+      "hora:",
+      hora,
+    );
+
+    if (service?.vertical === "ninos") {
+      if (!hora || hora.trim() === "") {
+        setErrorMessage("Por favor selecciona una hora válida");
+        return;
+      }
+      const hoyStr = new Date().toISOString().split("T")[0];
+      if (fechaInicio === hoyStr) {
+        const [h, m] = hora.split(":").map(Number);
+        const minutosSeleccionados = h * 60 + m;
+        const ahora = new Date();
+        const minutosActuales = ahora.getHours() * 60 + ahora.getMinutes();
+        if (minutosSeleccionados <= minutosActuales) {
+          setErrorMessage(`La hora ${hora} ya ha pasado. Elige una hora futura.`);
+          return;
+        }
+      }
+    }
+
+    const dateError = validateBookingDates(vertical, fechaInicio, hora);
+    if (dateError) {
+      setErrorMessage(dateError);
+      return;
+    }
+
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    const fechaInicioDate = new Date(fechaInicio);
+
+    if (fechaInicioDate < hoy) {
+      setErrorMessage("La fecha de inicio no puede ser en el pasado");
+      return;
+    }
+
+    if (service?.vertical === "ninos" && hora && fechaInicio) {
+      const hoyStr = new Date().toISOString().split("T")[0];
+      if (fechaInicio === hoyStr) {
+        const [horas, minutos] = hora.split(":").map(Number);
+        const horaSeleccionada = new Date();
+        horaSeleccionada.setHours(horas, minutos, 0, 0);
+        const horaMinima = new Date();
+        horaMinima.setHours(
+          horaMinima.getHours() + 1,
+          horaMinima.getMinutes(),
+          0,
+          0,
+        );
+        if (horaSeleccionada <= horaMinima) {
+          setErrorMessage(
+            `La hora debe ser al menos 1 hora desde ahora. Hora minima: ${String(horaMinima.getHours()).padStart(2, "0")}:${String(horaMinima.getMinutes()).padStart(2, "0")}`,
+          );
+          return;
+        }
+      }
+    }
+
     if (!stripe || !elements) return;
 
     setPaying(true);
-    setError("");
+    setErrorMessage("");
 
     const intentRes = await fetch("/api/stripe/create-payment-intent", {
       method: "POST",
@@ -423,7 +524,7 @@ function CheckoutForm({
 
     if (!intentRes.ok || intentData.error) {
       setPaying(false);
-      setError(intentData.error || "No se pudo iniciar el pago.");
+      setErrorMessage(intentData.error || "No se pudo iniciar el pago.");
       return;
     }
 
@@ -437,7 +538,7 @@ function CheckoutForm({
 
     if (confirmError) {
       setPaying(false);
-      setError(confirmError.message);
+      setErrorMessage(confirmError.message);
       return;
     }
 
@@ -483,7 +584,7 @@ function CheckoutForm({
           .eq("id", userId);
       }
     } catch (err) {
-      setError(err.message || "Error al guardar la reserva.");
+      setErrorMessage(err.message || "Error al guardar la reserva.");
     } finally {
       setPaying(false);
     }
@@ -674,6 +775,17 @@ export default function ReservarPage() {
 
   const vertical = service?.vertical ?? "alojamiento";
   const verticalConfig = VERTICALS[vertical] ?? VERTICALS.alojamiento;
+
+  const getMinHora = () => {
+    if (!fechaInicio) return undefined;
+    const hoy = new Date().toISOString().split("T")[0];
+    if (fechaInicio === hoy) {
+      const ahora = new Date();
+      ahora.setHours(ahora.getHours() + 1);
+      return `${String(ahora.getHours()).padStart(2, "0")}:${String(ahora.getMinutes()).padStart(2, "0")}`;
+    }
+    return undefined;
+  };
   const profile = service?.profiles ?? {};
   const unitPrice = Number(service?.precio) || 0;
   const cancelPolicy = getCancelPolicy(service?.cancellation_policy);
@@ -777,6 +889,16 @@ export default function ReservarPage() {
       return;
     }
 
+    const dateError = validateBookingDates(vertical, fechaInicio, hora);
+    if (dateError) {
+      setErrorMessage(dateError);
+      setClientSecret(null);
+      setPaymentIntentId(null);
+      setGrupoReserva(null);
+      setPaymentIntentLoading(false);
+      return;
+    }
+
     const grupo = crypto.randomUUID();
     setGrupoReserva(grupo);
 
@@ -833,6 +955,9 @@ export default function ReservarPage() {
     useNewCard,
     savedPaymentMethods.length,
     stripeCustomerId,
+    vertical,
+    fechaInicio,
+    hora,
   ]);
 
   const completeBooking = useCallback(
@@ -1056,6 +1181,7 @@ export default function ReservarPage() {
                   id="fecha-inicio"
                   type="date"
                   required
+                  min={new Date().toISOString().split("T")[0]}
                   value={fechaInicio}
                   onChange={(e) => setFechaInicio(e.target.value)}
                   onInput={(e) => setFechaInicio(e.target.value)}
@@ -1093,6 +1219,7 @@ export default function ReservarPage() {
                       id="hora"
                       type="time"
                       required
+                      min={getMinHora()}
                       value={hora}
                       onChange={(e) => setHora(e.target.value)}
                       className={inputClass}
@@ -1365,6 +1492,9 @@ export default function ReservarPage() {
                   metadata={paymentMetadata}
                   onPaymentSuccess={completeBooking}
                   onUseNewCard={() => setUseNewCard(true)}
+                  getBookingDateError={() =>
+                    validateBookingDates(vertical, fechaInicio, hora)
+                  }
                   disabled={!!successMessage}
                 />
               ) : clientSecret && paymentMetadata ? (
@@ -1385,6 +1515,11 @@ export default function ReservarPage() {
                         .filter(Boolean)
                         .join(" ")}
                       onPaymentSuccess={completeBooking}
+                      vertical={vertical}
+                      fechaInicio={fechaInicio}
+                      hora={hora}
+                      setErrorMessage={setErrorMessage}
+                      service={service}
                       disabled={!!successMessage}
                     />
                   </Elements>
