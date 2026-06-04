@@ -74,7 +74,7 @@ function SearchSection({ label, children, className = "", onClick }) {
   );
 }
 
-function DateTrigger({ value, placeholder = "Añade una fecha" }) {
+function DateTrigger({ value, placeholder }) {
   return (
     <span
       className="block w-full text-sm"
@@ -148,7 +148,7 @@ export default function Hero() {
             color: BRAND.primary,
           }}
         >
-          Marketplace de confianza
+          {t.hero.badge}
         </p>
         <h1 className="text-3xl font-bold leading-tight tracking-tight text-[#1a1a1a] sm:text-4xl lg:text-5xl">
           {t.hero.titulo}
@@ -182,7 +182,10 @@ export default function Hero() {
             <VerticalDivider />
 
             <SearchSection label={t.hero.llegada} onClick={openCalendar}>
-              <DateTrigger value={fechaDesde} />
+              <DateTrigger
+                value={fechaDesde}
+                placeholder={t.hero.annadeFecha}
+              />
             </SearchSection>
 
             <div
@@ -192,7 +195,10 @@ export default function Hero() {
             <VerticalDivider />
 
             <SearchSection label={t.hero.salida} onClick={openCalendar}>
-              <DateTrigger value={fechaHasta} />
+              <DateTrigger
+                value={fechaHasta}
+                placeholder={t.hero.annadeFecha}
+              />
             </SearchSection>
 
             <div

@@ -6,24 +6,14 @@ import { BRAND, SERIF } from "./brand";
 
 const STAR_COLOR = "#c8922a";
 
-const REVIEWS = [
-  {
-    tagKey: "ninera",
-    text: "Sara habló inglés con nuestros hijos. Por fin cenamos solos.",
-    name: "James W.",
-    meta: "familia británica",
-  },
-  {
-    tagKey: "mascota",
-    text: "Fotos cada pocas horas. Mi perro volvió feliz.",
-    name: "Sofía M.",
-    meta: "Madrid",
-  },
+const GRID_REVIEWS = [
+  { tagKey: "ninera", textKey: "resena2", metaKey: "resena2autor", name: "James W." },
+  { tagKey: "mascota", textKey: "resena3", name: "Sofía M.", meta: "Madrid" },
   {
     tagKey: "alojamiento",
-    text: "Saber que el apartamento tenía todos los papeles fue un alivio enorme.",
+    textKey: "resena4",
+    metaKey: "resena4autor",
     name: "Lena B.",
-    meta: "familia alemana",
   },
 ];
 
@@ -112,7 +102,7 @@ export default function ReviewsSection() {
             </div>
             <div className="hidden h-16 w-px shrink-0 bg-[#e8e4de] sm:block" />
             <div className="flex flex-wrap justify-center gap-2 sm:justify-start">
-              {["Google", "Trustpilot", "Plataforma propia"].map((source) => (
+              {["Google", "Trustpilot", r.plataforma].map((source) => (
                 <span
                   key={source}
                   className="rounded-full border px-3 py-1 text-xs text-[#666]"
@@ -169,13 +159,12 @@ export default function ReviewsSection() {
                 className="mt-4 leading-relaxed text-[#333]"
                 style={{ fontFamily: SERIF, fontStyle: "italic", fontSize: "20px" }}
               >
-                Reservé el apartamento, la niñera y el cuidador del perro en diez
-                minutos.{" "}
+                {r.resena1}{" "}
                 <span
                   className="font-bold not-italic"
                   style={{ color: BRAND.primary }}
                 >
-                  Por fin alguien lo había pensado.
+                  {r.resena1destacado}
                 </span>
               </blockquote>
               <div className="mt-6 flex items-center gap-3">
@@ -193,7 +182,7 @@ export default function ReviewsSection() {
                     Claire H.
                   </p>
                   <p className="text-xs text-[#888]">
-                    Familia francesa · Madrid, agosto 2024
+                    {r.resena1autor}
                   </p>
                 </div>
               </div>
@@ -207,7 +196,7 @@ export default function ReviewsSection() {
 
         {/* Grid de reseñas */}
         <div className="mt-6 grid gap-5 md:grid-cols-3 md:gap-6">
-          {REVIEWS.map((review) => (
+          {GRID_REVIEWS.map((review) => (
             <article
               key={review.name}
               className="flex flex-col rounded-2xl border bg-white p-6 sm:p-7"
@@ -219,14 +208,14 @@ export default function ReviewsSection() {
                 className="mt-4 flex-1 text-base leading-relaxed text-[#333]"
                 style={{ fontFamily: SERIF, fontStyle: "italic" }}
               >
-                {review.text}
+                {r[review.textKey]}
               </p>
               <div className="mt-5 border-t pt-4" style={{ borderColor: BRAND.border }}>
                 <p className="text-sm font-semibold text-[#1a1a1a]">
                   {review.name}
                 </p>
                 <p className="mt-0.5 text-xs capitalize text-[#888]">
-                  {review.meta}
+                  {review.metaKey ? r[review.metaKey] : review.meta}
                 </p>
               </div>
             </article>

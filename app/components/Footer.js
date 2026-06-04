@@ -90,7 +90,7 @@ export default function Footer() {
           © 2025 Home&Heart · {t.footer.derechos}
         </p>
         <p className="text-[11px] text-[#888]">
-          Madrid · Estonia (jurisdicción legal)
+          {t.footer.jurisdiccion}
         </p>
       </div>
     </footer>

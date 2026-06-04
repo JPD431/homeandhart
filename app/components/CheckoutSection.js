@@ -318,7 +318,7 @@ export default function CheckoutSection() {
                 className="mt-1 text-sm"
                 style={{ color: "rgba(255, 255, 255, 0.65)" }}
               >
-                3 servicios · 1 pago
+                {c.servicios3}
               </p>
             </div>
 
@@ -332,12 +332,12 @@ export default function CheckoutSection() {
               >
                 <SmallCheckIcon className="h-4 w-4 shrink-0 text-[#1d4f91]" />
                 <p className="text-xs font-medium text-[#1d4f91] sm:text-sm">
-                  Disponibilidad confirmada para estas fechas
+                  {c.disponibilidad}
                 </p>
               </div>
 
               <p className="mb-2 mt-6 text-[10px] font-semibold uppercase tracking-wider text-[#888]">
-                Alojamiento
+                {c.alojDemo}
               </p>
               <BookingLineItem
                 Icon={HomeIcon}
@@ -348,7 +348,7 @@ export default function CheckoutSection() {
               />
 
               <p className="mb-2 mt-4 text-[10px] font-semibold uppercase tracking-wider text-[#888]">
-                Servicios de cuidado
+                {c.serviciosCuidado}
               </p>
               <BookingLineItem
                 Icon={PersonIcon}

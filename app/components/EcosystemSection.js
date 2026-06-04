@@ -65,31 +65,19 @@ const ECOSYSTEM = [
   {
     titleKey: "alojamiento",
     descKey: "alojDesc",
-    items: [
-      "Pet-friendly disponible",
-      "NRU verificado",
-      "Check-in flexible",
-    ],
+    itemKeys: ["aloj1", "aloj2", "aloj3"],
     Icon: LodgingIcon,
   },
   {
     titleKey: "ninos",
     descKey: "ninosDesc",
-    items: [
-      "Antecedentes verificados",
-      "Idiomas indicados",
-      "Por horas o días",
-    ],
+    itemKeys: ["ninos1", "ninos2", "ninos3"],
     Icon: ChildcareIcon,
   },
   {
     titleKey: "mascotas",
     descKey: "mascotasDesc",
-    items: [
-      "Paseos incluidos",
-      "Fotos y actualizaciones",
-      "Cobertura veterinaria",
-    ],
+    itemKeys: ["masc1", "masc2", "masc3"],
     Icon: PetCareIcon,
   },
 ];
@@ -165,9 +153,9 @@ export default function EcosystemSection() {
                   {e[service.descKey]}
                 </p>
                 <ul className="mt-6 flex flex-col gap-2.5">
-                  {service.items.map((item) => (
+                  {service.itemKeys.map((key) => (
                     <li
-                      key={item}
+                      key={key}
                       className="flex items-start gap-2.5 text-sm sm:text-[15px]"
                       style={{ color: "rgba(255, 255, 255, 0.8)" }}
                     >
@@ -175,7 +163,7 @@ export default function EcosystemSection() {
                         className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[rgba(255,255,255,0.4)]"
                         aria-hidden
                       />
-                      {item}
+                      {e[key]}
                     </li>
                   ))}
                 </ul>
