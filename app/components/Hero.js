@@ -5,18 +5,11 @@ import { useState } from "react";
 import { BRAND } from "./brand";
 
 const TABS = [
-  { id: "todo", label: "Todo" },
-  { id: "alojamiento", label: "Alojamiento" },
-  { id: "ninos", label: "Niños" },
-  { id: "mascotas", label: "Mascotas" },
+  { id: "todo", label: "Todo", color: BRAND.primary },
+  { id: "alojamiento", label: "Alojamiento", color: "#1d4f91" },
+  { id: "ninos", label: "Niños", color: "#0e7a5c" },
+  { id: "mascotas", label: "Mascotas", color: "#c47d1a" },
 ];
-
-const PLACEHOLDERS = {
-  todo: "¿Qué necesitas? Alojamiento, cuidado infantil, mascotas…",
-  alojamiento: "Ciudad, barrio o dirección",
-  ninos: "Tipo de cuidado, edad del niño o zona",
-  mascotas: "Tipo de mascota, servicio o zona",
-};
 
 function SearchIcon({ className }) {
   return (
@@ -24,7 +17,7 @@ function SearchIcon({ className }) {
       className={className}
       fill="none"
       viewBox="0 0 24 24"
-      strokeWidth={2}
+      strokeWidth={2.5}
       stroke="currentColor"
       aria-hidden
     >
@@ -37,27 +30,55 @@ function SearchIcon({ className }) {
   );
 }
 
-function LocationIcon({ className }) {
+function VerticalDivider() {
   return (
-    <svg
-      className={className}
-      fill="none"
-      viewBox="0 0 24 24"
-      strokeWidth={1.5}
-      stroke="currentColor"
+    <div
+      className="hidden shrink-0 self-center lg:block"
+      style={{
+        width: 1,
+        height: 32,
+        backgroundColor: BRAND.border,
+      }}
       aria-hidden
+    />
+  );
+}
+
+function SearchSection({ label, children, className = "" }) {
+  return (
+    <div
+      className={`group flex min-w-0 flex-1 flex-col justify-center px-5 py-4 transition-colors hover:bg-[#f7f7f7] lg:py-3 ${className}`}
     >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"
+      <span className="text-[11px] font-semibold uppercase tracking-wide text-[#888]">
+        {label}
+      </span>
+      <div className="mt-0.5 min-h-[28px]">{children}</div>
+    </div>
+  );
+}
+
+function DateField({ id, value, onChange, min }) {
+  return (
+    <div className="relative w-full">
+      {!value && (
+        <span
+          className="pointer-events-none absolute left-0 top-1/2 -translate-y-1/2 text-sm text-[#999]"
+          aria-hidden
+        >
+          Añade una fecha
+        </span>
+      )}
+      <input
+        id={id}
+        type="date"
+        value={value}
+        min={min}
+        onChange={onChange}
+        className={`w-full cursor-pointer bg-transparent text-sm text-[#1a1a1a] outline-none [&::-webkit-calendar-picker-indicator]:cursor-pointer ${
+          value ? "" : "text-transparent"
+        }`}
       />
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z"
-      />
-    </svg>
+    </div>
   );
 }
 
@@ -65,19 +86,19 @@ export default function Hero() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState("todo");
   const [query, setQuery] = useState("");
+  const [fechaDesde, setFechaDesde] = useState("");
+  const [fechaHasta, setFechaHasta] = useState("");
+
+  const activeTabConfig = TABS.find((t) => t.id === activeTab) ?? TABS[0];
 
   function handleSearch(e) {
     e.preventDefault();
 
-    const trimmed = query.trim();
-
-    if (!trimmed && activeTab === "todo") {
-      router.push("/buscar");
-      return;
-    }
-
     const params = new URLSearchParams();
-    if (trimmed) params.set("ciudad", trimmed);
+    const ciudad = query.trim();
+    if (ciudad) params.set("ciudad", ciudad);
+    if (fechaDesde) params.set("desde", fechaDesde);
+    if (fechaHasta) params.set("hasta", fechaHasta);
     if (activeTab !== "todo") params.set("vertical", activeTab);
 
     const qs = params.toString();
@@ -105,77 +126,104 @@ export default function Hero() {
         </p>
       </div>
 
-      <div className="mx-auto mt-10 max-w-3xl">
-        <div
-          className="overflow-hidden rounded-2xl border bg-white shadow-sm shadow-black/[0.04]"
-          style={{ borderColor: BRAND.border }}
+      <div className="mx-auto mt-10 max-w-5xl">
+        <form
+          onSubmit={handleSearch}
+          className="overflow-hidden rounded-[32px] border border-[#ebebeb] bg-white shadow-lg lg:rounded-[50px]"
         >
-          <div
-            className="flex border-b"
-            style={{
-              borderColor: BRAND.border,
-              backgroundColor: BRAND.warm,
-            }}
-            role="tablist"
-            aria-label="Tipo de búsqueda"
-          >
-            {TABS.map((tab) => {
-              const isActive = activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={isActive}
-                  onClick={() => setActiveTab(tab.id)}
-                  className="relative flex-1 px-2 py-3.5 text-xs font-medium transition-colors sm:px-4 sm:py-4 sm:text-sm"
-                  style={{
-                    color: isActive ? BRAND.primary : "#666",
-                    backgroundColor: isActive ? "#fff" : "transparent",
-                  }}
-                >
-                  {tab.label}
-                  {isActive && (
-                    <span
-                      className="absolute inset-x-0 bottom-0 h-0.5"
-                      style={{ backgroundColor: BRAND.primary }}
-                    />
-                  )}
-                </button>
-              );
-            })}
-          </div>
+          <div className="flex flex-col lg:flex-row lg:items-stretch">
+            <SearchSection label="¿Dónde?" className="lg:rounded-l-[50px]">
+              <input
+                id="hero-ciudad"
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Busca una ciudad o barrio"
+                className="w-full bg-transparent text-sm text-[#1a1a1a] outline-none placeholder:text-[#999]"
+              />
+            </SearchSection>
 
-          <form onSubmit={handleSearch} className="p-4 sm:p-6">
-            <label htmlFor="search-query" className="sr-only">
-              Buscar
-            </label>
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-stretch">
-              <div
-                className="flex flex-1 items-center gap-3 rounded-xl border px-4 py-3"
-                style={{ borderColor: BRAND.border }}
-              >
-                <LocationIcon className="h-5 w-5 shrink-0 text-[#1d4f91]" />
-                <input
-                  id="search-query"
-                  type="search"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder={PLACEHOLDERS[activeTab]}
-                  className="w-full bg-transparent text-sm text-[#1a1a1a] outline-none placeholder:text-[#999] sm:text-base"
+            <div
+              className="mx-5 h-px shrink-0 bg-[#ebebeb] lg:hidden"
+              aria-hidden
+            />
+            <VerticalDivider />
+
+            <SearchSection label="Llegada">
+              <DateField
+                id="hero-desde"
+                value={fechaDesde}
+                min={new Date().toISOString().split("T")[0]}
+                onChange={(e) => setFechaDesde(e.target.value)}
+              />
+            </SearchSection>
+
+            <div
+              className="mx-5 h-px shrink-0 bg-[#ebebeb] lg:hidden"
+              aria-hidden
+            />
+            <VerticalDivider />
+
+            <SearchSection label="Salida">
+              <DateField
+                id="hero-hasta"
+                value={fechaHasta}
+                min={fechaDesde || new Date().toISOString().split("T")[0]}
+                onChange={(e) => setFechaHasta(e.target.value)}
+              />
+            </SearchSection>
+
+            <div
+              className="mx-5 h-px shrink-0 bg-[#ebebeb] lg:hidden"
+              aria-hidden
+            />
+            <VerticalDivider />
+
+            <SearchSection label="¿Qué necesitas?">
+              <div className="relative flex items-center gap-2">
+                <span
+                  className="h-2 w-2 shrink-0 rounded-full"
+                  style={{ backgroundColor: activeTabConfig.color }}
+                  aria-hidden
                 />
+                <select
+                  id="hero-vertical"
+                  value={activeTab}
+                  onChange={(e) => setActiveTab(e.target.value)}
+                  className="w-full cursor-pointer appearance-none bg-transparent pr-6 text-sm font-medium outline-none"
+                  style={{ color: activeTabConfig.color }}
+                >
+                  {TABS.map((tab) => (
+                    <option key={tab.id} value={tab.id}>
+                      {tab.label}
+                    </option>
+                  ))}
+                </select>
+                <svg
+                  className="pointer-events-none absolute right-0 h-4 w-4 text-[#888]"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth={2}
+                  stroke="currentColor"
+                  aria-hidden
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="m19 9-7 7-7-7" />
+                </svg>
               </div>
+            </SearchSection>
+
+            <div className="flex items-center justify-center p-3 lg:pr-3">
               <button
                 type="submit"
-                className="inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 sm:shrink-0"
+                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-white transition-opacity hover:opacity-90 lg:h-12 lg:w-12"
                 style={{ backgroundColor: BRAND.primary }}
+                aria-label="Buscar"
               >
-                <SearchIcon className="h-4 w-4" />
-                Buscar
+                <SearchIcon className="h-5 w-5" />
               </button>
             </div>
-          </form>
-        </div>
+          </div>
+        </form>
       </div>
     </section>
   );
