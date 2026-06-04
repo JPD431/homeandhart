@@ -248,6 +248,25 @@ export default async function ProveedorPage({ params }) {
     .eq("proveedor_id", id)
     .eq("disponible", true);
 
+  const serviceIds = (services ?? []).map((s) => s.id);
+  const hoy = new Date();
+  const en7d = new Date(hoy);
+  en7d.setDate(en7d.getDate() + 7);
+  const hoyStr = hoy.toISOString().split("T")[0];
+  const en7dStr = en7d.toISOString().split("T")[0];
+
+  const ocupadosProximos7Dias = new Set();
+  if (serviceIds.length > 0) {
+    const { data: bloqueos } = await supabase
+      .from("disponibilidad")
+      .select("service_id")
+      .in("service_id", serviceIds)
+      .lte("fecha_inicio", en7dStr)
+      .gte("fecha_fin", hoyStr);
+
+    (bloqueos ?? []).forEach((b) => ocupadosProximos7Dias.add(b.service_id));
+  }
+
   const { data: reviews } = await supabase
     .from("reviews")
     .select("id, valoracion, comentario, created_at, cliente_id")
@@ -457,6 +476,7 @@ export default async function ProveedorPage({ params }) {
               const diasDisponibles = normalizeDiasDisponiblesProveedor(
                 service.dias_disponibles,
               );
+              const ocupadoProximos7Dias = ocupadosProximos7Dias.has(service.id);
 
               return (
                 <li
@@ -475,9 +495,20 @@ export default async function ProveedorPage({ params }) {
                       <Icon className="h-6 w-6" />
                     </span>
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold uppercase tracking-wide text-[#888]">
-                        {vertical.label}
-                      </p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-semibold uppercase tracking-wide text-[#888]">
+                          {vertical.label}
+                        </p>
+                        <span
+                          className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                          style={{
+                            backgroundColor: ocupadoProximos7Dias ? "#f3f4f6" : "#dcfce7",
+                            color: ocupadoProximos7Dias ? "#6b7280" : "#166534",
+                          }}
+                        >
+                          {ocupadoProximos7Dias ? "Ocupado" : "Disponible"}
+                        </span>
+                      </div>
                       <p className="mt-0.5 text-lg font-semibold text-[#1a1a1a]">
                         {service.titulo || vertical.label}
                       </p>

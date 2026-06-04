@@ -350,6 +350,18 @@ function validateDiaDisponible(svc, fechaInicio) {
   return getDiaDisponibleError(fechaInicio, disponibles);
 }
 
+async function verificarDisponibilidad(serviceId, fechaInicio, fechaFin) {
+  const fin = fechaFin || fechaInicio;
+  const { data } = await supabase
+    .from("disponibilidad")
+    .select("id")
+    .eq("service_id", serviceId)
+    .lte("fecha_inicio", fin)
+    .gte("fecha_fin", fechaInicio);
+
+  return (data?.length ?? 0) === 0;
+}
+
 function FechaInicioConDias({
   id,
   value,
@@ -838,6 +850,8 @@ export default function ReservarPage() {
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(null);
   const [useNewCard, setUseNewCard] = useState(false);
   const [paymentMethodsLoading, setPaymentMethodsLoading] = useState(false);
+  const [disponibilidadChecking, setDisponibilidadChecking] = useState(false);
+  const [calendarioError, setCalendarioError] = useState("");
 
   useEffect(() => {
     async function load() {
@@ -1017,6 +1031,41 @@ export default function ReservarPage() {
     [service, bundleServices],
   );
 
+  useEffect(() => {
+    if (!fechaInicio || !service || selectedServices.length === 0) {
+      setCalendarioError("");
+      setDisponibilidadChecking(false);
+      return;
+    }
+
+    const fin = fechaFin || fechaInicio;
+    let cancelled = false;
+    setDisponibilidadChecking(true);
+
+    async function checkDisponibilidad() {
+      const results = await Promise.all(
+        selectedServices.map((svc) =>
+          verificarDisponibilidad(svc.id, fechaInicio, fin),
+        ),
+      );
+
+      if (cancelled) return;
+
+      const todasDisponibles = results.every(Boolean);
+      setCalendarioError(
+        todasDisponibles
+          ? ""
+          : "Este proveedor ya tiene una reserva en esas fechas. Por favor elige otras fechas.",
+      );
+      setDisponibilidadChecking(false);
+    }
+
+    checkDisponibilidad();
+    return () => {
+      cancelled = true;
+    };
+  }, [fechaInicio, fechaFin, service, selectedServices]);
+
   const priceSummary = useMemo(() => {
     if (!service) {
       return {
@@ -1103,7 +1152,14 @@ export default function ReservarPage() {
     };
   }, [service, selectedServices, vertical, fechaInicio, fechaFin, duracionHoras]);
 
-  const precioTotal = priceSummary.ready ? priceSummary.total : 0;
+  const precioListo =
+    priceSummary.ready && !calendarioError && !disponibilidadChecking;
+  const precioTotal = precioListo ? priceSummary.total : 0;
+  const precioDetail =
+    calendarioError ||
+    (disponibilidadChecking
+      ? "Comprobando disponibilidad…"
+      : priceSummary.detail);
 
   const paymentMetadata = useMemo(() => {
     if (!userId || !serviceId || !grupoReserva) return null;
@@ -1125,6 +1181,14 @@ export default function ReservarPage() {
     const dateError = validateBookingDates(vertical, fechaInicio, hora);
     if (dateError) {
       setErrorMessage(dateError);
+      setClientSecret(null);
+      setPaymentIntentId(null);
+      setGrupoReserva(null);
+      setPaymentIntentLoading(false);
+      return;
+    }
+
+    if (calendarioError || disponibilidadChecking) {
       setClientSecret(null);
       setPaymentIntentId(null);
       setGrupoReserva(null);
@@ -1191,6 +1255,8 @@ export default function ReservarPage() {
     vertical,
     fechaInicio,
     hora,
+    calendarioError,
+    disponibilidadChecking,
   ]);
 
   const completeBooking = useCallback(
@@ -1199,7 +1265,7 @@ export default function ReservarPage() {
         throw new Error("Datos de reserva incompletos.");
       }
 
-      if (!priceSummary.ready || priceSummary.total <= 0) {
+      if (!precioListo || priceSummary.total <= 0) {
         throw new Error("Completa las fechas o la duración para calcular el precio.");
       }
 
@@ -1226,10 +1292,36 @@ export default function ReservarPage() {
         });
       });
 
-      const { error } = await supabase.from("bookings").insert(bookingRows);
+      const fin = fechaFin || fechaInicio;
+      const disponibilidadChecks = await Promise.all(
+        selectedServices.map((svc) =>
+          verificarDisponibilidad(svc.id, fechaInicio, fin),
+        ),
+      );
+      if (!disponibilidadChecks.every(Boolean)) {
+        throw new Error(
+          "Este proveedor ya tiene una reserva en esas fechas. Por favor elige otras fechas.",
+        );
+      }
+
+      const { data: insertedBookings, error } = await supabase
+        .from("bookings")
+        .insert(bookingRows)
+        .select("id, service_id");
 
       if (error) {
         throw new Error(error.message);
+      }
+
+      if (insertedBookings?.length) {
+        await supabase.from("disponibilidad").insert(
+          insertedBookings.map((booking) => ({
+            service_id: booking.service_id,
+            fecha_inicio: fechaInicio,
+            fecha_fin: fin,
+            booking_id: booking.id,
+          })),
+        );
       }
 
       const emailServicios = selectedServices.map((svc) => {
@@ -1645,7 +1737,7 @@ export default function ReservarPage() {
                 Resumen del precio
               </p>
 
-              {priceSummary.ready ? (
+              {precioListo ? (
                 <>
                   <div className="mt-3 flex flex-col gap-2">
                     {priceSummary.lines.map((line) => {
@@ -1677,7 +1769,7 @@ export default function ReservarPage() {
                 </>
               ) : (
                 <>
-                  <p className="mt-1 text-sm text-[#444]">{priceSummary.detail}</p>
+                  <p className="mt-1 text-sm text-[#444]">{precioDetail}</p>
                   <p className="mt-2 text-2xl font-bold" style={{ color: verticalConfig.color }}>
                     —
                   </p>
@@ -1745,7 +1837,7 @@ export default function ReservarPage() {
                     </li>
                   ))}
                 </ul>
-                {refundPercentNow !== null && priceSummary.ready && (
+                {refundPercentNow !== null && precioListo && (
                   <p
                     className="mt-4 border-t pt-3 text-sm font-medium"
                     style={{
@@ -1765,7 +1857,7 @@ export default function ReservarPage() {
               </div>
             )}
 
-            {priceSummary.ready && priceSummary.total > 0 ? (
+            {precioListo && priceSummary.total > 0 ? (
               paymentMethodsLoading || paymentIntentLoading ? (
                 <p className="mt-6 text-center text-sm text-[#666]">
                   Preparando formulario de pago…

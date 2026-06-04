@@ -450,18 +450,24 @@ export default function BuscarPage() {
 
   const verticalParam = searchParams.get("vertical") || "todo";
   const ciudadParam = searchParams.get("ciudad") || "";
+  const fechaBusquedaInicioParam = searchParams.get("desde") || "";
+  const fechaBusquedaFinParam = searchParams.get("hasta") || "";
 
   const [ciudadInput, setCiudadInput] = useState(ciudadParam);
+  const [fechaDesdeInput, setFechaDesdeInput] = useState(fechaBusquedaInicioParam);
+  const [fechaHastaInput, setFechaHastaInput] = useState(fechaBusquedaFinParam);
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [hoveredIndex, setHoveredIndex] = useState(null);
 
   const updateParams = useCallback(
-    (vertical, ciudad) => {
+    (vertical, ciudad, desde, hasta) => {
       const params = new URLSearchParams();
       if (vertical && vertical !== "todo") params.set("vertical", vertical);
       if (ciudad?.trim()) params.set("ciudad", ciudad.trim());
+      if (desde) params.set("desde", desde);
+      if (hasta) params.set("hasta", hasta);
       const query = params.toString();
       router.push(query ? `${pathname}?${query}` : pathname);
     },
@@ -470,7 +476,9 @@ export default function BuscarPage() {
 
   useEffect(() => {
     setCiudadInput(ciudadParam);
-  }, [ciudadParam]);
+    setFechaDesdeInput(fechaBusquedaInicioParam);
+    setFechaHastaInput(fechaBusquedaFinParam);
+  }, [ciudadParam, fechaBusquedaInicioParam, fechaBusquedaFinParam]);
 
   useEffect(() => {
     async function fetchResults() {
@@ -520,6 +528,21 @@ export default function BuscarPage() {
         );
       }
 
+      if (fechaBusquedaInicioParam && fechaBusquedaFinParam) {
+        const { data: bloqueados } = await supabase
+          .from("disponibilidad")
+          .select("service_id")
+          .lte("fecha_inicio", fechaBusquedaFinParam)
+          .gte("fecha_fin", fechaBusquedaInicioParam);
+
+        const idsBloqueados = [
+          ...new Set((bloqueados ?? []).map((b) => b.service_id)),
+        ];
+        if (idsBloqueados.length > 0) {
+          query = query.not("id", "in", `(${idsBloqueados.join(",")})`);
+        }
+      }
+
       const { data, error: fetchError } = await query;
 
       if (fetchError) {
@@ -533,15 +556,15 @@ export default function BuscarPage() {
     }
 
     fetchResults();
-  }, [verticalParam, ciudadParam]);
+  }, [verticalParam, ciudadParam, fechaBusquedaInicioParam, fechaBusquedaFinParam]);
 
   function handleVerticalChange(vertical) {
-    updateParams(vertical, ciudadInput);
+    updateParams(vertical, ciudadInput, fechaDesdeInput, fechaHastaInput);
   }
 
-  function handleCiudadSubmit(e) {
+  function handleBuscarSubmit(e) {
     e.preventDefault();
-    updateParams(verticalParam, ciudadInput);
+    updateParams(verticalParam, ciudadInput, fechaDesdeInput, fechaHastaInput);
   }
 
   const activeTabColor = getActiveTabColor(verticalParam);
@@ -587,18 +610,48 @@ export default function BuscarPage() {
             })}
           </div>
 
-          <form onSubmit={handleCiudadSubmit} className="flex w-full gap-2 lg:max-w-md">
+          <form
+            onSubmit={handleBuscarSubmit}
+            className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end lg:max-w-3xl"
+          >
             <input
               type="text"
               value={ciudadInput}
               onChange={(e) => setCiudadInput(e.target.value)}
               placeholder="Ciudad, barrio o zona…"
-              className="flex-1 rounded-xl border px-4 py-2.5 text-sm text-[#1a1a1a] outline-none focus:ring-2 focus:ring-[#1d4f91]/30"
+              className="min-w-0 flex-1 rounded-xl border px-4 py-2.5 text-sm text-[#1a1a1a] outline-none focus:ring-2 focus:ring-[#1d4f91]/30 sm:min-w-[140px]"
               style={{ borderColor: BRAND.border }}
             />
+            <div className="flex gap-2">
+              <div>
+                <label className="mb-1 block text-[10px] font-medium text-[#888]">
+                  Desde
+                </label>
+                <input
+                  type="date"
+                  value={fechaDesdeInput}
+                  onChange={(e) => setFechaDesdeInput(e.target.value)}
+                  className="rounded-xl border px-3 py-2.5 text-sm text-[#1a1a1a] outline-none focus:ring-2 focus:ring-[#1d4f91]/30"
+                  style={{ borderColor: BRAND.border }}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-[10px] font-medium text-[#888]">
+                  Hasta
+                </label>
+                <input
+                  type="date"
+                  value={fechaHastaInput}
+                  min={fechaDesdeInput || undefined}
+                  onChange={(e) => setFechaHastaInput(e.target.value)}
+                  className="rounded-xl border px-3 py-2.5 text-sm text-[#1a1a1a] outline-none focus:ring-2 focus:ring-[#1d4f91]/30"
+                  style={{ borderColor: BRAND.border }}
+                />
+              </div>
+            </div>
             <button
               type="submit"
-              className="shrink-0 rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+              className="shrink-0 rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 sm:self-end"
               style={{ backgroundColor: activeTabColor }}
             >
               Buscar
