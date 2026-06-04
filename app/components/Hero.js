@@ -1,7 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import CalendarioRangoFechas from "@/app/components/CalendarioRangoFechas";
+import { formatShortDate } from "@/app/components/calendario-shared";
 import { BRAND } from "./brand";
 
 const TABS = [
@@ -44,10 +46,23 @@ function VerticalDivider() {
   );
 }
 
-function SearchSection({ label, children, className = "" }) {
+function SearchSection({ label, children, className = "", onClick }) {
   return (
     <div
-      className={`group flex min-w-0 flex-1 flex-col justify-center px-5 py-4 transition-colors hover:bg-[#f7f7f7] lg:py-3 ${className}`}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onClick={onClick}
+      onKeyDown={
+        onClick
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onClick();
+              }
+            }
+          : undefined
+      }
+      className={`group flex min-w-0 flex-1 flex-col justify-center px-5 py-4 transition-colors hover:bg-[#f7f7f7] lg:py-3 ${onClick ? "cursor-pointer" : ""} ${className}`}
     >
       <span className="text-[11px] font-semibold uppercase tracking-wide text-[#888]">
         {label}
@@ -57,39 +72,49 @@ function SearchSection({ label, children, className = "" }) {
   );
 }
 
-function DateField({ id, value, onChange, min }) {
+function DateTrigger({ value, placeholder = "Añade una fecha" }) {
   return (
-    <div className="relative w-full">
-      {!value && (
-        <span
-          className="pointer-events-none absolute left-0 top-1/2 -translate-y-1/2 text-sm text-[#999]"
-          aria-hidden
-        >
-          Añade una fecha
-        </span>
-      )}
-      <input
-        id={id}
-        type="date"
-        value={value}
-        min={min}
-        onChange={onChange}
-        className={`w-full cursor-pointer bg-transparent text-sm text-[#1a1a1a] outline-none [&::-webkit-calendar-picker-indicator]:cursor-pointer ${
-          value ? "" : "text-transparent"
-        }`}
-      />
-    </div>
+    <span
+      className="block w-full text-sm"
+      style={{ color: value ? "#1a1a1a" : "#999" }}
+    >
+      {value ? formatShortDate(value) : placeholder}
+    </span>
   );
 }
 
 export default function Hero() {
   const router = useRouter();
+  const pickerRef = useRef(null);
   const [activeTab, setActiveTab] = useState("todo");
   const [query, setQuery] = useState("");
   const [fechaDesde, setFechaDesde] = useState("");
   const [fechaHasta, setFechaHasta] = useState("");
+  const [calendarOpen, setCalendarOpen] = useState(false);
 
   const activeTabConfig = TABS.find((t) => t.id === activeTab) ?? TABS[0];
+
+  useEffect(() => {
+    if (!calendarOpen) return;
+
+    function handleClickOutside(e) {
+      if (pickerRef.current && !pickerRef.current.contains(e.target)) {
+        setCalendarOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [calendarOpen]);
+
+  function openCalendar() {
+    setCalendarOpen(true);
+  }
+
+  function handleRangeChange({ desde, hasta }) {
+    setFechaDesde(desde);
+    setFechaHasta(hasta);
+  }
 
   function handleSearch(e) {
     e.preventDefault();
@@ -126,7 +151,7 @@ export default function Hero() {
         </p>
       </div>
 
-      <div className="mx-auto mt-10 max-w-5xl">
+      <div ref={pickerRef} className="relative mx-auto mt-10 max-w-5xl">
         <form
           onSubmit={handleSearch}
           className="overflow-hidden rounded-[32px] border border-[#ebebeb] bg-white shadow-lg lg:rounded-[50px]"
@@ -149,13 +174,8 @@ export default function Hero() {
             />
             <VerticalDivider />
 
-            <SearchSection label="Llegada">
-              <DateField
-                id="hero-desde"
-                value={fechaDesde}
-                min={new Date().toISOString().split("T")[0]}
-                onChange={(e) => setFechaDesde(e.target.value)}
-              />
+            <SearchSection label="Llegada" onClick={openCalendar}>
+              <DateTrigger value={fechaDesde} />
             </SearchSection>
 
             <div
@@ -164,13 +184,8 @@ export default function Hero() {
             />
             <VerticalDivider />
 
-            <SearchSection label="Salida">
-              <DateField
-                id="hero-hasta"
-                value={fechaHasta}
-                min={fechaDesde || new Date().toISOString().split("T")[0]}
-                onChange={(e) => setFechaHasta(e.target.value)}
-              />
+            <SearchSection label="Salida" onClick={openCalendar}>
+              <DateTrigger value={fechaHasta} />
             </SearchSection>
 
             <div
@@ -224,6 +239,20 @@ export default function Hero() {
             </div>
           </div>
         </form>
+
+        {calendarOpen && (
+          <div
+            className="absolute left-0 right-0 z-50 mt-3 rounded-2xl border bg-white p-5 shadow-xl sm:p-6"
+            style={{ borderColor: BRAND.border }}
+          >
+            <CalendarioRangoFechas
+              fechaInicio={fechaDesde}
+              fechaFin={fechaHasta}
+              onChange={handleRangeChange}
+              onRangeComplete={() => setCalendarOpen(false)}
+            />
+          </div>
+        )}
       </div>
     </section>
   );

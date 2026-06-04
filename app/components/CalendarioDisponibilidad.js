@@ -3,8 +3,17 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { BRAND, SERIF } from "@/app/components/brand";
-
-const WEEKDAY_LABELS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
+import {
+  ChevronIcon,
+  MONTH_NAMES,
+  WEEKDAY_LABELS,
+  buildMonthGrid,
+  formatShortDate,
+  getHoyStr,
+  handleRangeDayClick,
+  isInRange,
+  parseDateStr,
+} from "@/app/components/calendario-shared";
 
 const DIA_ID_BY_JS = {
   0: "dom",
@@ -15,30 +24,6 @@ const DIA_ID_BY_JS = {
   5: "vie",
   6: "sab",
 };
-
-const MONTH_NAMES = [
-  "Enero",
-  "Febrero",
-  "Marzo",
-  "Abril",
-  "Mayo",
-  "Junio",
-  "Julio",
-  "Agosto",
-  "Septiembre",
-  "Octubre",
-  "Noviembre",
-  "Diciembre",
-];
-
-function toDateStr(year, month, day) {
-  return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-}
-
-function parseDateStr(str) {
-  const [y, m, d] = str.split("-").map(Number);
-  return new Date(y, m - 1, d);
-}
 
 function getDiaIdFromDateStr(dateStr) {
   return DIA_ID_BY_JS[parseDateStr(dateStr).getDay()];
@@ -52,47 +37,6 @@ function isDateOccupied(dateStr, bloqueos) {
 
 function isWeekdayAllowed(dateStr, diasDisponibles) {
   return diasDisponibles.includes(getDiaIdFromDateStr(dateStr));
-}
-
-function isInRange(dateStr, start, end) {
-  if (!start || !end) return false;
-  const [a, b] = start <= end ? [start, end] : [end, start];
-  return dateStr >= a && dateStr <= b;
-}
-
-function buildMonthGrid(viewDate) {
-  const year = viewDate.getFullYear();
-  const month = viewDate.getMonth();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const firstWeekday = (new Date(year, month, 1).getDay() + 6) % 7;
-  const cells = [];
-
-  for (let i = 0; i < firstWeekday; i++) {
-    cells.push(null);
-  }
-  for (let day = 1; day <= daysInMonth; day++) {
-    cells.push(toDateStr(year, month, day));
-  }
-  return cells;
-}
-
-function ChevronIcon({ direction }) {
-  return (
-    <svg
-      className="h-5 w-5"
-      fill="none"
-      viewBox="0 0 24 24"
-      strokeWidth={2}
-      stroke="currentColor"
-      aria-hidden
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d={direction === "left" ? "M15 19l-7-7 7-7" : "M9 5l7 7-7 7"}
-      />
-    </svg>
-  );
 }
 
 function MonthCalendar({
@@ -191,7 +135,7 @@ function MonthCalendar({
 
 export default function CalendarioDisponibilidad({ services, bloqueos }) {
   const hoy = new Date();
-  const hoyStr = toDateStr(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+  const hoyStr = getHoyStr();
 
   const [viewMonth, setViewMonth] = useState(
     () => new Date(hoy.getFullYear(), hoy.getMonth(), 1),
@@ -227,17 +171,9 @@ export default function CalendarioDisponibilidad({ services, bloqueos }) {
   }
 
   function handleDayClick(dateStr) {
-    if (!fechaInicio || (fechaInicio && fechaFin)) {
-      setFechaInicio(dateStr);
-      setFechaFin("");
-      return;
-    }
-    if (dateStr < fechaInicio) {
-      setFechaInicio(dateStr);
-      setFechaFin("");
-      return;
-    }
-    setFechaFin(dateStr);
+    const next = handleRangeDayClick(dateStr, fechaInicio, fechaFin);
+    setFechaInicio(next.desde);
+    setFechaFin(next.hasta);
   }
 
   const reservaHref = useMemo(() => {
@@ -386,11 +322,4 @@ export default function CalendarioDisponibilidad({ services, bloqueos }) {
       )}
     </section>
   );
-}
-
-function formatShortDate(dateStr) {
-  return parseDateStr(dateStr).toLocaleDateString("es-ES", {
-    day: "numeric",
-    month: "short",
-  });
 }
