@@ -70,6 +70,18 @@ const ESTANCIA_PLACEHOLDERS = {
   },
 };
 
+const DIAS_SEMANA = [
+  { id: "lun", label: "Lun" },
+  { id: "mar", label: "Mar" },
+  { id: "mie", label: "Mié" },
+  { id: "jue", label: "Jue" },
+  { id: "vie", label: "Vie" },
+  { id: "sab", label: "Sáb" },
+  { id: "dom", label: "Dom" },
+];
+
+const DIAS_DISPONIBLES_DEFAULT = DIAS_SEMANA.map((d) => d.id);
+
 const ANTELACION_OPTIONS = [
   { value: 0, label: "Sin restricción" },
   { value: 1, label: "Al menos 1 hora antes" },
@@ -149,6 +161,7 @@ const EMPTY_SERVICE_DETAILS = {
     estancia_minima: "",
     estancia_maxima: "",
     antelacion_minima: 24,
+    dias_disponibles: [...DIAS_DISPONIBLES_DEFAULT],
     nru: "",
     cancelacion: "moderada",
     reserva_inmediata: false,
@@ -164,6 +177,7 @@ const EMPTY_SERVICE_DETAILS = {
     estancia_minima: "",
     estancia_maxima: "",
     antelacion_minima: 24,
+    dias_disponibles: [...DIAS_DISPONIBLES_DEFAULT],
     edades: "",
     certificacion: "",
     cancelacion: "moderada",
@@ -181,6 +195,7 @@ const EMPTY_SERVICE_DETAILS = {
     estancia_minima: "",
     estancia_maxima: "",
     antelacion_minima: 24,
+    dias_disponibles: [...DIAS_DISPONIBLES_DEFAULT],
     tipos: "",
     cancelacion: "moderada",
     reserva_inmediata: false,
@@ -527,6 +542,43 @@ function EstanciaFields({ serviceId, details, onChange }) {
   );
 }
 
+function DiasDisponiblesSelector({ value, onChange }) {
+  const selected = Array.isArray(value) && value.length > 0 ? value : DIAS_DISPONIBLES_DEFAULT;
+
+  function toggle(diaId) {
+    const next = selected.includes(diaId)
+      ? selected.filter((d) => d !== diaId)
+      : [...selected, diaId];
+    onChange(next.length > 0 ? next : []);
+  }
+
+  return (
+    <div className="sm:col-span-2">
+      <p className="mb-2 text-xs font-medium text-[#444]">Días disponibles</p>
+      <div className="flex flex-wrap gap-2">
+        {DIAS_SEMANA.map((dia) => {
+          const isSelected = selected.includes(dia.id);
+          return (
+            <button
+              key={dia.id}
+              type="button"
+              onClick={() => toggle(dia.id)}
+              className="rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors"
+              style={{
+                borderColor: isSelected ? BRAND.primary : BRAND.border,
+                backgroundColor: isSelected ? BRAND.light : "#fff",
+                color: isSelected ? DARK_BLUE : "#666",
+              }}
+            >
+              {dia.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function AntelacionMinimaSelector({ value, onChange }) {
   const selected = value != null && value !== "" ? Number(value) : 24;
 
@@ -630,6 +682,10 @@ function ServiceFields({ serviceId, details, onChange, onLocationZoneBlur }) {
           value={details.antelacion_minima}
           onChange={(v) => update("antelacion_minima", v)}
         />
+        <DiasDisponiblesSelector
+          value={details.dias_disponibles}
+          onChange={(v) => update("dias_disponibles", v)}
+        />
         <div>
           <label className="mb-1.5 block text-xs font-medium text-[#444]">
             NRU
@@ -723,6 +779,10 @@ function ServiceFields({ serviceId, details, onChange, onLocationZoneBlur }) {
         <AntelacionMinimaSelector
           value={details.antelacion_minima}
           onChange={(v) => update("antelacion_minima", v)}
+        />
+        <DiasDisponiblesSelector
+          value={details.dias_disponibles}
+          onChange={(v) => update("dias_disponibles", v)}
         />
         <div>
           <label className="mb-1.5 block text-xs font-medium text-[#444]">
@@ -834,6 +894,10 @@ function ServiceFields({ serviceId, details, onChange, onLocationZoneBlur }) {
         <AntelacionMinimaSelector
           value={details.antelacion_minima}
           onChange={(v) => update("antelacion_minima", v)}
+        />
+        <DiasDisponiblesSelector
+          value={details.dias_disponibles}
+          onChange={(v) => update("dias_disponibles", v)}
         />
         <div>
           <label className="mb-1.5 block text-xs font-medium text-[#444]">
@@ -1061,6 +1125,7 @@ export default function SerProveedorPage() {
       // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS estancia_minima integer;
       // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS estancia_maxima integer;
       // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS antelacion_minima integer DEFAULT 24;
+      // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS dias_disponibles text[];
       const ciudadTrimmed = ciudad.trim();
       const detailsForInsert = await geocodeLocationZonesForServices(
         selectedServices,
@@ -1085,6 +1150,11 @@ export default function SerProveedorPage() {
             details.antelacion_minima != null && details.antelacion_minima !== ""
               ? Number(details.antelacion_minima)
               : 24,
+          dias_disponibles:
+            Array.isArray(details.dias_disponibles) &&
+            details.dias_disponibles.length > 0
+              ? details.dias_disponibles
+              : DIAS_DISPONIBLES_DEFAULT,
           cancellation_policy: details.cancelacion,
           ciudad: ciudadTrimmed,
           location_zone: details.location_zone?.trim() || null,

@@ -8,7 +8,7 @@ import {
   useStripe,
 } from "@stripe/react-stripe-js";
 import { useParams, useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Navbar from "@/app/components/Navbar";
 import { BRAND, SERIF } from "@/app/components/brand";
 import { supabase } from "@/lib/supabase";
@@ -304,6 +304,116 @@ function formatAntelacionInfo(antelacionMinima) {
       : 24;
   if (!h) return null;
   return `Reservar con al menos ${formatAntelacionLabel(h)} de antelación`;
+}
+
+const DIAS_SEMANA_META = [
+  { id: "lun", label: "Lun", nombre: "lunes", jsDay: 1 },
+  { id: "mar", label: "Mar", nombre: "martes", jsDay: 2 },
+  { id: "mie", label: "Mié", nombre: "miércoles", jsDay: 3 },
+  { id: "jue", label: "Jue", nombre: "jueves", jsDay: 4 },
+  { id: "vie", label: "Vie", nombre: "viernes", jsDay: 5 },
+  { id: "sab", label: "Sáb", nombre: "sábados", jsDay: 6 },
+  { id: "dom", label: "Dom", nombre: "domingos", jsDay: 0 },
+];
+
+const DIAS_DISPONIBLES_DEFAULT = DIAS_SEMANA_META.map((d) => d.id);
+
+function normalizeDiasDisponibles(dias) {
+  if (!Array.isArray(dias) || dias.length === 0) return DIAS_DISPONIBLES_DEFAULT;
+  return dias;
+}
+
+function getDiaIdFromFecha(fechaStr) {
+  if (!fechaStr) return null;
+  const [y, m, d] = fechaStr.split("-").map(Number);
+  const jsDay = new Date(y, m - 1, d).getDay();
+  return DIAS_SEMANA_META.find((dia) => dia.jsDay === jsDay)?.id ?? null;
+}
+
+function isFechaEnDiasDisponibles(fechaStr, diasDisponibles) {
+  const diaId = getDiaIdFromFecha(fechaStr);
+  if (!diaId) return true;
+  return normalizeDiasDisponibles(diasDisponibles).includes(diaId);
+}
+
+function getDiaDisponibleError(fechaStr, diasDisponibles) {
+  const diaId = getDiaIdFromFecha(fechaStr);
+  const nombre =
+    DIAS_SEMANA_META.find((d) => d.id === diaId)?.nombre ?? "ese día";
+  return `Este proveedor no está disponible los ${nombre}. Por favor elige otra fecha.`;
+}
+
+function validateDiaDisponible(svc, fechaInicio) {
+  if (!fechaInicio) return null;
+  const disponibles = normalizeDiasDisponibles(svc.dias_disponibles);
+  if (isFechaEnDiasDisponibles(fechaInicio, disponibles)) return null;
+  return getDiaDisponibleError(fechaInicio, disponibles);
+}
+
+function FechaInicioConDias({
+  id,
+  value,
+  onChange,
+  min,
+  diasDisponibles,
+  onValidationError,
+  inputClass,
+  borderColor,
+}) {
+  const inputRef = useRef(null);
+  const disponibles = normalizeDiasDisponibles(diasDisponibles);
+  const diasLabel = DIAS_SEMANA_META.filter((d) => disponibles.includes(d.id))
+    .map((d) => d.label)
+    .join(", ");
+
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    if (value && !isFechaEnDiasDisponibles(value, disponibles)) {
+      el.setCustomValidity(getDiaDisponibleError(value, disponibles));
+    } else {
+      el.setCustomValidity("");
+    }
+  }, [value, disponibles]);
+
+  function handleChange(e) {
+    const next = e.target.value;
+    if (!next) {
+      e.target.setCustomValidity("");
+      onValidationError("");
+      onChange("");
+      return;
+    }
+    if (!isFechaEnDiasDisponibles(next, disponibles)) {
+      const err = getDiaDisponibleError(next, disponibles);
+      e.target.setCustomValidity(err);
+      onValidationError(err);
+      return;
+    }
+    e.target.setCustomValidity("");
+    onValidationError("");
+    onChange(next);
+  }
+
+  return (
+    <input
+      ref={inputRef}
+      id={id}
+      type="date"
+      required
+      min={min}
+      value={value}
+      onChange={handleChange}
+      onInput={handleChange}
+      title={
+        diasLabel
+          ? `Solo puedes reservar en: ${diasLabel}`
+          : "Selecciona una fecha disponible"
+      }
+      className={inputClass}
+      style={{ borderColor }}
+    />
+  );
 }
 
 const PLATFORM_MULTIPLIER = 1.14;
@@ -833,6 +943,7 @@ export default function ReservarPage() {
               estancia_minima,
               estancia_maxima,
               antelacion_minima,
+              dias_disponibles,
               reserva_inmediata,
               ciudad,
               proveedor_id,
@@ -923,7 +1034,16 @@ export default function ReservarPage() {
       const calc = calculateServiceBasePrice(svc, dateContext);
       let ready = calc.ready;
       let detail = calc.detail;
-      if (calc.ready) {
+
+      if (fechaInicio) {
+        const diaError = validateDiaDisponible(svc, fechaInicio);
+        if (diaError) {
+          ready = false;
+          detail = diaError;
+        }
+      }
+
+      if (calc.ready && ready) {
         const duration = getServiceDuration(svc, dateContext);
         const estanciaError = validateEstancia(svc, duration);
         if (estanciaError) {
@@ -1349,16 +1469,15 @@ export default function ReservarPage() {
                 <label htmlFor="fecha-inicio" className="mb-1.5 block text-xs font-medium text-[#444]">
                   Fecha de inicio
                 </label>
-                <input
+                <FechaInicioConDias
                   id="fecha-inicio"
-                  type="date"
-                  required
-                  min={new Date().toISOString().split("T")[0]}
                   value={fechaInicio}
-                  onChange={(e) => setFechaInicio(e.target.value)}
-                  onInput={(e) => setFechaInicio(e.target.value)}
-                  className={inputClass}
-                  style={{ borderColor: BRAND.border }}
+                  min={new Date().toISOString().split("T")[0]}
+                  diasDisponibles={service?.dias_disponibles}
+                  onChange={setFechaInicio}
+                  onValidationError={setErrorMessage}
+                  inputClass={inputClass}
+                  borderColor={BRAND.border}
                 />
               </div>
 

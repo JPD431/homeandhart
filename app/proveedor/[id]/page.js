@@ -176,6 +176,23 @@ function formatAntelacionReserva(service) {
   return `Reservar con ${formatAntelacionLabel(h)} de antelación`;
 }
 
+const DIAS_SEMANA_PILLS = [
+  { id: "lun", label: "Lun" },
+  { id: "mar", label: "Mar" },
+  { id: "mie", label: "Mié" },
+  { id: "jue", label: "Jue" },
+  { id: "vie", label: "Vie" },
+  { id: "sab", label: "Sáb" },
+  { id: "dom", label: "Dom" },
+];
+
+function normalizeDiasDisponiblesProveedor(dias) {
+  if (!Array.isArray(dias) || dias.length === 0) {
+    return DIAS_SEMANA_PILLS.map((d) => d.id);
+  }
+  return dias;
+}
+
 const GOLD = "#c8922a";
 
 function StarRating({ value, size = 16 }) {
@@ -437,6 +454,9 @@ export default async function ProveedorPage({ params }) {
               const cancelPolicy = getCancelPolicy(service.cancellation_policy);
               const estanciaMinLabel = formatEstanciaMinima(service);
               const antelacionLabel = formatAntelacionReserva(service);
+              const diasDisponibles = normalizeDiasDisponiblesProveedor(
+                service.dias_disponibles,
+              );
 
               return (
                 <li
@@ -473,6 +493,24 @@ export default async function ProveedorPage({ params }) {
                       {antelacionLabel && (
                         <p className="mt-1 text-xs text-[#888]">{antelacionLabel}</p>
                       )}
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {DIAS_SEMANA_PILLS.map((dia) => {
+                          const activo = diasDisponibles.includes(dia.id);
+                          return (
+                            <span
+                              key={dia.id}
+                              className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                              style={{
+                                backgroundColor: activo ? BRAND.light : "#f3f3f3",
+                                color: activo ? BRAND.primary : "#aaa",
+                                border: `1px solid ${activo ? BRAND.primary : "#e0e0e0"}`,
+                              }}
+                            >
+                              {dia.label}
+                            </span>
+                          );
+                        })}
+                      </div>
                       {cancelPolicy ? (
                         <div className="mt-2">
                           <p className="text-xs font-semibold text-[#444]">
