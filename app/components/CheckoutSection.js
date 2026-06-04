@@ -1,3 +1,7 @@
+"use client";
+
+import { useLang } from "@/app/lib/LangContext";
+import { useTranslation } from "@/app/lib/i18n";
 import { BRAND, SERIF } from "./brand";
 
 const FEATURES = [
@@ -211,6 +215,9 @@ function BookingLineItem({
 }
 
 export default function CheckoutSection() {
+  const { lang } = useLang();
+  const t = useTranslation(lang);
+
   return (
     <section
       className="bg-white text-[#1a1a1a]"
@@ -223,20 +230,15 @@ export default function CheckoutSection() {
             className="text-[11px] font-semibold uppercase tracking-[0.2em] sm:text-xs"
             style={{ color: BRAND.primary }}
           >
-            reserva
+            {t.checkout.label}
           </p>
           <h2
             id="checkout-heading"
             className="mt-4 text-3xl leading-snug sm:text-4xl lg:text-[2.5rem]"
             style={{ fontFamily: SERIF }}
           >
-            Un checkout.
-            <br />
-            <span
-              className="italic"
-              style={{ color: BRAND.primary }}
-            >
-              Todos los servicios.
+            <span className="italic" style={{ color: BRAND.primary }}>
+              {t.checkout.titulo}
             </span>
           </h2>
           <p className="mt-4 text-base leading-relaxed text-[#5c5c5c] sm:text-lg">

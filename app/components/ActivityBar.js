@@ -1,24 +1,31 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useLang } from "@/app/lib/LangContext";
+import { useTranslation } from "@/app/lib/i18n";
 import { BRAND } from "./brand";
 
-const MESSAGES = [
-  "María acaba de reservar cuidado de niños en Madrid",
-  "Carlos reservó alojamiento pet-friendly en Barcelona",
-  "Lucía dejó una valoración 5★ a su cuidador de mascotas",
-  "8 familias están buscando servicios en tu zona ahora",
-];
-
 export default function ActivityBar() {
+  const { lang } = useLang();
+  const t = useTranslation(lang);
   const [index, setIndex] = useState(0);
+
+  const messages = useMemo(
+    () => [
+      t.activityBar.texto,
+      "Carlos reservó alojamiento pet-friendly en Barcelona",
+      "Lucía dejó una valoración 5★ a su cuidador de mascotas",
+      "8 familias están buscando servicios en tu zona ahora",
+    ],
+    [t.activityBar.texto],
+  );
 
   useEffect(() => {
     const id = setInterval(() => {
-      setIndex((current) => (current + 1) % MESSAGES.length);
+      setIndex((current) => (current + 1) % messages.length);
     }, 4000);
     return () => clearInterval(id);
-  }, []);
+  }, [messages.length]);
 
   return (
     <div
@@ -36,7 +43,7 @@ export default function ActivityBar() {
             className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500"
             aria-hidden
           />
-          {MESSAGES[index]}
+          {messages[index]}
         </span>
       </p>
     </div>

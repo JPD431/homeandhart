@@ -1,3 +1,7 @@
+"use client";
+
+import { useLang } from "@/app/lib/LangContext";
+import { useTranslation } from "@/app/lib/i18n";
 import { BRAND, SERIF } from "./brand";
 
 const STAR_COLOR = "#c8922a";
@@ -56,6 +60,9 @@ function ServiceTag({ children }) {
 }
 
 export default function ReviewsSection() {
+  const { lang } = useLang();
+  const t = useTranslation(lang);
+
   return (
     <section
       className="text-[#1a1a1a]"
@@ -68,17 +75,17 @@ export default function ReviewsSection() {
             className="text-[11px] font-semibold uppercase tracking-[0.2em] sm:text-xs"
             style={{ color: BRAND.primary }}
           >
-            lo que dicen las familias
+            {t.reviews.label}
           </p>
           <h2
             id="reviews-heading"
             className="mt-4 text-3xl leading-snug sm:text-4xl lg:text-[2.5rem]"
             style={{ fontFamily: SERIF }}
           >
-            580 familias ya lo han resuelto
+            {t.reviews.titulo}
           </h2>
           <p className="mt-3 text-base text-[#5c5c5c] sm:text-lg">
-            Reseñas reales. Sin filtros.
+            {t.reviews.subtitulo}
           </p>
         </header>
 
@@ -231,7 +238,7 @@ export default function ReviewsSection() {
             className="text-sm font-semibold transition-opacity hover:opacity-80 sm:text-base"
             style={{ color: BRAND.primary }}
           >
-            Ver todas las reseñas →
+            {t.reviews.verTodas}
           </button>
         </div>
       </div>

@@ -63,6 +63,26 @@ export const translations = {
       subtitulo:
         "Sabemos lo que es viajar con niños y mascotas. Por eso creamos Home&Heart.",
     },
+    activityBar: {
+      texto: "María acaba de reservar cuidado de niños en Madrid",
+    },
+    reviews: {
+      label: "LO QUE DICEN LAS FAMILIAS",
+      titulo: "580 familias ya lo han resuelto",
+      subtitulo: "Reseñas reales. Sin filtros.",
+      verTodas: "Ver todas las reseñas →",
+    },
+    checkout: {
+      label: "RESERVA",
+      titulo: "Un checkout. Todos los servicios.",
+    },
+    retention: {
+      titulo: "No somos una app para usar una vez.",
+    },
+    doubleCTA: {
+      titulo: "¿CÓMO PODEMOS AYUDARTE?",
+      subtitulo: "Cuéntanos qué necesitas",
+    },
     footer: {
       slogan: "Donde estés, estamos.",
       servicios: "Servicios",
@@ -143,6 +163,26 @@ export const translations = {
       titulo: "Built by families, for families",
       subtitulo:
         "We know what it is like to travel with children and pets. That is why we created Home&Heart.",
+    },
+    activityBar: {
+      texto: "María just booked childcare in Madrid",
+    },
+    reviews: {
+      label: "WHAT FAMILIES SAY",
+      titulo: "580 families have already solved it",
+      subtitulo: "Real reviews. No filters.",
+      verTodas: "View all reviews →",
+    },
+    checkout: {
+      label: "BOOKING",
+      titulo: "One checkout. All services.",
+    },
+    retention: {
+      titulo: "We are not a one-time app.",
+    },
+    doubleCTA: {
+      titulo: "HOW CAN WE HELP YOU?",
+      subtitulo: "Tell us what you need",
     },
     footer: {
       slogan: "Wherever you are, we are there.",

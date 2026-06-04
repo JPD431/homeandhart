@@ -1,3 +1,7 @@
+"use client";
+
+import { useLang } from "@/app/lib/LangContext";
+import { useTranslation } from "@/app/lib/i18n";
 import { BRAND, SERIF } from "./brand";
 
 const DARK_BLUE = "#163a6b";
@@ -36,6 +40,9 @@ function Pill({ children, variant = "dark" }) {
 }
 
 export default function DoubleCTASection() {
+  const { lang } = useLang();
+  const t = useTranslation(lang);
+
   return (
     <section
       className="text-[#1a1a1a]"
@@ -48,14 +55,14 @@ export default function DoubleCTASection() {
             className="text-[11px] font-semibold uppercase tracking-[0.2em] sm:text-xs"
             style={{ color: BRAND.primary }}
           >
-            ¿cómo podemos ayudarte?
+            {t.doubleCTA.titulo}
           </p>
           <h2
             id="double-cta-heading"
             className="mt-4 text-[#1a1a1a]"
             style={{ fontFamily: SERIF, fontSize: "32px" }}
           >
-            Cuéntanos qué necesitas
+            {t.doubleCTA.subtitulo}
           </h2>
           <p className="mt-3 text-base text-[#5c5c5c] sm:text-lg">
             Tanto si viajas como si lo necesitas en tu ciudad.

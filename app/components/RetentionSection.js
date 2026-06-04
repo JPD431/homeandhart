@@ -1,3 +1,7 @@
+"use client";
+
+import { useLang } from "@/app/lib/LangContext";
+import { useTranslation } from "@/app/lib/i18n";
 import { BRAND, SERIF } from "./brand";
 
 const CARDS = [
@@ -79,6 +83,9 @@ function ListIcon({ className }) {
 }
 
 export default function RetentionSection() {
+  const { lang } = useLang();
+  const t = useTranslation(lang);
+
   return (
     <section
       className="text-white"
@@ -109,8 +116,9 @@ export default function RetentionSection() {
               color: "rgba(255, 255, 255, 0.6)",
             }}
           >
-            No somos una app para usar una vez. Somos el ecosistema que tu
-            familia usa cada vez que lo necesita — en casa o de viaje.
+            {t.retention.titulo}
+            {lang === "es" &&
+              " Somos el ecosistema que tu familia usa cada vez que lo necesita — en casa o de viaje."}
           </p>
         </header>
 

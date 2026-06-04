@@ -8,6 +8,9 @@ import { BRAND } from "./brand";
 import { supabase } from "@/lib/supabase";
 
 function Logo() {
+  const { lang } = useLang();
+  const t = useTranslation(lang);
+
   return (
     <div className="flex flex-col">
       <span className="text-xl font-semibold tracking-tight sm:text-2xl">
@@ -16,7 +19,7 @@ function Logo() {
         <span style={{ color: "#111111" }}>Heart</span>
       </span>
       <span className="mt-0.5 text-xs text-[#5c5c5c] sm:text-sm">
-        Donde estés, estamos.
+        {t.footer.slogan}
       </span>
     </div>
   );
