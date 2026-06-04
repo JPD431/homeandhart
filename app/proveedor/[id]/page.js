@@ -5,6 +5,13 @@ import Navbar from "@/app/components/Navbar";
 import PreguntarButton from "@/app/components/PreguntarButton";
 import { BRAND, SERIF } from "@/app/components/brand";
 import {
+  ProveedorBioText,
+  ProveedorTranslateButton,
+  ProveedorTranslateProvider,
+  ServicioDescripcionText,
+  ServicioTituloText,
+} from "./ProveedorTraduccion";
+import {
   formatOfertaValidaHasta,
   getPrecioConDescuento,
   isOfertaActiva,
@@ -334,6 +341,12 @@ export default async function ProveedorPage({ params }) {
   const initials = getInitials(profile.nombre, profile.apellido);
   const isVerified = profile.verificado === true;
 
+  const servicesParaTraduccion = (services ?? []).map((service) => ({
+    id: service.id,
+    titulo: service.titulo || "",
+    descripcion: service.descripcion || service.oferta_descripcion || "",
+  }));
+
   return (
     <div
       className="min-h-screen pb-24 font-sans md:pb-12"
@@ -342,6 +355,10 @@ export default async function ProveedorPage({ params }) {
       <Navbar />
 
       <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
+        <ProveedorTranslateProvider
+          bio={bio}
+          services={servicesParaTraduccion}
+        >
         {/* Header del proveedor */}
         <header
           className="rounded-2xl border bg-white p-6 sm:p-8"
@@ -385,6 +402,7 @@ export default async function ProveedorPage({ params }) {
                   </span>
                 )}
               </div>
+              <ProveedorTranslateButton />
               <p className="mt-1 text-sm text-[#666]">{zone}</p>
 
               {languages.length > 0 && (
@@ -407,11 +425,7 @@ export default async function ProveedorPage({ params }) {
             </div>
           </div>
 
-          {bio && (
-            <p className="mt-6 border-t pt-6 text-sm leading-relaxed text-[#5c5c5c] sm:text-base" style={{ borderColor: BRAND.border }}>
-              {bio}
-            </p>
-          )}
+          <ProveedorBioText bio={bio} />
         </header>
 
         {/* Servicios disponibles */}
@@ -480,9 +494,16 @@ export default async function ProveedorPage({ params }) {
                           {ocupadoProximos7Dias ? "Ocupado" : "Disponible"}
                         </span>
                       </div>
-                      <p className="mt-0.5 text-lg font-semibold text-[#1a1a1a]">
-                        {service.titulo || vertical.label}
-                      </p>
+                      <ServicioTituloText
+                        serviceId={service.id}
+                        titulo={service.titulo || vertical.label}
+                      />
+                      <ServicioDescripcionText
+                        serviceId={service.id}
+                        descripcion={
+                          service.descripcion || service.oferta_descripcion || ""
+                        }
+                      />
                       {ofertaActiva && (
                         <div
                           className="mt-3 rounded-xl px-4 py-3 text-sm leading-relaxed text-[#92400e]"
@@ -640,6 +661,7 @@ export default async function ProveedorPage({ params }) {
             </>
           )}
         </section>
+        </ProveedorTranslateProvider>
       </main>
 
       {/* Botón flotante móvil */}
