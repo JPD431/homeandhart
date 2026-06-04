@@ -145,6 +145,19 @@ function formatPrice(precio, suffix) {
   return `${Number(precio)}€${suffix}`;
 }
 
+function formatEstanciaMinima(service) {
+  const n = service.estancia_minima;
+  if (n == null || n === "" || Number(n) <= 0) return null;
+  const count = Number(n);
+  if (service.vertical === "alojamiento") {
+    return `Mínimo ${count} ${count === 1 ? "noche" : "noches"}`;
+  }
+  if (service.vertical === "ninos") {
+    return `Mínimo ${count} ${count === 1 ? "hora" : "horas"}`;
+  }
+  return `Mínimo ${count} ${count === 1 ? "día" : "días"}`;
+}
+
 const GOLD = "#c8922a";
 
 function StarRating({ value, size = 16 }) {
@@ -404,6 +417,7 @@ export default async function ProveedorPage({ params }) {
                 VERTICALS[service.vertical] ?? VERTICALS.alojamiento;
               const { Icon } = vertical;
               const cancelPolicy = getCancelPolicy(service.cancellation_policy);
+              const estanciaMinLabel = formatEstanciaMinima(service);
 
               return (
                 <li
@@ -434,6 +448,9 @@ export default async function ProveedorPage({ params }) {
                       >
                         {formatPrice(service.precio, vertical.priceSuffix)}
                       </p>
+                      {estanciaMinLabel && (
+                        <p className="mt-1 text-xs text-[#888]">{estanciaMinLabel}</p>
+                      )}
                       {cancelPolicy ? (
                         <div className="mt-2">
                           <p className="text-xs font-semibold text-[#444]">

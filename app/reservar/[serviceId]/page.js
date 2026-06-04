@@ -217,6 +217,59 @@ function daysBetween(start, end) {
   return Math.max(1, Math.ceil(diff / (1000 * 60 * 60 * 24)));
 }
 
+function getEstanciaUnit(vertical, count) {
+  const n = Number(count);
+  if (vertical === "alojamiento") return n === 1 ? "noche" : "noches";
+  if (vertical === "ninos") return n === 1 ? "hora" : "horas";
+  return n === 1 ? "día" : "días";
+}
+
+function getServiceDuration(svc, { fechaInicio, fechaFin, duracionHoras, mainVertical }) {
+  if (svc.vertical === "ninos") {
+    let hours = Number(duracionHoras) || 0;
+    if (!hours && mainVertical !== "ninos") {
+      const days = daysBetween(fechaInicio, fechaFin || fechaInicio);
+      hours = days > 0 ? days : 0;
+    }
+    return hours;
+  }
+  return daysBetween(fechaInicio, fechaFin || fechaInicio);
+}
+
+function validateEstancia(svc, duration) {
+  if (!duration) return null;
+
+  const min =
+    svc.estancia_minima != null && svc.estancia_minima !== ""
+      ? Number(svc.estancia_minima)
+      : null;
+  const max =
+    svc.estancia_maxima != null && svc.estancia_maxima !== ""
+      ? Number(svc.estancia_maxima)
+      : null;
+
+  if (min != null && min > 0 && duration < min) {
+    return `Este servicio requiere un mínimo de ${min} ${getEstanciaUnit(svc.vertical, min)}`;
+  }
+  if (max != null && max > 0 && duration > max) {
+    return `Este servicio tiene un máximo de ${max} ${getEstanciaUnit(svc.vertical, max)}`;
+  }
+  return null;
+}
+
+function formatEstanciaInfo(vertical, minima, maxima) {
+  const parts = [];
+  if (minima != null && minima !== "" && Number(minima) > 0) {
+    const n = Number(minima);
+    parts.push(`Mínimo ${n} ${getEstanciaUnit(vertical, n)}`);
+  }
+  if (maxima != null && maxima !== "" && Number(maxima) > 0) {
+    const n = Number(maxima);
+    parts.push(`Máximo ${n} ${getEstanciaUnit(vertical, n)}`);
+  }
+  return parts;
+}
+
 const PLATFORM_MULTIPLIER = 1.14;
 const COMMISSION_RATE = 0.14;
 
@@ -741,6 +794,8 @@ export default function ReservarPage() {
               titulo,
               vertical,
               precio,
+              estancia_minima,
+              estancia_maxima,
               reserva_inmediata,
               ciudad,
               proveedor_id,
@@ -829,6 +884,16 @@ export default function ReservarPage() {
     const dateContext = { fechaInicio, fechaFin, duracionHoras, mainVertical: vertical };
     const lines = selectedServices.map((svc) => {
       const calc = calculateServiceBasePrice(svc, dateContext);
+      let ready = calc.ready;
+      let detail = calc.detail;
+      if (calc.ready) {
+        const duration = getServiceDuration(svc, dateContext);
+        const estanciaError = validateEstancia(svc, duration);
+        if (estanciaError) {
+          ready = false;
+          detail = estanciaError;
+        }
+      }
       const svcConfig = VERTICALS[svc.vertical] ?? VERTICALS.alojamiento;
       const name =
         svc.titulo ||
@@ -838,21 +903,21 @@ export default function ReservarPage() {
         name,
         base: calc.base,
         total: applyClientPrice(calc.base),
-        detail: calc.detail,
-        ready: calc.ready,
+        detail,
+        ready,
         vertical: svc.vertical,
       };
     });
 
-    const mainLine = lines[0];
-    if (!mainLine?.ready) {
+    const failedLine = lines.find((line) => !line.ready);
+    if (failedLine) {
       return {
         lines,
         subtotal: 0,
         commission: 0,
         total: 0,
         ready: false,
-        detail: mainLine?.detail || "Introduce las fechas para calcular el precio",
+        detail: failedLine.detail || "Introduce las fechas para calcular el precio",
       };
     }
 
@@ -866,7 +931,7 @@ export default function ReservarPage() {
       commission,
       total,
       ready: true,
-      detail: mainLine.detail,
+      detail: lines[0]?.detail || "",
     };
   }, [service, selectedServices, vertical, fechaInicio, fechaFin, duracionHoras]);
 
@@ -1161,6 +1226,42 @@ export default function ReservarPage() {
                   <p className="mt-0.5 text-sm leading-relaxed text-[#854d0e]">
                     {cancelPolicy.description}
                   </p>
+                </div>
+              </div>
+            )}
+
+            {formatEstanciaInfo(
+              vertical,
+              service.estancia_minima,
+              service.estancia_maxima,
+            ).length > 0 && (
+              <div
+                className="mt-4 flex gap-3 rounded-xl px-4 py-3"
+                style={{ backgroundColor: verticalConfig.light }}
+              >
+                <InfoIcon
+                  className="mt-0.5 h-5 w-5 shrink-0"
+                  style={{ color: verticalConfig.color }}
+                />
+                <div>
+                  <p
+                    className="text-xs font-semibold uppercase tracking-wide"
+                    style={{ color: verticalConfig.color }}
+                  >
+                    Estancia
+                  </p>
+                  {formatEstanciaInfo(
+                    vertical,
+                    service.estancia_minima,
+                    service.estancia_maxima,
+                  ).map((line) => (
+                    <p
+                      key={line}
+                      className="mt-0.5 text-sm leading-relaxed text-[#444]"
+                    >
+                      {line}
+                    </p>
+                  ))}
                 </div>
               </div>
             )}

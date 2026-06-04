@@ -55,6 +55,21 @@ const LOCATION_ZONE_PLACEHOLDERS = {
   mascotas: "Ej: Malasaña, Lavapiés, Chamartín...",
 };
 
+const ESTANCIA_PLACEHOLDERS = {
+  alojamiento: {
+    min: "Mínimo de noches (ej: 2)",
+    max: "Máximo de noches (ej: 30) — opcional",
+  },
+  ninos: {
+    min: "Mínimo de horas (ej: 2)",
+    max: "Máximo de horas (ej: 8) — opcional",
+  },
+  mascotas: {
+    min: "Mínimo de días (ej: 1)",
+    max: "Máximo de días (ej: 14) — opcional",
+  },
+};
+
 async function geocodeBarrio(barrio, ciudad) {
   const query = `${barrio}, ${ciudad}, España`;
   const response = await fetch(
@@ -119,6 +134,8 @@ const EMPTY_SERVICE_DETAILS = {
     location_lng: null,
     tipo_alojamiento: "",
     precio: "",
+    estancia_minima: "",
+    estancia_maxima: "",
     nru: "",
     cancelacion: "moderada",
     reserva_inmediata: false,
@@ -131,6 +148,8 @@ const EMPTY_SERVICE_DETAILS = {
     location_lat: null,
     location_lng: null,
     precio: "",
+    estancia_minima: "",
+    estancia_maxima: "",
     edades: "",
     certificacion: "",
     cancelacion: "moderada",
@@ -145,6 +164,8 @@ const EMPTY_SERVICE_DETAILS = {
     location_lat: null,
     location_lng: null,
     precio: "",
+    estancia_minima: "",
+    estancia_maxima: "",
     tipos: "",
     cancelacion: "moderada",
     reserva_inmediata: false,
@@ -450,6 +471,47 @@ function LocationZoneField({ serviceId, value, onChange, onBlur }) {
   );
 }
 
+function EstanciaFields({ serviceId, details, onChange }) {
+  const placeholders = ESTANCIA_PLACEHOLDERS[serviceId];
+
+  function update(field, val) {
+    onChange({ ...details, [field]: val });
+  }
+
+  return (
+    <>
+      <div>
+        <label className="mb-1.5 block text-xs font-medium text-[#444]">
+          Estancia mínima
+        </label>
+        <input
+          type="number"
+          min="1"
+          placeholder={placeholders.min}
+          value={details.estancia_minima}
+          onChange={(e) => update("estancia_minima", e.target.value)}
+          className={inputClass}
+          style={{ borderColor: BRAND.border }}
+        />
+      </div>
+      <div>
+        <label className="mb-1.5 block text-xs font-medium text-[#444]">
+          Estancia máxima
+        </label>
+        <input
+          type="number"
+          min="1"
+          placeholder={placeholders.max}
+          value={details.estancia_maxima}
+          onChange={(e) => update("estancia_maxima", e.target.value)}
+          className={inputClass}
+          style={{ borderColor: BRAND.border }}
+        />
+      </div>
+    </>
+  );
+}
+
 function TipoAlojamientoSelector({ value, onChange }) {
   return (
     <div className="sm:col-span-2">
@@ -520,6 +582,11 @@ function ServiceFields({ serviceId, details, onChange, onLocationZoneBlur }) {
             style={{ borderColor: BRAND.border }}
           />
         </div>
+        <EstanciaFields
+          serviceId={serviceId}
+          details={details}
+          onChange={onChange}
+        />
         <div>
           <label className="mb-1.5 block text-xs font-medium text-[#444]">
             NRU
@@ -605,6 +672,11 @@ function ServiceFields({ serviceId, details, onChange, onLocationZoneBlur }) {
             style={{ borderColor: BRAND.border }}
           />
         </div>
+        <EstanciaFields
+          serviceId={serviceId}
+          details={details}
+          onChange={onChange}
+        />
         <div>
           <label className="mb-1.5 block text-xs font-medium text-[#444]">
             Edades
@@ -707,6 +779,11 @@ function ServiceFields({ serviceId, details, onChange, onLocationZoneBlur }) {
             style={{ borderColor: BRAND.border }}
           />
         </div>
+        <EstanciaFields
+          serviceId={serviceId}
+          details={details}
+          onChange={onChange}
+        />
         <div>
           <label className="mb-1.5 block text-xs font-medium text-[#444]">
             Tipos de animales
@@ -930,6 +1007,8 @@ export default function SerProveedorPage() {
       // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS telefono_contacto text;
       // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS modalidad text;
       // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS tipo_alojamiento text;
+      // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS estancia_minima integer;
+      // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS estancia_maxima integer;
       const ciudadTrimmed = ciudad.trim();
       const detailsForInsert = await geocodeLocationZonesForServices(
         selectedServices,
@@ -944,6 +1023,12 @@ export default function SerProveedorPage() {
           vertical: serviceId,
           titulo: details.titulo.trim(),
           precio: details.precio ? Number(details.precio) : null,
+          estancia_minima: details.estancia_minima
+            ? Number(details.estancia_minima)
+            : null,
+          estancia_maxima: details.estancia_maxima
+            ? Number(details.estancia_maxima)
+            : null,
           cancellation_policy: details.cancelacion,
           ciudad: ciudadTrimmed,
           location_zone: details.location_zone?.trim() || null,
