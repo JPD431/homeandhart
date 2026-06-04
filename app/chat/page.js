@@ -43,21 +43,30 @@ function formatMessageTime(value) {
   });
 }
 
-function parseOfferContent(content) {
+function parseJsonMessage(content) {
   if (!content || typeof content !== "string") return null;
   const trimmed = content.trim();
   if (!trimmed.startsWith("{")) return null;
   try {
     const parsed = JSON.parse(trimmed);
-    if (parsed?.tipo === "oferta") return parsed;
+    if (parsed?.tipo === "oferta" || parsed?.tipo === "solicitud_precio") {
+      return parsed;
+    }
   } catch {
     return null;
   }
   return null;
 }
 
+function parseOfferContent(content) {
+  const parsed = parseJsonMessage(content);
+  return parsed?.tipo === "oferta" ? parsed : null;
+}
+
 function getMessagePreview(content) {
-  if (parseOfferContent(content)) return "🏷️ Oferta especial";
+  const parsed = parseJsonMessage(content);
+  if (parsed?.tipo === "oferta") return "🏷️ Oferta especial";
+  if (parsed?.tipo === "solicitud_precio") return "💬 Solicitud de precio";
   return content;
 }
 
@@ -138,6 +147,73 @@ function OfertaMessageCard({ message, offer, isMine, onReject, rejecting }) {
   );
 }
 
+function SolicitudPrecioMessageCard({
+  message,
+  solicitud,
+  isMine,
+  isProvider,
+  onReject,
+  onAcceptAndOffer,
+  rejecting,
+}) {
+  const rechazada = solicitud.estado === "rechazada";
+  const canRespond = isProvider && !isMine && !rechazada;
+
+  return (
+    <div
+      className="max-w-[min(100%,320px)] rounded-2xl border p-4 text-sm"
+      style={{
+        backgroundColor: "#fef3c7",
+        borderColor: "#c47d1a",
+        color: "#1a1a1a",
+      }}
+    >
+      <p className="font-semibold" style={{ color: "#c47d1a" }}>
+        💬 Solicitud de precio especial
+      </p>
+      <p className="mt-2 font-medium text-[#1a1a1a]">{solicitud.service_titulo}</p>
+      <div className="mt-2 flex flex-wrap items-baseline gap-2">
+        {solicitud.precio_original > 0 && (
+          <span className="text-[#888] line-through">
+            {Number(solicitud.precio_original).toFixed(2)}€
+          </span>
+        )}
+        <span className="text-lg font-bold text-green-700">
+          Propuesta: {Number(solicitud.precio_propuesto).toFixed(2)}€
+        </span>
+      </div>
+      {solicitud.mensaje && (
+        <p className="mt-3 whitespace-pre-wrap text-[#333]">{solicitud.mensaje}</p>
+      )}
+      {rechazada && (
+        <p className="mt-3 text-xs font-medium text-[#888]">Solicitud rechazada</p>
+      )}
+      {canRespond && (
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => onAcceptAndOffer(solicitud)}
+            className="rounded-lg bg-green-600 px-4 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90"
+          >
+            Aceptar y enviar oferta
+          </button>
+          <button
+            type="button"
+            onClick={() => onReject(message)}
+            disabled={rejecting}
+            className="rounded-lg bg-[#e5e5e5] px-4 py-2 text-xs font-semibold text-[#444] transition-opacity hover:opacity-90 disabled:opacity-60"
+          >
+            {rejecting ? "…" : "Rechazar"}
+          </button>
+        </div>
+      )}
+      <p className="mt-2 text-[10px] opacity-70">
+        {formatMessageTime(message.created_at)}
+      </p>
+    </div>
+  );
+}
+
 function filterProtectedContent(text) {
   let result = text;
   result = result.replace(
@@ -190,6 +266,12 @@ export default function ChatPage() {
   const [offerMensaje, setOfferMensaje] = useState("");
   const [sendingOffer, setSendingOffer] = useState(false);
   const [rejectingOfferId, setRejectingOfferId] = useState(null);
+  const [otherParticipantServices, setOtherParticipantServices] = useState([]);
+  const [showRequestForm, setShowRequestForm] = useState(false);
+  const [requestServiceId, setRequestServiceId] = useState("");
+  const [requestPrecio, setRequestPrecio] = useState("");
+  const [requestMensaje, setRequestMensaje] = useState("");
+  const [sendingRequest, setSendingRequest] = useState(false);
 
   const messagesEndRef = useRef(null);
   const isProvider = providerServices.length > 0;
@@ -422,6 +504,35 @@ export default function ChatPage() {
     [conversations, selectedId],
   );
 
+  const otherParticipantId = useMemo(() => {
+    if (!selectedConversation || !userId) return null;
+    return selectedConversation.participant_a_id === userId
+      ? selectedConversation.participant_b_id
+      : selectedConversation.participant_a_id;
+  }, [selectedConversation, userId]);
+
+  useEffect(() => {
+    if (!otherParticipantId || isProvider) {
+      setOtherParticipantServices([]);
+      return;
+    }
+
+    async function loadOtherServices() {
+      const { data } = await supabase
+        .from("services")
+        .select("id, titulo, precio, vertical")
+        .eq("proveedor_id", otherParticipantId)
+        .eq("disponible", true)
+        .order("titulo", { ascending: true });
+
+      const list = data ?? [];
+      setOtherParticipantServices(list);
+      setRequestServiceId((prev) => prev || list[0]?.id || "");
+    }
+
+    loadOtherServices();
+  }, [otherParticipantId, isProvider]);
+
   async function handleSend(e) {
     e.preventDefault();
     if (!userId || !selectedId || !draft.trim() || sending) return;
@@ -549,12 +660,99 @@ export default function ChatPage() {
     maybeNotifyRecipient(selectedId, "🏷️ Oferta especial");
   }
 
-  async function handleRejectOffer(message) {
-    const offer = parseOfferContent(message.content);
-    if (!offer || offer.estado === "rechazada") return;
+  async function handleSendPriceRequest(e) {
+    e.preventDefault();
+    if (!userId || !selectedId || sendingRequest || isProvider) return;
+
+    const svc = otherParticipantServices.find((s) => s.id === requestServiceId);
+    const precio = Number(requestPrecio);
+    if (!svc || !precio || precio <= 0) {
+      setErrorMessage("Completa servicio y tu propuesta de precio.");
+      return;
+    }
+
+    setSendingRequest(true);
+    setErrorMessage("");
+
+    const payload = {
+      tipo: "solicitud_precio",
+      service_id: svc.id,
+      service_titulo: svc.titulo?.trim() || "Servicio",
+      precio_propuesto: precio,
+      precio_original: Number(svc.precio) || 0,
+      mensaje: requestMensaje.trim(),
+    };
+
+    const content = JSON.stringify(payload);
+
+    const { data, error } = await supabase
+      .from("messages")
+      .insert({
+        conversation_id: selectedId,
+        sender_id: userId,
+        content,
+        read: false,
+      })
+      .select("id, conversation_id, sender_id, content, created_at, read")
+      .single();
+
+    setSendingRequest(false);
+
+    if (error) {
+      setErrorMessage(error.message);
+      return;
+    }
+
+    if (data) {
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === data.id)) return prev;
+        return [...prev, data];
+      });
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.id === selectedId
+            ? {
+                ...c,
+                last_message: {
+                  content: data.content,
+                  created_at: data.created_at,
+                  sender_id: data.sender_id,
+                  read: data.read,
+                },
+              }
+            : c,
+        ),
+      );
+    }
+
+    setShowRequestForm(false);
+    setRequestPrecio("");
+    setRequestMensaje("");
+    maybeNotifyRecipient(selectedId, "💬 Solicitud de precio");
+  }
+
+  function handleAcceptSolicitudAndOffer(solicitud) {
+    const until = new Date();
+    until.setDate(until.getDate() + 30);
+
+    setOfferServiceId(solicitud.service_id);
+    setOfferPrecio(String(solicitud.precio_propuesto));
+    setOfferMensaje(
+      solicitud.mensaje
+        ? `En respuesta a tu solicitud: ${solicitud.mensaje}`
+        : "",
+    );
+    setOfferValidaHasta(until.toISOString().split("T")[0]);
+    setShowOfferForm(true);
+    setShowRequestForm(false);
+  }
+
+  async function handleRejectSpecialMessage(message) {
+    const special = parseJsonMessage(message.content);
+    if (!special || special.estado === "rechazada") return;
 
     setRejectingOfferId(message.id);
-    const updated = { ...offer, estado: "rechazada" };
+    const updated = { ...special, estado: "rechazada" };
     const content = JSON.stringify(updated);
 
     const { error } = await supabase
@@ -825,9 +1023,9 @@ export default function ChatPage() {
                     <ul className="flex flex-col gap-3">
                       {messages.map((message) => {
                         const isMine = message.sender_id === userId;
-                        const offer = parseOfferContent(message.content);
+                        const special = parseJsonMessage(message.content);
 
-                        if (offer) {
+                        if (special?.tipo === "oferta") {
                           return (
                             <li
                               key={message.id}
@@ -835,9 +1033,28 @@ export default function ChatPage() {
                             >
                               <OfertaMessageCard
                                 message={message}
-                                offer={offer}
+                                offer={special}
                                 isMine={isMine}
-                                onReject={handleRejectOffer}
+                                onReject={handleRejectSpecialMessage}
+                                rejecting={rejectingOfferId === message.id}
+                              />
+                            </li>
+                          );
+                        }
+
+                        if (special?.tipo === "solicitud_precio") {
+                          return (
+                            <li
+                              key={message.id}
+                              className={`flex ${isMine ? "justify-end" : "justify-start"}`}
+                            >
+                              <SolicitudPrecioMessageCard
+                                message={message}
+                                solicitud={special}
+                                isMine={isMine}
+                                isProvider={isProvider}
+                                onReject={handleRejectSpecialMessage}
+                                onAcceptAndOffer={handleAcceptSolicitudAndOffer}
                                 rejecting={rejectingOfferId === message.id}
                               />
                             </li>
@@ -878,20 +1095,104 @@ export default function ChatPage() {
                   )}
                 </div>
 
-                {isProvider && (
+                {(isProvider ||
+                  (!isProvider && otherParticipantServices.length > 0)) && (
                   <div
-                    className="border-t px-4 pt-3"
+                    className="flex flex-wrap gap-4 border-t px-4 pt-3"
                     style={{ borderColor: BRAND.border }}
                   >
-                    <button
-                      type="button"
-                      onClick={() => setShowOfferForm((v) => !v)}
-                      className="text-sm font-semibold transition-opacity hover:opacity-80"
-                      style={{ color: BRAND.primary }}
-                    >
-                      Enviar oferta 🏷️
-                    </button>
+                    {isProvider && (
+                      <button
+                        type="button"
+                        onClick={() => setShowOfferForm((v) => !v)}
+                        className="text-sm font-semibold transition-opacity hover:opacity-80"
+                        style={{ color: BRAND.primary }}
+                      >
+                        Enviar oferta 🏷️
+                      </button>
+                    )}
+                    {!isProvider && (
+                      <button
+                        type="button"
+                        onClick={() => setShowRequestForm((v) => !v)}
+                        className="text-sm font-semibold transition-opacity hover:opacity-80"
+                        style={{ color: "#c47d1a" }}
+                      >
+                        Solicitar precio 💬
+                      </button>
+                    )}
                   </div>
+                )}
+
+                {showRequestForm && !isProvider && (
+                  <form
+                    onSubmit={handleSendPriceRequest}
+                    className="border-t px-4 py-4"
+                    style={{
+                      borderColor: BRAND.border,
+                      backgroundColor: "#fef3c7",
+                    }}
+                  >
+                    <p className="mb-3 text-sm font-semibold text-[#1a1a1a]">
+                      Solicitar precio especial
+                    </p>
+                    <div className="flex flex-col gap-3">
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-[#444]">
+                          Servicio
+                        </label>
+                        <select
+                          value={requestServiceId}
+                          onChange={(e) => setRequestServiceId(e.target.value)}
+                          className={inputClass}
+                          style={{ borderColor: "#c47d1a" }}
+                          required
+                        >
+                          {otherParticipantServices.map((s) => (
+                            <option key={s.id} value={s.id}>
+                              {s.titulo}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-[#444]">
+                          Tu propuesta de precio (€)
+                        </label>
+                        <input
+                          type="number"
+                          min="0.01"
+                          step="0.01"
+                          value={requestPrecio}
+                          onChange={(e) => setRequestPrecio(e.target.value)}
+                          className={inputClass}
+                          style={{ borderColor: "#c47d1a" }}
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-[#444]">
+                          Explica tu solicitud
+                        </label>
+                        <textarea
+                          rows={3}
+                          value={requestMensaje}
+                          onChange={(e) => setRequestMensaje(e.target.value)}
+                          placeholder="Ej: Me quedaré 10 noches, ¿podrías hacerme un precio especial?"
+                          className={`${inputClass} resize-y`}
+                          style={{ borderColor: "#c47d1a" }}
+                        />
+                      </div>
+                      <button
+                        type="submit"
+                        disabled={sendingRequest}
+                        className="self-start rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                        style={{ backgroundColor: BRAND.primary }}
+                      >
+                        {sendingRequest ? "Enviando…" : "Enviar solicitud"}
+                      </button>
+                    </div>
+                  </form>
                 )}
 
                 {showOfferForm && isProvider && (
@@ -918,9 +1219,9 @@ export default function ChatPage() {
                           style={{ borderColor: BRAND.border }}
                           required
                         >
-                          {providerServices.map((svc) => (
-                            <option key={svc.id} value={svc.id}>
-                              {svc.titulo || svc.vertical}
+                          {providerServices.map((s) => (
+                            <option key={s.id} value={s.id}>
+                              {s.titulo}
                             </option>
                           ))}
                         </select>
