@@ -4,26 +4,7 @@ import { useLang } from "@/app/lib/LangContext";
 import { useTranslation } from "@/app/lib/i18n";
 import { BRAND, SERIF } from "./brand";
 
-const FEATURES = [
-  {
-    title: "Pago único protegido",
-    description:
-      "Retenido hasta que cada servicio se completa. Reembolso total si algo falla.",
-    Icon: LockIcon,
-  },
-  {
-    title: "Disponibilidad cruzada automática",
-    description:
-      "Ves si el alojamiento, la niñera y el cuidador están libres el mismo día antes de pagar.",
-    Icon: RectanglesIcon,
-  },
-  {
-    title: "Cancelación gratuita 48h",
-    description:
-      "Sin letras pequeñas. La política es visible antes de confirmar.",
-    Icon: CheckBadgeIcon,
-  },
-];
+const FEATURE_ICONS = [LockIcon, RectanglesIcon, CheckBadgeIcon];
 
 const COMPARISON_ROWS = [
   { before: "Un sitio para el alojamiento", after: "Todo en H&H" },
@@ -217,6 +198,13 @@ function BookingLineItem({
 export default function CheckoutSection() {
   const { lang } = useLang();
   const t = useTranslation(lang);
+  const c = t.checkout;
+
+  const features = [
+    { title: c.beneficio1, description: c.beneficio1desc, Icon: FEATURE_ICONS[0] },
+    { title: c.beneficio2, description: c.beneficio2desc, Icon: FEATURE_ICONS[1] },
+    { title: c.beneficio3, description: c.beneficio3desc, Icon: FEATURE_ICONS[2] },
+  ];
 
   return (
     <section
@@ -242,8 +230,7 @@ export default function CheckoutSection() {
             </span>
           </h2>
           <p className="mt-4 text-base leading-relaxed text-[#5c5c5c] sm:text-lg">
-            Antes tenías que buscar en varios sitios, coordinarte por separado y
-            hacer varios pagos sin ninguna garantía. Ya no.
+            {c.subtitulo}
           </p>
         </header>
 
@@ -254,7 +241,7 @@ export default function CheckoutSection() {
           {/* Columna izquierda */}
           <div>
             <ul className="flex flex-col gap-6">
-              {FEATURES.map((feature) => {
+              {features.map((feature) => {
                 const { Icon } = feature;
                 return (
                   <li key={feature.title} className="flex gap-4">
@@ -286,7 +273,7 @@ export default function CheckoutSection() {
               }}
             >
               <p className="text-[10px] font-semibold uppercase tracking-wider text-[#888]">
-                Cómo era antes · Cómo es ahora
+                {c.antesAhora}
               </p>
               <ul className="mt-4 flex flex-col gap-3">
                 {COMPARISON_ROWS.map((row) => (
@@ -404,17 +391,11 @@ export default function CheckoutSection() {
                   borderRadius: "12px",
                 }}
               >
-                Reservar y pagar
+                {c.reservar}
               </button>
 
               <p className="mt-4 text-center text-[11px] text-[#888]">
-                Pago retenido hasta que cada servicio se completa.
-              </p>
-              <p
-                className="mt-2 text-center text-[10px] italic"
-                style={{ color: BRAND.primary, opacity: 0.75 }}
-              >
-                Payment held securely · Full refund if anything goes wrong.
+                {c.pagoRetenido}
               </p>
             </div>
           </div>

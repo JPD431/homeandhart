@@ -42,6 +42,7 @@ function Pill({ children, variant = "dark" }) {
 export default function DoubleCTASection() {
   const { lang } = useLang();
   const t = useTranslation(lang);
+  const d = t.doubleCTA;
 
   return (
     <section
@@ -55,17 +56,17 @@ export default function DoubleCTASection() {
             className="text-[11px] font-semibold uppercase tracking-[0.2em] sm:text-xs"
             style={{ color: BRAND.primary }}
           >
-            {t.doubleCTA.titulo}
+            {d.titulo}
           </p>
           <h2
             id="double-cta-heading"
             className="mt-4 text-[#1a1a1a]"
             style={{ fontFamily: SERIF, fontSize: "32px" }}
           >
-            {t.doubleCTA.subtitulo}
+            {d.subtitulo}
           </h2>
           <p className="mt-3 text-base text-[#5c5c5c] sm:text-lg">
-            Tanto si viajas como si lo necesitas en tu ciudad.
+            {d.subtitulo2}
           </p>
         </header>
 
@@ -87,20 +88,19 @@ export default function DoubleCTASection() {
               className="text-[11px] font-semibold uppercase tracking-[0.15em]"
               style={{ color: "rgba(255, 255, 255, 0.5)" }}
             >
-              Si viajas
+              {d.siViajas}
             </p>
             <h3
               className="mt-3 text-2xl text-white"
               style={{ fontFamily: SERIF }}
             >
-              Reserva el viaje completo en un solo lugar
+              {d.siViajasTitle}
             </h3>
             <p
               className="mt-2 text-sm leading-relaxed"
               style={{ color: "rgba(255, 255, 255, 0.65)" }}
             >
-              Alojamiento, niñera y cuidado de mascota. Todo coordinado, un
-              pago.
+              {d.siViajasDesc}
             </p>
             <div className="mt-5 flex flex-wrap gap-1.5">
               {TRAVEL_PILLS.map((pill) => (
@@ -147,17 +147,16 @@ export default function DoubleCTASection() {
             }}
           >
             <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-[#aaa]">
-              Si estás en tu ciudad
+              {d.siCiudad}
             </p>
             <h3
               className="mt-3 text-2xl text-[#111]"
               style={{ fontFamily: SERIF }}
             >
-              Encuentra cuidado de confianza cerca de ti
+              {d.siCiudadTitle}
             </h3>
             <p className="mt-2 text-sm leading-relaxed text-[#5c5c5c]">
-              Niñera o cuidador de mascota verificado, disponible hoy mismo en
-              Madrid.
+              {d.siCiudadDesc}
             </p>
             <div className="mt-5 flex flex-wrap gap-1.5">
               {CITY_PILLS.map((pill) => (
@@ -207,7 +206,7 @@ export default function DoubleCTASection() {
             className="text-2xl text-white"
             style={{ fontFamily: SERIF }}
           >
-            ¿Eres niñera, cuidador o anfitrión?
+            {d.proveedor}
           </h3>
           <p
             className="mx-auto mt-3 text-sm leading-relaxed sm:text-base"
@@ -216,8 +215,7 @@ export default function DoubleCTASection() {
               color: "rgba(255, 255, 255, 0.6)",
             }}
           >
-            Únete a nuestra comunidad. Clientes que valoran la confianza y pagan
-            bien por ella.
+            {d.proveedorDesc}
           </p>
           <div className="mt-6 flex flex-wrap items-center justify-center gap-2.5">
             <button
@@ -228,7 +226,7 @@ export default function DoubleCTASection() {
                 color: "rgba(255, 255, 255, 0.8)",
               }}
             >
-              Saber más
+              {d.saberMas}
             </button>
             <button
               type="button"
@@ -239,7 +237,7 @@ export default function DoubleCTASection() {
                 fontWeight: 500,
               }}
             >
-              Crear mi perfil
+              {d.crearPerfil}
             </button>
           </div>
         </div>

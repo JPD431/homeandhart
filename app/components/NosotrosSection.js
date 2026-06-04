@@ -5,17 +5,18 @@ import { useTranslation } from "@/app/lib/i18n";
 import { BRAND, SERIF } from "./brand";
 
 const VALUES = [
-  { letter: "F", title: "Faith", description: "Confianza real." },
-  { letter: "A", title: "Attention", description: "Cada detalle." },
-  { letter: "M", title: "Magic", description: "Viajes tranquilos." },
-  { letter: "I", title: "Integrity", description: "Sin sorpresas." },
-  { letter: "L", title: "Links", description: "Vínculos reales." },
-  { letter: "Y", title: "You First", description: "Personas primero." },
+  { letter: "F", title: "Faith", descKey: "faith" },
+  { letter: "A", title: "Attention", descKey: "attention" },
+  { letter: "M", title: "Magic", descKey: "magic" },
+  { letter: "I", title: "Integrity", descKey: "integrity" },
+  { letter: "L", title: "Links", descKey: "links" },
+  { letter: "Y", title: "You First", descKey: "youFirst" },
 ];
 
 export default function NosotrosSection() {
   const { lang } = useLang();
   const t = useTranslation(lang);
+  const n = t.nosotros;
 
   return (
     <section
@@ -44,20 +45,20 @@ export default function NosotrosSection() {
               className="mt-4 leading-snug text-[#1a1a1a]"
               style={{ fontFamily: SERIF, fontSize: "30px" }}
             >
-              {t.nosotros.titulo}
+              {n.titulo}
             </h2>
             <p
               className="mt-5 text-[14px] text-[#5c5c5c]"
               style={{ lineHeight: 1.8 }}
             >
-              {t.nosotros.subtitulo}
+              {n.subtitulo}
             </p>
             <a
               href="#"
               className="mt-6 inline-block text-sm transition-opacity hover:opacity-80"
               style={{ color: BRAND.primary, fontWeight: 500 }}
             >
-              Conoce nuestra historia →
+              {n.historia}
             </a>
           </div>
 
@@ -99,7 +100,7 @@ export default function NosotrosSection() {
                   className="text-[#aaa]"
                   style={{ fontSize: "11px", lineHeight: 1.4 }}
                 >
-                  {value.description}
+                  {n[value.descKey]}
                 </p>
               </article>
             ))}

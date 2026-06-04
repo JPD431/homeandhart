@@ -4,27 +4,6 @@ import { useLang } from "@/app/lib/LangContext";
 import { useTranslation } from "@/app/lib/i18n";
 import { BRAND, SERIF } from "./brand";
 
-const CARDS = [
-  {
-    title: "Tu círculo de confianza",
-    description:
-      "Guarda tus proveedores favoritos. La próxima vez, reservas con un clic — sin buscar de nuevo.",
-    Icon: StarIcon,
-  },
-  {
-    title: "Reservas recurrentes",
-    description:
-      "¿Necesitas niñera todos los viernes? Configúralo una vez. Nosotros lo gestionamos automáticamente.",
-    Icon: CalendarIcon,
-  },
-  {
-    title: "Historial y facturas",
-    description:
-      "Todas tus reservas y facturas en un panel. Para empresas: facturas con IVA desglosado.",
-    Icon: ListIcon,
-  },
-];
-
 function StarIcon({ className }) {
   return (
     <svg
@@ -82,9 +61,18 @@ function ListIcon({ className }) {
   );
 }
 
+const CARD_ICONS = [StarIcon, CalendarIcon, ListIcon];
+
 export default function RetentionSection() {
   const { lang } = useLang();
   const t = useTranslation(lang);
+  const r = t.retention;
+
+  const cards = [
+    { title: r.circulo, description: r.circulodesc, Icon: CARD_ICONS[0] },
+    { title: r.recurrentes, description: r.recurrentesdesc, Icon: CARD_ICONS[1] },
+    { title: r.historial, description: r.historialdesc, Icon: CARD_ICONS[2] },
+  ];
 
   return (
     <section
@@ -107,7 +95,7 @@ export default function RetentionSection() {
               lineHeight: 1.15,
             }}
           >
-            Donde estés, estamos.
+            {t.footer.slogan}
           </p>
           <p
             className="mx-auto mt-6 text-base leading-relaxed sm:text-lg"
@@ -116,14 +104,14 @@ export default function RetentionSection() {
               color: "rgba(255, 255, 255, 0.6)",
             }}
           >
-            {t.retention.titulo}
+            {r.titulo}
             {lang === "es" &&
               " Somos el ecosistema que tu familia usa cada vez que lo necesita — en casa o de viaje."}
           </p>
         </header>
 
         <div className="mt-14 grid gap-5 md:grid-cols-3 md:gap-6">
-          {CARDS.map((card) => {
+          {cards.map((card) => {
             const { Icon } = card;
             return (
               <article
@@ -168,14 +156,13 @@ export default function RetentionSection() {
               className="text-xl text-white sm:text-2xl"
               style={{ fontFamily: SERIF }}
             >
-              Crea tu cuenta gratuita hoy
+              {r.cta}
             </h3>
             <p
               className="mt-2 max-w-md text-sm leading-relaxed sm:text-base"
               style={{ color: "rgba(255, 255, 255, 0.6)" }}
             >
-              Sin tarjeta. Sin compromiso. Busca gratis y paga solo cuando
-              reserves.
+              {r.ctadesc}
             </p>
           </div>
           <button
@@ -187,7 +174,7 @@ export default function RetentionSection() {
               fontWeight: 500,
             }}
           >
-            Crear cuenta gratis
+            {r.ctaBtn}
           </button>
         </div>
       </div>
