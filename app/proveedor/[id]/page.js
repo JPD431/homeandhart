@@ -4,6 +4,11 @@ import CalendarioDisponibilidad from "@/app/components/CalendarioDisponibilidad"
 import Navbar from "@/app/components/Navbar";
 import PreguntarButton from "@/app/components/PreguntarButton";
 import { BRAND, SERIF } from "@/app/components/brand";
+import {
+  formatOfertaValidaHasta,
+  getPrecioConDescuento,
+  isOfertaActiva,
+} from "@/app/lib/ofertas";
 import { supabase } from "@/lib/supabase";
 
 const DARK_BLUE = "#163a6b";
@@ -439,6 +444,10 @@ export default async function ProveedorPage({ params }) {
                 service.dias_disponibles,
               );
               const ocupadoProximos7Dias = ocupadosProximos7Dias.has(service.id);
+              const ofertaActiva = isOfertaActiva(service);
+              const precioConDescuento = ofertaActiva
+                ? getPrecioConDescuento(service.precio, service.oferta_descuento)
+                : null;
 
               return (
                 <li
@@ -474,12 +483,33 @@ export default async function ProveedorPage({ params }) {
                       <p className="mt-0.5 text-lg font-semibold text-[#1a1a1a]">
                         {service.titulo || vertical.label}
                       </p>
-                      <p
-                        className="mt-2 text-2xl font-bold"
-                        style={{ color: BRAND.primary }}
-                      >
-                        {formatPrice(service.precio, vertical.priceSuffix)}
-                      </p>
+                      {ofertaActiva && (
+                        <div
+                          className="mt-3 rounded-xl px-4 py-3 text-sm leading-relaxed text-[#92400e]"
+                          style={{ backgroundColor: "#fef3c7" }}
+                        >
+                          🏷️ {service.oferta_titulo || "Oferta especial"} —{" "}
+                          {service.oferta_descuento}% descuento · Válida hasta{" "}
+                          {formatOfertaValidaHasta(service.oferta_valida_hasta)}
+                        </div>
+                      )}
+                      {ofertaActiva ? (
+                        <div className="mt-2 flex flex-wrap items-baseline gap-2">
+                          <p className="text-lg text-[#888] line-through">
+                            {formatPrice(service.precio, vertical.priceSuffix)}
+                          </p>
+                          <p className="text-2xl font-bold text-green-700">
+                            {formatPrice(precioConDescuento, vertical.priceSuffix)}
+                          </p>
+                        </div>
+                      ) : (
+                        <p
+                          className="mt-2 text-2xl font-bold"
+                          style={{ color: BRAND.primary }}
+                        >
+                          {formatPrice(service.precio, vertical.priceSuffix)}
+                        </p>
+                      )}
                       {estanciaMinLabel && (
                         <p className="mt-1 text-xs text-[#888]">{estanciaMinLabel}</p>
                       )}

@@ -6,6 +6,7 @@ import "mapbox-gl/dist/mapbox-gl.css";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Navbar from "@/app/components/Navbar";
+import { isOfertaActiva } from "@/app/lib/ofertas";
 import { BRAND } from "@/app/components/brand";
 import { supabase } from "@/lib/supabase";
 
@@ -276,6 +277,7 @@ function ServiceCard({ service, index, isHovered, onHover, onLeave }) {
   const zone = getServiceZone(service, profile);
   const subtype = getSubtypeLabel(service);
   const languages = Array.isArray(profile.idiomas) ? profile.idiomas : [];
+  const ofertaActiva = isOfertaActiva(service);
 
   async function handlePreguntar() {
     setPreguntando(true);
@@ -332,6 +334,27 @@ function ServiceCard({ service, index, isHovered, onHover, onLeave }) {
       onMouseEnter={() => onHover(index)}
       onMouseLeave={onLeave}
     >
+      {(ofertaActiva || service.disponible_para_viajar) && (
+        <div className="flex flex-wrap gap-2 px-4 pt-3">
+          {ofertaActiva && (
+            <span
+              className="rounded-full px-2.5 py-1 text-[10px] font-semibold text-white"
+              style={{ backgroundColor: "#c47d1a" }}
+            >
+              🏷️ Oferta -{service.oferta_descuento}%
+            </span>
+          )}
+          {service.disponible_para_viajar && (
+            <span
+              className="rounded-full px-2.5 py-1 text-[10px] font-semibold text-white"
+              style={{ backgroundColor: BRAND.primary }}
+            >
+              ✈️ Viaja contigo
+            </span>
+          )}
+        </div>
+      )}
+
       <div className="relative">
         {service.foto_url ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -504,6 +527,9 @@ export default function BuscarPage() {
           location_lng,
           ciudad,
           proveedor_id,
+          oferta_descuento,
+          oferta_valida_hasta,
+          disponible_para_viajar,
           profiles!inner (
             nombre,
             apellido,

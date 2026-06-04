@@ -167,6 +167,12 @@ const EMPTY_SERVICE_DETAILS = {
     reserva_inmediata: false,
     direccion_exacta: "",
     telefono_contacto: "",
+    oferta_activa: false,
+    oferta_titulo: "",
+    oferta_descuento: "",
+    oferta_valida_hasta: "",
+    oferta_descripcion: "",
+    disponible_para_viajar: false,
   },
   ninos: {
     titulo: "",
@@ -185,6 +191,12 @@ const EMPTY_SERVICE_DETAILS = {
     telefono_contacto: "",
     modalidad: "domicilio_cliente",
     direccion_exacta: "",
+    oferta_activa: false,
+    oferta_titulo: "",
+    oferta_descuento: "",
+    oferta_valida_hasta: "",
+    oferta_descripcion: "",
+    disponible_para_viajar: false,
   },
   mascotas: {
     titulo: "",
@@ -202,6 +214,12 @@ const EMPTY_SERVICE_DETAILS = {
     telefono_contacto: "",
     modalidad: "domicilio_cliente",
     direccion_exacta: "",
+    oferta_activa: false,
+    oferta_titulo: "",
+    oferta_descuento: "",
+    oferta_valida_hasta: "",
+    oferta_descripcion: "",
+    disponible_para_viajar: false,
   },
 };
 
@@ -408,6 +426,145 @@ function ModalidadServiceSelector({ serviceId, value, onChange }) {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function OfertaEspecialSection({ serviceId, details, onChange }) {
+  const enabled = details.oferta_activa === true;
+  const showViajar = serviceId === "ninos" || serviceId === "mascotas";
+
+  function update(field, val) {
+    onChange({ ...details, [field]: val });
+  }
+
+  return (
+    <div
+      className="mt-6 border-t pt-6"
+      style={{ borderColor: BRAND.border }}
+    >
+      <div className="flex items-center justify-between gap-4">
+        <p className="text-sm font-semibold text-[#1a1a1a]">
+          ¿Tienes una oferta especial?
+        </p>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={enabled}
+          onClick={() => update("oferta_activa", !enabled)}
+          className="relative h-7 w-12 shrink-0 rounded-full transition-colors"
+          style={{
+            backgroundColor: enabled ? BRAND.primary : "#d1d5db",
+          }}
+        >
+          <span
+            className="absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform"
+            style={{
+              left: enabled ? "calc(100% - 1.625rem)" : "0.125rem",
+            }}
+          />
+        </button>
+      </div>
+
+      {enabled && (
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <label className="mb-1.5 block text-xs font-medium text-[#444]">
+              Título de la oferta
+            </label>
+            <input
+              type="text"
+              value={details.oferta_titulo}
+              onChange={(e) => update("oferta_titulo", e.target.value)}
+              placeholder="Ej: Semana de verano — 20% descuento"
+              className={inputClass}
+              style={{ borderColor: BRAND.border }}
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-[#444]">
+              Descuento (%)
+            </label>
+            <input
+              type="number"
+              min="1"
+              max="90"
+              value={details.oferta_descuento}
+              onChange={(e) => update("oferta_descuento", e.target.value)}
+              className={inputClass}
+              style={{ borderColor: BRAND.border }}
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-[#444]">
+              Válida hasta
+            </label>
+            <input
+              type="date"
+              min={new Date().toISOString().split("T")[0]}
+              value={details.oferta_valida_hasta}
+              onChange={(e) => update("oferta_valida_hasta", e.target.value)}
+              className={inputClass}
+              style={{ borderColor: BRAND.border }}
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <label className="mb-1.5 block text-xs font-medium text-[#444]">
+              Descripción de la oferta
+            </label>
+            <textarea
+              rows={3}
+              value={details.oferta_descripcion}
+              onChange={(e) => update("oferta_descripcion", e.target.value)}
+              placeholder="Cuéntanos más sobre esta oferta..."
+              className={`${inputClass} resize-y`}
+              style={{ borderColor: BRAND.border }}
+            />
+          </div>
+          {showViajar && (
+            <div className="sm:col-span-2">
+              <div className="flex items-center justify-between gap-4 rounded-xl border px-4 py-3"
+                style={{ borderColor: BRAND.border }}
+              >
+                <div>
+                  <p className="text-sm font-semibold text-[#1a1a1a]">
+                    Disponible para viajar
+                  </p>
+                  <p className="mt-0.5 text-xs text-[#666]">
+                    Puedo desplazarme fuera de mi ciudad
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={details.disponible_para_viajar === true}
+                  onClick={() =>
+                    update(
+                      "disponible_para_viajar",
+                      !details.disponible_para_viajar,
+                    )
+                  }
+                  className="relative h-7 w-12 shrink-0 rounded-full transition-colors"
+                  style={{
+                    backgroundColor: details.disponible_para_viajar
+                      ? BRAND.primary
+                      : "#d1d5db",
+                  }}
+                >
+                  <span
+                    className="absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform"
+                    style={{
+                      left: details.disponible_para_viajar
+                        ? "calc(100% - 1.625rem)"
+                        : "0.125rem",
+                    }}
+                  />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -1126,6 +1283,11 @@ export default function SerProveedorPage() {
       // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS estancia_maxima integer;
       // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS antelacion_minima integer DEFAULT 24;
       // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS dias_disponibles text[];
+      // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS oferta_titulo text;
+      // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS oferta_descuento integer;
+      // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS oferta_valida_hasta date;
+      // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS oferta_descripcion text;
+      // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS disponible_para_viajar boolean DEFAULT false;
       const ciudadTrimmed = ciudad.trim();
       const detailsForInsert = await geocodeLocationZonesForServices(
         selectedServices,
@@ -1168,6 +1330,24 @@ export default function SerProveedorPage() {
             serviceId === "alojamiento" ? null : details.modalidad || null,
           tipo_alojamiento:
             serviceId === "alojamiento" ? details.tipo_alojamiento || null : null,
+          oferta_titulo: details.oferta_activa
+            ? details.oferta_titulo?.trim() || null
+            : null,
+          oferta_descuento:
+            details.oferta_activa && details.oferta_descuento
+              ? Math.min(90, Math.max(1, Number(details.oferta_descuento)))
+              : null,
+          oferta_valida_hasta:
+            details.oferta_activa && details.oferta_valida_hasta
+              ? details.oferta_valida_hasta
+              : null,
+          oferta_descripcion: details.oferta_activa
+            ? details.oferta_descripcion?.trim() || null
+            : null,
+          disponible_para_viajar:
+            details.oferta_activa &&
+            (serviceId === "ninos" || serviceId === "mascotas") &&
+            details.disponible_para_viajar === true,
         };
       });
 
@@ -1379,6 +1559,13 @@ export default function SerProveedorPage() {
                   serviceId={serviceId}
                   details={serviceDetails[serviceId]}
                   onLocationZoneBlur={handleLocationZoneBlur}
+                  onChange={(details) =>
+                    updateServiceDetails(serviceId, details)
+                  }
+                />
+                <OfertaEspecialSection
+                  serviceId={serviceId}
+                  details={serviceDetails[serviceId]}
                   onChange={(details) =>
                     updateServiceDetails(serviceId, details)
                   }

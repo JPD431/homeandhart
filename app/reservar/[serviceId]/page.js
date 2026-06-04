@@ -11,6 +11,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Navbar from "@/app/components/Navbar";
 import { BRAND, SERIF } from "@/app/components/brand";
+import { getPrecioEfectivo, isOfertaActiva } from "@/app/lib/ofertas";
 import { supabase } from "@/lib/supabase";
 
 const stripePromise = loadStripe(
@@ -453,7 +454,7 @@ function getCardBrandLabel(brand) {
 }
 
 function calculateServiceBasePrice(svc, { fechaInicio, fechaFin, duracionHoras, mainVertical }) {
-  const unitPrice = Number(svc?.precio) || 0;
+  const unitPrice = getPrecioEfectivo(svc);
   if (!unitPrice) return { base: 0, detail: "", ready: false };
 
   const v = svc.vertical;
@@ -1005,6 +1006,8 @@ export default function ReservarPage() {
   };
   const profile = service?.profiles ?? {};
   const unitPrice = Number(service?.precio) || 0;
+  const precioEfectivo = service ? getPrecioEfectivo(service) : 0;
+  const ofertaActiva = service ? isOfertaActiva(service) : false;
   const cancelPolicy = getCancelPolicy(service?.cancellation_policy);
 
   const serviceStartAt = useMemo(
@@ -1467,9 +1470,22 @@ export default function ReservarPage() {
                 <p className="text-xs font-medium uppercase tracking-wide text-[#888]">
                   {verticalConfig.label}
                 </p>
-                <p className="text-2xl font-bold" style={{ color: verticalConfig.color }}>
-                  {unitPrice ? `${unitPrice}€${verticalConfig.priceSuffix}` : "Consultar"}
-                </p>
+                {ofertaActiva ? (
+                  <div className="flex flex-wrap items-baseline gap-2">
+                    <p className="text-lg text-[#888] line-through">
+                      {unitPrice ? `${unitPrice}€${verticalConfig.priceSuffix}` : "Consultar"}
+                    </p>
+                    <p className="text-2xl font-bold text-green-700">
+                      {precioEfectivo
+                        ? `${precioEfectivo}€${verticalConfig.priceSuffix}`
+                        : "Consultar"}
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-2xl font-bold" style={{ color: verticalConfig.color }}>
+                    {unitPrice ? `${unitPrice}€${verticalConfig.priceSuffix}` : "Consultar"}
+                  </p>
+                )}
               </div>
             </div>
 
