@@ -341,8 +341,8 @@ export default function CheckoutSection() {
               </p>
               <BookingLineItem
                 Icon={HomeIcon}
-                name="Apartamento Salamanca · 3 noches"
-                detail="Ana P. · NRU registrado"
+                name={c.demoAparto}
+                detail={c.demoNru}
                 tag="Pet-friendly · Verified"
                 price="210€"
               />
@@ -352,15 +352,15 @@ export default function CheckoutSection() {
               </p>
               <BookingLineItem
                 Icon={PersonIcon}
-                name="Niñera · sábado tarde (4h)"
-                detail="Sara R. · Certificada"
+                name={c.demoBaby}
+                detail={c.demoCert}
                 tag="English native"
                 price="80€"
               />
               <BookingLineItem
                 Icon={PetIcon}
-                name="Cuidador mascota · 2 días"
-                detail="Miguel L. · Paseos incluidos"
+                name={c.demoPet}
+                detail={c.demoPaseos}
                 tag="English fluent"
                 price="70€"
               />
