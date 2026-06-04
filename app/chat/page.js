@@ -1,10 +1,14 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Navbar from "@/app/components/Navbar";
 import { BRAND, SERIF } from "@/app/components/brand";
 import { supabase } from "@/lib/supabase";
+
+const inputClass =
+  "w-full rounded-xl border px-4 py-2.5 text-sm text-[#1a1a1a] outline-none focus:ring-2 focus:ring-[#1d4f91]/30";
 
 function getInitials(nombre, apellido) {
   const first = nombre?.trim()?.[0] ?? "";
@@ -37,6 +41,101 @@ function formatMessageTime(value) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function parseOfferContent(content) {
+  if (!content || typeof content !== "string") return null;
+  const trimmed = content.trim();
+  if (!trimmed.startsWith("{")) return null;
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (parsed?.tipo === "oferta") return parsed;
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function getMessagePreview(content) {
+  if (parseOfferContent(content)) return "🏷️ Oferta especial";
+  return content;
+}
+
+function formatOfferValidUntil(dateStr) {
+  if (!dateStr) return "";
+  const [y, m, d] = dateStr.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString("es-ES", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function OfertaMessageCard({ message, offer, isMine, onReject, rejecting }) {
+  const rechazada = offer.estado === "rechazada";
+  const expirada = offer.valida_hasta < new Date().toISOString().split("T")[0];
+  const canRespond = !isMine && !rechazada && !expirada;
+
+  const acceptHref = `/reservar/${offer.service_id}?precio_especial=${encodeURIComponent(offer.precio_especial)}&valida_hasta=${encodeURIComponent(offer.valida_hasta)}`;
+
+  return (
+    <div
+      className="max-w-[min(100%,320px)] rounded-2xl border p-4 text-sm"
+      style={{
+        backgroundColor: "#e8f0fb",
+        borderColor: "#1d4f91",
+        color: "#1a1a1a",
+      }}
+    >
+      <p className="font-semibold" style={{ color: "#1d4f91" }}>
+        🏷️ Oferta especial
+      </p>
+      <p className="mt-2 font-medium text-[#1a1a1a]">{offer.service_titulo}</p>
+      <div className="mt-2 flex flex-wrap items-baseline gap-2">
+        {offer.precio_original > 0 && (
+          <span className="text-[#888] line-through">
+            {Number(offer.precio_original).toFixed(2)}€
+          </span>
+        )}
+        <span className="text-lg font-bold text-green-700">
+          {Number(offer.precio_especial).toFixed(2)}€
+        </span>
+      </div>
+      <p className="mt-2 text-xs text-[#555]">
+        Válida hasta {formatOfferValidUntil(offer.valida_hasta)}
+      </p>
+      {offer.mensaje && (
+        <p className="mt-3 whitespace-pre-wrap text-[#333]">{offer.mensaje}</p>
+      )}
+      {rechazada && (
+        <p className="mt-3 text-xs font-medium text-[#888]">Oferta rechazada</p>
+      )}
+      {expirada && !rechazada && (
+        <p className="mt-3 text-xs font-medium text-[#888]">Oferta caducada</p>
+      )}
+      {canRespond && (
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Link
+            href={acceptHref}
+            className="rounded-lg bg-green-600 px-4 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90"
+          >
+            Aceptar oferta
+          </Link>
+          <button
+            type="button"
+            onClick={() => onReject(message)}
+            disabled={rejecting}
+            className="rounded-lg bg-[#e5e5e5] px-4 py-2 text-xs font-semibold text-[#444] transition-opacity hover:opacity-90 disabled:opacity-60"
+          >
+            {rejecting ? "…" : "Rechazar"}
+          </button>
+        </div>
+      )}
+      <p className="mt-2 text-[10px] opacity-70">
+        {formatMessageTime(message.created_at)}
+      </p>
+    </div>
+  );
 }
 
 function filterProtectedContent(text) {
@@ -83,8 +182,17 @@ export default function ChatPage() {
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [providerServices, setProviderServices] = useState([]);
+  const [showOfferForm, setShowOfferForm] = useState(false);
+  const [offerServiceId, setOfferServiceId] = useState("");
+  const [offerPrecio, setOfferPrecio] = useState("");
+  const [offerValidaHasta, setOfferValidaHasta] = useState("");
+  const [offerMensaje, setOfferMensaje] = useState("");
+  const [sendingOffer, setSendingOffer] = useState(false);
+  const [rejectingOfferId, setRejectingOfferId] = useState(null);
 
   const messagesEndRef = useRef(null);
+  const isProvider = providerServices.length > 0;
 
   const loadConversations = useCallback(async (uid) => {
     const { data, error } = await supabase
@@ -185,6 +293,25 @@ export default function ChatPage() {
   );
 
   useEffect(() => {
+    if (!userId) return;
+
+    async function loadProviderServices() {
+      const { data } = await supabase
+        .from("services")
+        .select("id, titulo, precio, vertical")
+        .eq("proveedor_id", userId)
+        .eq("disponible", true)
+        .order("titulo", { ascending: true });
+
+      const list = data ?? [];
+      setProviderServices(list);
+      setOfferServiceId((prev) => prev || list[0]?.id || "");
+    }
+
+    loadProviderServices();
+  }, [userId]);
+
+  useEffect(() => {
     async function init() {
       const {
         data: { user },
@@ -264,6 +391,21 @@ export default function ChatPage() {
           );
         },
       )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "messages",
+          filter: `conversation_id=eq.${selectedId}`,
+        },
+        (payload) => {
+          const updated = payload.new;
+          setMessages((prev) =>
+            prev.map((m) => (m.id === updated.id ? { ...m, ...updated } : m)),
+          );
+        },
+      )
       .subscribe();
 
     return () => {
@@ -331,6 +473,105 @@ export default function ChatPage() {
 
     setDraft("");
     maybeNotifyRecipient(selectedId, filteredContent);
+  }
+
+  async function handleSendOffer(e) {
+    e.preventDefault();
+    if (!userId || !selectedId || sendingOffer) return;
+
+    const svc = providerServices.find((s) => s.id === offerServiceId);
+    const precio = Number(offerPrecio);
+    if (!svc || !precio || precio <= 0 || !offerValidaHasta) {
+      setErrorMessage("Completa servicio, precio especial y fecha de validez.");
+      return;
+    }
+
+    setSendingOffer(true);
+    setErrorMessage("");
+
+    const payload = {
+      tipo: "oferta",
+      service_id: svc.id,
+      service_titulo: svc.titulo?.trim() || "Servicio",
+      precio_especial: precio,
+      precio_original: Number(svc.precio) || 0,
+      valida_hasta: offerValidaHasta,
+      mensaje: offerMensaje.trim(),
+    };
+
+    // -- ALTER TABLE messages ADD COLUMN IF NOT EXISTS tipo text DEFAULT 'texto';
+    const content = JSON.stringify(payload);
+
+    const { data, error } = await supabase
+      .from("messages")
+      .insert({
+        conversation_id: selectedId,
+        sender_id: userId,
+        content,
+        read: false,
+      })
+      .select("id, conversation_id, sender_id, content, created_at, read")
+      .single();
+
+    setSendingOffer(false);
+
+    if (error) {
+      setErrorMessage(error.message);
+      return;
+    }
+
+    if (data) {
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === data.id)) return prev;
+        return [...prev, data];
+      });
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.id === selectedId
+            ? {
+                ...c,
+                last_message: {
+                  content: data.content,
+                  created_at: data.created_at,
+                  sender_id: data.sender_id,
+                  read: data.read,
+                },
+              }
+            : c,
+        ),
+      );
+    }
+
+    setShowOfferForm(false);
+    setOfferPrecio("");
+    setOfferValidaHasta("");
+    setOfferMensaje("");
+    maybeNotifyRecipient(selectedId, "🏷️ Oferta especial");
+  }
+
+  async function handleRejectOffer(message) {
+    const offer = parseOfferContent(message.content);
+    if (!offer || offer.estado === "rechazada") return;
+
+    setRejectingOfferId(message.id);
+    const updated = { ...offer, estado: "rechazada" };
+    const content = JSON.stringify(updated);
+
+    const { error } = await supabase
+      .from("messages")
+      .update({ content })
+      .eq("id", message.id);
+
+    setRejectingOfferId(null);
+
+    if (error) {
+      setErrorMessage(error.message);
+      return;
+    }
+
+    setMessages((prev) =>
+      prev.map((m) => (m.id === message.id ? { ...m, content } : m)),
+    );
   }
 
   async function maybeNotifyRecipient(conversationId, messageContent) {
@@ -511,8 +752,9 @@ export default function ChatPage() {
                             )}
                           </div>
                           <p className="mt-0.5 truncate text-xs text-[#666]">
-                            {conversation.last_message?.content ||
-                              "Sin mensajes todavía"}
+                            {conversation.last_message?.content
+                              ? getMessagePreview(conversation.last_message.content)
+                              : "Sin mensajes todavía"}
                           </p>
                         </div>
                         {unread && (
@@ -583,6 +825,25 @@ export default function ChatPage() {
                     <ul className="flex flex-col gap-3">
                       {messages.map((message) => {
                         const isMine = message.sender_id === userId;
+                        const offer = parseOfferContent(message.content);
+
+                        if (offer) {
+                          return (
+                            <li
+                              key={message.id}
+                              className={`flex ${isMine ? "justify-end" : "justify-start"}`}
+                            >
+                              <OfertaMessageCard
+                                message={message}
+                                offer={offer}
+                                isMine={isMine}
+                                onReject={handleRejectOffer}
+                                rejecting={rejectingOfferId === message.id}
+                              />
+                            </li>
+                          );
+                        }
+
                         return (
                           <li
                             key={message.id}
@@ -605,9 +866,7 @@ export default function ChatPage() {
                               <p className="whitespace-pre-wrap break-words">
                                 {message.content}
                               </p>
-                              <p
-                                className="mt-1 text-[10px] opacity-70"
-                              >
+                              <p className="mt-1 text-[10px] opacity-70">
                                 {formatMessageTime(message.created_at)}
                               </p>
                             </div>
@@ -618,6 +877,109 @@ export default function ChatPage() {
                     </ul>
                   )}
                 </div>
+
+                {isProvider && (
+                  <div
+                    className="border-t px-4 pt-3"
+                    style={{ borderColor: BRAND.border }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setShowOfferForm((v) => !v)}
+                      className="text-sm font-semibold transition-opacity hover:opacity-80"
+                      style={{ color: BRAND.primary }}
+                    >
+                      Enviar oferta 🏷️
+                    </button>
+                  </div>
+                )}
+
+                {showOfferForm && isProvider && (
+                  <form
+                    onSubmit={handleSendOffer}
+                    className="border-t px-4 py-4"
+                    style={{
+                      borderColor: BRAND.border,
+                      backgroundColor: BRAND.light,
+                    }}
+                  >
+                    <p className="mb-3 text-sm font-semibold text-[#1a1a1a]">
+                      Nueva oferta personalizada
+                    </p>
+                    <div className="flex flex-col gap-3">
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-[#444]">
+                          Servicio
+                        </label>
+                        <select
+                          value={offerServiceId}
+                          onChange={(e) => setOfferServiceId(e.target.value)}
+                          className={inputClass}
+                          style={{ borderColor: BRAND.border }}
+                          required
+                        >
+                          {providerServices.map((svc) => (
+                            <option key={svc.id} value={svc.id}>
+                              {svc.titulo || svc.vertical}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-[#444]">
+                            Precio especial (€)
+                          </label>
+                          <input
+                            type="number"
+                            min="0.01"
+                            step="0.01"
+                            value={offerPrecio}
+                            onChange={(e) => setOfferPrecio(e.target.value)}
+                            className={inputClass}
+                            style={{ borderColor: BRAND.border }}
+                            required
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-xs font-medium text-[#444]">
+                            Válida hasta
+                          </label>
+                          <input
+                            type="date"
+                            min={new Date().toISOString().split("T")[0]}
+                            value={offerValidaHasta}
+                            onChange={(e) => setOfferValidaHasta(e.target.value)}
+                            className={inputClass}
+                            style={{ borderColor: BRAND.border }}
+                            required
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-[#444]">
+                          Mensaje de la oferta
+                        </label>
+                        <textarea
+                          rows={3}
+                          value={offerMensaje}
+                          onChange={(e) => setOfferMensaje(e.target.value)}
+                          placeholder="Ej: Te ofrezco un precio especial para estas fechas..."
+                          className={`${inputClass} resize-y`}
+                          style={{ borderColor: BRAND.border }}
+                        />
+                      </div>
+                      <button
+                        type="submit"
+                        disabled={sendingOffer}
+                        className="self-start rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                        style={{ backgroundColor: BRAND.primary }}
+                      >
+                        {sendingOffer ? "Enviando…" : "Enviar oferta"}
+                      </button>
+                    </div>
+                  </form>
+                )}
 
                 <form
                   onSubmit={handleSend}

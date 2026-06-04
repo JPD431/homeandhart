@@ -7,12 +7,12 @@ import {
   useElements,
   useStripe,
 } from "@stripe/react-stripe-js";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Navbar from "@/app/components/Navbar";
 import { BRAND, SERIF } from "@/app/components/brand";
 import { applyBestDiscountToBase } from "@/app/lib/descuentosDuracion";
-import { getPrecioEfectivo, isOfertaActiva } from "@/app/lib/ofertas";
+import { getHoyDateStr, getPrecioEfectivo, isOfertaActiva } from "@/app/lib/ofertas";
 import { supabase } from "@/lib/supabase";
 
 const stripePromise = loadStripe(
@@ -457,12 +457,41 @@ function getCardBrandLabel(brand) {
 function calculateServiceBasePrice(
   svc,
   { fechaInicio, fechaFin, duracionHoras, mainVertical },
+  unitPriceOverride = null,
 ) {
-  const unitPrice = Number(svc.precio) || 0;
+  const useOverride =
+    unitPriceOverride != null && Number(unitPriceOverride) > 0;
+  const unitPrice = useOverride
+    ? Number(unitPriceOverride)
+    : Number(svc.precio) || 0;
   if (!unitPrice) return { base: 0, detail: "", ready: false, discountPct: 0, discountSource: null };
 
   const v = svc.vertical;
   const dateContext = { fechaInicio, fechaFin, duracionHoras, mainVertical };
+
+  function finalizeBase(subtotal, detail, ready, duration) {
+    if (useOverride) {
+      return {
+        base: subtotal,
+        detail,
+        ready,
+        discountPct: 0,
+        discountSource: null,
+      };
+    }
+    const { total, pct, source } = applyBestDiscountToBase(
+      subtotal,
+      svc,
+      duration,
+    );
+    return {
+      base: total,
+      detail,
+      ready,
+      discountPct: pct,
+      discountSource: source,
+    };
+  }
 
   if (v === "ninos") {
     let hours = Number(duracionHoras) || 0;
@@ -481,18 +510,12 @@ function calculateServiceBasePrice(
     }
     const subtotal = unitPrice * hours;
     const duration = getServiceDuration(svc, dateContext);
-    const { total, pct, source } = applyBestDiscountToBase(
+    return finalizeBase(
       subtotal,
-      svc,
+      `${hours} hora${hours > 1 ? "s" : ""}`,
+      true,
       duration,
     );
-    return {
-      base: total,
-      detail: `${hours} hora${hours > 1 ? "s" : ""}`,
-      ready: true,
-      discountPct: pct,
-      discountSource: source,
-    };
   }
 
   const start = fechaInicio;
@@ -510,18 +533,12 @@ function calculateServiceBasePrice(
   const unit = v === "alojamiento" ? "noche" : "día";
   const subtotal = unitPrice * days;
   const duration = getServiceDuration(svc, dateContext);
-  const { total, pct, source } = applyBestDiscountToBase(
+  return finalizeBase(
     subtotal,
-    svc,
+    `${days} ${unit}${days > 1 ? "s" : ""}`,
+    true,
     duration,
   );
-  return {
-    base: total,
-    detail: `${days} ${unit}${days > 1 ? "s" : ""}`,
-    ready: true,
-    discountPct: pct,
-    discountSource: source,
-  };
 }
 
 function buildBookingPayload({
@@ -860,7 +877,10 @@ function CheckoutForm({
 export default function ReservarPage() {
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
   const serviceId = params.serviceId;
+  const precioEspecialParam = searchParams.get("precio_especial");
+  const validaHastaParam = searchParams.get("valida_hasta");
 
   const [loading, setLoading] = useState(true);
   const [service, setService] = useState(null);
@@ -1044,8 +1064,15 @@ export default function ReservarPage() {
   };
   const profile = service?.profiles ?? {};
   const unitPrice = Number(service?.precio) || 0;
+  const precioEspecialChat = useMemo(() => {
+    const precio = Number(precioEspecialParam);
+    if (!precio || precio <= 0 || !validaHastaParam) return null;
+    if (validaHastaParam < getHoyDateStr()) return null;
+    return precio;
+  }, [precioEspecialParam, validaHastaParam]);
   const precioEfectivo = service ? getPrecioEfectivo(service) : 0;
-  const ofertaActiva = service ? isOfertaActiva(service) : false;
+  const ofertaActiva =
+    service && !precioEspecialChat ? isOfertaActiva(service) : false;
   const cancelPolicy = getCancelPolicy(service?.cancellation_policy);
 
   const serviceStartAt = useMemo(
@@ -1121,7 +1148,9 @@ export default function ReservarPage() {
 
     const dateContext = { fechaInicio, fechaFin, duracionHoras, mainVertical: vertical };
     const lines = selectedServices.map((svc) => {
-      const calc = calculateServiceBasePrice(svc, dateContext);
+      const unitOverride =
+        svc.id === service.id ? precioEspecialChat : null;
+      const calc = calculateServiceBasePrice(svc, dateContext, unitOverride);
       let ready = calc.ready;
       let detail = calc.detail;
 
@@ -1193,7 +1222,15 @@ export default function ReservarPage() {
       ready: true,
       detail: lines[0]?.detail || "",
     };
-  }, [service, selectedServices, vertical, fechaInicio, fechaFin, duracionHoras]);
+  }, [
+    service,
+    selectedServices,
+    vertical,
+    fechaInicio,
+    fechaFin,
+    duracionHoras,
+    precioEspecialChat,
+  ]);
 
   const precioListo =
     priceSummary.ready && !calendarioError && !disponibilidadChecking;
@@ -1510,7 +1547,23 @@ export default function ReservarPage() {
                 <p className="text-xs font-medium uppercase tracking-wide text-[#888]">
                   {verticalConfig.label}
                 </p>
-                {ofertaActiva ? (
+                {precioEspecialChat ? (
+                  <div>
+                    <p className="text-sm font-medium text-green-700">
+                      Precio especial acordado con el proveedor 🏷️
+                    </p>
+                    <div className="mt-1 flex flex-wrap items-baseline gap-2">
+                      <p className="text-lg text-[#888] line-through">
+                        {unitPrice
+                          ? `${unitPrice}€${verticalConfig.priceSuffix}`
+                          : "Consultar"}
+                      </p>
+                      <p className="text-2xl font-bold text-green-700">
+                        {precioEspecialChat}€{verticalConfig.priceSuffix}
+                      </p>
+                    </div>
+                  </div>
+                ) : ofertaActiva ? (
                   <div className="flex flex-wrap items-baseline gap-2">
                     <p className="text-lg text-[#888] line-through">
                       {unitPrice ? `${unitPrice}€${verticalConfig.priceSuffix}` : "Consultar"}
@@ -1822,6 +1875,11 @@ export default function ReservarPage() {
                   <p className="mt-1 text-xs text-[#888]">
                     Gastos de gestión incluidos
                   </p>
+                  {precioEspecialChat && (
+                    <p className="mt-2 text-sm font-medium text-green-700">
+                      Precio especial acordado con el proveedor 🏷️
+                    </p>
+                  )}
                   {priceSummary.lines.some(
                     (line) =>
                       line.discountSource === "duration" && line.discountPct > 0,
