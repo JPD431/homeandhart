@@ -64,8 +64,7 @@ function PetCareIcon({ className }) {
 const ECOSYSTEM = [
   {
     titleKey: "alojamiento",
-    description:
-      "Apartamentos con NRU registrado. Sin sorpresas al llegar.",
+    descKey: "alojDesc",
     items: [
       "Pet-friendly disponible",
       "NRU verificado",
@@ -75,8 +74,7 @@ const ECOSYSTEM = [
   },
   {
     titleKey: "ninos",
-    description:
-      "Niñeras certificadas con antecedentes verificados. En tu ciudad o mientras viajas.",
+    descKey: "ninosDesc",
     items: [
       "Antecedentes verificados",
       "Idiomas indicados",
@@ -86,8 +84,7 @@ const ECOSYSTEM = [
   },
   {
     titleKey: "mascotas",
-    description:
-      "Cuidadores verificados para que tu mascota esté bien mientras tú disfrutas.",
+    descKey: "mascotasDesc",
     items: [
       "Paseos incluidos",
       "Fotos y actualizaciones",
@@ -100,6 +97,7 @@ const ECOSYSTEM = [
 export default function EcosystemSection() {
   const { lang } = useLang();
   const t = useTranslation(lang);
+  const e = t.ecosystem;
 
   return (
     <section
@@ -149,7 +147,7 @@ export default function EcosystemSection() {
                     color: "rgba(255, 255, 255, 0.7)",
                   }}
                 >
-                  Disponible ahora
+                  {e.disponible}
                 </span>
                 <span className="mt-5 flex h-11 w-11 items-center justify-center rounded-xl bg-[rgba(255,255,255,0.1)] text-white">
                   <Icon className="h-6 w-6" />
@@ -164,7 +162,7 @@ export default function EcosystemSection() {
                   className="mt-2 text-sm leading-relaxed sm:text-base"
                   style={{ color: "rgba(255, 255, 255, 0.6)" }}
                 >
-                  {service.description}
+                  {e[service.descKey]}
                 </p>
                 <ul className="mt-6 flex flex-col gap-2.5">
                   {service.items.map((item) => (

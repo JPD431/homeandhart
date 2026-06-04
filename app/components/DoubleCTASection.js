@@ -6,20 +6,6 @@ import { BRAND, SERIF } from "./brand";
 
 const DARK_BLUE = "#163a6b";
 
-const TRAVEL_PILLS = [
-  "Alojamiento verificado",
-  "Niñera certificada",
-  "Cuidador mascotas",
-  "Un pago",
-];
-
-const CITY_PILLS = [
-  "Disponible hoy",
-  "Verificado",
-  "Pago protegido",
-  "Sin compromiso",
-];
-
 function Pill({ children, variant = "dark" }) {
   const isDark = variant === "dark";
   return (
@@ -43,6 +29,9 @@ export default function DoubleCTASection() {
   const { lang } = useLang();
   const t = useTranslation(lang);
   const d = t.doubleCTA;
+
+  const travelPills = [d.pill1, d.pill2, d.pill3, d.pill4];
+  const cityPills = [d.pill5, d.pill6, d.pill7, d.pill8];
 
   return (
     <section
@@ -103,7 +92,7 @@ export default function DoubleCTASection() {
               {d.siViajasDesc}
             </p>
             <div className="mt-5 flex flex-wrap gap-1.5">
-              {TRAVEL_PILLS.map((pill) => (
+              {travelPills.map((pill) => (
                 <Pill key={pill} variant="dark">
                   {pill}
                 </Pill>
@@ -119,7 +108,7 @@ export default function DoubleCTASection() {
                 borderRadius: "22px",
               }}
             >
-              Buscar disponibilidad →
+              {d.buscar}
             </button>
             <span
               className="pointer-events-none absolute select-none text-white"
@@ -159,7 +148,7 @@ export default function DoubleCTASection() {
               {d.siCiudadDesc}
             </p>
             <div className="mt-5 flex flex-wrap gap-1.5">
-              {CITY_PILLS.map((pill) => (
+              {cityPills.map((pill) => (
                 <Pill key={pill} variant="light">
                   {pill}
                 </Pill>
@@ -173,7 +162,7 @@ export default function DoubleCTASection() {
                 borderRadius: "22px",
               }}
             >
-              Ver proveedores →
+              {d.verProveedores}
             </button>
             <span
               className="pointer-events-none absolute select-none"

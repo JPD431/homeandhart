@@ -6,13 +6,6 @@ import { BRAND, SERIF } from "./brand";
 
 const FEATURE_ICONS = [LockIcon, RectanglesIcon, CheckBadgeIcon];
 
-const COMPARISON_ROWS = [
-  { before: "Un sitio para el alojamiento", after: "Todo en H&H" },
-  { before: "Otro sitio para la mascota", after: "Un solo buscador" },
-  { before: "Grupos para encontrar niñera", after: "Perfiles verificados" },
-  { before: "Varios pagos sin garantía", after: "1 pago protegido" },
-];
-
 function LockIcon({ className }) {
   return (
     <svg
@@ -206,6 +199,13 @@ export default function CheckoutSection() {
     { title: c.beneficio3, description: c.beneficio3desc, Icon: FEATURE_ICONS[2] },
   ];
 
+  const comparisonRows = [
+    { before: c.antes1, after: c.ahora1 },
+    { before: c.antes2, after: c.ahora2 },
+    { before: c.antes3, after: c.ahora3 },
+    { before: c.antes4, after: c.ahora4 },
+  ];
+
   return (
     <section
       className="bg-white text-[#1a1a1a]"
@@ -276,7 +276,7 @@ export default function CheckoutSection() {
                 {c.antesAhora}
               </p>
               <ul className="mt-4 flex flex-col gap-3">
-                {COMPARISON_ROWS.map((row) => (
+                {comparisonRows.map((row) => (
                   <li
                     key={row.before}
                     className="flex flex-wrap items-center gap-2 text-sm"
@@ -312,7 +312,7 @@ export default function CheckoutSection() {
                 className="text-lg text-white sm:text-xl"
                 style={{ fontFamily: SERIF }}
               >
-                Tu reserva · Madrid · 15–18 jul
+                {c.reservaDemo}
               </h3>
               <p
                 className="mt-1 text-sm"
@@ -372,7 +372,7 @@ export default function CheckoutSection() {
                 <div>
                   <p className="text-sm text-[#888]">Total</p>
                   <p className="mt-0.5 text-xs text-[#999]">
-                    Un único pago · distribuido automáticamente
+                    {c.unPago}
                   </p>
                 </div>
                 <p

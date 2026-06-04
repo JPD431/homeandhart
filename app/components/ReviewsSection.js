@@ -6,27 +6,21 @@ import { BRAND, SERIF } from "./brand";
 
 const STAR_COLOR = "#c8922a";
 
-const SUMMARY_STATS = [
-  "580 reseñas verificadas",
-  "98% recomendarían H&H",
-  "1.200+ reservas",
-];
-
 const REVIEWS = [
   {
-    tag: "niñera",
+    tagKey: "ninera",
     text: "Sara habló inglés con nuestros hijos. Por fin cenamos solos.",
     name: "James W.",
     meta: "familia británica",
   },
   {
-    tag: "mascota",
+    tagKey: "mascota",
     text: "Fotos cada pocas horas. Mi perro volvió feliz.",
     name: "Sofía M.",
     meta: "Madrid",
   },
   {
-    tag: "alojamiento",
+    tagKey: "alojamiento",
     text: "Saber que el apartamento tenía todos los papeles fue un alivio enorme.",
     name: "Lena B.",
     meta: "familia alemana",
@@ -62,6 +56,13 @@ function ServiceTag({ children }) {
 export default function ReviewsSection() {
   const { lang } = useLang();
   const t = useTranslation(lang);
+  const r = t.reviews;
+
+  const summaryStats = [
+    r.resenasVerificadas,
+    r.recomendarian,
+    r.reservas,
+  ];
 
   return (
     <section
@@ -107,7 +108,7 @@ export default function ReviewsSection() {
                 4.9
               </p>
               <Stars className="mt-2 text-lg sm:text-xl" />
-              <p className="mt-1.5 text-sm text-[#5c5c5c]">Valoración media</p>
+              <p className="mt-1.5 text-sm text-[#5c5c5c]">{r.valoracionMedia}</p>
             </div>
             <div className="hidden h-16 w-px shrink-0 bg-[#e8e4de] sm:block" />
             <div className="flex flex-wrap justify-center gap-2 sm:justify-start">
@@ -126,7 +127,7 @@ export default function ReviewsSection() {
           <div className="hidden h-16 w-px shrink-0 bg-[#e8e4de] lg:block" />
 
           <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:justify-center lg:justify-end lg:gap-0">
-            {SUMMARY_STATS.map((stat, index) => (
+            {summaryStats.map((stat, index) => (
               <div key={stat} className="flex items-center">
                 {index > 0 && (
                   <div
@@ -162,7 +163,7 @@ export default function ReviewsSection() {
 
           <div className="relative grid gap-8 lg:grid-cols-2">
             <div>
-              <ServiceTag>paquete completo</ServiceTag>
+              <ServiceTag>{r.paquete}</ServiceTag>
               <Stars className="mt-4 block text-base" />
               <blockquote
                 className="mt-4 leading-relaxed text-[#333]"
@@ -199,7 +200,7 @@ export default function ReviewsSection() {
             </div>
 
             <div className="flex justify-start lg:justify-end">
-              <ServiceTag>paquete completo</ServiceTag>
+              <ServiceTag>{r.paquete}</ServiceTag>
             </div>
           </div>
         </article>
@@ -212,7 +213,7 @@ export default function ReviewsSection() {
               className="flex flex-col rounded-2xl border bg-white p-6 sm:p-7"
               style={{ borderColor: BRAND.border }}
             >
-              <ServiceTag>{review.tag}</ServiceTag>
+              <ServiceTag>{r[review.tagKey]}</ServiceTag>
               <Stars className="mt-4 block text-sm" />
               <p
                 className="mt-4 flex-1 text-base leading-relaxed text-[#333]"
