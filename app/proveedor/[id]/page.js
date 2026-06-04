@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import CalendarioDisponibilidad from "@/app/components/CalendarioDisponibilidad";
 import Navbar from "@/app/components/Navbar";
 import PreguntarButton from "@/app/components/PreguntarButton";
 import { BRAND, SERIF } from "@/app/components/brand";
@@ -256,16 +257,30 @@ export default async function ProveedorPage({ params }) {
   const en7dStr = en7d.toISOString().split("T")[0];
 
   const ocupadosProximos7Dias = new Set();
+  let bloqueosCalendario = [];
   if (serviceIds.length > 0) {
     const { data: bloqueos } = await supabase
       .from("disponibilidad")
-      .select("service_id")
-      .in("service_id", serviceIds)
-      .lte("fecha_inicio", en7dStr)
-      .gte("fecha_fin", hoyStr);
+      .select("fecha_inicio, fecha_fin, service_id")
+      .in("service_id", serviceIds);
 
-    (bloqueos ?? []).forEach((b) => ocupadosProximos7Dias.add(b.service_id));
+    bloqueosCalendario = bloqueos ?? [];
+    bloqueosCalendario.forEach((b) => {
+      if (b.fecha_inicio <= en7dStr && b.fecha_fin >= hoyStr) {
+        ocupadosProximos7Dias.add(b.service_id);
+      }
+    });
   }
+
+  const servicesParaCalendario = (services ?? []).map((service) => {
+    const vertical = VERTICALS[service.vertical] ?? VERTICALS.alojamiento;
+    return {
+      id: service.id,
+      titulo: service.titulo || vertical.label,
+      label: vertical.label,
+      dias_disponibles: normalizeDiasDisponiblesProveedor(service.dias_disponibles),
+    };
+  });
 
   const { data: reviews } = await supabase
     .from("reviews")
@@ -393,59 +408,6 @@ export default async function ProveedorPage({ params }) {
             </p>
           )}
         </header>
-
-        <section
-          className="mt-8 rounded-2xl border bg-white p-6 sm:p-8"
-          style={{ borderColor: BRAND.border }}
-        >
-          <h2
-            className="text-xl font-bold text-[#1a1a1a] sm:text-2xl"
-            style={{ fontFamily: SERIF }}
-          >
-            Lo que dicen los clientes
-          </h2>
-
-          {reviewCount === 0 ? (
-            <p className="mt-4 text-sm text-[#666]">Aún no tiene valoraciones</p>
-          ) : (
-            <>
-              <div className="mt-4 flex flex-wrap items-end gap-3">
-                <p className="text-4xl font-bold" style={{ color: GOLD }}>
-                  {averageRating}
-                </p>
-                <div>
-                  <StarRating value={Math.round(Number(averageRating))} size={18} />
-                  <p className="mt-1 text-sm text-[#666]">
-                    {reviewCount} reseña{reviewCount > 1 ? "s" : ""}
-                  </p>
-                </div>
-              </div>
-
-              <ul className="mt-6 flex flex-col gap-4 border-t pt-6" style={{ borderColor: BRAND.border }}>
-                {reviewsWithNames.map((review) => (
-                  <li key={review.id}>
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-sm font-semibold text-[#1a1a1a]">
-                        {review.cliente_nombre}
-                      </p>
-                      <p className="text-xs text-[#888]">
-                        {formatReviewDate(review.created_at)}
-                      </p>
-                    </div>
-                    <div className="mt-1">
-                      <StarRating value={review.valoracion} />
-                    </div>
-                    {review.comentario && (
-                      <p className="mt-2 text-sm leading-relaxed text-[#444]">
-                        {review.comentario}
-                      </p>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-        </section>
 
         {/* Servicios disponibles */}
         <section className="mt-8">
@@ -589,6 +551,64 @@ export default async function ProveedorPage({ params }) {
               );
             })}
           </ul>
+        </section>
+
+        <CalendarioDisponibilidad
+          services={servicesParaCalendario}
+          bloqueos={bloqueosCalendario}
+        />
+
+        <section
+          className="mt-8 rounded-2xl border bg-white p-6 sm:p-8"
+          style={{ borderColor: BRAND.border }}
+        >
+          <h2
+            className="text-xl font-bold text-[#1a1a1a] sm:text-2xl"
+            style={{ fontFamily: SERIF }}
+          >
+            Lo que dicen los clientes
+          </h2>
+
+          {reviewCount === 0 ? (
+            <p className="mt-4 text-sm text-[#666]">Aún no tiene valoraciones</p>
+          ) : (
+            <>
+              <div className="mt-4 flex flex-wrap items-end gap-3">
+                <p className="text-4xl font-bold" style={{ color: GOLD }}>
+                  {averageRating}
+                </p>
+                <div>
+                  <StarRating value={Math.round(Number(averageRating))} size={18} />
+                  <p className="mt-1 text-sm text-[#666]">
+                    {reviewCount} reseña{reviewCount > 1 ? "s" : ""}
+                  </p>
+                </div>
+              </div>
+
+              <ul className="mt-6 flex flex-col gap-4 border-t pt-6" style={{ borderColor: BRAND.border }}>
+                {reviewsWithNames.map((review) => (
+                  <li key={review.id}>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm font-semibold text-[#1a1a1a]">
+                        {review.cliente_nombre}
+                      </p>
+                      <p className="text-xs text-[#888]">
+                        {formatReviewDate(review.created_at)}
+                      </p>
+                    </div>
+                    <div className="mt-1">
+                      <StarRating value={review.valoracion} />
+                    </div>
+                    {review.comentario && (
+                      <p className="mt-2 text-sm leading-relaxed text-[#444]">
+                        {review.comentario}
+                      </p>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
         </section>
       </main>
 
