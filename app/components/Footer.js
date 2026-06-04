@@ -41,9 +41,9 @@ export default function Footer() {
   ];
 
   const legalLinks = [
-    { label: t.footer.terminos, href: "#" },
-    { label: t.footer.privacidad, href: "#" },
-    { label: t.footer.cookies, href: "#" },
+    { label: t.footer.terminos, href: "/legal/terminos" },
+    { label: t.footer.privacidad, href: "/legal/privacidad" },
+    { label: t.footer.cookies, href: "/legal/cookies" },
   ];
 
   return (

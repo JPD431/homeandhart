@@ -1,4 +1,5 @@
 import { Geist, Geist_Mono } from "next/font/google";
+import CookieBanner from "@/app/components/CookieBanner";
 import { LangProvider } from "@/app/lib/LangContext";
 import "./globals.css";
 
@@ -24,7 +25,10 @@ export default function RootLayout({ children }) {
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <LangProvider>{children}</LangProvider>
+        <LangProvider>
+          {children}
+          <CookieBanner />
+        </LangProvider>
       </body>
     </html>
   );
