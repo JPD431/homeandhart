@@ -70,6 +70,18 @@ const ESTANCIA_PLACEHOLDERS = {
   },
 };
 
+const ANTELACION_OPTIONS = [
+  { value: 0, label: "Sin restricción" },
+  { value: 1, label: "Al menos 1 hora antes" },
+  { value: 3, label: "Al menos 3 horas antes" },
+  { value: 6, label: "Al menos 6 horas antes" },
+  { value: 12, label: "Al menos 12 horas antes" },
+  { value: 24, label: "Al menos 24 horas antes" },
+  { value: 48, label: "Al menos 48 horas antes" },
+  { value: 72, label: "Al menos 3 días antes" },
+  { value: 168, label: "Al menos 7 días antes" },
+];
+
 async function geocodeBarrio(barrio, ciudad) {
   const query = `${barrio}, ${ciudad}, España`;
   const response = await fetch(
@@ -136,6 +148,7 @@ const EMPTY_SERVICE_DETAILS = {
     precio: "",
     estancia_minima: "",
     estancia_maxima: "",
+    antelacion_minima: 24,
     nru: "",
     cancelacion: "moderada",
     reserva_inmediata: false,
@@ -150,6 +163,7 @@ const EMPTY_SERVICE_DETAILS = {
     precio: "",
     estancia_minima: "",
     estancia_maxima: "",
+    antelacion_minima: 24,
     edades: "",
     certificacion: "",
     cancelacion: "moderada",
@@ -166,6 +180,7 @@ const EMPTY_SERVICE_DETAILS = {
     precio: "",
     estancia_minima: "",
     estancia_maxima: "",
+    antelacion_minima: 24,
     tipos: "",
     cancelacion: "moderada",
     reserva_inmediata: false,
@@ -512,6 +527,30 @@ function EstanciaFields({ serviceId, details, onChange }) {
   );
 }
 
+function AntelacionMinimaSelector({ value, onChange }) {
+  const selected = value != null && value !== "" ? Number(value) : 24;
+
+  return (
+    <div className="sm:col-span-2">
+      <label className="mb-1.5 block text-xs font-medium text-[#444]">
+        Antelación mínima para reservar
+      </label>
+      <select
+        value={String(selected)}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className={inputClass}
+        style={{ borderColor: BRAND.border }}
+      >
+        {ANTELACION_OPTIONS.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 function TipoAlojamientoSelector({ value, onChange }) {
   return (
     <div className="sm:col-span-2">
@@ -586,6 +625,10 @@ function ServiceFields({ serviceId, details, onChange, onLocationZoneBlur }) {
           serviceId={serviceId}
           details={details}
           onChange={onChange}
+        />
+        <AntelacionMinimaSelector
+          value={details.antelacion_minima}
+          onChange={(v) => update("antelacion_minima", v)}
         />
         <div>
           <label className="mb-1.5 block text-xs font-medium text-[#444]">
@@ -676,6 +719,10 @@ function ServiceFields({ serviceId, details, onChange, onLocationZoneBlur }) {
           serviceId={serviceId}
           details={details}
           onChange={onChange}
+        />
+        <AntelacionMinimaSelector
+          value={details.antelacion_minima}
+          onChange={(v) => update("antelacion_minima", v)}
         />
         <div>
           <label className="mb-1.5 block text-xs font-medium text-[#444]">
@@ -783,6 +830,10 @@ function ServiceFields({ serviceId, details, onChange, onLocationZoneBlur }) {
           serviceId={serviceId}
           details={details}
           onChange={onChange}
+        />
+        <AntelacionMinimaSelector
+          value={details.antelacion_minima}
+          onChange={(v) => update("antelacion_minima", v)}
         />
         <div>
           <label className="mb-1.5 block text-xs font-medium text-[#444]">
@@ -1009,6 +1060,7 @@ export default function SerProveedorPage() {
       // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS tipo_alojamiento text;
       // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS estancia_minima integer;
       // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS estancia_maxima integer;
+      // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS antelacion_minima integer DEFAULT 24;
       const ciudadTrimmed = ciudad.trim();
       const detailsForInsert = await geocodeLocationZonesForServices(
         selectedServices,
@@ -1029,6 +1081,10 @@ export default function SerProveedorPage() {
           estancia_maxima: details.estancia_maxima
             ? Number(details.estancia_maxima)
             : null,
+          antelacion_minima:
+            details.antelacion_minima != null && details.antelacion_minima !== ""
+              ? Number(details.antelacion_minima)
+              : 24,
           cancellation_policy: details.cancelacion,
           ciudad: ciudadTrimmed,
           location_zone: details.location_zone?.trim() || null,

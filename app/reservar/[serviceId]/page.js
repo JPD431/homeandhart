@@ -270,6 +270,42 @@ function formatEstanciaInfo(vertical, minima, maxima) {
   return parts;
 }
 
+function formatAntelacionLabel(hours) {
+  const h = Number(hours);
+  if (h >= 24 && h % 24 === 0) {
+    const days = h / 24;
+    return days === 1 ? "1 día" : `${days} días`;
+  }
+  return h === 1 ? "1 hora" : `${h} horas`;
+}
+
+function validateAntelacion(svc, fechaInicio, hora, mainVertical) {
+  const required =
+    svc.antelacion_minima != null && svc.antelacion_minima !== ""
+      ? Number(svc.antelacion_minima)
+      : 24;
+  if (!required || !fechaInicio) return null;
+
+  const v = svc.vertical || mainVertical;
+  const start = getServiceStartDateTime(v, fechaInicio, hora);
+  if (!start) return null;
+
+  const hoursUntil = (start.getTime() - Date.now()) / (1000 * 60 * 60);
+  if (hoursUntil < required) {
+    return `Este servicio requiere reservar con al menos ${formatAntelacionLabel(required)} de antelación`;
+  }
+  return null;
+}
+
+function formatAntelacionInfo(antelacionMinima) {
+  const h =
+    antelacionMinima != null && antelacionMinima !== ""
+      ? Number(antelacionMinima)
+      : 24;
+  if (!h) return null;
+  return `Reservar con al menos ${formatAntelacionLabel(h)} de antelación`;
+}
+
 const PLATFORM_MULTIPLIER = 1.14;
 const COMMISSION_RATE = 0.14;
 
@@ -796,6 +832,7 @@ export default function ReservarPage() {
               precio,
               estancia_minima,
               estancia_maxima,
+              antelacion_minima,
               reserva_inmediata,
               ciudad,
               proveedor_id,
@@ -892,6 +929,17 @@ export default function ReservarPage() {
         if (estanciaError) {
           ready = false;
           detail = estanciaError;
+        } else {
+          const antelacionError = validateAntelacion(
+            svc,
+            fechaInicio,
+            hora,
+            vertical,
+          );
+          if (antelacionError) {
+            ready = false;
+            detail = antelacionError;
+          }
         }
       }
       const svcConfig = VERTICALS[svc.vertical] ?? VERTICALS.alojamiento;
@@ -1262,6 +1310,29 @@ export default function ReservarPage() {
                       {line}
                     </p>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {formatAntelacionInfo(service.antelacion_minima) && (
+              <div
+                className="mt-4 flex gap-3 rounded-xl px-4 py-3"
+                style={{ backgroundColor: verticalConfig.light }}
+              >
+                <InfoIcon
+                  className="mt-0.5 h-5 w-5 shrink-0"
+                  style={{ color: verticalConfig.color }}
+                />
+                <div>
+                  <p
+                    className="text-xs font-semibold uppercase tracking-wide"
+                    style={{ color: verticalConfig.color }}
+                  >
+                    Antelación
+                  </p>
+                  <p className="mt-0.5 text-sm leading-relaxed text-[#444]">
+                    {formatAntelacionInfo(service.antelacion_minima)}
+                  </p>
                 </div>
               </div>
             )}

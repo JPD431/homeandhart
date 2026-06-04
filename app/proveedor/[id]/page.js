@@ -158,6 +158,24 @@ function formatEstanciaMinima(service) {
   return `Mínimo ${count} ${count === 1 ? "día" : "días"}`;
 }
 
+function formatAntelacionLabel(hours) {
+  const h = Number(hours);
+  if (h >= 24 && h % 24 === 0) {
+    const days = h / 24;
+    return days === 1 ? "1 día" : `${days} días`;
+  }
+  return h === 1 ? "1 hora" : `${h} horas`;
+}
+
+function formatAntelacionReserva(service) {
+  const h =
+    service.antelacion_minima != null && service.antelacion_minima !== ""
+      ? Number(service.antelacion_minima)
+      : null;
+  if (h == null || h <= 0) return null;
+  return `Reservar con ${formatAntelacionLabel(h)} de antelación`;
+}
+
 const GOLD = "#c8922a";
 
 function StarRating({ value, size = 16 }) {
@@ -418,6 +436,7 @@ export default async function ProveedorPage({ params }) {
               const { Icon } = vertical;
               const cancelPolicy = getCancelPolicy(service.cancellation_policy);
               const estanciaMinLabel = formatEstanciaMinima(service);
+              const antelacionLabel = formatAntelacionReserva(service);
 
               return (
                 <li
@@ -450,6 +469,9 @@ export default async function ProveedorPage({ params }) {
                       </p>
                       {estanciaMinLabel && (
                         <p className="mt-1 text-xs text-[#888]">{estanciaMinLabel}</p>
+                      )}
+                      {antelacionLabel && (
+                        <p className="mt-1 text-xs text-[#888]">{antelacionLabel}</p>
                       )}
                       {cancelPolicy ? (
                         <div className="mt-2">
