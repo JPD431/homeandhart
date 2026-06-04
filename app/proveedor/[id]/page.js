@@ -9,6 +9,7 @@ import {
   ProveedorTranslateButton,
   ProveedorTranslateProvider,
   ServicioDescripcionText,
+  ServicioOfertaTituloText,
   ServicioTituloText,
 } from "./ProveedorTraduccion";
 import {
@@ -341,11 +342,16 @@ export default async function ProveedorPage({ params }) {
   const initials = getInitials(profile.nombre, profile.apellido);
   const isVerified = profile.verificado === true;
 
-  const servicesParaTraduccion = (services ?? []).map((service) => ({
-    id: service.id,
-    titulo: service.titulo || "",
-    descripcion: service.descripcion || service.oferta_descripcion || "",
-  }));
+  const servicesParaTraduccion = (services ?? []).map((service) => {
+    const vertical = VERTICALS[service.vertical] ?? VERTICALS.alojamiento;
+    return {
+      id: service.id,
+      titulo: service.titulo || vertical.label,
+      descripcion: service.descripcion || "",
+      oferta_descripcion: service.oferta_descripcion || "",
+      oferta_titulo: service.oferta_titulo || "",
+    };
+  });
 
   return (
     <div
@@ -500,19 +506,24 @@ export default async function ProveedorPage({ params }) {
                       />
                       <ServicioDescripcionText
                         serviceId={service.id}
-                        descripcion={
-                          service.descripcion || service.oferta_descripcion || ""
-                        }
+                        descripcion={service.descripcion || ""}
                       />
+                      {service.oferta_descripcion && (
+                        <ServicioDescripcionText
+                          serviceId={service.id}
+                          descripcion={service.oferta_descripcion}
+                          field="oferta_descripcion"
+                        />
+                      )}
                       {ofertaActiva && (
-                        <div
-                          className="mt-3 rounded-xl px-4 py-3 text-sm leading-relaxed text-[#92400e]"
-                          style={{ backgroundColor: "#fef3c7" }}
-                        >
-                          🏷️ {service.oferta_titulo || "Oferta especial"} —{" "}
-                          {service.oferta_descuento}% descuento · Válida hasta{" "}
-                          {formatOfertaValidaHasta(service.oferta_valida_hasta)}
-                        </div>
+                        <ServicioOfertaTituloText
+                          serviceId={service.id}
+                          ofertaTitulo={service.oferta_titulo || "Oferta especial"}
+                          descuento={service.oferta_descuento}
+                          validaHastaLabel={formatOfertaValidaHasta(
+                            service.oferta_valida_hasta,
+                          )}
+                        />
                       )}
                       {ofertaActiva ? (
                         <div className="mt-2 flex flex-wrap items-baseline gap-2">
