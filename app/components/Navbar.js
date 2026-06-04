@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useLang } from "@/app/lib/LangContext";
+import { useTranslation } from "@/app/lib/i18n";
 import { BRAND } from "./brand";
 import { supabase } from "@/lib/supabase";
 
@@ -39,7 +41,37 @@ function ChatIcon({ className }) {
   );
 }
 
+function LangSwitcher() {
+  const { lang, setLang } = useLang();
+
+  return (
+    <div
+      className="flex items-center gap-0.5 rounded-lg border p-0.5"
+      style={{ borderColor: BRAND.border }}
+      role="group"
+      aria-label="Idioma"
+    >
+      {["es", "en"].map((code) => (
+        <button
+          key={code}
+          type="button"
+          onClick={() => setLang(code)}
+          className="rounded-md px-2 py-1 text-xs font-semibold uppercase transition-colors"
+          style={{
+            color: lang === code ? BRAND.primary : "#888",
+          }}
+          aria-pressed={lang === code}
+        >
+          {code}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function Navbar() {
+  const { lang } = useLang();
+  const t = useTranslation(lang);
   const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
@@ -112,22 +144,23 @@ export default function Navbar() {
             className="transition-colors hover:text-[#1d4f91]"
             style={{ color: BRAND.primary }}
           >
-            Inicio
+            {t.navbar.inicio}
           </a>
           <a href="#" className="transition-colors hover:text-[#1d4f91]">
-            Servicios
+            {t.navbar.servicios}
           </a>
           <a href="#" className="transition-colors hover:text-[#1d4f91]">
-            Cómo funciona
+            {t.navbar.comoFunciona}
           </a>
           <Link
             href="/ser-proveedor"
             className="transition-colors hover:text-[#1d4f91] no-underline"
           >
-            Ser proveedor
+            {t.navbar.serProveedor}
           </Link>
         </nav>
         <div className="flex items-center gap-2 sm:gap-3">
+          <LangSwitcher />
           <Link
             href="/chat"
             className="relative flex h-10 w-10 items-center justify-center rounded-lg text-[#444] no-underline transition-colors hover:bg-[#f7f5f2]"
@@ -144,14 +177,14 @@ export default function Navbar() {
             href="/login"
             className="hidden rounded-lg px-4 py-2 text-sm font-medium text-[#444] no-underline transition-colors hover:bg-[#f7f5f2] sm:inline-block"
           >
-            Iniciar sesión
+            {t.navbar.iniciarSesion}
           </Link>
           <Link
             href="/registro"
             className="rounded-lg px-4 py-2 text-sm font-medium text-white no-underline transition-opacity hover:opacity-90"
             style={{ backgroundColor: BRAND.primary }}
           >
-            Registrarse
+            {t.navbar.registrarse}
           </Link>
         </div>
       </div>

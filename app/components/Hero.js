@@ -4,13 +4,15 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import CalendarioRangoFechas from "@/app/components/CalendarioRangoFechas";
 import { formatShortDate } from "@/app/components/calendario-shared";
+import { useLang } from "@/app/lib/LangContext";
+import { useTranslation } from "@/app/lib/i18n";
 import { BRAND } from "./brand";
 
-const TABS = [
-  { id: "todo", label: "Todo", color: BRAND.primary },
-  { id: "alojamiento", label: "Alojamiento", color: "#1d4f91" },
-  { id: "ninos", label: "Niños", color: "#0e7a5c" },
-  { id: "mascotas", label: "Mascotas", color: "#c47d1a" },
+const TAB_IDS = [
+  { id: "todo", color: BRAND.primary },
+  { id: "alojamiento", color: "#1d4f91" },
+  { id: "ninos", color: "#0e7a5c" },
+  { id: "mascotas", color: "#c47d1a" },
 ];
 
 function SearchIcon({ className }) {
@@ -85,6 +87,8 @@ function DateTrigger({ value, placeholder = "Añade una fecha" }) {
 
 export default function Hero() {
   const router = useRouter();
+  const { lang } = useLang();
+  const t = useTranslation(lang);
   const pickerRef = useRef(null);
   const [activeTab, setActiveTab] = useState("todo");
   const [query, setQuery] = useState("");
@@ -92,7 +96,11 @@ export default function Hero() {
   const [fechaHasta, setFechaHasta] = useState("");
   const [calendarOpen, setCalendarOpen] = useState(false);
 
-  const activeTabConfig = TABS.find((t) => t.id === activeTab) ?? TABS[0];
+  const tabs = TAB_IDS.map((tab) => ({
+    ...tab,
+    label: t.hero[tab.id],
+  }));
+  const activeTabConfig = tabs.find((tab) => tab.id === activeTab) ?? tabs[0];
 
   useEffect(() => {
     if (!calendarOpen) return;
@@ -143,11 +151,10 @@ export default function Hero() {
           Marketplace de confianza
         </p>
         <h1 className="text-3xl font-bold leading-tight tracking-tight text-[#1a1a1a] sm:text-4xl lg:text-5xl">
-          Por fin, todo lo que necesitas en un solo lugar
+          {t.hero.titulo}
         </h1>
         <p className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-[#5c5c5c] sm:text-lg">
-          Alojamiento, cuidado de niños y mascotas — encuentra proveedores
-          verificados cerca de ti, con reserva sencilla y segura.
+          {t.hero.subtitulo}
         </p>
       </div>
 
@@ -157,13 +164,13 @@ export default function Hero() {
           className="overflow-hidden rounded-[32px] border border-[#ebebeb] bg-white shadow-lg lg:rounded-[50px]"
         >
           <div className="flex flex-col lg:flex-row lg:items-stretch">
-            <SearchSection label="¿Dónde?" className="lg:rounded-l-[50px]">
+            <SearchSection label={t.hero.donde} className="lg:rounded-l-[50px]">
               <input
                 id="hero-ciudad"
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Busca una ciudad o barrio"
+                placeholder={t.hero.placeholder}
                 className="w-full bg-transparent text-sm text-[#1a1a1a] outline-none placeholder:text-[#999]"
               />
             </SearchSection>
@@ -174,7 +181,7 @@ export default function Hero() {
             />
             <VerticalDivider />
 
-            <SearchSection label="Llegada" onClick={openCalendar}>
+            <SearchSection label={t.hero.llegada} onClick={openCalendar}>
               <DateTrigger value={fechaDesde} />
             </SearchSection>
 
@@ -184,7 +191,7 @@ export default function Hero() {
             />
             <VerticalDivider />
 
-            <SearchSection label="Salida" onClick={openCalendar}>
+            <SearchSection label={t.hero.salida} onClick={openCalendar}>
               <DateTrigger value={fechaHasta} />
             </SearchSection>
 
@@ -194,7 +201,7 @@ export default function Hero() {
             />
             <VerticalDivider />
 
-            <SearchSection label="¿Qué necesitas?">
+            <SearchSection label={t.hero.queNecesitas}>
               <div className="relative flex items-center gap-2">
                 <span
                   className="h-2 w-2 shrink-0 rounded-full"
@@ -208,7 +215,7 @@ export default function Hero() {
                   className="w-full cursor-pointer appearance-none bg-transparent pr-6 text-sm font-medium outline-none"
                   style={{ color: activeTabConfig.color }}
                 >
-                  {TABS.map((tab) => (
+                  {tabs.map((tab) => (
                     <option key={tab.id} value={tab.id}>
                       {tab.label}
                     </option>
@@ -232,7 +239,7 @@ export default function Hero() {
                 type="submit"
                 className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-white transition-opacity hover:opacity-90 lg:h-12 lg:w-12"
                 style={{ backgroundColor: BRAND.primary }}
-                aria-label="Buscar"
+                aria-label={t.hero.buscar}
               >
                 <SearchIcon className="h-5 w-5" />
               </button>

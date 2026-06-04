@@ -6,7 +6,9 @@ import "mapbox-gl/dist/mapbox-gl.css";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Navbar from "@/app/components/Navbar";
+import { useLang } from "@/app/lib/LangContext";
 import { isOfertaActiva } from "@/app/lib/ofertas";
+import { useTranslation } from "@/app/lib/i18n";
 import { BRAND } from "@/app/components/brand";
 import { supabase } from "@/lib/supabase";
 
@@ -267,7 +269,7 @@ function MapaResultados({ results, hoveredIndex, onPinHover, onPinLeave }) {
   );
 }
 
-function ServiceCard({ service, index, isHovered, onHover, onLeave }) {
+function ServiceCard({ service, index, isHovered, onHover, onLeave, t }) {
   const router = useRouter();
   const [preguntando, setPreguntando] = useState(false);
   const profile = service.profiles ?? {};
@@ -442,7 +444,7 @@ function ServiceCard({ service, index, isHovered, onHover, onLeave }) {
             className="flex-1 rounded-xl border py-2.5 text-center text-sm font-semibold no-underline transition-opacity hover:opacity-90"
             style={{ borderColor: theme.color, color: theme.color }}
           >
-            Ver perfil
+            {t.buscar.verPerfil}
           </Link>
           <button
             type="button"
@@ -451,14 +453,14 @@ function ServiceCard({ service, index, isHovered, onHover, onLeave }) {
             className="flex-1 rounded-xl border py-2.5 text-center text-sm font-semibold transition-opacity hover:opacity-90 disabled:cursor-wait disabled:opacity-60"
             style={{ borderColor: theme.color, color: theme.color }}
           >
-            {preguntando ? "…" : "Preguntar 💬"}
+            {preguntando ? "…" : `${t.buscar.preguntar} 💬`}
           </button>
           <Link
             href={`/reservar/${service.id}`}
             className="flex-1 rounded-xl py-2.5 text-center text-sm font-semibold text-white no-underline transition-opacity hover:opacity-90"
             style={{ backgroundColor: theme.color }}
           >
-            Reservar
+            {t.buscar.reservar}
           </Link>
         </div>
       </div>
@@ -470,6 +472,8 @@ export default function BuscarPage() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const { lang } = useLang();
+  const t = useTranslation(lang);
 
   const verticalParam = searchParams.get("vertical") || "todo";
   const ciudadParam = searchParams.get("ciudad") || "";
@@ -596,6 +600,18 @@ export default function BuscarPage() {
   const activeTabColor = getActiveTabColor(verticalParam);
   const resultCount = results.length;
 
+  const filterTabs = FILTER_TABS.map((tab) => ({
+    ...tab,
+    label: tab.id === "todo" ? t.hero.todo : t.hero[tab.id],
+  }));
+
+  const resultadosLabel =
+    resultCount === 1
+      ? lang === "en"
+        ? "1 result found"
+        : "1 resultado encontrado"
+      : `${resultCount} ${t.buscar.resultados}`;
+
   return (
     <div className="flex min-h-screen flex-col font-sans" style={{ backgroundColor: BRAND.warm, color: "#1a1a1a" }}>
       <Navbar />
@@ -605,9 +621,16 @@ export default function BuscarPage() {
         className="shrink-0 border-b bg-white px-4 py-4 sm:px-6"
         style={{ borderColor: BRAND.border }}
       >
-        <div className="mx-auto flex max-w-[1600px] flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="mx-auto flex max-w-[1600px] flex-col gap-4">
+          <h1
+            className="text-xl font-bold text-[#1a1a1a] sm:text-2xl"
+            style={{ fontFamily: "Georgia, serif" }}
+          >
+            {t.buscar.titulo}
+          </h1>
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-wrap gap-2">
-            {FILTER_TABS.map((tab) => {
+            {filterTabs.map((tab) => {
               const isActive = verticalParam === tab.id;
               const tabColor =
                 tab.id === "todo"
@@ -680,17 +703,14 @@ export default function BuscarPage() {
               className="shrink-0 rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 sm:self-end"
               style={{ backgroundColor: activeTabColor }}
             >
-              Buscar
+              {t.hero.buscar}
             </button>
           </form>
+          </div>
         </div>
 
         <p className="mx-auto mt-3 max-w-[1600px] text-xs text-[#888]">
-          {loading
-            ? "Buscando proveedores…"
-            : resultCount === 1
-              ? "1 resultado encontrado"
-              : `${resultCount} resultados encontrados`}
+          {loading ? (lang === "en" ? "Searching…" : "Buscando proveedores…") : resultadosLabel}
         </p>
       </header>
 
@@ -743,8 +763,7 @@ export default function BuscarPage() {
               className="m-4 rounded-2xl border bg-white px-6 py-10 text-center text-sm leading-relaxed text-[#666]"
               style={{ borderColor: BRAND.border }}
             >
-              No encontramos proveedores en esta zona todavía. Estamos creciendo
-              cada semana.
+              {t.buscar.sinResultados}
             </p>
           )}
 
@@ -758,6 +777,7 @@ export default function BuscarPage() {
                   isHovered={hoveredIndex === index}
                   onHover={setHoveredIndex}
                   onLeave={() => setHoveredIndex(null)}
+                  t={t}
                 />
               ))}
             </ul>
