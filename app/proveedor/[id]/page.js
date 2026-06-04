@@ -17,6 +17,7 @@ import {
   getPrecioConDescuento,
   isOfertaActiva,
 } from "@/app/lib/ofertas";
+import { formatDescuentosDuracionList } from "@/app/lib/descuentosDuracion";
 import { supabase } from "@/lib/supabase";
 
 const DARK_BLUE = "#163a6b";
@@ -468,6 +469,8 @@ export default async function ProveedorPage({ params }) {
               const precioConDescuento = ofertaActiva
                 ? getPrecioConDescuento(service.precio, service.oferta_descuento)
                 : null;
+              const descuentosDuracionLabel =
+                formatDescuentosDuracionList(service);
 
               return (
                 <li
@@ -524,6 +527,11 @@ export default async function ProveedorPage({ params }) {
                             service.oferta_valida_hasta,
                           )}
                         />
+                      )}
+                      {descuentosDuracionLabel && (
+                        <p className="mt-2 text-xs font-medium text-green-700">
+                          {descuentosDuracionLabel}
+                        </p>
                       )}
                       {ofertaActiva ? (
                         <div className="mt-2 flex flex-wrap items-baseline gap-2">

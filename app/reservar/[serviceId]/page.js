@@ -11,6 +11,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Navbar from "@/app/components/Navbar";
 import { BRAND, SERIF } from "@/app/components/brand";
+import { applyBestDiscountToBase } from "@/app/lib/descuentosDuracion";
 import { getPrecioEfectivo, isOfertaActiva } from "@/app/lib/ofertas";
 import { supabase } from "@/lib/supabase";
 
@@ -453,11 +454,15 @@ function getCardBrandLabel(brand) {
   return labels[brand] ?? (brand ? brand.charAt(0).toUpperCase() + brand.slice(1) : "Tarjeta");
 }
 
-function calculateServiceBasePrice(svc, { fechaInicio, fechaFin, duracionHoras, mainVertical }) {
-  const unitPrice = getPrecioEfectivo(svc);
-  if (!unitPrice) return { base: 0, detail: "", ready: false };
+function calculateServiceBasePrice(
+  svc,
+  { fechaInicio, fechaFin, duracionHoras, mainVertical },
+) {
+  const unitPrice = Number(svc.precio) || 0;
+  if (!unitPrice) return { base: 0, detail: "", ready: false, discountPct: 0, discountSource: null };
 
   const v = svc.vertical;
+  const dateContext = { fechaInicio, fechaFin, duracionHoras, mainVertical };
 
   if (v === "ninos") {
     let hours = Number(duracionHoras) || 0;
@@ -466,12 +471,27 @@ function calculateServiceBasePrice(svc, { fechaInicio, fechaFin, duracionHoras, 
       hours = days > 0 ? days : 0;
     }
     if (!hours) {
-      return { base: 0, detail: "Introduce la duración en horas", ready: false };
+      return {
+        base: 0,
+        detail: "Introduce la duración en horas",
+        ready: false,
+        discountPct: 0,
+        discountSource: null,
+      };
     }
+    const subtotal = unitPrice * hours;
+    const duration = getServiceDuration(svc, dateContext);
+    const { total, pct, source } = applyBestDiscountToBase(
+      subtotal,
+      svc,
+      duration,
+    );
     return {
-      base: unitPrice * hours,
+      base: total,
       detail: `${hours} hora${hours > 1 ? "s" : ""}`,
       ready: true,
+      discountPct: pct,
+      discountSource: source,
     };
   }
 
@@ -479,13 +499,28 @@ function calculateServiceBasePrice(svc, { fechaInicio, fechaFin, duracionHoras, 
   const end = fechaFin || fechaInicio;
   const days = daysBetween(start, end);
   if (!start || days === 0) {
-    return { base: 0, detail: "Introduce fechas de inicio y fin", ready: false };
+    return {
+      base: 0,
+      detail: "Introduce fechas de inicio y fin",
+      ready: false,
+      discountPct: 0,
+      discountSource: null,
+    };
   }
   const unit = v === "alojamiento" ? "noche" : "día";
+  const subtotal = unitPrice * days;
+  const duration = getServiceDuration(svc, dateContext);
+  const { total, pct, source } = applyBestDiscountToBase(
+    subtotal,
+    svc,
+    duration,
+  );
   return {
-    base: unitPrice * days,
+    base: total,
     detail: `${days} ${unit}${days > 1 ? "s" : ""}`,
     ready: true,
+    discountPct: pct,
+    discountSource: source,
   };
 }
 
@@ -965,6 +1000,9 @@ export default function ReservarPage() {
               direccion_exacta,
               telefono_contacto,
               modalidad,
+              oferta_descuento,
+              oferta_valida_hasta,
+              descuentos_duracion,
               profiles (
                 nombre,
                 apellido
@@ -1126,6 +1164,8 @@ export default function ReservarPage() {
         detail,
         ready,
         vertical: svc.vertical,
+        discountPct: calc.discountPct ?? 0,
+        discountSource: calc.discountSource ?? null,
       };
     });
 
@@ -1782,6 +1822,30 @@ export default function ReservarPage() {
                   <p className="mt-1 text-xs text-[#888]">
                     Gastos de gestión incluidos
                   </p>
+                  {priceSummary.lines.some(
+                    (line) =>
+                      line.discountSource === "duration" && line.discountPct > 0,
+                  ) && (
+                    <div className="mt-3 flex flex-col gap-1">
+                      {priceSummary.lines
+                        .filter(
+                          (line) =>
+                            line.discountSource === "duration" &&
+                            line.discountPct > 0,
+                        )
+                        .map((line) => (
+                          <p
+                            key={line.id}
+                            className="text-sm font-medium text-green-700"
+                          >
+                            Descuento por estancia larga: -{line.discountPct}%
+                            {priceSummary.lines.length > 1
+                              ? ` (${line.name})`
+                              : ""}
+                          </p>
+                        ))}
+                    </div>
+                  )}
                 </>
               ) : (
                 <>

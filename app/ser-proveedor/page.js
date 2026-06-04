@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { BRAND, SERIF } from "@/app/components/brand";
+import { serializeDescuentosDuracionForDb } from "@/app/lib/descuentosDuracion";
 
 const DARK_BLUE = "#163a6b";
 
@@ -173,6 +174,8 @@ const EMPTY_SERVICE_DETAILS = {
     oferta_valida_hasta: "",
     oferta_descripcion: "",
     disponible_para_viajar: false,
+    descuentos_duracion_activa: false,
+    descuentos_duracion: [{ minDias: "", descuento: "" }],
   },
   ninos: {
     titulo: "",
@@ -197,6 +200,8 @@ const EMPTY_SERVICE_DETAILS = {
     oferta_valida_hasta: "",
     oferta_descripcion: "",
     disponible_para_viajar: false,
+    descuentos_duracion_activa: false,
+    descuentos_duracion: [{ minDias: "", descuento: "" }],
   },
   mascotas: {
     titulo: "",
@@ -220,6 +225,8 @@ const EMPTY_SERVICE_DETAILS = {
     oferta_valida_hasta: "",
     oferta_descripcion: "",
     disponible_para_viajar: false,
+    descuentos_duracion_activa: false,
+    descuentos_duracion: [{ minDias: "", descuento: "" }],
   },
 };
 
@@ -562,6 +569,158 @@ function OfertaEspecialSection({ serviceId, details, onChange }) {
                 </button>
               </div>
             </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const MAX_DESCUENTOS_DURACION = 3;
+
+function getDuracionUnitSingular(serviceId) {
+  if (serviceId === "alojamiento") return "noches";
+  if (serviceId === "ninos") return "horas";
+  return "días";
+}
+
+function DescuentosDuracionSection({ serviceId, details, onChange }) {
+  const enabled = details.descuentos_duracion_activa === true;
+  const niveles = Array.isArray(details.descuentos_duracion)
+    ? details.descuentos_duracion
+    : [{ minDias: "", descuento: "" }];
+  const unitLabel = getDuracionUnitSingular(serviceId);
+
+  function update(field, val) {
+    onChange({ ...details, [field]: val });
+  }
+
+  function updateNivel(index, field, val) {
+    const next = niveles.map((n, i) =>
+      i === index ? { ...n, [field]: val } : n,
+    );
+    update("descuentos_duracion", next);
+  }
+
+  function addNivel() {
+    if (niveles.length >= MAX_DESCUENTOS_DURACION) return;
+    update("descuentos_duracion", [...niveles, { minDias: "", descuento: "" }]);
+  }
+
+  return (
+    <div
+      className="mt-6 border-t pt-6"
+      style={{ borderColor: BRAND.border }}
+    >
+      <p className="text-sm font-semibold text-[#1a1a1a]">
+        Descuentos por duración
+      </p>
+      <div className="mt-3 flex items-center justify-between gap-4">
+        <p className="text-sm text-[#444]">
+          ¿Ofreces descuento por estancias largas?
+        </p>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={enabled}
+          onClick={() => {
+            const next = !enabled;
+            onChange({
+              ...details,
+              descuentos_duracion_activa: next,
+              descuentos_duracion:
+                next && niveles.length === 0
+                  ? [{ minDias: "", descuento: "" }]
+                  : niveles,
+            });
+          }}
+          className="relative h-7 w-12 shrink-0 rounded-full transition-colors"
+          style={{
+            backgroundColor: enabled ? BRAND.primary : "#d1d5db",
+          }}
+        >
+          <span
+            className="absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform"
+            style={{
+              left: enabled ? "calc(100% - 1.625rem)" : "0.125rem",
+            }}
+          />
+        </button>
+      </div>
+
+      {enabled && (
+        <div className="mt-4 flex flex-col gap-4">
+          {niveles.map((nivel, index) => {
+            const min = Number(nivel.minDias);
+            const pct = Number(nivel.descuento);
+            const preview =
+              min > 0 && pct >= 1
+                ? `${min}+ ${unitLabel} → ${pct}%`
+                : null;
+
+            return (
+              <div
+                key={index}
+                className="rounded-xl border p-4"
+                style={{ borderColor: BRAND.border }}
+              >
+                <p className="mb-3 text-xs font-semibold text-[#444]">
+                  Nivel {index + 1}
+                </p>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium text-[#444]">
+                      A partir de X {unitLabel}
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={nivel.minDias}
+                      onChange={(e) =>
+                        updateNivel(index, "minDias", e.target.value)
+                      }
+                      className={inputClass}
+                      style={{ borderColor: BRAND.border }}
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium text-[#444]">
+                      Descuento (%)
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="50"
+                      value={nivel.descuento}
+                      onChange={(e) =>
+                        updateNivel(index, "descuento", e.target.value)
+                      }
+                      className={inputClass}
+                      style={{ borderColor: BRAND.border }}
+                    />
+                  </div>
+                </div>
+                {preview && (
+                  <p
+                    className="mt-3 text-sm font-medium"
+                    style={{ color: BRAND.primary }}
+                  >
+                    {preview}
+                  </p>
+                )}
+              </div>
+            );
+          })}
+
+          {niveles.length < MAX_DESCUENTOS_DURACION && (
+            <button
+              type="button"
+              onClick={addNivel}
+              className="self-start text-sm font-semibold transition-opacity hover:opacity-80"
+              style={{ color: BRAND.primary }}
+            >
+              Añadir otro nivel
+            </button>
           )}
         </div>
       )}
@@ -1288,6 +1447,7 @@ export default function SerProveedorPage() {
       // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS oferta_valida_hasta date;
       // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS oferta_descripcion text;
       // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS disponible_para_viajar boolean DEFAULT false;
+      // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS descuentos_duracion jsonb;
       const ciudadTrimmed = ciudad.trim();
       const detailsForInsert = await geocodeLocationZonesForServices(
         selectedServices,
@@ -1348,6 +1508,7 @@ export default function SerProveedorPage() {
             details.oferta_activa &&
             (serviceId === "ninos" || serviceId === "mascotas") &&
             details.disponible_para_viajar === true,
+          descuentos_duracion: serializeDescuentosDuracionForDb(details),
         };
       });
 
@@ -1564,6 +1725,13 @@ export default function SerProveedorPage() {
                   }
                 />
                 <OfertaEspecialSection
+                  serviceId={serviceId}
+                  details={serviceDetails[serviceId]}
+                  onChange={(details) =>
+                    updateServiceDetails(serviceId, details)
+                  }
+                />
+                <DescuentosDuracionSection
                   serviceId={serviceId}
                   details={serviceDetails[serviceId]}
                   onChange={(details) =>
