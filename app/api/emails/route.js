@@ -1,3 +1,4 @@
+import { createClient } from "@supabase/supabase-js";
 import { Resend } from "resend";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -393,6 +394,75 @@ function mensajeNuevoEmailHtml(data) {
   });
 }
 
+function servicioCompletadoEmailHtml(data) {
+  const dashboardUrl =
+    data.dashboard_url ||
+    `${process.env.NEXT_PUBLIC_URL || "https://homeandheart.es"}/dashboard`;
+
+  return emailLayout({
+    title: "¿Cómo fue tu experiencia? — Home&Heart",
+    bodyHtml: `
+      <h1 style="margin:0;font-size:22px;color:${BRAND_PRIMARY};font-weight:600;text-align:center;">¿Cómo fue tu experiencia?</h1>
+      <p style="margin:20px 0 0;font-size:14px;color:#444;line-height:1.6;text-align:center;">
+        Hola <strong>${data.cliente_nombre || "Cliente"}</strong>, tu servicio en Home&amp;Heart ha finalizado. Cuéntanos cómo fue.
+      </p>
+      <p style="margin:28px 0 0;text-align:center;">
+        <a href="${dashboardUrl}" style="display:inline-block;width:100%;max-width:280px;background-color:#16a34a;color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;padding:14px 24px;border-radius:8px;box-sizing:border-box;">
+          ✅ Todo fue bien
+        </a>
+      </p>
+      <p style="margin:16px 0 0;text-align:center;">
+        <a href="${dashboardUrl}" style="display:inline-block;width:100%;max-width:280px;background-color:${AMBER};color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;padding:14px 24px;border-radius:8px;box-sizing:border-box;">
+          ⚠️ Hubo un problema
+        </a>
+      </p>
+      <p style="margin:24px 0 0;font-size:13px;color:#888;line-height:1.5;text-align:center;">
+        Tienes 24 horas para responder. Si no contestas, el pago se liberará automáticamente.
+      </p>`,
+  });
+}
+
+async function sendServicioCompletadoEmail(data) {
+  if (!data.cliente_id) {
+    return { error: "Falta el campo requerido: cliente_id" };
+  }
+
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return { error: "Supabase no está configurado para este email" };
+  }
+
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+  );
+
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("nombre, email_contacto")
+    .eq("id", data.cliente_id)
+    .single();
+
+  if (profileError || !profile?.email_contacto) {
+    return { error: "No se encontró el email del cliente" };
+  }
+
+  const result = await resend.emails.send({
+    from: FROM,
+    to: profile.email_contacto,
+    subject: "¿Cómo fue tu experiencia? — Home&Heart",
+    html: servicioCompletadoEmailHtml({
+      cliente_nombre: profile.nombre,
+      dashboard_url: `${process.env.NEXT_PUBLIC_URL || "https://homeandheart.es"}/dashboard`,
+    }),
+  });
+
+  if (result.error) {
+    return { error: result.error.message };
+  }
+
+  return { success: true, booking_id: data.booking_id };
+}
+
 async function sendMensajeNuevoEmail(data) {
   const destinatarioEmail = data.destinatario_email || data.destinatario;
 
@@ -452,6 +522,16 @@ export async function POST(request) {
 
     if (tipo === "mensaje_nuevo") {
       const result = await sendMensajeNuevoEmail(data);
+
+      if (result.error) {
+        return Response.json({ error: result.error }, { status: 400 });
+      }
+
+      return Response.json({ success: true });
+    }
+
+    if (tipo === "servicio_completado") {
+      const result = await sendServicioCompletadoEmail(data);
 
       if (result.error) {
         return Response.json({ error: result.error }, { status: 400 });
