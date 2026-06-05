@@ -17,6 +17,7 @@ import {
   getFamiliaMiembros,
   getUserFamiliaActiva,
 } from "@/app/lib/familia";
+import { formatDateRange, loadUserViajes } from "@/app/lib/viajes";
 import Navbar from "@/app/components/Navbar";
 import ReportarModal from "@/app/components/ReportarModal";
 import { BRAND, SERIF } from "@/app/components/brand";
@@ -335,6 +336,7 @@ export default function DashboardPage() {
   const [familiaData, setFamiliaData] = useState(null);
   const [familiaMiembros, setFamiliaMiembros] = useState([]);
   const [familiaReservasCount, setFamiliaReservasCount] = useState(0);
+  const [viajes, setViajes] = useState([]);
 
   async function handleConfirmDeleteAccount() {
     if (!profile?.id || deleteConfirmText !== "DELETE") return;
@@ -515,6 +517,7 @@ export default function DashboardPage() {
         setFamiliaData(null);
         setFamiliaMiembros([]);
         setFamiliaReservasCount(0);
+        setViajes([]);
       } else {
         const { data: bookingsData } = await supabase
           .from("bookings")
@@ -612,6 +615,13 @@ export default function DashboardPage() {
           setFamiliaMiembros([]);
           setFamiliaReservasCount(0);
         }
+
+        const { viajes: viajesData } = await loadUserViajes(
+          supabase,
+          user.id,
+          familiaActiva?.familia?.id ?? null,
+        );
+        setViajes(viajesData);
 
         setPaymentMethodsLoading(true);
         try {
@@ -1425,6 +1435,53 @@ export default function DashboardPage() {
                     Gestionar familia →
                   </Link>
                 </div>
+              )}
+            </Section>
+
+            <Section title="Mis viajes">
+              <div className="-mt-2 mb-4 flex justify-end">
+                <Link
+                  href="/viaje/nuevo"
+                  className="rounded-xl px-4 py-2 text-sm font-semibold text-white no-underline transition-opacity hover:opacity-90"
+                  style={{ backgroundColor: BRAND.primary }}
+                >
+                  Nuevo viaje
+                </Link>
+              </div>
+              {viajes.length === 0 ? (
+                <p className="text-sm text-[#666]">
+                  Crea un tablón de viaje para coordinar los servicios de tu
+                  familia en un solo lugar.
+                </p>
+              ) : (
+                <ul className="flex flex-col gap-3">
+                  {viajes.map((viaje) => (
+                    <li key={viaje.id}>
+                      <Link
+                        href={`/viaje/${viaje.id}`}
+                        className="flex flex-col gap-1 rounded-xl border px-4 py-4 no-underline transition-colors hover:bg-[#f7f5f2] sm:flex-row sm:items-center sm:justify-between"
+                        style={{ borderColor: BRAND.border, color: "#1a1a1a" }}
+                      >
+                        <div>
+                          <p className="font-semibold text-[#1a1a1a]">
+                            {viaje.nombre}
+                          </p>
+                          <p className="mt-0.5 text-xs text-[#888]">
+                            {formatDateRange(
+                              viaje.fecha_inicio,
+                              viaje.fecha_fin,
+                            )}
+                            {viaje.ciudad ? ` · ${viaje.ciudad}` : ""}
+                          </p>
+                        </div>
+                        <p className="text-sm font-medium" style={{ color: BRAND.primary }}>
+                          {viaje.serviciosCount} servicio
+                          {viaje.serviciosCount !== 1 ? "s" : ""} →
+                        </p>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
               )}
             </Section>
 
