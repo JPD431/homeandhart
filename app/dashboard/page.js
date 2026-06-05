@@ -952,7 +952,7 @@ export default function DashboardPage() {
               </button>
 
               <Link
-                href="/completar-perfil"
+                href="/editar-perfil"
                 className="mt-3 inline-block rounded-xl border px-5 py-2.5 text-sm font-semibold no-underline transition-colors hover:bg-[#e8f0fb]"
                 style={{ borderColor: BRAND.primary, color: BRAND.primary }}
               >
@@ -1262,7 +1262,7 @@ export default function DashboardPage() {
               )}
 
               <Link
-                href="/completar-perfil"
+                href="/editar-perfil"
                 className="mt-3 inline-block rounded-xl border px-5 py-2.5 text-sm font-semibold no-underline transition-colors hover:bg-[#e8f0fb]"
                 style={{ borderColor: BRAND.primary, color: BRAND.primary }}
               >
