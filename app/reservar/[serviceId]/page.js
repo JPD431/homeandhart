@@ -12,6 +12,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Navbar from "@/app/components/Navbar";
 import { BRAND, SERIF } from "@/app/components/brand";
 import { applyBestDiscountToBase } from "@/app/lib/descuentosDuracion";
+import { getUserFamiliaActiva } from "@/app/lib/familia";
 import { getHoyDateStr, getPrecioEfectivo, isOfertaActiva } from "@/app/lib/ofertas";
 import { supabase } from "@/lib/supabase";
 
@@ -541,6 +542,8 @@ function calculateServiceBasePrice(
   );
 }
 
+// -- ALTER TABLE bookings ADD COLUMN IF NOT EXISTS familia_id uuid REFERENCES familias(id);
+
 function buildBookingPayload({
   svc,
   userId,
@@ -552,6 +555,7 @@ function buildBookingPayload({
   precioTotal,
   grupoReserva,
   paymentIntentId,
+  familiaId = null,
 }) {
   const v = svc.vertical;
   const isImmediate = svc.reserva_inmediata === true;
@@ -569,6 +573,7 @@ function buildBookingPayload({
     grupo_reserva: grupoReserva,
     // -- ALTER TABLE bookings ADD COLUMN IF NOT EXISTS payment_intent_id text;
     payment_intent_id: paymentIntentId,
+    familia_id: familiaId,
   };
 }
 
@@ -906,6 +911,8 @@ export default function ReservarPage() {
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(null);
   const [useNewCard, setUseNewCard] = useState(false);
   const [aceptaPolitica, setAceptaPolitica] = useState(false);
+  const [familiaInfo, setFamiliaInfo] = useState(null);
+  const [reservarComoFamilia, setReservarComoFamilia] = useState(false);
   const [paymentMethodsLoading, setPaymentMethodsLoading] = useState(false);
   const [disponibilidadChecking, setDisponibilidadChecking] = useState(false);
   const [calendarioError, setCalendarioError] = useState("");
@@ -932,6 +939,11 @@ export default function ReservarPage() {
         .single();
 
       setPerfilCliente(perfilClienteData);
+
+      const familiaActiva = await getUserFamiliaActiva(supabase, user.id);
+      if (familiaActiva) {
+        setFamiliaInfo(familiaActiva.familia);
+      }
 
       setPaymentMethodsLoading(true);
       try {
@@ -1370,6 +1382,8 @@ export default function ReservarPage() {
           precioTotal: applyClientPrice(calc.base),
           grupoReserva,
           paymentIntentId: confirmedPaymentIntentId,
+          familiaId:
+            reservarComoFamilia && familiaInfo?.id ? familiaInfo.id : null,
         });
       });
 
@@ -1484,6 +1498,8 @@ export default function ReservarPage() {
       userEmail,
       perfilCliente,
       router,
+      reservarComoFamilia,
+      familiaInfo,
     ],
   );
 
@@ -2019,6 +2035,40 @@ export default function ReservarPage() {
                     )
                   </p>
                 )}
+              </div>
+            )}
+
+            {precioListo && priceSummary.total > 0 && familiaInfo && (
+              <div
+                className="my-4 flex items-center justify-between gap-3 rounded-xl border px-4 py-3"
+                style={{ borderColor: BRAND.border, backgroundColor: BRAND.warm }}
+              >
+                <label
+                  htmlFor="reservar-familia"
+                  className="text-sm font-medium text-[#444]"
+                >
+                  Reservar bajo el grupo familiar {familiaInfo.nombre}
+                </label>
+                <button
+                  type="button"
+                  id="reservar-familia"
+                  role="switch"
+                  aria-checked={reservarComoFamilia}
+                  onClick={() => setReservarComoFamilia((prev) => !prev)}
+                  className="relative h-7 w-12 shrink-0 rounded-full transition-colors"
+                  style={{
+                    backgroundColor: reservarComoFamilia
+                      ? BRAND.primary
+                      : "#d1d5db",
+                  }}
+                >
+                  <span
+                    className="absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform"
+                    style={{
+                      left: reservarComoFamilia ? "22px" : "2px",
+                    }}
+                  />
+                </button>
               </div>
             )}
 

@@ -604,6 +604,39 @@ export async function POST(request) {
       return Response.json({ success: true });
     }
 
+    if (tipo === "invitacion_familia") {
+      const aceptarUrl = data.aceptar_url || "#";
+      const result = await resend.emails.send({
+        from: FROM,
+        to: data.destinatario_email,
+        subject: "Invitación a grupo familiar — Home&Heart",
+        html: emailLayout({
+          title: "Invitación a grupo familiar",
+          bodyHtml: `
+            <h1 style="margin:0 0 16px;font-size:20px;color:${BRAND_PRIMARY};">Invitación a grupo familiar</h1>
+            <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#444;">
+              <strong>${data.invitador_nombre ?? "Un miembro"}</strong> te ha invitado a unirte al grupo familiar
+              <strong>${data.familia_nombre ?? "Home&Heart"}</strong> en Home&amp;Heart.
+            </p>
+            <p style="margin:0 0 24px;font-size:14px;line-height:1.6;color:#666;">
+              Podrás ver las reservas del grupo y hacer reservas bajo el mismo grupo familiar.
+            </p>
+            <p style="margin:0;text-align:center;">
+              <a href="${aceptarUrl}" style="display:inline-block;background-color:${BRAND_PRIMARY};color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:10px;font-size:15px;font-weight:600;">
+                Aceptar invitación
+              </a>
+            </p>
+          `,
+        }),
+      });
+
+      if (result.error) {
+        return Response.json({ error: result.error.message }, { status: 400 });
+      }
+
+      return Response.json({ success: true });
+    }
+
     if (tipo === "incidencia") {
       const adminEmail = process.env.ADMIN_EMAIL || FROM;
       const result = await resend.emails.send({

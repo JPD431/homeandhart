@@ -11,6 +11,12 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import FavoritoButton from "@/app/components/FavoritoButton";
+import {
+  countFamiliaReservas,
+  getFamiliaInitials,
+  getFamiliaMiembros,
+  getUserFamiliaActiva,
+} from "@/app/lib/familia";
 import Navbar from "@/app/components/Navbar";
 import ReportarModal from "@/app/components/ReportarModal";
 import { BRAND, SERIF } from "@/app/components/brand";
@@ -326,6 +332,9 @@ export default function DashboardPage() {
   const [deleteError, setDeleteError] = useState("");
   const [reportModal, setReportModal] = useState(null);
   const [favoritos, setFavoritos] = useState([]);
+  const [familiaData, setFamiliaData] = useState(null);
+  const [familiaMiembros, setFamiliaMiembros] = useState([]);
+  const [familiaReservasCount, setFamiliaReservasCount] = useState(0);
 
   async function handleConfirmDeleteAccount() {
     if (!profile?.id || deleteConfirmText !== "DELETE") return;
@@ -503,6 +512,9 @@ export default function DashboardPage() {
           setBookings([]);
         }
         setFavoritos([]);
+        setFamiliaData(null);
+        setFamiliaMiembros([]);
+        setFamiliaReservasCount(0);
       } else {
         const { data: bookingsData } = await supabase
           .from("bookings")
@@ -580,6 +592,25 @@ export default function DashboardPage() {
           );
         } else {
           setFavoritos([]);
+        }
+
+        const familiaActiva = await getUserFamiliaActiva(supabase, user.id);
+        if (familiaActiva) {
+          setFamiliaData(familiaActiva.familia);
+          const miembros = await getFamiliaMiembros(
+            supabase,
+            familiaActiva.familia.id,
+          );
+          setFamiliaMiembros(miembros.filter((m) => m.estado === "activo"));
+          const reservasCount = await countFamiliaReservas(
+            supabase,
+            familiaActiva.familia.id,
+          );
+          setFamiliaReservasCount(reservasCount);
+        } else {
+          setFamiliaData(null);
+          setFamiliaMiembros([]);
+          setFamiliaReservasCount(0);
         }
 
         setPaymentMethodsLoading(true);
@@ -1310,6 +1341,90 @@ export default function DashboardPage() {
                     );
                   })}
                 </ul>
+              )}
+            </Section>
+
+            <Section title="Mi familia">
+              {!familiaData ? (
+                <div>
+                  <p className="text-sm text-[#666]">
+                    Crea un grupo familiar y coordina reservas con toda la
+                    familia.
+                  </p>
+                  <Link
+                    href="/familia"
+                    className="mt-4 inline-block rounded-xl px-5 py-3 text-sm font-semibold text-white no-underline transition-opacity hover:opacity-90"
+                    style={{ backgroundColor: BRAND.primary }}
+                  >
+                    Crear grupo
+                  </Link>
+                </div>
+              ) : (
+                <div>
+                  <p
+                    className="text-lg font-semibold text-[#1a1a1a]"
+                    style={{ fontFamily: SERIF }}
+                  >
+                    {familiaData.nombre}
+                  </p>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    {familiaMiembros.slice(0, 6).map((miembro) => {
+                      const perfil = miembro.profiles;
+                      const avatarUrl =
+                        perfil?.foto_perfil || perfil?.avatar_url || null;
+                      const initials = getFamiliaInitials(
+                        perfil?.nombre,
+                        perfil?.apellido,
+                      );
+                      return avatarUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          key={miembro.id}
+                          src={avatarUrl}
+                          alt=""
+                          title={
+                            [perfil?.nombre, perfil?.apellido]
+                              .filter(Boolean)
+                              .join(" ") || "Miembro"
+                          }
+                          className="h-9 w-9 rounded-full object-cover ring-2 ring-white"
+                        />
+                      ) : (
+                        <span
+                          key={miembro.id}
+                          title={
+                            [perfil?.nombre, perfil?.apellido]
+                              .filter(Boolean)
+                              .join(" ") || "Miembro"
+                          }
+                          className="flex h-9 w-9 items-center justify-center rounded-full text-xs font-semibold ring-2 ring-white"
+                          style={{
+                            backgroundColor: BRAND.light,
+                            color: BRAND.primary,
+                          }}
+                        >
+                          {initials}
+                        </span>
+                      );
+                    })}
+                    {familiaMiembros.length > 6 && (
+                      <span className="text-xs text-[#888]">
+                        +{familiaMiembros.length - 6}
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-3 text-sm text-[#666]">
+                    {familiaReservasCount} reserva
+                    {familiaReservasCount !== 1 ? "s" : ""} del grupo
+                  </p>
+                  <Link
+                    href="/familia"
+                    className="mt-4 inline-block text-sm font-medium no-underline transition-opacity hover:opacity-80"
+                    style={{ color: BRAND.primary }}
+                  >
+                    Gestionar familia →
+                  </Link>
+                </div>
               )}
             </Section>
 
