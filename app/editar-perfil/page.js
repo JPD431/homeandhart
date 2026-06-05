@@ -10,6 +10,7 @@ import {
   normalizeDescuentosDuracion,
   serializeDescuentosDuracionForDb,
 } from "@/app/lib/descuentosDuracion";
+import { RELACION_OPTIONS } from "@/app/lib/referencias";
 import { supabase } from "@/lib/supabase";
 
 const DARK_BLUE = "#163a6b";
@@ -706,6 +707,13 @@ export default function EditarPerfilPage() {
   const [submitting, setSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [referencias, setReferencias] = useState([]);
+  const [refNombre, setRefNombre] = useState("");
+  const [refEmail, setRefEmail] = useState("");
+  const [refRelacion, setRefRelacion] = useState(RELACION_OPTIONS[0]);
+  const [refSending, setRefSending] = useState(false);
+  const [refMessage, setRefMessage] = useState("");
+  const [refError, setRefError] = useState("");
 
   useEffect(() => {
     async function load() {
@@ -755,6 +763,16 @@ export default function EditarPerfilPage() {
         setServices((serviceRows ?? []).map(mapServiceFromDb));
       }
 
+      if (perfilData?.role === "proveedor") {
+        const { data: refsData } = await supabase
+          .from("referencias")
+          .select("id, nombre_referente, email_referente, relacion, estado, created_at")
+          .eq("proveedor_id", user.id)
+          .order("created_at", { ascending: false });
+
+        setReferencias(refsData ?? []);
+      }
+
       setLoading(false);
     }
 
@@ -780,6 +798,64 @@ export default function EditarPerfilPage() {
     if (!file) return;
     setProfilePhotoFile(file);
     setFotoPreview(URL.createObjectURL(file));
+  }
+
+  async function handleSolicitarReferencia(e) {
+    e.preventDefault();
+    if (!userId || !refNombre.trim() || !refEmail.trim()) {
+      setRefError("Completa el nombre y el email del referente.");
+      return;
+    }
+
+    setRefSending(true);
+    setRefError("");
+    setRefMessage("");
+
+    const token = crypto.randomUUID();
+
+    const { error: insertError } = await supabase.from("referencias").insert({
+      proveedor_id: userId,
+      nombre_referente: refNombre.trim(),
+      email_referente: refEmail.trim().toLowerCase(),
+      relacion: refRelacion,
+      estado: "pendiente",
+      token,
+    });
+
+    if (insertError) {
+      setRefSending(false);
+      setRefError(insertError.message);
+      return;
+    }
+
+    const proveedorNombre =
+      [nombre, apellido].filter(Boolean).join(" ") || "Proveedor";
+
+    await fetch("/api/emails", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        tipo: "solicitud_referencia",
+        destinatario_email: refEmail.trim().toLowerCase(),
+        referente_nombre: refNombre.trim(),
+        proveedor_nombre: proveedorNombre,
+        proveedor_foto: fotoPreview || fotoPerfil || null,
+        aval_url: `${process.env.NEXT_PUBLIC_URL || ""}/referencias/${token}`,
+      }),
+    });
+
+    const { data: refsData } = await supabase
+      .from("referencias")
+      .select("id, nombre_referente, email_referente, relacion, estado, created_at")
+      .eq("proveedor_id", userId)
+      .order("created_at", { ascending: false });
+
+    setReferencias(refsData ?? []);
+    setRefNombre("");
+    setRefEmail("");
+    setRefRelacion(RELACION_OPTIONS[0]);
+    setRefSending(false);
+    setRefMessage("Solicitud enviada. El referente recibirá un email para completar el aval.");
   }
 
   async function handleSubmit(e) {
@@ -1144,6 +1220,121 @@ export default function EditarPerfilPage() {
             </button>
           )}
         </section>
+
+        {perfil?.role === "proveedor" && (
+          <section className="border-t py-10" style={{ borderColor: BRAND.border }}>
+            <SectionLabel number="03" title="Referencias externas" />
+            <h2
+              className="mt-3 text-xl text-[#1a1a1a]"
+              style={{ fontFamily: SERIF }}
+            >
+              Avales de personas que te conocen
+            </h2>
+            <p className="mt-2 text-sm text-[#666]">
+              Pide a familias, vecinos o compañeros que avalen tu perfil.
+            </p>
+
+            {referencias.length > 0 && (
+              <ul className="mt-5 flex flex-col gap-2">
+                {referencias.map((ref) => (
+                  <li
+                    key={ref.id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-xl border px-4 py-3"
+                    style={{ borderColor: BRAND.border }}
+                  >
+                    <div>
+                      <p className="text-sm font-medium text-[#1a1a1a]">
+                        {ref.nombre_referente}
+                      </p>
+                      <p className="text-xs text-[#888]">
+                        {ref.relacion} · {ref.email_referente}
+                      </p>
+                    </div>
+                    <span
+                      className="rounded-full px-2.5 py-0.5 text-[11px] font-semibold"
+                      style={{
+                        backgroundColor:
+                          ref.estado === "completada" ? "#dcfce7" : "#fef3c7",
+                        color:
+                          ref.estado === "completada" ? "#166534" : "#92400e",
+                      }}
+                    >
+                      {ref.estado === "completada" ? "Completada" : "Pendiente"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <form
+              onSubmit={handleSolicitarReferencia}
+              className="mt-6 rounded-2xl border bg-white p-5"
+              style={{ borderColor: BRAND.border }}
+            >
+              {refError && (
+                <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+                  {refError}
+                </p>
+              )}
+              {refMessage && (
+                <p className="mb-3 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">
+                  {refMessage}
+                </p>
+              )}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-[#444]">
+                    Nombre del referente
+                  </label>
+                  <input
+                    type="text"
+                    value={refNombre}
+                    onChange={(e) => setRefNombre(e.target.value)}
+                    className={inputClass}
+                    style={{ borderColor: BRAND.border }}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-[#444]">
+                    Email del referente
+                  </label>
+                  <input
+                    type="email"
+                    value={refEmail}
+                    onChange={(e) => setRefEmail(e.target.value)}
+                    className={inputClass}
+                    style={{ borderColor: BRAND.border }}
+                  />
+                </div>
+              </div>
+              <div className="mt-4">
+                <label className="mb-1.5 block text-xs font-medium text-[#444]">
+                  Relación
+                </label>
+                <select
+                  value={refRelacion}
+                  onChange={(e) => setRefRelacion(e.target.value)}
+                  className={inputClass}
+                  style={{ borderColor: BRAND.border }}
+                >
+                  {RELACION_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button
+                type="submit"
+                disabled={refSending}
+                className="mt-4 rounded-xl px-5 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                style={{ backgroundColor: BRAND.primary }}
+              >
+                {refSending ? "Enviando…" : "Solicitar referencia"}
+              </button>
+            </form>
+          </section>
+        )}
 
         {successMessage && (
           <p className="mb-4 rounded-lg bg-green-50 px-4 py-3 text-sm text-green-700">

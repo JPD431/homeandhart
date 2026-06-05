@@ -20,6 +20,7 @@ import {
   isOfertaActiva,
 } from "@/app/lib/ofertas";
 import { formatDescuentosDuracionList } from "@/app/lib/descuentosDuracion";
+import { getReferenteInitial } from "@/app/lib/referencias";
 import { supabase } from "@/lib/supabase";
 
 const DARK_BLUE = "#163a6b";
@@ -310,6 +311,17 @@ export default async function ProveedorPage({ params }) {
     .select("valoracion")
     .eq("proveedor_id", id);
 
+  const { data: referenciasCompletadas } = await supabase
+    .from("referencias")
+    .select(
+      "id, nombre_referente, relacion, conoce_desde, recomendaria, comentario",
+    )
+    .eq("proveedor_id", id)
+    .eq("estado", "completada")
+    .order("created_at", { ascending: false });
+
+  const avalesCount = referenciasCompletadas?.length ?? 0;
+
   const reviewCount = allRatings?.length ?? 0;
   const averageRating =
     reviewCount > 0
@@ -412,6 +424,12 @@ export default async function ProveedorPage({ params }) {
                   >
                     <CheckBadgeIcon className="h-3.5 w-3.5" />
                     Verificado
+                  </span>
+                )}
+                {avalesCount > 0 && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
+                    {avalesCount} aval{avalesCount !== 1 ? "es" : ""} externos
+                    verificados
                   </span>
                 )}
               </div>
@@ -633,6 +651,64 @@ export default async function ProveedorPage({ params }) {
           services={servicesParaCalendario}
           bloqueos={bloqueosCalendario}
         />
+
+        {avalesCount > 0 && (
+          <section
+            className="mt-8 rounded-2xl border bg-white p-6 sm:p-8"
+            style={{ borderColor: BRAND.border }}
+          >
+            <h2
+              className="text-xl font-bold text-[#1a1a1a] sm:text-2xl"
+              style={{ fontFamily: SERIF }}
+            >
+              Avales externos
+            </h2>
+            <p className="mt-1 text-sm text-[#666]">
+              Personas que conocen a {fullName || "este proveedor"} y avalan su
+              trabajo
+            </p>
+            <ul className="mt-6 flex flex-col gap-4">
+              {referenciasCompletadas.map((ref) => (
+                <li
+                  key={ref.id}
+                  className="rounded-xl border px-4 py-4"
+                  style={{ borderColor: BRAND.border }}
+                >
+                  <div className="flex items-start gap-3">
+                    <span
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold"
+                      style={{
+                        backgroundColor: BRAND.light,
+                        color: BRAND.primary,
+                      }}
+                    >
+                      {getReferenteInitial(ref.nombre_referente)}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-[#1a1a1a]">
+                        {ref.nombre_referente}
+                      </p>
+                      <p className="mt-0.5 text-xs text-[#888]">
+                        {ref.relacion}
+                        {ref.conoce_desde ? ` · ${ref.conoce_desde}` : ""}
+                      </p>
+                      {ref.comentario && (
+                        <p className="mt-2 text-sm leading-relaxed text-[#444]">
+                          {ref.comentario}
+                        </p>
+                      )}
+                      {ref.recomendaria === true && (
+                        <p className="mt-2 text-xs font-semibold text-green-700">
+                          ¿Recomendaría? ✓
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
         <section
           className="mt-8 rounded-2xl border bg-white p-6 sm:p-8"

@@ -604,6 +604,50 @@ export async function POST(request) {
       return Response.json({ success: true });
     }
 
+    if (tipo === "solicitud_referencia") {
+      const avalUrl = data.aval_url || "#";
+      const proveedorNombre = data.proveedor_nombre ?? "Un proveedor";
+      const fotoHtml = data.proveedor_foto
+        ? `<img src="${data.proveedor_foto}" alt="" width="72" height="72" style="border-radius:50%;object-fit:cover;display:block;margin:0 auto 16px;" />`
+        : "";
+
+      const result = await resend.emails.send({
+        from: FROM,
+        to: data.destinatario_email,
+        subject: `${proveedorNombre} te ha pedido que avales su perfil en Home&Heart`,
+        html: emailLayout({
+          title: "Solicitud de aval",
+          bodyHtml: `
+            <div style="text-align:center;margin-bottom:20px;">
+              ${fotoHtml}
+              <p style="margin:0;font-size:18px;font-weight:600;color:${BRAND_PRIMARY};">${proveedorNombre}</p>
+            </div>
+            <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#444;">
+              Hola ${data.referente_nombre ?? ""}, <strong>${proveedorNombre}</strong> te ha pedido que avales su perfil en Home&amp;Heart.
+              Los avales de personas que conocen al proveedor ayudan a las familias a confiar antes de reservar.
+            </p>
+            <p style="margin:0 0 8px;font-size:14px;font-weight:600;color:#444;">En el formulario podrás indicar:</p>
+            <ul style="margin:0 0 20px;padding-left:20px;font-size:14px;line-height:1.8;color:#666;">
+              <li>¿Cuánto tiempo conoces a ${proveedorNombre.split(" ")[0]}?</li>
+              <li>¿Recomendarías sus servicios?</li>
+              <li>Un comentario libre sobre tu experiencia</li>
+            </ul>
+            <p style="margin:0;text-align:center;">
+              <a href="${avalUrl}" style="display:inline-block;background-color:${BRAND_PRIMARY};color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:10px;font-size:15px;font-weight:600;">
+                Enviar mi aval
+              </a>
+            </p>
+          `,
+        }),
+      });
+
+      if (result.error) {
+        return Response.json({ error: result.error.message }, { status: 400 });
+      }
+
+      return Response.json({ success: true });
+    }
+
     if (tipo === "cancelacion_garantia") {
       const alternativas = Array.isArray(data.alternativas)
         ? data.alternativas.slice(0, 3)
