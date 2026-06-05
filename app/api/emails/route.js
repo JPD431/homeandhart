@@ -680,6 +680,7 @@ export async function POST(request) {
                 </td>
               </tr>
             </table>
+            <p style="margin:10px 0 0;font-size:11px;color:#888;">* El precio puede variar según la disponibilidad del proveedor</p>
           </div>
         `,
         )

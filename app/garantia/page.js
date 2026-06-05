@@ -303,7 +303,7 @@ export default function GarantiaPage() {
                 {
                   emoji: "💰",
                   title: "Precio garantizado",
-                  desc: "Pagas lo mismo que en tu reserva original.",
+                  desc: "Intentamos ofrecerte alternativas con precio similar al de tu reserva original. El precio final puede variar según disponibilidad.",
                 },
                 {
                   emoji: "✅",
