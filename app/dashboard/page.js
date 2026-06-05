@@ -11,6 +11,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import Navbar from "@/app/components/Navbar";
+import ReportarModal from "@/app/components/ReportarModal";
 import { BRAND, SERIF } from "@/app/components/brand";
 import { supabase } from "@/lib/supabase";
 
@@ -316,6 +317,7 @@ export default function DashboardPage() {
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState("");
+  const [reportModal, setReportModal] = useState(null);
 
   async function handleConfirmDeleteAccount() {
     if (!profile?.id || deleteConfirmText !== "DELETE") return;
@@ -495,7 +497,16 @@ export default function DashboardPage() {
       } else {
         const { data: bookingsData } = await supabase
           .from("bookings")
-          .select("*")
+          .select(
+            `
+            *,
+            services:service_id (
+              titulo,
+              proveedor_id,
+              profiles:proveedor_id (nombre, apellido)
+            )
+          `,
+          )
           .eq("cliente_id", user.id)
           .order("created_at", { ascending: false });
 
@@ -1184,6 +1195,33 @@ export default function DashboardPage() {
                             Dejar una valoración
                           </Link>
                         )}
+
+                        {estado === "completada" &&
+                          booking.services?.proveedor_id && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const proveedor = booking.services.profiles;
+                                const proveedorNombre =
+                                  [proveedor?.nombre, proveedor?.apellido]
+                                    .filter(Boolean)
+                                    .join(" ") ||
+                                  booking.services.titulo ||
+                                  "Proveedor";
+                                setReportModal({
+                                  reportedId: booking.services.proveedor_id,
+                                  reportedName: proveedorNombre,
+                                  bookingId: booking.id,
+                                  tipo: "proveedor",
+                                  fechaInicio: booking.fecha_inicio,
+                                  fechaFin: booking.fecha_fin,
+                                });
+                              }}
+                              className="self-start text-xs text-[#888] underline transition-colors hover:text-[#1d4f91]"
+                            >
+                              Reportar problema
+                            </button>
+                          )}
                       </li>
                     );
                   })}
@@ -1385,6 +1423,19 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {reportModal && (
+        <ReportarModal
+          open
+          onClose={() => setReportModal(null)}
+          reportedName={reportModal.reportedName}
+          reportedId={reportModal.reportedId}
+          bookingId={reportModal.bookingId}
+          tipo={reportModal.tipo}
+          fechaInicio={reportModal.fechaInicio}
+          fechaFin={reportModal.fechaFin}
+        />
       )}
 
       {showRoleSwitchModal && (

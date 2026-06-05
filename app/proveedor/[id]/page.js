@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import CalendarioDisponibilidad from "@/app/components/CalendarioDisponibilidad";
 import Navbar from "@/app/components/Navbar";
 import PreguntarButton from "@/app/components/PreguntarButton";
+import ReportarPerfilButton from "@/app/components/ReportarPerfilButton";
 import { BRAND, SERIF } from "@/app/components/brand";
 import {
   ProveedorBioText,
@@ -680,6 +681,11 @@ export default async function ProveedorPage({ params }) {
             </>
           )}
         </section>
+
+        <ReportarPerfilButton
+          proveedorId={id}
+          proveedorNombre={fullName || "Proveedor"}
+        />
         </ProveedorTranslateProvider>
       </main>
 

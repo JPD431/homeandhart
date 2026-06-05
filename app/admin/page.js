@@ -10,6 +10,7 @@ const TABS = [
   { id: "pendientes", label: "Pendientes de verificar" },
   { id: "verificados", label: "Verificados" },
   { id: "rechazados", label: "Rechazados" },
+  { id: "reportes", label: "Reportes" },
   { id: "ingresos", label: "Ingresos" },
 ];
 
@@ -219,6 +220,7 @@ export default function AdminPage() {
   const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [completedBookings, setCompletedBookings] = useState([]);
+  const [reports, setReports] = useState([]);
 
   const loadData = useCallback(async () => {
     setErrorMessage("");
@@ -304,6 +306,23 @@ export default function AdminPage() {
       setCompletedBookings(bookingsData ?? []);
     }
 
+    const { data: reportsData, error: reportsError } = await supabase
+      .from("reports")
+      .select(
+        `
+        *,
+        reporter:reporter_id (nombre, apellido),
+        reported:reported_id (nombre, apellido)
+      `,
+      )
+      .order("created_at", { ascending: false });
+
+    if (reportsError) {
+      setErrorMessage(reportsError.message);
+    } else {
+      setReports(reportsData ?? []);
+    }
+
     setLoading(false);
   }, [router]);
 
@@ -312,13 +331,25 @@ export default function AdminPage() {
   }, [loadData]);
 
   const counts = useMemo(() => {
-    const result = { pendientes: 0, verificados: 0, rechazados: 0, ingresos: 0 };
+    const result = {
+      pendientes: 0,
+      verificados: 0,
+      rechazados: 0,
+      reportes: 0,
+      ingresos: 0,
+    };
     for (const p of providers) {
       result[getProviderStatus(p)] += 1;
     }
+    result.reportes = reports.filter((r) => r.estado === "pendiente").length;
     result.ingresos = completedBookings.length;
     return result;
-  }, [providers, completedBookings]);
+  }, [providers, completedBookings, reports]);
+
+  const pendingReports = useMemo(
+    () => reports.filter((r) => r.estado === "pendiente"),
+    [reports],
+  );
 
   const revenueSummary = useMemo(() => {
     let totalCobrado = 0;
@@ -365,6 +396,31 @@ export default function AdminPage() {
 
     setRejectingId(null);
     setRejectReason("");
+    await loadData();
+  }
+
+  async function handleReportStatus(reportId, estado) {
+    setActionLoading(reportId);
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    const { error } = await supabase
+      .from("reports")
+      .update({ estado })
+      .eq("id", reportId);
+
+    setActionLoading(null);
+
+    if (error) {
+      setErrorMessage(error.message);
+      return;
+    }
+
+    setSuccessMessage(
+      estado === "resuelto"
+        ? "Reporte marcado como resuelto."
+        : "Reporte desestimado.",
+    );
     await loadData();
   }
 
@@ -543,7 +599,110 @@ export default function AdminPage() {
           </p>
         )}
 
-        {activeTab === "ingresos" ? (
+        {activeTab === "reportes" ? (
+          <div className="mt-6">
+            {pendingReports.length === 0 ? (
+              <p
+                className="rounded-2xl border bg-white px-6 py-10 text-center text-sm text-[#666]"
+                style={{ borderColor: BRAND.border }}
+              >
+                No hay reportes pendientes.
+              </p>
+            ) : (
+              <ul className="flex flex-col gap-4">
+                {pendingReports.map((report) => {
+                  const reporterNombre = report.reporter
+                    ? [report.reporter.nombre, report.reporter.apellido]
+                        .filter(Boolean)
+                        .join(" ")
+                    : "—";
+                  const reportedNombre = report.reported
+                    ? [report.reported.nombre, report.reported.apellido]
+                        .filter(Boolean)
+                        .join(" ")
+                    : "—";
+                  const isBusy = actionLoading === report.id;
+
+                  return (
+                    <li
+                      key={report.id}
+                      className="rounded-2xl border bg-white p-6"
+                      style={{ borderColor: BRAND.border }}
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-[#1a1a1a]">
+                            {reporterNombre}{" "}
+                            <span className="font-normal text-[#888]">
+                              reporta a
+                            </span>{" "}
+                            {reportedNombre}
+                          </p>
+                          <p className="mt-1 text-xs text-[#888]">
+                            {formatDate(report.created_at)}
+                            {report.tipo ? ` · ${report.tipo}` : ""}
+                          </p>
+                        </div>
+                        <span
+                          className="rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide"
+                          style={{
+                            backgroundColor: "#fef3c7",
+                            color: "#92400e",
+                          }}
+                        >
+                          Pendiente
+                        </span>
+                      </div>
+
+                      <div className="mt-4">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-[#888]">
+                          Motivo
+                        </p>
+                        <p className="mt-1 text-sm text-[#1a1a1a]">
+                          {report.motivo}
+                        </p>
+                      </div>
+
+                      {report.descripcion && (
+                        <div className="mt-3">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-[#888]">
+                            Descripción
+                          </p>
+                          <p className="mt-1 text-sm leading-relaxed text-[#444]">
+                            {report.descripcion}
+                          </p>
+                        </div>
+                      )}
+
+                      <div className="mt-5 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          disabled={isBusy}
+                          onClick={() => handleReportStatus(report.id, "resuelto")}
+                          className="rounded-xl px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                          style={{ backgroundColor: BRAND.primary }}
+                        >
+                          {isBusy ? "Procesando…" : "Resuelto"}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isBusy}
+                          onClick={() =>
+                            handleReportStatus(report.id, "desestimado")
+                          }
+                          className="rounded-xl border px-4 py-2 text-sm font-semibold text-[#666] transition-colors hover:bg-[#f7f5f2] disabled:opacity-60"
+                          style={{ borderColor: BRAND.border }}
+                        >
+                          Desestimar
+                        </button>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        ) : activeTab === "ingresos" ? (
           <div className="mt-6">
             <div className="grid gap-4 sm:grid-cols-3">
               <div
