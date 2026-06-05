@@ -905,6 +905,7 @@ export default function ReservarPage() {
   const [savedPaymentMethods, setSavedPaymentMethods] = useState([]);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(null);
   const [useNewCard, setUseNewCard] = useState(false);
+  const [aceptaPolitica, setAceptaPolitica] = useState(false);
   const [paymentMethodsLoading, setPaymentMethodsLoading] = useState(false);
   const [disponibilidadChecking, setDisponibilidadChecking] = useState(false);
   const [calendarioError, setCalendarioError] = useState("");
@@ -1995,6 +1996,30 @@ export default function ReservarPage() {
               </div>
             )}
 
+            {precioListo && priceSummary.total > 0 && (
+              <div className="my-4 flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  id="acepta-politica"
+                  required
+                  checked={aceptaPolitica}
+                  onChange={(e) => setAceptaPolitica(e.target.checked)}
+                  className="mt-1 cursor-pointer"
+                />
+                <label htmlFor="acepta-politica" className="text-sm text-[#444]">
+                  He leído y acepto la política de cancelación{" "}
+                  <span className="font-medium text-[#1d4f91]">
+                    {service?.cancellation_policy === "flexible"
+                      ? "Flexible"
+                      : service?.cancellation_policy === "moderada"
+                        ? "Moderada"
+                        : "Estricta"}
+                  </span>{" "}
+                  y las condiciones de este servicio
+                </label>
+              </div>
+            )}
+
             {precioListo && priceSummary.total > 0 ? (
               paymentMethodsLoading || paymentIntentLoading ? (
                 <p className="mt-6 text-center text-sm text-[#666]">
@@ -2016,7 +2041,7 @@ export default function ReservarPage() {
                   getBookingDateError={() =>
                     validateBookingDates(vertical, fechaInicio, hora)
                   }
-                  disabled={!!successMessage}
+                  disabled={!!successMessage || !aceptaPolitica}
                 />
               ) : clientSecret && paymentMetadata ? (
                 <>
@@ -2041,7 +2066,7 @@ export default function ReservarPage() {
                       hora={hora}
                       setErrorMessage={setErrorMessage}
                       service={service}
-                      disabled={!!successMessage}
+                      disabled={!!successMessage || !aceptaPolitica}
                     />
                   </Elements>
                   {savedPaymentMethods.length > 0 && (

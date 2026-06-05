@@ -27,6 +27,7 @@ export default function RegistroPage() {
   const [role, setRole] = useState("cliente");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [aceptaTerminos, setAceptaTerminos] = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -183,11 +184,44 @@ export default function RegistroPage() {
             </p>
           )}
 
+          <div className="flex items-start gap-3">
+            <input
+              type="checkbox"
+              id="terminos"
+              required
+              checked={aceptaTerminos}
+              onChange={(e) => setAceptaTerminos(e.target.checked)}
+              className="mt-1 cursor-pointer"
+            />
+            <label htmlFor="terminos" className="text-sm text-[#444]">
+              He leído y acepto los{" "}
+              <a
+                href="/legal/terminos"
+                target="_blank"
+                className="text-[#1d4f91] underline"
+              >
+                Términos de uso
+              </a>{" "}
+              y la{" "}
+              <a
+                href="/legal/privacidad"
+                target="_blank"
+                className="text-[#1d4f91] underline"
+              >
+                Política de privacidad
+              </a>{" "}
+              de Home&Heart
+            </label>
+          </div>
+
           <button
             type="submit"
-            disabled={loading}
-            className="mt-2 w-full rounded-xl py-3.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
-            style={{ backgroundColor: BRAND.primary }}
+            disabled={loading || !aceptaTerminos}
+            className="mt-2 w-full rounded-xl py-3.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-100"
+            style={{
+              backgroundColor:
+                loading || !aceptaTerminos ? "#9ca3af" : BRAND.primary,
+            }}
           >
             {loading ? "Creando cuenta…" : "Crear cuenta"}
           </button>
