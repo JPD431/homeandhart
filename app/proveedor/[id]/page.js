@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import CalendarioDisponibilidad from "@/app/components/CalendarioDisponibilidad";
 import Navbar from "@/app/components/Navbar";
 import PreguntarButton from "@/app/components/PreguntarButton";
+import FavoritoButton from "@/app/components/FavoritoButton";
 import ReportarPerfilButton from "@/app/components/ReportarPerfilButton";
 import { BRAND, SERIF } from "@/app/components/brand";
 import {
@@ -369,9 +370,13 @@ export default async function ProveedorPage({ params }) {
         >
         {/* Header del proveedor */}
         <header
-          className="rounded-2xl border bg-white p-6 sm:p-8"
+          className="relative rounded-2xl border bg-white p-6 sm:p-8"
           style={{ borderColor: BRAND.border }}
         >
+          <FavoritoButton
+            proveedorId={id}
+            className="absolute right-4 top-4 z-10"
+          />
           <div className="flex flex-col items-center gap-5 sm:flex-row sm:items-start">
             {avatarUrl ? (
               // eslint-disable-next-line @next/next/no-img-element

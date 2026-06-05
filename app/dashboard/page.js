@@ -10,6 +10,7 @@ import {
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import FavoritoButton from "@/app/components/FavoritoButton";
 import Navbar from "@/app/components/Navbar";
 import ReportarModal from "@/app/components/ReportarModal";
 import { BRAND, SERIF } from "@/app/components/brand";
@@ -284,6 +285,12 @@ function StatusBadge({ status }) {
   );
 }
 
+function getInitials(nombre, apellido) {
+  const first = nombre?.trim()?.[0] ?? "";
+  const last = apellido?.trim()?.[0] ?? "";
+  return (first + last).toUpperCase() || "?";
+}
+
 function formatPrice(precio, vertical) {
   const config = VERTICALS[vertical] ?? VERTICALS.alojamiento;
   if (precio == null || precio === "") return "Consultar";
@@ -318,6 +325,7 @@ export default function DashboardPage() {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState("");
   const [reportModal, setReportModal] = useState(null);
+  const [favoritos, setFavoritos] = useState([]);
 
   async function handleConfirmDeleteAccount() {
     if (!profile?.id || deleteConfirmText !== "DELETE") return;
@@ -494,6 +502,7 @@ export default function DashboardPage() {
         } else {
           setBookings([]);
         }
+        setFavoritos([]);
       } else {
         const { data: bookingsData } = await supabase
           .from("bookings")
@@ -526,6 +535,51 @@ export default function DashboardPage() {
           );
         } else {
           setReviewedBookingIds(new Set());
+        }
+
+        const { data: favoritosData } = await supabase
+          .from("favoritos")
+          .select(
+            `
+            id,
+            proveedor_id,
+            profiles:proveedor_id (
+              id,
+              nombre,
+              apellido,
+              ciudad,
+              foto_perfil,
+              avatar_url
+            )
+          `,
+          )
+          .eq("cliente_id", user.id)
+          .order("created_at", { ascending: false });
+
+        const favoritosList = favoritosData ?? [];
+        if (favoritosList.length > 0) {
+          const proveedorIds = favoritosList.map((f) => f.proveedor_id);
+          const { data: favServices } = await supabase
+            .from("services")
+            .select("id, proveedor_id, vertical, titulo")
+            .in("proveedor_id", proveedorIds);
+
+          const servicesByProvider = {};
+          for (const svc of favServices ?? []) {
+            if (!servicesByProvider[svc.proveedor_id]) {
+              servicesByProvider[svc.proveedor_id] = [];
+            }
+            servicesByProvider[svc.proveedor_id].push(svc);
+          }
+
+          setFavoritos(
+            favoritosList.map((f) => ({
+              ...f,
+              services: servicesByProvider[f.proveedor_id] ?? [],
+            })),
+          );
+        } else {
+          setFavoritos([]);
         }
 
         setPaymentMethodsLoading(true);
@@ -1230,9 +1284,109 @@ export default function DashboardPage() {
             </Section>
 
             <Section title="Mis favoritos">
-              <p className="text-sm text-[#666]">
-                Próximamente podrás guardar tus proveedores favoritos.
-              </p>
+              {favoritos.length === 0 ? (
+                <p className="text-sm text-[#666]">
+                  Aún no tienes proveedores favoritos. Explora y guarda los que
+                  más te interesen.
+                </p>
+              ) : (
+                <ul className="flex flex-col gap-4">
+                  {favoritos.map((favorito) => {
+                    const proveedor = favorito.profiles ?? {};
+                    const nombreCompleto =
+                      [proveedor.nombre, proveedor.apellido]
+                        .filter(Boolean)
+                        .join(" ") || "Proveedor";
+                    const avatarUrl =
+                      proveedor.foto_perfil || proveedor.avatar_url || null;
+                    const initials = getInitials(
+                      proveedor.nombre,
+                      proveedor.apellido,
+                    );
+
+                    return (
+                      <li
+                        key={favorito.id}
+                        className="flex flex-col gap-4 rounded-xl border px-4 py-4 sm:flex-row sm:items-center sm:justify-between"
+                        style={{ borderColor: BRAND.border }}
+                      >
+                        <div className="flex min-w-0 flex-1 items-start gap-3">
+                          {avatarUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={avatarUrl}
+                              alt={nombreCompleto}
+                              className="h-12 w-12 shrink-0 rounded-full object-cover"
+                            />
+                          ) : (
+                            <span
+                              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-sm font-semibold"
+                              style={{
+                                backgroundColor: BRAND.light,
+                                color: BRAND.primary,
+                              }}
+                            >
+                              {initials}
+                            </span>
+                          )}
+                          <div className="min-w-0">
+                            <p className="font-medium text-[#1a1a1a]">
+                              {nombreCompleto}
+                            </p>
+                            <p className="mt-0.5 text-xs text-[#888]">
+                              {proveedor.ciudad || "Ciudad no indicada"}
+                            </p>
+                            {favorito.services.length > 0 && (
+                              <ul className="mt-2 flex flex-wrap gap-1.5">
+                                {favorito.services.map((svc) => {
+                                  const verticalConfig =
+                                    VERTICALS[svc.vertical] ??
+                                    VERTICALS.alojamiento;
+                                  return (
+                                    <li key={svc.id}>
+                                      <span
+                                        className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                                        style={{
+                                          backgroundColor: BRAND.light,
+                                          color: BRAND.primary,
+                                        }}
+                                      >
+                                        {svc.titulo || verticalConfig.label}
+                                      </span>
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2 self-end sm:self-center">
+                          <Link
+                            href={`/proveedor/${favorito.proveedor_id}`}
+                            className="rounded-xl border px-4 py-2 text-sm font-semibold no-underline transition-colors hover:bg-[#e8f0fb]"
+                            style={{
+                              borderColor: BRAND.primary,
+                              color: BRAND.primary,
+                            }}
+                          >
+                            Ver perfil
+                          </Link>
+                          <FavoritoButton
+                            proveedorId={favorito.proveedor_id}
+                            onChange={(isFav) => {
+                              if (!isFav) {
+                                setFavoritos((prev) =>
+                                  prev.filter((f) => f.id !== favorito.id),
+                                );
+                              }
+                            }}
+                          />
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
             </Section>
 
             <Section title="Mi perfil">

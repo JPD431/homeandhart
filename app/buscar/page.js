@@ -5,6 +5,7 @@ import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import FavoritoButton from "@/app/components/FavoritoButton";
 import Navbar from "@/app/components/Navbar";
 import { useLang } from "@/app/lib/LangContext";
 import { isOfertaActiva } from "@/app/lib/ofertas";
@@ -358,6 +359,10 @@ function ServiceCard({ service, index, isHovered, onHover, onLeave, t }) {
       )}
 
       <div className="relative">
+        <FavoritoButton
+          proveedorId={proveedorId}
+          className="absolute right-3 top-3 z-10"
+        />
         {service.foto_url ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
