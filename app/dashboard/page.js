@@ -1088,6 +1088,17 @@ export default function DashboardPage() {
         ) : (
           <>
             <Section title="Mis reservas">
+              {bookings.length > 0 && (
+                <div className="-mt-2 mb-4 flex justify-end">
+                  <Link
+                    href="/historial"
+                    className="text-sm font-medium no-underline transition-opacity hover:opacity-80"
+                    style={{ color: BRAND.primary }}
+                  >
+                    Ver historial completo →
+                  </Link>
+                </div>
+              )}
               {bookings.length === 0 ? (
                 <div className="text-center">
                   <p className="text-sm text-[#666]">
@@ -1250,32 +1261,43 @@ export default function DashboardPage() {
                           </Link>
                         )}
 
-                        {estado === "completada" &&
-                          booking.services?.proveedor_id && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const proveedor = booking.services.profiles;
-                                const proveedorNombre =
-                                  [proveedor?.nombre, proveedor?.apellido]
-                                    .filter(Boolean)
-                                    .join(" ") ||
-                                  booking.services.titulo ||
-                                  "Proveedor";
-                                setReportModal({
-                                  reportedId: booking.services.proveedor_id,
-                                  reportedName: proveedorNombre,
-                                  bookingId: booking.id,
-                                  tipo: "proveedor",
-                                  fechaInicio: booking.fecha_inicio,
-                                  fechaFin: booking.fecha_fin,
-                                });
-                              }}
-                              className="self-start text-xs text-[#888] underline transition-colors hover:text-[#1d4f91]"
+                        {estado === "completada" && (
+                          <div className="flex flex-wrap items-center gap-4">
+                            <a
+                              href={`/api/facturas/${booking.id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-sm text-[#1d4f91] underline"
                             >
-                              Reportar problema
-                            </button>
-                          )}
+                              Descargar factura 📄
+                            </a>
+                            {booking.services?.proveedor_id && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const proveedor = booking.services.profiles;
+                                  const proveedorNombre =
+                                    [proveedor?.nombre, proveedor?.apellido]
+                                      .filter(Boolean)
+                                      .join(" ") ||
+                                    booking.services.titulo ||
+                                    "Proveedor";
+                                  setReportModal({
+                                    reportedId: booking.services.proveedor_id,
+                                    reportedName: proveedorNombre,
+                                    bookingId: booking.id,
+                                    tipo: "proveedor",
+                                    fechaInicio: booking.fecha_inicio,
+                                    fechaFin: booking.fecha_fin,
+                                  });
+                                }}
+                                className="text-xs text-[#888] underline transition-colors hover:text-[#1d4f91]"
+                              >
+                                Reportar problema
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </li>
                     );
                   })}
