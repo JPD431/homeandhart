@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import Navbar from "@/app/components/Navbar";
+import ProveedorEmergenciaToggle from "@/app/components/ProveedorEmergenciaToggle";
 import { BRAND, SERIF } from "@/app/components/brand";
 import {
   normalizeDescuentosDuracion,
@@ -87,6 +88,7 @@ function emptyServiceDetails() {
     disponible_para_viajar: false,
     descuentos_duracion_activa: false,
     descuentos_duracion: [{ minDias: "", descuento: "" }],
+    proveedor_emergencia: false,
   };
 }
 
@@ -126,6 +128,7 @@ function mapServiceFromDb(row) {
               descuento: String(t.descuento),
             }))
           : [{ minDias: "", descuento: "" }],
+      proveedor_emergencia: row.proveedor_emergencia === true,
     },
   };
 }
@@ -177,6 +180,8 @@ function buildServicePayload(details, vertical, ciudad, proveedorId, disponible)
       (vertical === "ninos" || vertical === "mascotas") &&
       details.disponible_para_viajar === true,
     descuentos_duracion: serializeDescuentosDuracionForDb(details),
+    // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS proveedor_emergencia boolean DEFAULT false;
+    proveedor_emergencia: details.proveedor_emergencia === true,
   };
 }
 
@@ -667,6 +672,12 @@ function ServiceEditForm({ vertical, details, onChange }) {
           serviceId={vertical}
           details={details}
           onChange={onChange}
+        />
+      </div>
+      <div className="sm:col-span-2">
+        <ProveedorEmergenciaToggle
+          checked={details.proveedor_emergencia === true}
+          onChange={(value) => update("proveedor_emergencia", value)}
         />
       </div>
     </div>

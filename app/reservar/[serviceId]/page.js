@@ -13,6 +13,7 @@ import Navbar from "@/app/components/Navbar";
 import { BRAND, SERIF } from "@/app/components/brand";
 import { applyBestDiscountToBase } from "@/app/lib/descuentosDuracion";
 import { getUserFamiliaActiva } from "@/app/lib/familia";
+import { procesarCancelacionTardia } from "@/app/lib/garantia";
 import { getHoyDateStr, getPrecioEfectivo, isOfertaActiva } from "@/app/lib/ofertas";
 import { supabase } from "@/lib/supabase";
 
@@ -886,6 +887,7 @@ export default function ReservarPage() {
   const serviceId = params.serviceId;
   const precioEspecialParam = searchParams.get("precio_especial");
   const validaHastaParam = searchParams.get("valida_hasta");
+  const cancelarBookingId = searchParams.get("cancelar_booking");
 
   const [loading, setLoading] = useState(true);
   const [service, setService] = useState(null);
@@ -1061,6 +1063,35 @@ export default function ReservarPage() {
 
     load();
   }, [router, serviceId]);
+
+  useEffect(() => {
+    if (!cancelarBookingId || !userId || loading) return;
+
+    async function ejecutarCancelacionGarantia() {
+      const clienteNombre =
+        [perfilCliente?.nombre, perfilCliente?.apellido]
+          .filter(Boolean)
+          .join(" ") || "Cliente";
+
+      await procesarCancelacionTardia({
+        bookingId: cancelarBookingId,
+        supabaseClient: supabase,
+        userEmail,
+        clienteNombre,
+      });
+
+      router.replace("/dashboard");
+    }
+
+    ejecutarCancelacionGarantia();
+  }, [
+    cancelarBookingId,
+    userId,
+    loading,
+    perfilCliente,
+    userEmail,
+    router,
+  ]);
 
   const vertical = service?.vertical ?? "alojamiento";
   const verticalConfig = VERTICALS[vertical] ?? VERTICALS.alojamiento;

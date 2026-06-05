@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { BRAND, SERIF } from "@/app/components/brand";
+import ProveedorEmergenciaToggle from "@/app/components/ProveedorEmergenciaToggle";
 import { serializeDescuentosDuracionForDb } from "@/app/lib/descuentosDuracion";
 
 const DARK_BLUE = "#163a6b";
@@ -176,6 +177,7 @@ const EMPTY_SERVICE_DETAILS = {
     disponible_para_viajar: false,
     descuentos_duracion_activa: false,
     descuentos_duracion: [{ minDias: "", descuento: "" }],
+    proveedor_emergencia: false,
   },
   ninos: {
     titulo: "",
@@ -202,6 +204,7 @@ const EMPTY_SERVICE_DETAILS = {
     disponible_para_viajar: false,
     descuentos_duracion_activa: false,
     descuentos_duracion: [{ minDias: "", descuento: "" }],
+    proveedor_emergencia: false,
   },
   mascotas: {
     titulo: "",
@@ -227,6 +230,7 @@ const EMPTY_SERVICE_DETAILS = {
     disponible_para_viajar: false,
     descuentos_duracion_activa: false,
     descuentos_duracion: [{ minDias: "", descuento: "" }],
+    proveedor_emergencia: false,
   },
 };
 
@@ -1448,6 +1452,7 @@ export default function SerProveedorPage() {
       // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS oferta_descripcion text;
       // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS disponible_para_viajar boolean DEFAULT false;
       // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS descuentos_duracion jsonb;
+      // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS proveedor_emergencia boolean DEFAULT false;
       const ciudadTrimmed = ciudad.trim();
       const detailsForInsert = await geocodeLocationZonesForServices(
         selectedServices,
@@ -1509,6 +1514,7 @@ export default function SerProveedorPage() {
             (serviceId === "ninos" || serviceId === "mascotas") &&
             details.disponible_para_viajar === true,
           descuentos_duracion: serializeDescuentosDuracionForDb(details),
+          proveedor_emergencia: details.proveedor_emergencia === true,
         };
       });
 
@@ -1736,6 +1742,15 @@ export default function SerProveedorPage() {
                   details={serviceDetails[serviceId]}
                   onChange={(details) =>
                     updateServiceDetails(serviceId, details)
+                  }
+                />
+                <ProveedorEmergenciaToggle
+                  checked={serviceDetails[serviceId]?.proveedor_emergencia === true}
+                  onChange={(value) =>
+                    updateServiceDetails(serviceId, {
+                      ...serviceDetails[serviceId],
+                      proveedor_emergencia: value,
+                    })
                   }
                 />
               </div>

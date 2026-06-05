@@ -604,6 +604,70 @@ export async function POST(request) {
       return Response.json({ success: true });
     }
 
+    if (tipo === "cancelacion_garantia") {
+      const alternativas = Array.isArray(data.alternativas)
+        ? data.alternativas.slice(0, 3)
+        : [];
+      const precioOriginal =
+        data.precio_original != null
+          ? `${Number(data.precio_original).toFixed(2)} €`
+          : "tu reserva original";
+
+      const cardsHtml = alternativas
+        .map(
+          (alt) => `
+          <div style="margin:16px 0;padding:16px;border:1px solid #e8e4de;border-radius:12px;background:#f7f5f2;">
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+              <tr>
+                ${
+                  alt.foto_url
+                    ? `<td width="72" valign="top" style="padding-right:12px;">
+                    <img src="${alt.foto_url}" alt="" width="64" height="64" style="border-radius:8px;object-fit:cover;display:block;" />
+                  </td>`
+                    : ""
+                }
+                <td valign="top">
+                  <p style="margin:0 0 4px;font-size:15px;font-weight:600;color:#1a1a1a;">${alt.proveedor_nombre ?? "Proveedor"}</p>
+                  <p style="margin:0 0 4px;font-size:13px;color:#666;">${alt.titulo ?? "Servicio"}</p>
+                  <p style="margin:0 0 8px;font-size:14px;font-weight:700;color:${BRAND_PRIMARY};">${Number(alt.precio || 0).toFixed(2)} € · ${alt.valoracion ?? "—"} ★</p>
+                  <a href="${alt.reservar_url || "#"}" style="display:inline-block;background-color:${BRAND_PRIMARY};color:#ffffff;text-decoration:none;padding:10px 18px;border-radius:8px;font-size:13px;font-weight:600;">
+                    Reservar ahora
+                  </a>
+                </td>
+              </tr>
+            </table>
+          </div>
+        `,
+        )
+        .join("");
+
+      const result = await resend.emails.send({
+        from: FROM,
+        to: data.cliente_email,
+        subject: "🛡️ Tu reserva fue cancelada — Activando Garantía Home&Heart",
+        html: emailLayout({
+          title: "Garantía Home&Heart",
+          bodyHtml: `
+            <h1 style="margin:0 0 16px;font-size:20px;color:${BRAND_PRIMARY};">🛡️ Tu reserva fue cancelada</h1>
+            <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#444;">
+              Hola ${data.cliente_nombre ?? "Cliente"}, tu proveedor ha cancelado con menos de 24h de antelación.
+              Hemos activado la <strong>Garantía Home&Heart</strong> y encontrado estas alternativas para ti:
+            </p>
+            ${cardsHtml || "<p style='font-size:14px;color:#666;'>No hay alternativas disponibles en este momento.</p>"}
+            <p style="margin:20px 0 0;font-size:13px;color:#888;font-style:italic;">
+              Precio garantizado igual al de tu reserva original (${precioOriginal}).
+            </p>
+          `,
+        }),
+      });
+
+      if (result.error) {
+        return Response.json({ error: result.error.message }, { status: 400 });
+      }
+
+      return Response.json({ success: true });
+    }
+
     if (tipo === "invitacion_familia") {
       const aceptarUrl = data.aceptar_url || "#";
       const result = await resend.emails.send({

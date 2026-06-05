@@ -221,6 +221,7 @@ export default function AdminPage() {
   const [errorMessage, setErrorMessage] = useState("");
   const [completedBookings, setCompletedBookings] = useState([]);
   const [reports, setReports] = useState([]);
+  const [lateCancellations, setLateCancellations] = useState([]);
 
   const loadData = useCallback(async () => {
     setErrorMessage("");
@@ -323,6 +324,56 @@ export default function AdminPage() {
       setReports(reportsData ?? []);
     }
 
+    // -- ALTER TABLE bookings ADD COLUMN IF NOT EXISTS estado_garantia text;
+    // -- ALTER TABLE bookings ADD COLUMN IF NOT EXISTS cancelado_at timestamp with time zone;
+    // -- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS penalizacion_valoracion numeric DEFAULT 0;
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const { data: garantiaBookings, error: garantiaError } = await supabase
+      .from("bookings")
+      .select(
+        `
+        id,
+        cancelado_at,
+        services:service_id (
+          proveedor_id,
+          profiles:proveedor_id (
+            nombre,
+            apellido,
+            penalizacion_valoracion
+          )
+        )
+      `,
+      )
+      .eq("estado", "cancelada_garantia")
+      .gte("cancelado_at", thirtyDaysAgo.toISOString());
+
+    if (garantiaError) {
+      setErrorMessage(garantiaError.message);
+    } else {
+      const grouped = {};
+      for (const booking of garantiaBookings ?? []) {
+        const proveedorId = booking.services?.proveedor_id;
+        if (!proveedorId) continue;
+        if (!grouped[proveedorId]) {
+          const perfil = booking.services?.profiles ?? {};
+          grouped[proveedorId] = {
+            proveedorId,
+            nombre:
+              [perfil.nombre, perfil.apellido].filter(Boolean).join(" ") ||
+              "Proveedor",
+            penalizacion: Number(perfil.penalizacion_valoracion) || 0,
+            count: 0,
+          };
+        }
+        grouped[proveedorId].count += 1;
+      }
+      setLateCancellations(
+        Object.values(grouped).sort((a, b) => b.count - a.count),
+      );
+    }
+
     setLoading(false);
   }, [router]);
 
@@ -396,6 +447,30 @@ export default function AdminPage() {
 
     setRejectingId(null);
     setRejectReason("");
+    await loadData();
+  }
+
+  async function handlePenalizarProveedor(proveedorId) {
+    setActionLoading(proveedorId);
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    const entry = lateCancellations.find((p) => p.proveedorId === proveedorId);
+    const nuevaPenalizacion = (entry?.penalizacion ?? 0) + 0.5;
+
+    const { error } = await supabase
+      .from("profiles")
+      .update({ penalizacion_valoracion: nuevaPenalizacion })
+      .eq("id", proveedorId);
+
+    setActionLoading(null);
+
+    if (error) {
+      setErrorMessage(error.message);
+      return;
+    }
+
+    setSuccessMessage("Penalización aplicada. La valoración visible se reducirá.");
     await loadData();
   }
 
@@ -701,6 +776,66 @@ export default function AdminPage() {
                 })}
               </ul>
             )}
+
+            <section
+              className="mt-8 rounded-2xl border bg-white p-6"
+              style={{ borderColor: BRAND.border }}
+            >
+              <h2
+                className="text-lg font-semibold text-[#1a1a1a]"
+                style={{ fontFamily: SERIF }}
+              >
+                Cancelaciones tardías
+              </h2>
+              <p className="mt-1 text-xs text-[#888]">
+                Proveedores que cancelaron con menos de 24h en los últimos 30
+                días
+              </p>
+
+              {lateCancellations.length === 0 ? (
+                <p className="mt-4 text-sm text-[#666]">
+                  No hay cancelaciones tardías registradas.
+                </p>
+              ) : (
+                <ul className="mt-4 flex flex-col gap-3">
+                  {lateCancellations.map((entry) => {
+                    const isBusy = actionLoading === entry.proveedorId;
+                    return (
+                      <li
+                        key={entry.proveedorId}
+                        className="flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3"
+                        style={{ borderColor: BRAND.border }}
+                      >
+                        <div>
+                          <p className="font-medium text-[#1a1a1a]">
+                            {entry.nombre}
+                          </p>
+                          <p className="mt-0.5 text-xs text-[#888]">
+                            {entry.count} cancelación
+                            {entry.count !== 1 ? "es" : ""} tardía
+                            {entry.count !== 1 ? "s" : ""}
+                            {entry.penalizacion > 0
+                              ? ` · Penalización: -${entry.penalizacion.toFixed(1)} ★`
+                              : ""}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          disabled={isBusy}
+                          onClick={() =>
+                            handlePenalizarProveedor(entry.proveedorId)
+                          }
+                          className="rounded-xl border px-4 py-2 text-sm font-semibold text-red-700 transition-colors hover:bg-red-50 disabled:opacity-60"
+                          style={{ borderColor: "#fecaca" }}
+                        >
+                          {isBusy ? "Aplicando…" : "Penalizar"}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </section>
           </div>
         ) : activeTab === "ingresos" ? (
           <div className="mt-6">
