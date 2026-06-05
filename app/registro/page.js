@@ -28,6 +28,9 @@ export default function RegistroPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [aceptaTerminos, setAceptaTerminos] = useState(false);
+  const [mensajeVerificacion, setMensajeVerificacion] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendMessage, setResendMessage] = useState("");
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -69,7 +72,32 @@ export default function RegistroPage() {
 
     setLoading(false);
 
+    if (data.user && !data.user.email_confirmed_at) {
+      setMensajeVerificacion(true);
+      return;
+    }
+
     router.push("/completar-perfil");
+  }
+
+  async function handleResendEmail() {
+    setResendLoading(true);
+    setResendMessage("");
+    setError("");
+
+    const { error: resendError } = await supabase.auth.resend({
+      type: "signup",
+      email,
+    });
+
+    setResendLoading(false);
+
+    if (resendError) {
+      setError(resendError.message);
+      return;
+    }
+
+    setResendMessage("Email de verificación reenviado.");
   }
 
   return (
@@ -88,6 +116,54 @@ export default function RegistroPage() {
           Home<span className="italic text-[#1d4f91]">&</span>Heart
         </Link>
 
+        {mensajeVerificacion ? (
+          <div className="text-center">
+            <div
+              className="mx-auto flex h-16 w-16 items-center justify-center rounded-full text-3xl"
+              style={{ backgroundColor: BRAND.light }}
+            >
+              ✉️
+            </div>
+            <h1 className="mt-6 text-2xl font-bold text-[#1a1a1a]">
+              Revisa tu email
+            </h1>
+            <p className="mt-3 text-sm leading-relaxed text-[#444]">
+              Te hemos enviado un enlace de verificación a{" "}
+              <strong className="text-[#1a1a1a]">{email}</strong>. Haz clic en el
+              enlace para activar tu cuenta.
+            </p>
+            <p className="mt-4 text-xs text-[#888]">
+              ¿No lo ves? Revisa la carpeta de spam.
+            </p>
+            {error && (
+              <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+                {error}
+              </p>
+            )}
+            {resendMessage && (
+              <p className="mt-4 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">
+                {resendMessage}
+              </p>
+            )}
+            <button
+              type="button"
+              onClick={handleResendEmail}
+              disabled={resendLoading}
+              className="mt-6 w-full rounded-xl py-3.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+              style={{ backgroundColor: BRAND.primary }}
+            >
+              {resendLoading ? "Reenviando…" : "Reenviar email"}
+            </button>
+            <Link
+              href="/"
+              className="mt-4 inline-block text-sm font-medium no-underline hover:underline"
+              style={{ color: BRAND.primary }}
+            >
+              Volver al inicio
+            </Link>
+          </div>
+        ) : (
+          <>
         <h1 className="text-2xl font-bold text-[#1a1a1a]">Crear cuenta</h1>
 
         <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4">
@@ -237,6 +313,8 @@ export default function RegistroPage() {
             Inicia sesión
           </Link>
         </p>
+          </>
+        )}
       </div>
     </div>
   );
