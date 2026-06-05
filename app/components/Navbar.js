@@ -142,19 +142,25 @@ export default function Navbar() {
           className="hidden items-center gap-8 text-sm font-medium text-[#444] md:flex"
           aria-label="Principal"
         >
-          <a
-            href="#"
-            className="transition-colors hover:text-[#1d4f91]"
+          <Link
+            href="/"
+            className="transition-colors hover:text-[#1d4f91] no-underline"
             style={{ color: BRAND.primary }}
           >
             {t.navbar.inicio}
-          </a>
-          <a href="#" className="transition-colors hover:text-[#1d4f91]">
+          </Link>
+          <Link
+            href="/buscar"
+            className="transition-colors hover:text-[#1d4f91] no-underline"
+          >
             {t.navbar.servicios}
-          </a>
-          <a href="#" className="transition-colors hover:text-[#1d4f91]">
+          </Link>
+          <Link
+            href="/#como-funciona"
+            className="transition-colors hover:text-[#1d4f91] no-underline"
+          >
             {t.navbar.comoFunciona}
-          </a>
+          </Link>
           <Link
             href="/ser-proveedor"
             className="transition-colors hover:text-[#1d4f91] no-underline"

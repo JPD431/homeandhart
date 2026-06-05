@@ -89,6 +89,7 @@ export default function EcosystemSection() {
 
   return (
     <section
+      id="como-funciona"
       className="px-4 py-16 text-white sm:px-6 sm:py-20 lg:px-8 lg:py-24"
       style={{ backgroundColor: BRAND.primary }}
       aria-labelledby="ecosystem-heading"
