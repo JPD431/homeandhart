@@ -216,6 +216,60 @@ function proveedorEmailHtml(data) {
   });
 }
 
+function reservaNuevaEmailHtml(data) {
+  const dashboardUrl =
+    data.dashboard_url ||
+    `${process.env.NEXT_PUBLIC_URL || "https://homeandheart.es"}/dashboard?reserva=${data.booking_id}`;
+
+  return emailLayout({
+    title: "Nueva reserva recibida — Home&Heart",
+    bodyHtml: `
+      <h1 style="margin:0;font-size:22px;color:${BRAND_PRIMARY};font-weight:600;text-align:center;">Nueva reserva recibida</h1>
+      <p style="margin:20px 0 0;font-size:14px;color:#444;line-height:1.6;">
+        Hola${data.proveedor_nombre ? ` <strong>${data.proveedor_nombre}</strong>` : ""}, tienes una nueva reserva en Home&amp;Heart.
+      </p>
+      <p style="margin:16px 0 0;font-size:14px;color:#444;line-height:1.6;">
+        Cliente: <strong>${data.cliente_nombre || "Un cliente"}</strong>
+      </p>
+      ${detailsBlock(data)}
+      <p style="margin:24px 0 0;text-align:center;">
+        <a href="${dashboardUrl}" style="display:inline-block;background-color:${BRAND_PRIMARY};color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;padding:14px 28px;border-radius:8px;">
+          Ver reserva
+        </a>
+      </p>`,
+  });
+}
+
+async function sendReservaNuevaEmail(data) {
+  const required = [
+    "proveedor_email",
+    "cliente_nombre",
+    "servicio_titulo",
+    "fecha_inicio",
+    "precio_total",
+    "booking_id",
+  ];
+
+  for (const field of required) {
+    if (!data[field]) {
+      return { error: `Falta el campo requerido: ${field}` };
+    }
+  }
+
+  const result = await resend.emails.send({
+    from: FROM,
+    to: data.proveedor_email,
+    subject: "Nueva reserva recibida — Home&Heart",
+    html: reservaNuevaEmailHtml(data),
+  });
+
+  if (result.error) {
+    return { error: result.error.message };
+  }
+
+  return { success: true };
+}
+
 async function sendReservaConfirmadaEmails(data) {
   const required = [
     "cliente_email",
@@ -502,6 +556,16 @@ export async function POST(request) {
 
     if (tipo === "reserva_confirmada") {
       const result = await sendReservaConfirmadaEmails(data);
+
+      if (result.error) {
+        return Response.json({ error: result.error }, { status: 400 });
+      }
+
+      return Response.json({ success: true });
+    }
+
+    if (tipo === "reserva_nueva") {
+      const result = await sendReservaNuevaEmail(data);
 
       if (result.error) {
         return Response.json({ error: result.error }, { status: 400 });
