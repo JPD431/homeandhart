@@ -679,6 +679,7 @@ export default function EditarPerfilPage() {
 
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState(null);
+  const [perfil, setPerfil] = useState(null);
   const [nombre, setNombre] = useState("");
   const [apellido, setApellido] = useState("");
   const [ciudad, setCiudad] = useState("");
@@ -709,7 +710,7 @@ export default function EditarPerfilPage() {
 
       setUserId(user.id);
 
-      const { data: profile, error: profileError } = await supabase
+      const { data: perfilData, error: profileError } = await supabase
         .from("profiles")
         .select("*")
         .eq("id", user.id)
@@ -721,12 +722,15 @@ export default function EditarPerfilPage() {
         return;
       }
 
-      setNombre(profile.nombre || "");
-      setApellido(profile.apellido || "");
-      setCiudad(profile.ciudad || "");
-      setDescripcion(profile.descripcion || "");
-      setFotoPerfil(profile.foto_perfil || profile.avatar_url || null);
-      setFotoPreview(profile.foto_perfil || profile.avatar_url || null);
+      if (perfilData) {
+        setNombre(perfilData.nombre || "");
+        setApellido(perfilData.apellido || "");
+        setCiudad(perfilData.ciudad || "");
+        setDescripcion(perfilData.descripcion || "");
+        setPerfil(perfilData);
+        setFotoPerfil(perfilData.foto_perfil || perfilData.avatar_url || null);
+        setFotoPreview(perfilData.foto_perfil || perfilData.avatar_url || null);
+      }
 
       const { data: serviceRows, error: servicesError } = await supabase
         .from("services")
