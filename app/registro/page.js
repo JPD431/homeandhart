@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
+import { generateCodigoReferido } from "@/app/lib/referidos";
 import { BRAND } from "@/app/components/brand";
+import { supabase } from "@/lib/supabase";
 
 const ROLES = [
   {
@@ -19,8 +20,25 @@ const ROLES = [
   },
 ];
 
-export default function RegistroPage() {
+async function createUniqueCodigoReferido(seed) {
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const codigo = generateCodigoReferido(seed);
+    const { data: existing } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("codigo_referido", codigo)
+      .maybeSingle();
+
+    if (!existing) return codigo;
+  }
+
+  return generateCodigoReferido(`${seed}${Date.now()}`);
+}
+
+function RegistroForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const refCode = searchParams.get("ref")?.trim() || null;
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -63,11 +81,21 @@ export default function RegistroPage() {
     }
 
     if (data.user) {
-      await supabase.from("profiles").upsert({
+      const emailSeed = email.split("@")[0] || email;
+      const codigoReferido = await createUniqueCodigoReferido(emailSeed);
+
+      const profilePayload = {
         id: data.user.id,
         email_contacto: email,
         role,
-      });
+        codigo_referido: codigoReferido,
+      };
+
+      if (refCode) {
+        profilePayload.referido_por = refCode;
+      }
+
+      await supabase.from("profiles").upsert(profilePayload);
     }
 
     setLoading(false);
@@ -317,5 +345,22 @@ export default function RegistroPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function RegistroPage() {
+  return (
+    <Suspense
+      fallback={
+        <div
+          className="flex min-h-screen items-center justify-center px-4 py-12 font-sans"
+          style={{ backgroundColor: BRAND.warm }}
+        >
+          <p className="text-sm text-[#666]">Cargando…</p>
+        </div>
+      }
+    >
+      <RegistroForm />
+    </Suspense>
   );
 }

@@ -17,6 +17,7 @@ import {
   getFamiliaMiembros,
   getUserFamiliaActiva,
 } from "@/app/lib/familia";
+import { buildReferralLink } from "@/app/lib/referidos";
 import { formatDateRange, loadUserViajes } from "@/app/lib/viajes";
 import Navbar from "@/app/components/Navbar";
 import ReportarModal from "@/app/components/ReportarModal";
@@ -317,6 +318,7 @@ export default function DashboardPage() {
   const [actionLoadingId, setActionLoadingId] = useState(null);
   const [bookingFeedback, setBookingFeedback] = useState({});
   const [connectingStripe, setConnectingStripe] = useState(false);
+  const [referralCopyMessage, setReferralCopyMessage] = useState("");
   const [connectError, setConnectError] = useState("");
   const [stripeCustomerId, setStripeCustomerId] = useState(null);
   const [savedPaymentMethods, setSavedPaymentMethods] = useState([]);
@@ -913,6 +915,23 @@ export default function DashboardPage() {
   const isProvider = profile?.role === "proveedor";
   const greetingName = profile?.nombre?.trim();
   const stripeReturn = searchParams.get("stripe");
+  const codigoReferido = profile?.codigo_referido || null;
+  const referidosCount = Number(profile?.referidos_count) || 0;
+  const reservasSinComision = Number(profile?.reservas_sin_comision) || 0;
+
+  async function handleCopyReferralLink() {
+    if (!codigoReferido) return;
+
+    const link = buildReferralLink(codigoReferido);
+    try {
+      await navigator.clipboard.writeText(link);
+      setReferralCopyMessage("Link copiado al portapapeles");
+    } catch {
+      setReferralCopyMessage(link);
+    }
+
+    setTimeout(() => setReferralCopyMessage(""), 3000);
+  }
 
   if (loading) {
     return (
@@ -956,6 +975,53 @@ export default function DashboardPage() {
             </Link>
           )}
         </header>
+
+        <Section title="Mi programa de referidos">
+          <div className="space-y-4">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-[#888]">
+                Tu código
+              </p>
+              <p
+                className="mt-1 text-xl font-bold tracking-wide"
+                style={{ color: BRAND.primary }}
+              >
+                {codigoReferido || "—"}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              disabled={!codigoReferido}
+              onClick={handleCopyReferralLink}
+              className="rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+              style={{ backgroundColor: BRAND.primary }}
+            >
+              Copiar link de invitación
+            </button>
+
+            {referralCopyMessage && (
+              <p className="text-sm text-green-700">{referralCopyMessage}</p>
+            )}
+
+            <p className="text-sm text-[#444]">
+              Has invitado a{" "}
+              <strong className="text-[#1a1a1a]">{referidosCount}</strong>{" "}
+              {referidosCount === 1 ? "persona" : "personas"}
+            </p>
+
+            <p className="text-sm text-[#444]">
+              Te quedan{" "}
+              <strong className="text-[#1a1a1a]">{reservasSinComision}</strong>{" "}
+              reservas sin comisión 🎁
+            </p>
+
+            <p className="text-sm leading-relaxed text-[#666]">
+              Por cada amigo que invite y complete su primera reserva, recibirás
+              1 reserva extra sin comisión.
+            </p>
+          </div>
+        </Section>
 
         {isProvider ? (
           <>
