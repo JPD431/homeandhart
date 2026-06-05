@@ -37,6 +37,7 @@ export default function Footer() {
   const empresaLinks = [
     { label: t.footer.nosotros, href: "#" },
     { label: t.footer.comoFunciona, href: "#" },
+    { label: t.footer.garantia, href: "/garantia" },
     { label: t.footer.contacto, href: "#" },
   ];
 

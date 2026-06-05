@@ -156,6 +156,12 @@ export default function Navbar() {
             {t.navbar.servicios}
           </Link>
           <Link
+            href="/garantia"
+            className="transition-colors hover:text-[#1d4f91] no-underline"
+          >
+            {t.navbar.garantia}
+          </Link>
+          <Link
             href="/#como-funciona"
             className="transition-colors hover:text-[#1d4f91] no-underline"
           >

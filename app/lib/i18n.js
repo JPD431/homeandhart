@@ -3,6 +3,7 @@ export const translations = {
     navbar: {
       inicio: "Inicio",
       servicios: "Servicios",
+      garantia: "Garantía",
       comoFunciona: "Cómo funciona",
       serProveedor: "Ser proveedor",
       iniciarSesion: "Iniciar sesión",
@@ -204,6 +205,7 @@ export const translations = {
       empresa: "Empresa",
       nosotros: "Nosotros",
       comoFunciona: "Cómo funciona",
+      garantia: "Garantía Home&Heart",
       contacto: "Contacto",
       legal: "Legal",
       terminos: "Términos de uso",
@@ -216,6 +218,7 @@ export const translations = {
     navbar: {
       inicio: "Home",
       servicios: "Services",
+      garantia: "Guarantee",
       comoFunciona: "How it works",
       serProveedor: "Become a host",
       iniciarSesion: "Log in",
@@ -415,6 +418,7 @@ export const translations = {
       empresa: "Company",
       nosotros: "About us",
       comoFunciona: "How it works",
+      garantia: "Home&Heart Guarantee",
       contacto: "Contact",
       legal: "Legal",
       terminos: "Terms of use",
