@@ -243,6 +243,33 @@ function Section({ title, children }) {
   );
 }
 
+function DangerZone({ onDeleteClick }) {
+  return (
+    <div
+      className="mt-8 border-t pt-6"
+      style={{ borderColor: BRAND.border }}
+    >
+      <p className="text-xs font-semibold uppercase tracking-wide text-[#888]">
+        Zona de peligro
+      </p>
+      <h3 className="mt-2 text-base font-semibold text-red-600">
+        Eliminar cuenta
+      </h3>
+      <p className="mt-2 text-sm leading-relaxed text-[#666]">
+        Esta acción es irreversible. Se eliminarán todos tus datos, reservas y
+        servicios.
+      </p>
+      <button
+        type="button"
+        onClick={onDeleteClick}
+        className="mt-4 rounded-xl border border-red-600 px-5 py-2.5 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50"
+      >
+        Eliminar mi cuenta
+      </button>
+    </div>
+  );
+}
+
 function StatusBadge({ status }) {
   const key = status?.toLowerCase?.() ?? "pendiente";
   const style = STATUS_STYLES[key] ?? STATUS_STYLES.pendiente;
@@ -285,6 +312,37 @@ export default function DashboardPage() {
   const [showRoleSwitchModal, setShowRoleSwitchModal] = useState(false);
   const [roleSwitchLoading, setRoleSwitchLoading] = useState(false);
   const [roleSwitchError, setRoleSwitchError] = useState("");
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+
+  async function handleConfirmDeleteAccount() {
+    if (!profile?.id || deleteConfirmText !== "DELETE") return;
+
+    setDeleteLoading(true);
+    setDeleteError("");
+
+    try {
+      const response = await fetch("/api/auth/delete-account", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: profile.id }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || data.error) {
+        throw new Error(data.error || "No se pudo eliminar la cuenta.");
+      }
+
+      await supabase.auth.signOut();
+      router.push("/");
+    } catch (err) {
+      setDeleteError(err.message || "Error al eliminar la cuenta.");
+      setDeleteLoading(false);
+    }
+  }
 
   async function handleBecomeProvider() {
     if (!profile?.id) return;
@@ -958,6 +1016,8 @@ export default function DashboardPage() {
               >
                 Editar perfil
               </Link>
+
+              <DangerZone onDeleteClick={() => setShowDeleteModal(true)} />
             </Section>
           </>
         ) : (
@@ -1268,10 +1328,64 @@ export default function DashboardPage() {
               >
                 Editar perfil
               </Link>
+
+              <DangerZone onDeleteClick={() => setShowDeleteModal(true)} />
             </Section>
           </>
         )}
       </main>
+
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div
+            className="w-full max-w-md rounded-2xl border bg-white p-6 shadow-lg"
+            style={{ borderColor: BRAND.border }}
+          >
+            <p className="text-lg font-semibold text-[#1a1a1a]">
+              ¿Estás seguro?
+            </p>
+            <p className="mt-2 text-sm leading-relaxed text-[#666]">
+              Escribe DELETE para confirmar la eliminación de tu cuenta.
+            </p>
+            <input
+              type="text"
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              placeholder="DELETE"
+              className="mt-4 w-full rounded-xl border px-4 py-3 text-sm text-[#1a1a1a] outline-none focus:ring-2 focus:ring-red-500/30"
+              style={{ borderColor: BRAND.border }}
+            />
+            {deleteError && (
+              <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+                {deleteError}
+              </p>
+            )}
+            <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                disabled={deleteLoading}
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setDeleteConfirmText("");
+                  setDeleteError("");
+                }}
+                className="rounded-xl border px-4 py-2.5 text-sm font-semibold text-[#666] transition-colors hover:bg-[#f7f5f2] disabled:opacity-60"
+                style={{ borderColor: BRAND.border }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={deleteLoading || deleteConfirmText !== "DELETE"}
+                onClick={handleConfirmDeleteAccount}
+                className="rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {deleteLoading ? "Eliminando…" : "Confirmar eliminación"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showRoleSwitchModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
