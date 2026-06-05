@@ -946,6 +946,15 @@ export default function DashboardPage() {
           <p className="mt-2 text-lg text-[#5c5c5c]">
             {isProvider ? "Tu panel de proveedor" : "Tu panel de cliente"}
           </p>
+          {!isProvider && (
+            <Link
+              href="/pasaporte"
+              className="mt-4 inline-flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold no-underline transition-colors hover:bg-[#e8f0fb]"
+              style={{ borderColor: BRAND.primary, color: BRAND.primary }}
+            >
+              Mi pasaporte →
+            </Link>
+          )}
         </header>
 
         {isProvider ? (
