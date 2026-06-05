@@ -1082,6 +1082,14 @@ export default function DashboardPage() {
                 Editar perfil
               </Link>
 
+              <Link
+                href="/estadisticas"
+                className="mt-3 inline-block rounded-xl border px-5 py-2.5 text-sm font-semibold no-underline transition-colors hover:bg-[#e8f0fb]"
+                style={{ borderColor: BRAND.primary, color: BRAND.primary }}
+              >
+                Ver estadísticas
+              </Link>
+
               <DangerZone onDeleteClick={() => setShowDeleteModal(true)} />
             </Section>
           </>
