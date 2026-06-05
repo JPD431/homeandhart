@@ -37,6 +37,19 @@ function formatEuro(value) {
   return `${Number(value).toFixed(2)}€`;
 }
 
+function formatEuroRounded(value) {
+  return `${Math.round(Number(value)).toLocaleString("es-ES")}€`;
+}
+
+function isCurrentMonth(dateStr) {
+  if (!dateStr) return false;
+  const d = new Date(dateStr);
+  const now = new Date();
+  return (
+    d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()
+  );
+}
+
 function getLast6Months() {
   const months = [];
   const now = new Date();
@@ -50,7 +63,7 @@ function getLast6Months() {
   return months;
 }
 
-function MetricCard({ label, value, sublabel }) {
+function MetricCard({ label, value, sublabel, valueColor = BRAND.primary }) {
   return (
     <div
       className="rounded-2xl border bg-white p-6"
@@ -61,7 +74,7 @@ function MetricCard({ label, value, sublabel }) {
       </p>
       <p
         className="mt-3 text-3xl font-bold sm:text-4xl"
-        style={{ color: BRAND.primary }}
+        style={{ color: valueColor }}
       >
         {value}
       </p>
@@ -154,6 +167,20 @@ export default function EstadisticasPage() {
       (sum, b) => sum + getNetIncome(b.precio_total),
       0,
     );
+    const pendienteDeCobrar = bookings
+      .filter((b) => {
+        const estado = getBookingEstado(b);
+        return estado === "confirmada" || estado === "en_curso";
+      })
+      .reduce((sum, b) => sum + getNetIncome(b.precio_total), 0);
+    const facturadoEsteMes = completadas
+      .filter((b) => isCurrentMonth(b.created_at))
+      .reduce((sum, b) => sum + getNetIncome(b.precio_total), 0);
+    const totalEstimadoMes = facturadoEsteMes + pendienteDeCobrar;
+    const porcentajeCobrado =
+      totalEstimadoMes > 0
+        ? Math.round((facturadoEsteMes / totalEstimadoMes) * 100)
+        : 0;
     const valoracionMedia =
       reviews.length > 0
         ? (
@@ -166,6 +193,10 @@ export default function EstadisticasPage() {
       totalReservas: bookings.length,
       completadas: completadas.length,
       ingresosNetos,
+      pendienteDeCobrar,
+      facturadoEsteMes,
+      totalEstimadoMes,
+      porcentajeCobrado,
       valoracionMedia,
     };
   }, [bookings, reviews]);
@@ -296,7 +327,7 @@ export default function EstadisticasPage() {
       </header>
 
       <main className="mx-auto max-w-5xl space-y-6 px-4 py-8 sm:px-6">
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <MetricCard
             label="Total reservas recibidas"
             value={metrics.totalReservas}
@@ -322,6 +353,18 @@ export default function EstadisticasPage() {
                 ? `${reviews.length} valoración${reviews.length > 1 ? "es" : ""}`
                 : "Sin valoraciones"
             }
+          />
+          <MetricCard
+            label="Pendiente de cobrar"
+            value={formatEuro(metrics.pendienteDeCobrar)}
+            sublabel="Reservas activas en curso"
+            valueColor="#c47d1a"
+          />
+          <MetricCard
+            label="Total facturado este mes"
+            value={formatEuro(metrics.facturadoEsteMes)}
+            sublabel="Mes en curso"
+            valueColor="#0e7a5c"
           />
         </div>
 
@@ -364,6 +407,51 @@ export default function EstadisticasPage() {
                 </div>
               );
             })}
+          </div>
+
+          <div
+            className="mt-8 rounded-xl border p-5"
+            style={{ borderColor: BRAND.border, backgroundColor: BRAND.warm }}
+          >
+            <h3
+              className="text-base font-semibold text-[#1a1a1a]"
+              style={{ fontFamily: SERIF }}
+            >
+              Proyección de ingresos
+            </h3>
+            <p className="mt-2 text-sm leading-relaxed text-[#444]">
+              <span className="font-semibold" style={{ color: "#0e7a5c" }}>
+                {formatEuroRounded(metrics.facturadoEsteMes)} cobrados
+              </span>
+              {" + "}
+              <span className="font-semibold" style={{ color: "#c47d1a" }}>
+                {formatEuroRounded(metrics.pendienteDeCobrar)} pendientes
+              </span>
+              {" = "}
+              <span className="font-semibold" style={{ color: BRAND.primary }}>
+                {formatEuroRounded(metrics.totalEstimadoMes)} estimados este mes
+              </span>
+            </p>
+            <div className="mt-4">
+              <div className="flex items-center justify-between text-xs text-[#888]">
+                <span>Progreso de cobro</span>
+                <span className="font-semibold" style={{ color: BRAND.primary }}>
+                  {metrics.porcentajeCobrado}%
+                </span>
+              </div>
+              <div
+                className="mt-2 h-3 overflow-hidden rounded-full"
+                style={{ backgroundColor: "#e8e4de" }}
+              >
+                <div
+                  className="h-full rounded-full transition-all duration-500"
+                  style={{
+                    width: `${metrics.porcentajeCobrado}%`,
+                    backgroundColor: "#0e7a5c",
+                  }}
+                />
+              </div>
+            </div>
           </div>
         </section>
 
