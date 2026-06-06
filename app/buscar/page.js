@@ -284,6 +284,9 @@ function StaticMap({
   onPinSelect,
   extra,
   t,
+  bundleMode,
+  origenId,
+  onBundleAdd,
 }) {
   const selected = selectedIndex != null ? results[selectedIndex] : null;
   const selectedProfile = selected?.profiles ?? {};
@@ -416,13 +419,24 @@ function StaticMap({
               </p>
             </div>
             <div className="flex shrink-0 flex-col gap-1.5 sm:flex-row">
-              <Link
-                href={`/reservar/${selected.id}`}
-                className="rounded px-3 py-1.5 text-center text-[11px] font-semibold text-white no-underline"
-                style={{ backgroundColor: BRAND.primary }}
-              >
-                {extra.reservarAhora}
-              </Link>
+              {bundleMode && origenId ? (
+                <button
+                  type="button"
+                  onClick={() => onBundleAdd(selected.id)}
+                  className="rounded px-3 py-1.5 text-center text-[11px] font-semibold text-white"
+                  style={{ backgroundColor: BRAND.primary }}
+                >
+                  + Añadir a mi reserva
+                </button>
+              ) : (
+                <Link
+                  href={`/reservar/${selected.id}`}
+                  className="rounded px-3 py-1.5 text-center text-[11px] font-semibold text-white no-underline"
+                  style={{ backgroundColor: BRAND.primary }}
+                >
+                  {extra.reservarAhora}
+                </Link>
+              )}
               <Link
                 href={`/proveedor/${selected.proveedor_id || selectedProfile.id}`}
                 className="rounded border px-3 py-1.5 text-center text-[11px] font-semibold no-underline"
@@ -448,6 +462,8 @@ function ServiceCard({
   extra,
   t,
   lang,
+  bundleMode,
+  onBundleAdd,
 }) {
   const profile = service.profiles ?? {};
   const theme = VERTICAL_THEME[service.vertical] ?? VERTICAL_THEME.alojamiento;
@@ -534,17 +550,31 @@ function ServiceCard({
             </div>
           )}
 
-          <Link
-            href={`/reservar/${service.id}`}
-            onClick={(e) => e.stopPropagation()}
-            className="mt-2 block w-full rounded py-2 text-center text-[11px] font-semibold text-white no-underline transition-opacity hover:opacity-90"
-            style={{ backgroundColor: theme.color }}
-          >
-            {extra.reservar(
-              service.precio != null && service.precio !== "" ? `${Number(service.precio)}€` : "—",
-              theme.priceSuffix,
-            )}
-          </Link>
+          {bundleMode ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onBundleAdd(service.id);
+              }}
+              className="mt-2 block w-full rounded py-2 text-center text-[11px] font-semibold text-white transition-opacity hover:opacity-90"
+              style={{ backgroundColor: theme.color }}
+            >
+              + Añadir a mi reserva
+            </button>
+          ) : (
+            <Link
+              href={`/reservar/${service.id}`}
+              onClick={(e) => e.stopPropagation()}
+              className="mt-2 block w-full rounded py-2 text-center text-[11px] font-semibold text-white no-underline transition-opacity hover:opacity-90"
+              style={{ backgroundColor: theme.color }}
+            >
+              {extra.reservar(
+                service.precio != null && service.precio !== "" ? `${Number(service.precio)}€` : "—",
+                theme.priceSuffix,
+              )}
+            </Link>
+          )}
         </div>
       </button>
     </li>
@@ -567,8 +597,11 @@ export default function BuscarPage() {
   const ciudadParam = searchParams.get("ciudad") || "";
   const fechaBusquedaInicioParam = searchParams.get("desde") || "";
   const fechaBusquedaFinParam = searchParams.get("hasta") || "";
+  const bundleMode = searchParams.get("bundle") === "true";
+  const origenParam = searchParams.get("origen") || "";
 
   const [user, setUser] = useState(null);
+  const [origenService, setOrigenService] = useState(null);
   const [ciudadInput, setCiudadInput] = useState(ciudadParam);
   const [fechaDesdeInput, setFechaDesdeInput] = useState(fechaBusquedaInicioParam);
   const [fechaHastaInput, setFechaHastaInput] = useState(fechaBusquedaFinParam);
@@ -586,10 +619,15 @@ export default function BuscarPage() {
       if (ciudad?.trim()) params.set("ciudad", ciudad.trim());
       if (desde) params.set("desde", desde);
       if (hasta) params.set("hasta", hasta);
+      if (searchParams.get("bundle") === "true") {
+        params.set("bundle", "true");
+        const origen = searchParams.get("origen");
+        if (origen) params.set("origen", origen);
+      }
       const query = params.toString();
       router.push(query ? `${pathname}?${query}` : pathname);
     },
-    [pathname, router],
+    [pathname, router, searchParams],
   );
 
   useEffect(() => {
@@ -597,6 +635,39 @@ export default function BuscarPage() {
       setUser(authUser ?? null);
     });
   }, []);
+
+  useEffect(() => {
+    if (!bundleMode || !origenParam) {
+      setOrigenService(null);
+      return;
+    }
+
+    async function loadOrigen() {
+      const { data } = await supabase
+        .from("services")
+        .select(
+          `
+          id,
+          titulo,
+          profiles (
+            nombre,
+            apellido
+          )
+        `,
+        )
+        .eq("id", origenParam)
+        .single();
+
+      setOrigenService(data ?? null);
+    }
+
+    loadOrigen();
+  }, [bundleMode, origenParam]);
+
+  function handleBundleAdd(serviceIdToAdd) {
+    if (!origenParam) return;
+    router.push(`/reservar/${origenParam}?bundle_add=${serviceIdToAdd}`);
+  }
 
   useEffect(() => {
     function measureHeaders() {
@@ -776,6 +847,22 @@ export default function BuscarPage() {
         ? formatShortDate(fechaDesdeInput)
         : t.hero.annadeFecha;
 
+  const origenLabel = origenService
+    ? origenService.titulo ||
+      formatShortName(
+        origenService.profiles?.nombre,
+        origenService.profiles?.apellido,
+      ) ||
+      "tu reserva"
+    : "tu reserva";
+
+  const bundleFechasLabel =
+    fechaBusquedaInicioParam && fechaBusquedaFinParam
+      ? `${formatShortDate(fechaBusquedaInicioParam)} — ${formatShortDate(fechaBusquedaFinParam)}`
+      : fechaBusquedaInicioParam
+        ? formatShortDate(fechaBusquedaInicioParam)
+        : fechasDisplay;
+
   const splitHeight =
     headerOffset > 0
       ? `max(600px, calc(100vh - ${headerOffset}px))`
@@ -795,6 +882,15 @@ export default function BuscarPage() {
       <div ref={navbarRef} className="shrink-0">
         <BuscarNavbar user={user} t={t} extra={extra} />
       </div>
+
+      {bundleMode && (
+        <div
+          className="shrink-0 border-b px-5 py-3 text-center text-[12px] font-medium"
+          style={{ backgroundColor: "#e8f0fb", borderColor: "#e8e4de", color: "#1d4f91" }}
+        >
+          🔗 Estás añadiendo servicios a tu reserva de {origenLabel} · {bundleFechasLabel}
+        </div>
+      )}
 
       {/* Barra de filtros */}
       <header
@@ -955,6 +1051,8 @@ export default function BuscarPage() {
                   extra={extra}
                   t={t}
                   lang={lang}
+                  bundleMode={bundleMode}
+                  onBundleAdd={handleBundleAdd}
                 />
               ))}
             </ul>
@@ -976,6 +1074,9 @@ export default function BuscarPage() {
               onPinSelect={handleSelect}
               extra={extra}
               t={t}
+              bundleMode={bundleMode}
+              origenId={origenParam}
+              onBundleAdd={handleBundleAdd}
             />
           ) : (
             <div

@@ -1107,7 +1107,7 @@ export default function ReservarPage() {
   const [loading, setLoading] = useState(true);
   const [service, setService] = useState(null);
   const [complementaryServices, setComplementaryServices] = useState([]);
-  const [bundleIds, setBundleIds] = useState([]);
+  const [bundleServices, setBundleServices] = useState([]);
   const [userId, setUserId] = useState(null);
   const [userEmail, setUserEmail] = useState(null);
   const [perfilCliente, setPerfilCliente] = useState(null);
@@ -1141,6 +1141,22 @@ export default function ReservarPage() {
   const [providerReviewCount, setProviderReviewCount] = useState(0);
   const [tabReviewsMap, setTabReviewsMap] = useState({});
   const [filteredComplementary, setFilteredComplementary] = useState([]);
+  useEffect(() => {
+    const savedState = sessionStorage.getItem("bundle_state");
+    if (!savedState) return;
+
+    try {
+      const state = JSON.parse(savedState);
+      if (state.fechaInicio) setFechaInicio(state.fechaInicio);
+      if (state.fechaFin) setFechaFin(state.fechaFin);
+      if (state.hora) setHora(state.hora);
+      if (state.duracionHoras) setDuracionHoras(state.duracionHoras);
+      if (state.bundleServices) setBundleServices(state.bundleServices);
+    } catch {
+      // ignore invalid saved state
+    }
+    sessionStorage.removeItem("bundle_state");
+  }, []);
 
   useEffect(() => {
     async function load() {
@@ -1308,6 +1324,78 @@ export default function ReservarPage() {
   }, [router, serviceId]);
 
   useEffect(() => {
+    const bundleAddId = searchParams.get("bundle_add");
+    if (!bundleAddId || loading || !service || !userId) return;
+
+    async function addBundleFromUrl() {
+      if (bundleAddId === service.id) {
+        const params = new URLSearchParams(searchParams.toString());
+        params.delete("bundle_add");
+        const query = params.toString();
+        router.replace(
+          query ? `/reservar/${serviceId}?${query}` : `/reservar/${serviceId}`,
+          { scroll: false },
+        );
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("services")
+        .select(
+          `
+          id,
+          titulo,
+          vertical,
+          precio,
+          descripcion,
+          estancia_minima,
+          estancia_maxima,
+          antelacion_minima,
+          dias_disponibles,
+          reserva_inmediata,
+          disponible_para_viajar,
+          ciudad,
+          proveedor_id,
+          direccion_exacta,
+          telefono_contacto,
+          modalidad,
+          oferta_descuento,
+          oferta_valida_hasta,
+          descuentos_duracion,
+          profiles (
+            nombre,
+            apellido,
+            verificado
+          )
+        `,
+        )
+        .eq("id", bundleAddId)
+        .single();
+
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete("bundle_add");
+      const query = params.toString();
+      router.replace(
+        query ? `/reservar/${serviceId}?${query}` : `/reservar/${serviceId}`,
+        { scroll: false },
+      );
+
+      if (error || !data) return;
+
+      setBundleServices((prev) =>
+        prev.some((s) => s.id === data.id) ? prev : [...prev, data],
+      );
+      const nombreServicio =
+        data.titulo ||
+        `${VERTICALS[data.vertical]?.label ?? "Servicio"} · ${formatShortName(data.profiles?.nombre, data.profiles?.apellido)}`;
+      setSuccessMessage(`✓ ${nombreServicio} añadido a tu reserva`);
+      setSuccessVariant("green");
+    }
+
+    addBundleFromUrl();
+  }, [searchParams, loading, service, userId, serviceId, router]);
+
+  useEffect(() => {
     if (!cancelarBookingId || !userId || loading) return;
 
     async function ejecutarCancelacionGarantia() {
@@ -1383,11 +1471,6 @@ export default function ReservarPage() {
     );
     return Array.from(map.values());
   }, [complementaryServices, tabServices, filteredComplementary]);
-
-  const bundleServices = useMemo(
-    () => allBundleCandidates.filter((s) => bundleIds.includes(s.id)),
-    [allBundleCandidates, bundleIds],
-  );
 
   const selectedServices = useMemo(
     () => (service ? [service, ...bundleServices] : []),
@@ -1939,9 +2022,13 @@ export default function ReservarPage() {
   );
 
   function toggleBundleService(id) {
-    setBundleIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
-    );
+    setBundleServices((prev) => {
+      if (prev.some((s) => s.id === id)) {
+        return prev.filter((s) => s.id !== id);
+      }
+      const svc = allBundleCandidates.find((s) => s.id === id);
+      return svc ? [...prev, svc] : prev;
+    });
   }
 
   function handleRangeChange({ desde, hasta }) {
@@ -1998,9 +2085,24 @@ export default function ReservarPage() {
     service.cancellation_policy,
   );
   const freeCancelDateStr = formatCancelDeadline(freeCancelDeadline);
-  const buscarUrl = fechaInicio
-    ? `/buscar?desde=${fechaInicio}${fechaFin ? `&hasta=${fechaFin}` : ""}`
-    : "/buscar";
+  function goToBuscarBundle() {
+    sessionStorage.setItem(
+      "bundle_state",
+      JSON.stringify({
+        fechaInicio,
+        fechaFin,
+        hora,
+        duracionHoras,
+        bundleServices,
+      }),
+    );
+    const params = new URLSearchParams();
+    if (fechaInicio) params.set("desde", fechaInicio);
+    if (fechaFin) params.set("hasta", fechaFin);
+    params.set("bundle", "true");
+    params.set("origen", serviceId);
+    router.push(`/buscar?${params.toString()}`);
+  }
   const mainPriceLine =
     priceSummary.lines.find((l) => l.id === service.id) ?? priceSummary.lines[0];
   const bundleLines = priceSummary.lines.filter((l) => l.id !== service.id);
@@ -2303,6 +2405,111 @@ export default function ReservarPage() {
 
               {datesReady ? (
                 <>
+                  {bundleServices.length > 0 && (
+                    <div style={{ marginBottom: 12 }}>
+                      <div
+                        style={{
+                          fontSize: 10,
+                          color: "#0e7a5c",
+                          fontWeight: 500,
+                          marginBottom: 8,
+                        }}
+                      >
+                        ✓ Añadidos a tu reserva
+                      </div>
+                      {bundleServices.map((s) => (
+                        <div
+                          key={s.id}
+                          style={{
+                            background: "#e6f4f0",
+                            border: "0.5px solid #0e7a5c",
+                            borderRadius: 7,
+                            padding: "10px 12px",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 10,
+                            marginBottom: 6,
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: 28,
+                              height: 28,
+                              borderRadius: "50%",
+                              background:
+                                s.vertical === "alojamiento"
+                                  ? "#1d4f91"
+                                  : s.vertical === "ninos"
+                                    ? "#0e7a5c"
+                                    : "#c47d1a",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontSize: 9,
+                              color: "#fff",
+                              fontWeight: 500,
+                              flexShrink: 0,
+                            }}
+                          >
+                            {(s.titulo || "S")[0]}
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <div
+                              style={{
+                                fontSize: 12,
+                                fontWeight: 500,
+                                color: "#2a3a4a",
+                              }}
+                            >
+                              {s.titulo}
+                            </div>
+                            <div
+                              style={{
+                                fontSize: 10,
+                                color: "#888",
+                                marginTop: 1,
+                              }}
+                            >
+                              {s.profiles?.nombre} {s.profiles?.apellido} · {s.precio}€/
+                              {s.vertical === "alojamiento"
+                                ? "noche"
+                                : s.vertical === "ninos"
+                                  ? "hora"
+                                  : "día"}
+                            </div>
+                          </div>
+                          <span
+                            style={{
+                              fontSize: 12,
+                              fontWeight: 500,
+                              color: "#0e7a5c",
+                            }}
+                          >
+                            {s.precio}€
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setBundleServices((prev) =>
+                                prev.filter((b) => b.id !== s.id),
+                              )
+                            }
+                            style={{
+                              fontSize: 14,
+                              color: "#e53e3e",
+                              background: "none",
+                              border: "none",
+                              cursor: "pointer",
+                              padding: "0 4px",
+                            }}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
                   <div
                     style={{
                       backgroundColor: "#e8f0fb",
@@ -2317,7 +2524,7 @@ export default function ReservarPage() {
                       <ul className="mt-3 flex flex-col gap-2">
                         {filteredComplementary.map((comp) => {
                           const compConfig = VERTICALS[comp.vertical] ?? VERTICALS.alojamiento;
-                          const isAdded = bundleIds.includes(comp.id);
+                          const isAdded = bundleServices.some((s) => s.id === comp.id);
                           const addPrice = getCompAddPrice(comp);
                           const providerName = formatShortName(
                             comp.profiles?.nombre,
@@ -2405,7 +2612,7 @@ export default function ReservarPage() {
                     <ul className="mt-4 flex flex-col gap-3">
                       {tabServices.map((comp) => {
                         const compConfig = VERTICALS[comp.vertical] ?? VERTICALS.alojamiento;
-                        const isAdded = bundleIds.includes(comp.id);
+                        const isAdded = bundleServices.some((s) => s.id === comp.id);
                         const providerName = formatShortName(
                           comp.profiles?.nombre,
                           comp.profiles?.apellido,
@@ -2473,13 +2680,14 @@ export default function ReservarPage() {
                     </p>
                   )}
 
-                  <Link
-                    href={buscarUrl}
-                    className="mt-4 block w-full rounded border py-2.5 text-center text-[11px] font-semibold no-underline transition-opacity hover:opacity-80"
+                  <button
+                    type="button"
+                    onClick={goToBuscarBundle}
+                    className="mt-4 block w-full rounded border py-2.5 text-center text-[11px] font-semibold transition-opacity hover:opacity-80"
                     style={{ borderColor: "#1d4f91", color: "#1d4f91", borderRadius: 6 }}
                   >
                     🔍 Ver todos los proveedores disponibles →
-                  </Link>
+                  </button>
                 </>
               ) : (
                 <p className="text-[11px] text-[#888]">
