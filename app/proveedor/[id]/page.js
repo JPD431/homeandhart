@@ -2,8 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import CalendarioDisponibilidad from "@/app/components/CalendarioDisponibilidad";
 import FavoritoButton from "@/app/components/FavoritoButton";
-import PreguntarButton from "@/app/components/PreguntarButton";
 import ReportarPerfilButton from "@/app/components/ReportarPerfilButton";
+import ProveedorPreguntarButton from "./ProveedorPreguntarButton";
 import { SERIF } from "@/app/components/brand";
 import {
   ProveedorBioText,
@@ -434,13 +434,13 @@ export default async function ProveedorPage({ params }) {
                   Reservar
                 </Link>
               )}
-              <PreguntarButton
+              <ProveedorPreguntarButton
                 proveedorId={id}
                 className="w-full min-w-[140px] rounded border px-5 py-2.5 text-[12px] font-semibold transition-colors hover:bg-[#e8f0fb] disabled:opacity-60 lg:w-auto"
                 style={{ borderColor: "#1d4f91", color: "#1d4f91", borderRadius: 4 }}
               >
                 Preguntar 💬
-              </PreguntarButton>
+              </ProveedorPreguntarButton>
               <div className="proveedor-reportar-wrap">
                 <ReportarPerfilButton
                   proveedorId={id}
