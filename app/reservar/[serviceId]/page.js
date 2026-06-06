@@ -10,6 +10,7 @@ import {
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import CalendarioRangoFechas from "@/app/components/CalendarioRangoFechas";
 import { BRAND, SERIF } from "@/app/components/brand";
 import { applyBestDiscountToBase } from "@/app/lib/descuentosDuracion";
 import { getUserFamiliaActiva } from "@/app/lib/familia";
@@ -883,8 +884,8 @@ function SavedCardCheckout({
         type="button"
         disabled={paying || disabled}
         onClick={handlePayWithSaved}
-        className="mt-4 w-full rounded py-[13px] text-[13px] font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-        style={{ backgroundColor: "#1d4f91", borderRadius: 4 }}
+        className="mt-4 w-full py-[13px] text-[13px] font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+        style={{ backgroundColor: "#1d4f91", borderRadius: 6 }}
       >
         {paying ? "Procesando pago…" : `Pagar ${precioTotal.toFixed(2)}€ →`}
       </button>
@@ -1085,8 +1086,8 @@ function CheckoutForm({
       <button
         type="submit"
         disabled={!stripe || paying || disabled}
-        className="mt-4 w-full rounded py-[13px] text-[13px] font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-        style={{ backgroundColor: "#1d4f91", borderRadius: 4 }}
+        className="mt-4 w-full py-[13px] text-[13px] font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+        style={{ backgroundColor: "#1d4f91", borderRadius: 6 }}
       >
         {paying ? "Procesando pago…" : `Pagar ${precioTotal.toFixed(2)}€ →`}
       </button>
@@ -1132,7 +1133,7 @@ export default function ReservarPage() {
   const [paymentMethodsLoading, setPaymentMethodsLoading] = useState(false);
   const [disponibilidadChecking, setDisponibilidadChecking] = useState(false);
   const [calendarioError, setCalendarioError] = useState("");
-  const [showFechas, setShowFechas] = useState(true);
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const [bundleTab, setBundleTab] = useState("alojamiento");
   const [tabServices, setTabServices] = useState([]);
   const [tabServicesLoading, setTabServicesLoading] = useState(false);
@@ -1943,6 +1944,19 @@ export default function ReservarPage() {
     );
   }
 
+  function handleRangeChange({ desde, hasta }) {
+    if (desde) {
+      const diaError = validateDiaDisponible(service, desde);
+      if (diaError) {
+        setErrorMessage(diaError);
+        return;
+      }
+      setErrorMessage("");
+    }
+    setFechaInicio(desde);
+    setFechaFin(hasta);
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen font-sans" style={{ backgroundColor: "#f7f5f2" }}>
@@ -2088,128 +2102,108 @@ export default function ReservarPage() {
                 </div>
               </div>
 
-              {(showFechas || !datesReady) ? (
-                <div className="mt-4 flex flex-col gap-3">
-                  <div>
-                    <label htmlFor="fecha-inicio" className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-[#bbb]">
-                      {vertical === "ninos" ? "Fecha" : "Llegada"}
-                    </label>
-                    <FechaInicioConDias
-                      id="fecha-inicio"
-                      value={fechaInicio}
-                      min={new Date().toISOString().split("T")[0]}
-                      diasDisponibles={service?.dias_disponibles}
-                      onChange={setFechaInicio}
-                      onValidationError={setErrorMessage}
-                      inputClass={inputClass}
-                      borderColor="#e8e4de"
-                    />
-                  </div>
-                  {(vertical === "alojamiento" || vertical === "mascotas") && (
-                    <div>
-                      <label htmlFor="fecha-fin" className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-[#bbb]">
-                        Salida
-                      </label>
-                      <input
-                        id="fecha-fin"
-                        type="date"
-                        required
-                        min={fechaInicio || undefined}
-                        value={fechaFin}
-                        onChange={(e) => setFechaFin(e.target.value)}
-                        className={inputClass}
-                        style={{ borderColor: "#e8e4de" }}
-                      />
-                    </div>
-                  )}
-                  {vertical === "ninos" && (
-                    <>
-                      <div>
-                        <label htmlFor="hora" className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-[#bbb]">
-                          Hora
-                        </label>
-                        <input
-                          id="hora"
-                          type="time"
-                          required
-                          min={getMinHora()}
-                          value={hora}
-                          onChange={(e) => setHora(e.target.value)}
-                          className={inputClass}
-                          style={{ borderColor: "#e8e4de" }}
-                        />
-                      </div>
-                      <div>
-                        <label htmlFor="duracion" className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-[#bbb]">
-                          Duración (horas)
-                        </label>
-                        <input
-                          id="duracion"
-                          type="number"
-                          min="1"
-                          step="1"
-                          required
-                          value={duracionHoras}
-                          onChange={(e) => setDuracionHoras(e.target.value)}
-                          className={inputClass}
-                          style={{ borderColor: "#e8e4de" }}
-                        />
-                      </div>
-                    </>
-                  )}
-                </div>
-              ) : (
-                <div className="mt-4 grid grid-cols-2 gap-3">
-                  <div
-                    className="rounded-lg border p-3"
-                    style={{ backgroundColor: "#f7f5f2", borderColor: "#e8e4de" }}
+              <div className="relative mt-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setCalendarOpen(true)}
+                    className="w-full border text-left transition-opacity hover:opacity-80"
+                    style={{
+                      backgroundColor: "#f7f5f2",
+                      borderColor: "#e8e4de",
+                      borderRadius: 6,
+                      padding: "10px 12px",
+                    }}
                   >
                     <p className="text-[8px] font-medium uppercase tracking-wide text-[#bbb]">
-                      {vertical === "ninos" ? "Fecha" : "Llegada"}
+                      Llegada
                     </p>
-                    <p className="mt-1 text-[13px] text-[#2a3a4a]">
-                      {formatFechaDisplay(fechaInicio)}
-                      {vertical === "ninos" && hora ? ` · ${hora}` : ""}
+                    <p className="mt-0.5 text-[13px] text-[#2a3a4a]">
+                      {fechaInicio ? formatFechaDisplay(fechaInicio) : "Seleccionar"}
                     </p>
-                  </div>
-                  {(vertical === "alojamiento" || vertical === "mascotas") && (
-                    <div
-                      className="rounded-lg border p-3"
-                      style={{ backgroundColor: "#f7f5f2", borderColor: "#e8e4de" }}
-                    >
-                      <p className="text-[8px] font-medium uppercase tracking-wide text-[#bbb]">
-                        Salida
-                      </p>
-                      <p className="mt-1 text-[13px] text-[#2a3a4a]">
-                        {formatFechaDisplay(fechaFin)}
-                      </p>
-                    </div>
-                  )}
-                  {vertical === "ninos" && (
-                    <div
-                      className="rounded-lg border p-3"
-                      style={{ backgroundColor: "#f7f5f2", borderColor: "#e8e4de" }}
-                    >
-                      <p className="text-[8px] font-medium uppercase tracking-wide text-[#bbb]">
-                        Duración
-                      </p>
-                      <p className="mt-1 text-[13px] text-[#2a3a4a]">
-                        {duracionHoras} hora{Number(duracionHoras) > 1 ? "s" : ""}
-                      </p>
-                    </div>
-                  )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCalendarOpen(true)}
+                    className="w-full border text-left transition-opacity hover:opacity-80"
+                    style={{
+                      backgroundColor: "#f7f5f2",
+                      borderColor: "#e8e4de",
+                      borderRadius: 6,
+                      padding: "10px 12px",
+                    }}
+                  >
+                    <p className="text-[8px] font-medium uppercase tracking-wide text-[#bbb]">
+                      Salida
+                    </p>
+                    <p className="mt-0.5 text-[13px] text-[#2a3a4a]">
+                      {fechaFin
+                        ? formatFechaDisplay(fechaFin)
+                        : vertical === "ninos"
+                          ? "—"
+                          : "Seleccionar"}
+                    </p>
+                  </button>
                 </div>
-              )}
 
-              {datesReady && (
+                {calendarOpen && (
+                  <div
+                    className="absolute left-0 right-0 z-20 mt-2 rounded-lg border bg-white p-4 shadow-lg"
+                    style={{ borderColor: "#e8e4de" }}
+                  >
+                    <CalendarioRangoFechas
+                      fechaInicio={fechaInicio}
+                      fechaFin={fechaFin}
+                      onChange={handleRangeChange}
+                      onRangeComplete={() => setCalendarOpen(false)}
+                    />
+                  </div>
+                )}
+
                 <button
                   type="button"
-                  onClick={() => setShowFechas((v) => !v)}
+                  onClick={() => setCalendarOpen(true)}
                   className="mt-2 border-0 bg-transparent p-0 text-[11px] font-medium hover:underline"
                   style={{ color: "#1d4f91" }}
                 >
-                  {showFechas ? "Ocultar fechas" : "Cambiar fechas →"}
+                  Cambiar fechas →
                 </button>
+              </div>
+
+              {vertical === "ninos" && (
+                <div className="mt-3 grid grid-cols-2 gap-3">
+                  <div>
+                    <label htmlFor="hora" className="mb-1 block text-[8px] font-medium uppercase tracking-wide text-[#bbb]">
+                      Hora
+                    </label>
+                    <input
+                      id="hora"
+                      type="time"
+                      required
+                      min={getMinHora()}
+                      value={hora}
+                      onChange={(e) => setHora(e.target.value)}
+                      className={inputClass}
+                      style={{ borderColor: "#e8e4de", borderRadius: 6 }}
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="duracion" className="mb-1 block text-[8px] font-medium uppercase tracking-wide text-[#bbb]">
+                      Duración (horas)
+                    </label>
+                    <input
+                      id="duracion"
+                      type="number"
+                      min="1"
+                      step="1"
+                      required
+                      value={duracionHoras}
+                      onChange={(e) => setDuracionHoras(e.target.value)}
+                      className={inputClass}
+                      style={{ borderColor: "#e8e4de", borderRadius: 6 }}
+                    />
+                  </div>
+                </div>
               )}
 
               <textarea
@@ -2310,11 +2304,14 @@ export default function ReservarPage() {
               {datesReady ? (
                 <>
                   <div
-                    className="rounded-lg p-4"
-                    style={{ backgroundColor: "#e8f0fb" }}
+                    style={{
+                      backgroundColor: "#e8f0fb",
+                      borderRadius: 8,
+                      padding: 14,
+                    }}
                   >
-                    <p className="text-[11px] font-semibold text-[#1d4f91]">
-                      ✨ Disponibles para tus fechas · {formatFechasRango(fechaInicio, fechaFin)}
+                    <p className="text-[10px] font-semibold text-[#1d4f91]">
+                      ✨ Disponibles para tus fechas
                     </p>
                     {filteredComplementary.length > 0 ? (
                       <ul className="mt-3 flex flex-col gap-2">
@@ -2329,7 +2326,7 @@ export default function ReservarPage() {
                           return (
                             <li
                               key={comp.id}
-                              className="flex items-center justify-between gap-2 rounded-lg bg-white/70 px-3 py-2"
+                              className="flex items-center justify-between gap-2"
                             >
                               <div className="flex min-w-0 items-center gap-2">
                                 <span
@@ -2351,10 +2348,10 @@ export default function ReservarPage() {
                                 className="shrink-0 rounded px-2.5 py-1 text-[10px] font-semibold transition-colors"
                                 style={
                                   isAdded
-                                    ? { backgroundColor: "#0e7a5c", color: "#fff" }
+                                    ? { backgroundColor: "#1d4f91", color: "#fff", border: "1px solid #1d4f91" }
                                     : {
-                                        border: `1px solid ${compConfig.color}`,
-                                        color: compConfig.color,
+                                        border: "1px solid #1d4f91",
+                                        color: "#1d4f91",
                                         backgroundColor: "#fff",
                                       }
                                 }
@@ -2372,9 +2369,11 @@ export default function ReservarPage() {
                     )}
                   </div>
 
-                  <p className="my-4 text-center text-[10px] text-[#bbb]">
-                    ¿No encuentras lo que buscas?
-                  </p>
+                  <div className="my-4 flex items-center gap-3">
+                    <div className="h-px flex-1" style={{ backgroundColor: "#e8e4de" }} />
+                    <span className="text-[10px] text-[#bbb]">¿No encuentras lo que buscas?</span>
+                    <div className="h-px flex-1" style={{ backgroundColor: "#e8e4de" }} />
+                  </div>
 
                   <div className="flex flex-wrap gap-2">
                     {BUNDLE_TABS.map((tab) => (
@@ -2407,18 +2406,16 @@ export default function ReservarPage() {
                       {tabServices.map((comp) => {
                         const compConfig = VERTICALS[comp.vertical] ?? VERTICALS.alojamiento;
                         const isAdded = bundleIds.includes(comp.id);
-                        const addPrice = getCompAddPrice(comp);
                         const providerName = formatShortName(
                           comp.profiles?.nombre,
                           comp.profiles?.apellido,
                         );
-                        const reviews = tabReviewsMap[comp.proveedor_id];
                         const compTags = getServiceDisplayTags(comp);
                         return (
                           <li
                             key={comp.id}
-                            className="rounded-lg border bg-white p-3"
-                            style={{ borderColor: "#e8e4de" }}
+                            className="border bg-white p-3"
+                            style={{ borderColor: "#e8e4de", borderRadius: 7 }}
                           >
                             <div className="flex items-start gap-3">
                               <span
@@ -2436,14 +2433,6 @@ export default function ReservarPage() {
                                     <p className="text-[10px] text-[#888]">
                                       {comp.titulo || compConfig.label}
                                     </p>
-                                    {reviews?.avg && (
-                                      <div className="mt-1 flex items-center gap-1">
-                                        <StarRating value={reviews.avg} size={9} />
-                                        <span className="text-[9px] text-[#aaa]">
-                                          {reviews.avg} · {reviews.count} reseña{reviews.count !== 1 ? "s" : ""}
-                                        </span>
-                                      </div>
-                                    )}
                                     {compTags.length > 0 && (
                                       <div className="mt-1.5 flex flex-wrap gap-1">
                                         {compTags.map((tag) => (
@@ -2452,7 +2441,7 @@ export default function ReservarPage() {
                                       </div>
                                     )}
                                   </div>
-                                  <p className="shrink-0 text-[12px] font-semibold" style={{ color: compConfig.color }}>
+                                  <p className="shrink-0 text-[12px] font-semibold text-[#1a1a1a]">
                                     {comp.precio ? `${comp.precio}€` : "—"}
                                   </p>
                                 </div>
@@ -2462,15 +2451,15 @@ export default function ReservarPage() {
                                   className="mt-2 rounded px-3 py-1 text-[10px] font-semibold transition-colors"
                                   style={
                                     isAdded
-                                      ? { backgroundColor: "#0e7a5c", color: "#fff" }
+                                      ? { backgroundColor: "#1d4f91", color: "#fff" }
                                       : {
-                                          border: `1px solid ${compConfig.color}`,
-                                          color: compConfig.color,
+                                          border: "1px solid #1d4f91",
+                                          color: "#1d4f91",
                                           backgroundColor: "#fff",
                                         }
                                   }
                                 >
-                                  {isAdded ? "Añadido ✓" : `+ Añadir${addPrice ? ` · ${formatEuro(addPrice)}` : ""}`}
+                                  {isAdded ? "Añadido ✓" : "+ Añadir"}
                                 </button>
                               </div>
                             </div>
@@ -2486,14 +2475,11 @@ export default function ReservarPage() {
 
                   <Link
                     href={buscarUrl}
-                    className="mt-4 block text-center text-[11px] font-semibold no-underline hover:underline"
-                    style={{ color: "#1d4f91" }}
+                    className="mt-4 block w-full rounded border py-2.5 text-center text-[11px] font-semibold no-underline transition-opacity hover:opacity-80"
+                    style={{ borderColor: "#1d4f91", color: "#1d4f91", borderRadius: 6 }}
                   >
                     🔍 Ver todos los proveedores disponibles →
                   </Link>
-                  <p className="mt-1 text-center text-[9px] text-[#bbb]">
-                    Se abrirá el buscador con tus fechas ya seleccionadas
-                  </p>
                 </>
               ) : (
                 <p className="text-[11px] text-[#888]">
@@ -2521,24 +2507,23 @@ export default function ReservarPage() {
           </div>
 
           {/* Columna derecha — Resumen */}
-          <aside className="lg:sticky lg:top-5 lg:self-start">
+          <aside className="lg:sticky lg:top-[20px] lg:self-start">
             <div
               className="rounded-[10px] border bg-white p-5"
               style={{ borderColor: "#e8e4de" }}
             >
-              <h3
-                className="text-[13px] font-semibold text-[#1a1a1a]"
-                style={{ fontFamily: SERIF }}
-              >
+              <h3 className="text-[12px] font-medium text-[#1a1a1a]">
                 Resumen del pedido
               </h3>
 
               <div className="mt-4 flex gap-2.5">
                 <div
-                  className="flex h-10 w-12 shrink-0 items-center justify-center rounded"
+                  className="flex h-10 w-12 shrink-0 items-center justify-center"
                   style={{
                     background: `linear-gradient(135deg, ${verticalConfig.color}22, ${verticalConfig.color}55)`,
                     borderRadius: 6,
+                    width: 48,
+                    height: 40,
                   }}
                 >
                   <Icon className="h-5 w-5" style={{ color: verticalConfig.color }} />
@@ -2546,8 +2531,9 @@ export default function ReservarPage() {
                 <div className="min-w-0">
                   <p className="text-[12px] font-semibold text-[#1a1a1a]">{fullProviderName}</p>
                   <p className="text-[10px] text-[#888]">
-                    {profile.verificado === true && "Verificada ✓ · "}
-                    {providerAvgRating ? `${providerAvgRating} ★` : "Sin valoraciones"}
+                    {providerAvgRating
+                      ? `${providerAvgRating} ★`
+                      : "Sin valoraciones"}
                     {providerReviewCount > 0 &&
                       ` · ${providerReviewCount} reseña${providerReviewCount !== 1 ? "s" : ""}`}
                   </p>
@@ -2556,43 +2542,45 @@ export default function ReservarPage() {
 
               {precioListo ? (
                 <>
-                  <div className="mt-4 flex items-start justify-between gap-2 text-[11px]">
-                    <div>
-                      <p className="text-[#444]">
-                        {mainPriceLine?.detail} × {formatEuro(unitClientPrice)}
-                      </p>
-                      <p className="mt-0.5 text-[10px] font-medium text-[#0e7a5c]">
-                        ✓ Pago protegido incluido
-                      </p>
-                    </div>
-                    <span className="shrink-0 font-semibold text-[#1a1a1a]">
+                  <div className="mt-4 flex items-center justify-between gap-2 text-[11px]">
+                    <span className="text-[#444]">
+                      {mainPriceLine?.detail} × {formatEuro(unitClientPrice)}
+                    </span>
+                    <span className="shrink-0 text-[#1a1a1a]">
                       {mainPriceLine ? formatEuro(mainPriceLine.total) : "—"}
                     </span>
                   </div>
 
-                  {bundleLines.map((line) => (
-                    <div
-                      key={line.id}
-                      className="mt-2 flex items-center justify-between gap-2 text-[11px]"
-                    >
-                      <div className="flex min-w-0 items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => toggleBundleService(line.id)}
-                          className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-0 text-[10px] text-[#888] hover:bg-[#f7f5f2]"
-                          aria-label="Eliminar servicio"
-                        >
-                          ×
-                        </button>
-                        <span className="truncate text-[#666]">{line.name}</span>
+                  {bundleLines.map((line) => {
+                    const lineConfig = VERTICALS[line.vertical] ?? verticalConfig;
+                    return (
+                      <div
+                        key={line.id}
+                        className="mt-2 flex items-center justify-between gap-2 text-[11px]"
+                      >
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span
+                            className="h-2 w-2 shrink-0 rounded-full"
+                            style={{ backgroundColor: lineConfig.color }}
+                          />
+                          <span className="truncate text-[#666]">{line.name}</span>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <span className="text-[#1a1a1a]">{formatEuro(line.total)}</span>
+                          <button
+                            type="button"
+                            onClick={() => toggleBundleService(line.id)}
+                            className="flex h-4 w-4 items-center justify-center border-0 bg-transparent p-0 text-[14px] leading-none text-red-500 hover:text-red-700"
+                            aria-label="Eliminar servicio"
+                          >
+                            ×
+                          </button>
+                        </div>
                       </div>
-                      <span className="shrink-0 font-medium text-[#1a1a1a]">
-                        {formatEuro(line.total)}
-                      </span>
-                    </div>
-                  ))}
+                    );
+                  })}
 
-                  <div className="my-3 h-px" style={{ backgroundColor: "#e8e4de" }} />
+                  <div className="my-3 h-px" style={{ backgroundColor: "#f0ede8" }} />
 
                   <div className="flex items-center justify-between text-[11px] text-[#666]">
                     <span>Gastos de gestión</span>
@@ -2618,17 +2606,14 @@ export default function ReservarPage() {
                       </div>
                     ))}
 
-                  <div className="my-3 h-px" style={{ backgroundColor: "#e8e4de" }} />
+                  <div className="my-3 h-px" style={{ backgroundColor: "#f0ede8" }} />
 
                   <div className="flex items-center justify-between">
-                    <span className="text-[13px] font-medium text-[#1a1a1a]">Total</span>
+                    <span className="text-[15px] font-medium text-[#1a1a1a]">Total</span>
                     <span className="text-[15px] font-medium text-[#1a1a1a]">
                       {formatEuro(priceSummary.total)}
                     </span>
                   </div>
-                  <p className="mt-1 text-[9px] text-[#bbb]">
-                    IVA incluido · Pago único seguro
-                  </p>
                 </>
               ) : (
                 <p className="mt-4 text-[11px] text-[#888]">{precioDetail}</p>
@@ -2705,8 +2690,8 @@ export default function ReservarPage() {
                   <button
                     type="button"
                     disabled
-                    className="mt-4 w-full rounded py-[13px] text-[13px] font-semibold text-white opacity-60"
-                    style={{ backgroundColor: "#1d4f91", borderRadius: 4 }}
+                    className="mt-4 w-full py-[13px] text-[13px] font-semibold text-white opacity-60"
+                    style={{ backgroundColor: "#1d4f91", borderRadius: 6 }}
                   >
                     Pagar {priceSummary.total > 0 ? formatEuro(priceSummary.total) : ""} →
                   </button>
@@ -2715,8 +2700,8 @@ export default function ReservarPage() {
                 <button
                   type="button"
                   disabled
-                  className="mt-4 w-full rounded py-[13px] text-[13px] font-semibold text-white opacity-60"
-                  style={{ backgroundColor: "#1d4f91", borderRadius: 4 }}
+                  className="mt-4 w-full py-[13px] text-[13px] font-semibold text-white opacity-60"
+                  style={{ backgroundColor: "#1d4f91", borderRadius: 6 }}
                 >
                   Pagar →
                 </button>
