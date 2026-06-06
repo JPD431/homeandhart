@@ -4,8 +4,30 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Navbar from "@/app/components/Navbar";
-import { BRAND, SERIF } from "@/app/components/brand";
 import { supabase } from "@/lib/supabase";
+
+const BLUE = "#1d4f91";
+const AMBER = "#c47d1a";
+const WARM = "#f7f5f2";
+const BORDER = "#e8e4de";
+const DARK = "#2a3a4a";
+
+const VERTICAL_COLORS = {
+  alojamiento: "#1d4f91",
+  ninos: "#0e7a5c",
+  mascotas: "#c47d1a",
+};
+
+const VERTICAL_LABELS = {
+  alojamiento: "Alojamiento",
+  ninos: "Cuidado de niños",
+  mascotas: "Cuidado de mascotas",
+};
+
+const hideScrollbar = {
+  scrollbarWidth: "none",
+  msOverflowStyle: "none",
+};
 
 const inputClass =
   "w-full rounded-xl border px-4 py-2.5 text-sm text-[#1a1a1a] outline-none focus:ring-2 focus:ring-[#1d4f91]/30";
@@ -43,6 +65,31 @@ function formatMessageTime(value) {
   });
 }
 
+function formatListTime(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  const now = new Date();
+  if (date.toDateString() === now.toDateString()) {
+    return date.toLocaleTimeString("es-ES", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
+  return date.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
+}
+
+function formatLastSeen(lastMessage, otherId) {
+  if (!lastMessage || lastMessage.sender_id !== otherId) {
+    return "Última vez hace un momento";
+  }
+  const diff = Date.now() - new Date(lastMessage.created_at).getTime();
+  const hours = Math.floor(diff / 3600000);
+  if (hours < 1) return "En línea ahora";
+  if (hours < 24) return `Última vez hace ${hours}h`;
+  const days = Math.floor(hours / 24);
+  return `Última vez hace ${days}d`;
+}
+
 function parseJsonMessage(content) {
   if (!content || typeof content !== "string") return null;
   const trimmed = content.trim();
@@ -65,7 +112,10 @@ function parseOfferContent(content) {
 
 function getMessagePreview(content) {
   const parsed = parseJsonMessage(content);
-  if (parsed?.tipo === "oferta") return "🏷️ Oferta especial";
+  if (parsed?.tipo === "oferta") {
+    const precio = Number(parsed.precio_especial);
+    return `🏷️ Oferta especial · ${Number.isFinite(precio) ? `${precio.toFixed(0)}€` : ""}`;
+  }
   if (parsed?.tipo === "solicitud_precio") return "💬 Solicitud de precio";
   return content;
 }
@@ -80,67 +130,115 @@ function formatOfferValidUntil(dateStr) {
   });
 }
 
+function Avatar({
+  nombre,
+  apellido,
+  vertical = "alojamiento",
+  size = 36,
+  showOnline = false,
+}) {
+  const bg = VERTICAL_COLORS[vertical] ?? BLUE;
+  return (
+    <div className="relative shrink-0" style={{ width: size, height: size }}>
+      <div
+        className="flex items-center justify-center rounded-full text-white"
+        style={{
+          width: size,
+          height: size,
+          backgroundColor: bg,
+          fontSize: size <= 24 ? 9 : 12,
+          fontWeight: 500,
+        }}
+      >
+        {getInitials(nombre, apellido)}
+      </div>
+      {showOnline && (
+        <span
+          className="absolute rounded-full"
+          style={{
+            width: 9,
+            height: 9,
+            backgroundColor: "#22c55e",
+            border: "2px solid #fff",
+            bottom: 0,
+            right: 0,
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
 function OfertaMessageCard({ message, offer, isMine, onReject, rejecting }) {
   const rechazada = offer.estado === "rechazada";
   const expirada = offer.valida_hasta < new Date().toISOString().split("T")[0];
   const canRespond = !isMine && !rechazada && !expirada;
+  const ahorro = Math.max(
+    0,
+    (Number(offer.precio_original) || 0) - (Number(offer.precio_especial) || 0),
+  );
 
   const acceptHref = `/reservar/${offer.service_id}?precio_especial=${encodeURIComponent(offer.precio_especial)}&valida_hasta=${encodeURIComponent(offer.valida_hasta)}`;
 
   return (
-    <div
-      className="max-w-[min(100%,320px)] rounded-2xl border p-4 text-sm"
-      style={{
-        backgroundColor: "#e8f0fb",
-        borderColor: "#1d4f91",
-        color: "#1a1a1a",
-      }}
-    >
-      <p className="font-semibold" style={{ color: "#1d4f91" }}>
-        🏷️ Oferta especial
-      </p>
-      <p className="mt-2 font-medium text-[#1a1a1a]">{offer.service_titulo}</p>
-      <div className="mt-2 flex flex-wrap items-baseline gap-2">
-        {offer.precio_original > 0 && (
-          <span className="text-[#888] line-through">
-            {Number(offer.precio_original).toFixed(2)}€
+    <div className={`flex max-w-[min(100%,340px)] flex-col ${isMine ? "items-end" : "items-start"}`}>
+      <div
+        className="w-full rounded-[10px] border bg-white p-4"
+        style={{ borderColor: BLUE, borderWidth: 1 }}
+      >
+        <p
+          className="text-[9px] font-medium uppercase tracking-wide"
+          style={{ color: BLUE }}
+        >
+          🏷️ OFERTA ESPECIAL
+        </p>
+        <p className="mt-2 text-[13px] font-medium" style={{ color: DARK }}>
+          {offer.service_titulo}
+        </p>
+        <div className="mt-2 flex flex-wrap items-baseline gap-2">
+          {offer.precio_original > 0 && (
+            <span className="text-sm text-[#aaa] line-through">
+              {Number(offer.precio_original).toFixed(2)}€
+            </span>
+          )}
+          <span className="text-base font-semibold" style={{ color: "#0e7a5c" }}>
+            {Number(offer.precio_especial).toFixed(2)}€
           </span>
-        )}
-        <span className="text-lg font-bold text-green-700">
-          {Number(offer.precio_especial).toFixed(2)}€
-        </span>
-      </div>
-      <p className="mt-2 text-xs text-[#555]">
-        Válida hasta {formatOfferValidUntil(offer.valida_hasta)}
-      </p>
-      {offer.mensaje && (
-        <p className="mt-3 whitespace-pre-wrap text-[#333]">{offer.mensaje}</p>
-      )}
-      {rechazada && (
-        <p className="mt-3 text-xs font-medium text-[#888]">Oferta rechazada</p>
-      )}
-      {expirada && !rechazada && (
-        <p className="mt-3 text-xs font-medium text-[#888]">Oferta caducada</p>
-      )}
-      {canRespond && (
-        <div className="mt-4 flex flex-wrap gap-2">
-          <Link
-            href={acceptHref}
-            className="rounded-lg bg-green-600 px-4 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90"
-          >
-            Aceptar oferta
-          </Link>
-          <button
-            type="button"
-            onClick={() => onReject(message)}
-            disabled={rejecting}
-            className="rounded-lg bg-[#e5e5e5] px-4 py-2 text-xs font-semibold text-[#444] transition-opacity hover:opacity-90 disabled:opacity-60"
-          >
-            {rejecting ? "…" : "Rechazar"}
-          </button>
         </div>
-      )}
-      <p className="mt-2 text-[10px] opacity-70">
+        <p className="mt-1 text-[10px] text-[#888]">
+          Válida hasta {formatOfferValidUntil(offer.valida_hasta)}
+          {ahorro > 0 && ` · Ahorro ${ahorro.toFixed(0)}€`}
+        </p>
+        {offer.mensaje && (
+          <p className="mt-2 whitespace-pre-wrap text-xs text-[#666]">{offer.mensaje}</p>
+        )}
+        {rechazada && (
+          <p className="mt-2 text-[10px] font-medium text-[#888]">Oferta rechazada</p>
+        )}
+        {expirada && !rechazada && (
+          <p className="mt-2 text-[10px] font-medium text-[#888]">Oferta caducada</p>
+        )}
+        {canRespond && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Link
+              href={acceptHref}
+              className="rounded px-3 py-1.5 text-[11px] font-medium text-white no-underline transition-opacity hover:opacity-90"
+              style={{ backgroundColor: BLUE }}
+            >
+              Aceptar oferta →
+            </Link>
+            <button
+              type="button"
+              onClick={() => onReject(message)}
+              disabled={rejecting}
+              className="rounded bg-[#e5e5e5] px-3 py-1.5 text-[11px] font-medium text-[#666] transition-opacity hover:opacity-90 disabled:opacity-60"
+            >
+              {rejecting ? "…" : "Rechazar"}
+            </button>
+          </div>
+        )}
+      </div>
+      <p className="mt-1 text-[9px] text-[#bbb]">
         {formatMessageTime(message.created_at)}
       </p>
     </div>
@@ -161,53 +259,61 @@ function SolicitudPrecioMessageCard({
 
   return (
     <div
-      className="max-w-[min(100%,320px)] rounded-2xl border p-4 text-sm"
-      style={{
-        backgroundColor: "#fef3c7",
-        borderColor: "#c47d1a",
-        color: "#1a1a1a",
-      }}
+      className={`flex max-w-[min(100%,340px)] flex-col ${isMine ? "items-end" : "items-start"}`}
     >
-      <p className="font-semibold" style={{ color: "#c47d1a" }}>
-        💬 Solicitud de precio especial
-      </p>
-      <p className="mt-2 font-medium text-[#1a1a1a]">{solicitud.service_titulo}</p>
-      <div className="mt-2 flex flex-wrap items-baseline gap-2">
-        {solicitud.precio_original > 0 && (
-          <span className="text-[#888] line-through">
-            {Number(solicitud.precio_original).toFixed(2)}€
+      <div
+        className="w-full rounded-[10px] border bg-white p-4"
+        style={{ borderColor: AMBER, borderWidth: 1 }}
+      >
+        <p
+          className="text-[9px] font-medium uppercase tracking-wide"
+          style={{ color: AMBER }}
+        >
+          💬 SOLICITUD DE PRECIO ESPECIAL
+        </p>
+        <p className="mt-2 text-[13px] font-medium" style={{ color: DARK }}>
+          {solicitud.service_titulo}
+        </p>
+        <div className="mt-2 flex flex-wrap items-baseline gap-2">
+          {solicitud.precio_original > 0 && (
+            <span className="text-sm text-[#aaa] line-through">
+              {Number(solicitud.precio_original).toFixed(2)}€
+            </span>
+          )}
+          <span className="text-base font-semibold" style={{ color: "#0e7a5c" }}>
+            {Number(solicitud.precio_propuesto).toFixed(2)}€
           </span>
-        )}
-        <span className="text-lg font-bold text-green-700">
-          Propuesta: {Number(solicitud.precio_propuesto).toFixed(2)}€
-        </span>
-      </div>
-      {solicitud.mensaje && (
-        <p className="mt-3 whitespace-pre-wrap text-[#333]">{solicitud.mensaje}</p>
-      )}
-      {rechazada && (
-        <p className="mt-3 text-xs font-medium text-[#888]">Solicitud rechazada</p>
-      )}
-      {canRespond && (
-        <div className="mt-4 flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => onAcceptAndOffer(solicitud)}
-            className="rounded-lg bg-green-600 px-4 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90"
-          >
-            Aceptar y enviar oferta
-          </button>
-          <button
-            type="button"
-            onClick={() => onReject(message)}
-            disabled={rejecting}
-            className="rounded-lg bg-[#e5e5e5] px-4 py-2 text-xs font-semibold text-[#444] transition-opacity hover:opacity-90 disabled:opacity-60"
-          >
-            {rejecting ? "…" : "Rechazar"}
-          </button>
         </div>
-      )}
-      <p className="mt-2 text-[10px] opacity-70">
+        {solicitud.mensaje && (
+          <p className="mt-2 whitespace-pre-wrap text-xs text-[#666]">
+            {solicitud.mensaje}
+          </p>
+        )}
+        {rechazada && (
+          <p className="mt-2 text-[10px] font-medium text-[#888]">Solicitud rechazada</p>
+        )}
+        {canRespond && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => onAcceptAndOffer(solicitud)}
+              className="rounded px-3 py-1.5 text-[11px] font-medium text-white transition-opacity hover:opacity-90"
+              style={{ backgroundColor: "#0e7a5c" }}
+            >
+              Aceptar y enviar oferta
+            </button>
+            <button
+              type="button"
+              onClick={() => onReject(message)}
+              disabled={rejecting}
+              className="rounded bg-[#e5e5e5] px-3 py-1.5 text-[11px] font-medium text-[#666] transition-opacity hover:opacity-90 disabled:opacity-60"
+            >
+              {rejecting ? "…" : "Rechazar"}
+            </button>
+          </div>
+        )}
+      </div>
+      <p className="mt-1 text-[9px] text-[#bbb]">
         {formatMessageTime(message.created_at)}
       </p>
     </div>
@@ -272,6 +378,7 @@ export default function ChatPage() {
   const [requestPrecio, setRequestPrecio] = useState("");
   const [requestMensaje, setRequestMensaje] = useState("");
   const [sendingRequest, setSendingRequest] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const messagesEndRef = useRef(null);
   const isProvider = providerServices.length > 0;
@@ -533,6 +640,46 @@ export default function ChatPage() {
     loadOtherServices();
   }, [otherParticipantId, isProvider]);
 
+  const filteredConversations = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return conversations;
+    return conversations.filter((c) => {
+      const name = formatShortName(c.other_nombre, c.other_apellido).toLowerCase();
+      const preview = (getMessagePreview(c.last_message?.content) || "").toLowerCase();
+      return name.includes(q) || preview.includes(q);
+    });
+  }, [conversations, searchQuery]);
+
+  const unreadTotal = useMemo(
+    () =>
+      conversations.filter(
+        (c) =>
+          c.last_message &&
+          c.last_message.sender_id !== userId &&
+          c.last_message.read === false,
+      ).length,
+    [conversations, userId],
+  );
+
+  const serviceVertical = useMemo(() => {
+    if (isProvider && providerServices[0]?.vertical) {
+      return providerServices[0].vertical;
+    }
+    if (otherParticipantServices[0]?.vertical) {
+      return otherParticipantServices[0].vertical;
+    }
+    return "alojamiento";
+  }, [isProvider, providerServices, otherParticipantServices]);
+
+  const reservarHref = useMemo(() => {
+    const svc = isProvider
+      ? providerServices[0]
+      : otherParticipantServices[0];
+    if (svc?.id) return `/reservar/${svc.id}`;
+    if (otherParticipantId) return `/proveedor/${otherParticipantId}`;
+    return "/buscar";
+  }, [isProvider, providerServices, otherParticipantServices, otherParticipantId]);
+
   async function handleSend(e) {
     e.preventDefault();
     if (!userId || !selectedId || !draft.trim() || sending) return;
@@ -610,7 +757,6 @@ export default function ChatPage() {
       mensaje: offerMensaje.trim(),
     };
 
-    // -- ALTER TABLE messages ADD COLUMN IF NOT EXISTS tipo text DEFAULT 'texto';
     const content = JSON.stringify(payload);
 
     const { data, error } = await supabase
@@ -775,13 +921,12 @@ export default function ChatPage() {
   async function maybeNotifyRecipient(conversationId, messageContent) {
     if (!userId || !selectedConversation) return;
 
-    // -- ALTER TABLE conversations ADD COLUMN IF NOT EXISTS ultimo_email_notificacion timestamptz;
     const otroParticipanteId =
       selectedConversation.participant_a_id === userId
         ? selectedConversation.participant_b_id
         : selectedConversation.participant_a_id;
 
-    const debeEnviarEmail = true; // temporal para testing
+    const debeEnviarEmail = true;
     if (!debeEnviarEmail) return;
 
     const { data: otroParticipanteProfile } = await supabase
@@ -791,11 +936,6 @@ export default function ChatPage() {
       .single();
 
     const emailDestinatario = otroParticipanteProfile?.email_contacto;
-
-    console.log("userId:", userId);
-    console.log("selectedConversation:", selectedConversation);
-    console.log("otroParticipanteId:", otroParticipanteId);
-    console.log("emailDestinatario:", emailDestinatario);
 
     if (!emailDestinatario) return;
 
@@ -808,8 +948,6 @@ export default function ChatPage() {
     const remitenteNombre =
       formatShortName(senderProfile?.nombre, senderProfile?.apellido) ||
       "Un usuario";
-
-    console.log("Enviando notificacion email a:", emailDestinatario);
 
     const response = await fetch("/api/emails", {
       method: "POST",
@@ -847,9 +985,12 @@ export default function ChatPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen font-sans" style={{ backgroundColor: BRAND.warm }}>
+      <div className="min-h-screen bg-white font-sans">
         <Navbar />
-        <main className="mx-auto max-w-6xl px-4 py-16 text-center text-sm text-[#666]">
+        <main
+          className="flex items-center justify-center text-sm text-[#aaa]"
+          style={{ height: "calc(100vh - 57px)" }}
+        >
           Cargando mensajes…
         </main>
       </div>
@@ -860,465 +1001,531 @@ export default function ChatPage() {
     ? getOtherParticipant(selectedConversation, userId)
     : null;
 
+  const isOtherOnline =
+    selectedConversation?.last_message &&
+    selectedConversation.last_message.sender_id === otherParticipantId &&
+    Date.now() - new Date(selectedConversation.last_message.created_at).getTime() <
+      3600000;
+
   return (
-    <div
-      className="flex min-h-screen flex-col font-sans"
-      style={{ backgroundColor: BRAND.warm, color: "#1a1a1a" }}
-    >
+    <div className="min-h-screen bg-white font-sans" style={{ color: DARK }}>
+      <style>{`
+        .chat-hide-scrollbar::-webkit-scrollbar { display: none; }
+      `}</style>
       <Navbar />
 
-      <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-4 py-6 sm:px-6">
-        <h1
-          className="mb-4 text-2xl font-bold text-[#1a1a1a]"
-          style={{ fontFamily: SERIF }}
-        >
-          Mensajes
-        </h1>
+      {errorMessage && (
+        <p className="border-b bg-red-50 px-6 py-2 text-xs text-red-700">
+          {errorMessage}
+        </p>
+      )}
 
-        {errorMessage && (
-          <p className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
-            {errorMessage}
-          </p>
-        )}
-
-        <div
-          className="flex min-h-[70vh] flex-1 overflow-hidden rounded-2xl border bg-white"
-          style={{ borderColor: BRAND.border }}
+      <div
+        className="grid"
+        style={{
+          gridTemplateColumns: "280px 1fr",
+          height: "calc(100vh - 57px)",
+          backgroundColor: "#fff",
+        }}
+      >
+        {/* Columna izquierda — lista */}
+        <aside
+          className="flex flex-col border-r"
+          style={{ borderColor: BORDER }}
         >
-          {/* Lista de conversaciones */}
-          <aside
-            className={`flex w-full flex-col border-r lg:w-[320px] lg:shrink-0 ${
-              selectedId ? "hidden lg:flex" : "flex"
-            }`}
-            style={{ borderColor: BRAND.border }}
+          <div
+            className="flex items-center justify-between px-4 py-3"
+            style={{ borderBottom: `0.5px solid #f0ede8` }}
           >
-            <div
-              className="border-b px-4 py-3 text-sm font-semibold"
-              style={{ borderColor: BRAND.border, color: BRAND.primary }}
-            >
-              Conversaciones
-            </div>
-
-            {conversations.length === 0 ? (
-              <p className="px-4 py-8 text-sm text-[#888]">
-                Aún no tienes conversaciones. Contacta con un proveedor desde su
-                perfil.
-              </p>
-            ) : (
-              <ul className="flex-1 overflow-y-auto">
-                {conversations.map((conversation) => {
-                  const isActive = conversation.id === selectedId;
-                  const unread =
-                    conversation.last_message &&
-                    conversation.last_message.sender_id !== userId &&
-                    conversation.last_message.read === false;
-
-                  return (
-                    <li key={conversation.id}>
-                      <button
-                        type="button"
-                        onClick={() => selectConversation(conversation.id)}
-                        className="flex w-full items-start gap-3 border-b px-4 py-3 text-left transition-colors hover:bg-[#fafafa]"
-                        style={{
-                          borderColor: BRAND.border,
-                          backgroundColor: isActive ? BRAND.light : "transparent",
-                        }}
-                      >
-                        <span
-                          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white"
-                          style={{ backgroundColor: BRAND.primary }}
-                        >
-                          {getInitials(
-                            conversation.other_nombre,
-                            conversation.other_apellido,
-                          )}
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center justify-between gap-2">
-                            <p className="truncate text-sm font-semibold text-[#1a1a1a]">
-                              {formatShortName(
-                                conversation.other_nombre,
-                                conversation.other_apellido,
-                              ) || "Usuario"}
-                            </p>
-                            {conversation.last_message && (
-                              <span className="shrink-0 text-[10px] text-[#888]">
-                                {formatMessageTime(
-                                  conversation.last_message.created_at,
-                                )}
-                              </span>
-                            )}
-                          </div>
-                          <p className="mt-0.5 truncate text-xs text-[#666]">
-                            {conversation.last_message?.content
-                              ? getMessagePreview(conversation.last_message.content)
-                              : "Sin mensajes todavía"}
-                          </p>
-                        </div>
-                        {unread && (
-                          <span
-                            className="mt-2 h-2 w-2 shrink-0 rounded-full"
-                            style={{ backgroundColor: BRAND.primary }}
-                          />
-                        )}
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
+            <span className="text-[13px] font-medium" style={{ color: DARK }}>
+              Mensajes
+            </span>
+            {unreadTotal > 0 && (
+              <span
+                className="rounded-full px-2 py-0.5 text-[9px] font-medium text-white"
+                style={{ backgroundColor: BLUE }}
+              >
+                {unreadTotal} sin leer
+              </span>
             )}
-          </aside>
+          </div>
 
-          {/* Panel de mensajes */}
-          <section
-            className={`flex min-w-0 flex-1 flex-col ${
-              selectedId ? "flex" : "hidden lg:flex"
-            }`}
-          >
-            {selectedConversation ? (
-              <>
-                <div
-                  className="flex items-center gap-3 border-b px-4 py-3"
-                  style={{ borderColor: BRAND.border }}
-                >
-                  <button
-                    type="button"
-                    onClick={() => setSelectedId(null)}
-                    className="rounded-lg px-2 py-1 text-sm text-[#666] lg:hidden"
-                  >
-                    ← Volver
-                  </button>
-                  <span
-                    className="flex h-9 w-9 items-center justify-center rounded-full text-xs font-semibold text-white"
-                    style={{ backgroundColor: BRAND.primary }}
-                  >
-                    {getInitials(
-                      otherParticipant?.nombre,
-                      otherParticipant?.apellido,
-                    )}
-                  </span>
-                  <div>
-                    <p className="text-sm font-semibold text-[#1a1a1a]">
+          <div className="px-3 py-2">
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Buscar conversación..."
+              className="w-full border-0 px-4 py-2 text-xs outline-none"
+              style={{
+                borderRadius: 20,
+                backgroundColor: WARM,
+                color: DARK,
+              }}
+            />
+          </div>
+
+          {filteredConversations.length === 0 ? (
+            <p className="px-4 py-8 text-xs text-[#bbb]">
+              {conversations.length === 0
+                ? "Aún no tienes conversaciones."
+                : "No hay resultados."}
+            </p>
+          ) : (
+            <ul
+              className="chat-hide-scrollbar flex-1 overflow-y-auto"
+              style={hideScrollbar}
+            >
+              {filteredConversations.map((conversation) => {
+                const isActive = conversation.id === selectedId;
+                const unread =
+                  conversation.last_message &&
+                  conversation.last_message.sender_id !== userId &&
+                  conversation.last_message.read === false;
+                const lastParsed = parseJsonMessage(
+                  conversation.last_message?.content,
+                );
+                const convVertical =
+                  lastParsed?.tipo === "oferta" ||
+                  lastParsed?.tipo === "solicitud_precio"
+                    ? "alojamiento"
+                    : "alojamiento";
+
+                return (
+                  <li key={conversation.id}>
+                    <button
+                      type="button"
+                      onClick={() => selectConversation(conversation.id)}
+                      className="flex w-full items-center gap-3 px-3 py-3 text-left transition-colors"
+                      style={{
+                        borderLeft: isActive
+                          ? `2px solid ${BLUE}`
+                          : "2px solid transparent",
+                        backgroundColor: isActive ? WARM : "transparent",
+                      }}
+                    >
+                      <Avatar
+                        nombre={conversation.other_nombre}
+                        apellido={conversation.other_apellido}
+                        vertical={convVertical}
+                        size={36}
+                        showOnline={isActive}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <p
+                            className="truncate text-xs font-medium"
+                            style={{ color: DARK }}
+                          >
+                            {formatShortName(
+                              conversation.other_nombre,
+                              conversation.other_apellido,
+                            ) || "Usuario"}
+                          </p>
+                          {conversation.last_message && (
+                            <span className="shrink-0 text-[9px] text-[#bbb]">
+                              {formatListTime(
+                                conversation.last_message.created_at,
+                              )}
+                            </span>
+                          )}
+                        </div>
+                        <p
+                          className="mt-0.5 truncate text-[11px]"
+                          style={{
+                            color: unread ? DARK : "#aaa",
+                            fontWeight: unread ? 500 : 400,
+                          }}
+                        >
+                          {conversation.last_message?.content
+                            ? getMessagePreview(conversation.last_message.content)
+                            : "Sin mensajes todavía"}
+                        </p>
+                      </div>
+                      {unread && (
+                        <span
+                          className="flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full px-1 text-[9px] font-medium text-white"
+                          style={{ backgroundColor: BLUE }}
+                        >
+                          1
+                        </span>
+                      )}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </aside>
+
+        {/* Columna derecha — chat */}
+        <section className="flex min-w-0 flex-col">
+          {selectedConversation ? (
+            <>
+              {/* Header chat */}
+              <div
+                className="flex items-center justify-between gap-4 px-5 py-3"
+                style={{
+                  backgroundColor: "#fff",
+                  borderBottom: "0.5px solid #f0ede8",
+                }}
+              >
+                <div className="flex min-w-0 items-center gap-3">
+                  <Avatar
+                    nombre={otherParticipant?.nombre}
+                    apellido={otherParticipant?.apellido}
+                    vertical={serviceVertical}
+                    size={36}
+                    showOnline={isOtherOnline}
+                  />
+                  <div className="min-w-0">
+                    <p className="truncate text-xs font-medium" style={{ color: DARK }}>
                       {formatShortName(
                         otherParticipant?.nombre,
                         otherParticipant?.apellido,
                       ) || "Usuario"}
                     </p>
-                    <p className="text-xs text-[#888]">
-                      Los datos de contacto se comparten al confirmar la reserva
+                    <p className="text-[10px] text-[#aaa]">
+                      {VERTICAL_LABELS[serviceVertical] || "Servicio"} ·{" "}
+                      {formatLastSeen(
+                        selectedConversation.last_message,
+                        otherParticipantId,
+                      )}
                     </p>
                   </div>
                 </div>
+                <div className="flex shrink-0 gap-2">
+                  {otherParticipantId && (
+                    <Link
+                      href={`/proveedor/${otherParticipantId}`}
+                      className="rounded border px-3 py-1.5 text-[11px] font-medium no-underline transition-colors hover:bg-[#f7f5f2]"
+                      style={{ borderColor: BLUE, color: BLUE }}
+                    >
+                      Ver perfil →
+                    </Link>
+                  )}
+                  <Link
+                    href={reservarHref}
+                    className="rounded border px-3 py-1.5 text-[11px] font-medium no-underline transition-colors hover:bg-[#f7f5f2]"
+                    style={{ borderColor: BLUE, color: BLUE }}
+                  >
+                    Reservar
+                  </Link>
+                </div>
+              </div>
 
-                <div className="flex-1 overflow-y-auto px-4 py-4">
-                  {messagesLoading ? (
-                    <p className="text-center text-sm text-[#888]">
-                      Cargando mensajes…
-                    </p>
-                  ) : messages.length === 0 ? (
-                    <p className="text-center text-sm text-[#888]">
-                      Envía el primer mensaje para iniciar la conversación.
-                    </p>
-                  ) : (
-                    <ul className="flex flex-col gap-3">
-                      {messages.map((message) => {
-                        const isMine = message.sender_id === userId;
-                        const special = parseJsonMessage(message.content);
+              {/* Mensajes */}
+              <div
+                className="chat-hide-scrollbar flex-1 overflow-y-auto px-5 py-4"
+                style={{ ...hideScrollbar, backgroundColor: WARM }}
+              >
+                {messagesLoading ? (
+                  <p className="text-center text-xs text-[#aaa]">
+                    Cargando mensajes…
+                  </p>
+                ) : messages.length === 0 ? (
+                  <p className="text-center text-xs text-[#aaa]">
+                    Envía el primer mensaje para iniciar la conversación.
+                  </p>
+                ) : (
+                  <ul className="flex flex-col gap-4">
+                    {messages.map((message) => {
+                      const isMine = message.sender_id === userId;
+                      const special = parseJsonMessage(message.content);
 
-                        if (special?.tipo === "oferta") {
-                          return (
-                            <li
-                              key={message.id}
-                              className={`flex ${isMine ? "justify-end" : "justify-start"}`}
-                            >
-                              <OfertaMessageCard
-                                message={message}
-                                offer={special}
-                                isMine={isMine}
-                                onReject={handleRejectSpecialMessage}
-                                rejecting={rejectingOfferId === message.id}
-                              />
-                            </li>
-                          );
-                        }
-
-                        if (special?.tipo === "solicitud_precio") {
-                          return (
-                            <li
-                              key={message.id}
-                              className={`flex ${isMine ? "justify-end" : "justify-start"}`}
-                            >
-                              <SolicitudPrecioMessageCard
-                                message={message}
-                                solicitud={special}
-                                isMine={isMine}
-                                isProvider={isProvider}
-                                onReject={handleRejectSpecialMessage}
-                                onAcceptAndOffer={handleAcceptSolicitudAndOffer}
-                                rejecting={rejectingOfferId === message.id}
-                              />
-                            </li>
-                          );
-                        }
-
+                      if (special?.tipo === "oferta") {
                         return (
                           <li
                             key={message.id}
                             className={`flex ${isMine ? "justify-end" : "justify-start"}`}
                           >
+                            <OfertaMessageCard
+                              message={message}
+                              offer={special}
+                              isMine={isMine}
+                              onReject={handleRejectSpecialMessage}
+                              rejecting={rejectingOfferId === message.id}
+                            />
+                          </li>
+                        );
+                      }
+
+                      if (special?.tipo === "solicitud_precio") {
+                        return (
+                          <li
+                            key={message.id}
+                            className={`flex ${isMine ? "justify-end" : "justify-start"}`}
+                          >
+                            <SolicitudPrecioMessageCard
+                              message={message}
+                              solicitud={special}
+                              isMine={isMine}
+                              isProvider={isProvider}
+                              onReject={handleRejectSpecialMessage}
+                              onAcceptAndOffer={handleAcceptSolicitudAndOffer}
+                              rejecting={rejectingOfferId === message.id}
+                            />
+                          </li>
+                        );
+                      }
+
+                      return (
+                        <li
+                          key={message.id}
+                          className={`flex items-end gap-2 ${isMine ? "justify-end" : "justify-start"}`}
+                        >
+                          {!isMine && (
+                            <Avatar
+                              nombre={otherParticipant?.nombre}
+                              apellido={otherParticipant?.apellido}
+                              vertical={serviceVertical}
+                              size={24}
+                            />
+                          )}
+                          <div className="flex max-w-[75%] flex-col">
                             <div
-                              className="max-w-[80%] rounded-2xl px-4 py-2.5 text-sm"
+                              className="px-3 py-2 text-xs leading-relaxed"
                               style={
                                 isMine
                                   ? {
-                                      backgroundColor: BRAND.primary,
+                                      backgroundColor: BLUE,
                                       color: "#fff",
+                                      borderRadius: "8px 8px 2px 8px",
                                     }
                                   : {
-                                      backgroundColor: BRAND.light,
-                                      color: "#1a1a1a",
+                                      backgroundColor: "#fff",
+                                      color: DARK,
+                                      border: `0.5px solid ${BORDER}`,
+                                      borderRadius: "8px 8px 8px 2px",
                                     }
                               }
                             >
                               <p className="whitespace-pre-wrap break-words">
                                 {message.content}
                               </p>
-                              <p className="mt-1 text-[10px] opacity-70">
-                                {formatMessageTime(message.created_at)}
-                              </p>
                             </div>
-                          </li>
-                        );
-                      })}
-                      <li ref={messagesEndRef} />
-                    </ul>
-                  )}
-                </div>
-
-                {(isProvider ||
-                  (!isProvider && otherParticipantServices.length > 0)) && (
-                  <div
-                    className="flex flex-wrap gap-4 border-t px-4 pt-3"
-                    style={{ borderColor: BRAND.border }}
-                  >
-                    {isProvider && (
-                      <button
-                        type="button"
-                        onClick={() => setShowOfferForm((v) => !v)}
-                        className="text-sm font-semibold transition-opacity hover:opacity-80"
-                        style={{ color: BRAND.primary }}
-                      >
-                        Enviar oferta 🏷️
-                      </button>
-                    )}
-                    {!isProvider && (
-                      <button
-                        type="button"
-                        onClick={() => setShowRequestForm((v) => !v)}
-                        className="text-sm font-semibold transition-opacity hover:opacity-80"
-                        style={{ color: "#c47d1a" }}
-                      >
-                        Solicitar precio 💬
-                      </button>
-                    )}
-                  </div>
+                            <p
+                              className={`mt-1 text-[9px] text-[#bbb] ${isMine ? "text-right" : "text-left"}`}
+                            >
+                              {formatMessageTime(message.created_at)}
+                            </p>
+                          </div>
+                        </li>
+                      );
+                    })}
+                    <li ref={messagesEndRef} />
+                  </ul>
                 )}
+              </div>
 
-                {showRequestForm && !isProvider && (
-                  <form
-                    onSubmit={handleSendPriceRequest}
-                    className="border-t px-4 py-4"
-                    style={{
-                      borderColor: BRAND.border,
-                      backgroundColor: "#fef3c7",
-                    }}
-                  >
-                    <p className="mb-3 text-sm font-semibold text-[#1a1a1a]">
-                      Solicitar precio especial
-                    </p>
-                    <div className="flex flex-col gap-3">
-                      <div>
-                        <label className="mb-1 block text-xs font-medium text-[#444]">
-                          Servicio
-                        </label>
-                        <select
-                          value={requestServiceId}
-                          onChange={(e) => setRequestServiceId(e.target.value)}
-                          className={inputClass}
-                          style={{ borderColor: "#c47d1a" }}
-                          required
-                        >
-                          {otherParticipantServices.map((s) => (
-                            <option key={s.id} value={s.id}>
-                              {s.titulo}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-xs font-medium text-[#444]">
-                          Tu propuesta de precio (€)
-                        </label>
-                        <input
-                          type="number"
-                          min="0.01"
-                          step="0.01"
-                          value={requestPrecio}
-                          onChange={(e) => setRequestPrecio(e.target.value)}
-                          className={inputClass}
-                          style={{ borderColor: "#c47d1a" }}
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-xs font-medium text-[#444]">
-                          Explica tu solicitud
-                        </label>
-                        <textarea
-                          rows={3}
-                          value={requestMensaje}
-                          onChange={(e) => setRequestMensaje(e.target.value)}
-                          placeholder="Ej: Me quedaré 10 noches, ¿podrías hacerme un precio especial?"
-                          className={`${inputClass} resize-y`}
-                          style={{ borderColor: "#c47d1a" }}
-                        />
-                      </div>
-                      <button
-                        type="submit"
-                        disabled={sendingRequest}
-                        className="self-start rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
-                        style={{ backgroundColor: BRAND.primary }}
-                      >
-                        {sendingRequest ? "Enviando…" : "Enviar solicitud"}
-                      </button>
-                    </div>
-                  </form>
-                )}
-
-                {showOfferForm && isProvider && (
-                  <form
-                    onSubmit={handleSendOffer}
-                    className="border-t px-4 py-4"
-                    style={{
-                      borderColor: BRAND.border,
-                      backgroundColor: BRAND.light,
-                    }}
-                  >
-                    <p className="mb-3 text-sm font-semibold text-[#1a1a1a]">
-                      Nueva oferta personalizada
-                    </p>
-                    <div className="flex flex-col gap-3">
-                      <div>
-                        <label className="mb-1 block text-xs font-medium text-[#444]">
-                          Servicio
-                        </label>
-                        <select
-                          value={offerServiceId}
-                          onChange={(e) => setOfferServiceId(e.target.value)}
-                          className={inputClass}
-                          style={{ borderColor: BRAND.border }}
-                          required
-                        >
-                          {providerServices.map((s) => (
-                            <option key={s.id} value={s.id}>
-                              {s.titulo}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <div>
-                          <label className="mb-1 block text-xs font-medium text-[#444]">
-                            Precio especial (€)
-                          </label>
-                          <input
-                            type="number"
-                            min="0.01"
-                            step="0.01"
-                            value={offerPrecio}
-                            onChange={(e) => setOfferPrecio(e.target.value)}
-                            className={inputClass}
-                            style={{ borderColor: BRAND.border }}
-                            required
-                          />
-                        </div>
-                        <div>
-                          <label className="mb-1 block text-xs font-medium text-[#444]">
-                            Válida hasta
-                          </label>
-                          <input
-                            type="date"
-                            min={new Date().toISOString().split("T")[0]}
-                            value={offerValidaHasta}
-                            onChange={(e) => setOfferValidaHasta(e.target.value)}
-                            className={inputClass}
-                            style={{ borderColor: BRAND.border }}
-                            required
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-xs font-medium text-[#444]">
-                          Mensaje de la oferta
-                        </label>
-                        <textarea
-                          rows={3}
-                          value={offerMensaje}
-                          onChange={(e) => setOfferMensaje(e.target.value)}
-                          placeholder="Ej: Te ofrezco un precio especial para estas fechas..."
-                          className={`${inputClass} resize-y`}
-                          style={{ borderColor: BRAND.border }}
-                        />
-                      </div>
-                      <button
-                        type="submit"
-                        disabled={sendingOffer}
-                        className="self-start rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
-                        style={{ backgroundColor: BRAND.primary }}
-                      >
-                        {sendingOffer ? "Enviando…" : "Enviar oferta"}
-                      </button>
-                    </div>
-                  </form>
-                )}
-
+              {/* Formularios oferta / solicitud */}
+              {showRequestForm && !isProvider && (
                 <form
-                  onSubmit={handleSend}
-                  className="border-t p-4"
-                  style={{ borderColor: BRAND.border }}
+                  onSubmit={handleSendPriceRequest}
+                  className="border-t px-5 py-3"
+                  style={{
+                    borderColor: "#f0ede8",
+                    backgroundColor: "#fff",
+                  }}
                 >
-                  <div className="flex gap-2">
+                  <p className="mb-2 text-xs font-medium" style={{ color: AMBER }}>
+                    Solicitar precio especial
+                  </p>
+                  <div className="flex flex-col gap-2">
+                    <select
+                      value={requestServiceId}
+                      onChange={(e) => setRequestServiceId(e.target.value)}
+                      className={inputClass}
+                      style={{ borderColor: AMBER }}
+                      required
+                    >
+                      {otherParticipantServices.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.titulo}
+                        </option>
+                      ))}
+                    </select>
                     <input
-                      type="text"
-                      value={draft}
-                      onChange={(e) => setDraft(e.target.value)}
-                      placeholder="Escribe un mensaje…"
-                      className="flex-1 rounded-xl border px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-[#1d4f91]/30"
-                      style={{ borderColor: BRAND.border }}
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      value={requestPrecio}
+                      onChange={(e) => setRequestPrecio(e.target.value)}
+                      placeholder="Tu propuesta de precio (€)"
+                      className={inputClass}
+                      style={{ borderColor: AMBER }}
+                      required
+                    />
+                    <textarea
+                      rows={2}
+                      value={requestMensaje}
+                      onChange={(e) => setRequestMensaje(e.target.value)}
+                      placeholder="Explica tu solicitud..."
+                      className={`${inputClass} resize-y`}
+                      style={{ borderColor: AMBER }}
                     />
                     <button
                       type="submit"
-                      disabled={sending || !draft.trim()}
-                      className="rounded-xl px-5 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-                      style={{ backgroundColor: BRAND.primary }}
+                      disabled={sendingRequest}
+                      className="self-start rounded px-4 py-2 text-xs font-medium text-white disabled:opacity-60"
+                      style={{ backgroundColor: BLUE }}
                     >
-                      {sending ? "…" : "Enviar"}
+                      {sendingRequest ? "Enviando…" : "Enviar solicitud"}
                     </button>
                   </div>
-                  <p className="mt-2 text-[11px] text-[#888]">
-                    Teléfonos y emails se ocultan automáticamente hasta confirmar
-                    la reserva.
-                  </p>
                 </form>
-              </>
-            ) : (
-              <div className="flex flex-1 items-center justify-center px-6 text-center text-sm text-[#888]">
-                Selecciona una conversación para ver los mensajes.
+              )}
+
+              {showOfferForm && isProvider && (
+                <form
+                  onSubmit={handleSendOffer}
+                  className="border-t px-5 py-3"
+                  style={{
+                    borderColor: "#f0ede8",
+                    backgroundColor: "#fff",
+                  }}
+                >
+                  <p className="mb-2 text-xs font-medium" style={{ color: BLUE }}>
+                    Nueva oferta personalizada
+                  </p>
+                  <div className="flex flex-col gap-2">
+                    <select
+                      value={offerServiceId}
+                      onChange={(e) => setOfferServiceId(e.target.value)}
+                      className={inputClass}
+                      style={{ borderColor: BORDER }}
+                      required
+                    >
+                      {providerServices.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.titulo}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        value={offerPrecio}
+                        onChange={(e) => setOfferPrecio(e.target.value)}
+                        placeholder="Precio especial (€)"
+                        className={inputClass}
+                        required
+                      />
+                      <input
+                        type="date"
+                        min={new Date().toISOString().split("T")[0]}
+                        value={offerValidaHasta}
+                        onChange={(e) => setOfferValidaHasta(e.target.value)}
+                        className={inputClass}
+                        required
+                      />
+                    </div>
+                    <textarea
+                      rows={2}
+                      value={offerMensaje}
+                      onChange={(e) => setOfferMensaje(e.target.value)}
+                      placeholder="Mensaje de la oferta..."
+                      className={`${inputClass} resize-y`}
+                    />
+                    <button
+                      type="submit"
+                      disabled={sendingOffer}
+                      className="self-start rounded px-4 py-2 text-xs font-medium text-white disabled:opacity-60"
+                      style={{ backgroundColor: BLUE }}
+                    >
+                      {sendingOffer ? "Enviando…" : "Enviar oferta"}
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* Input */}
+              <div
+                className="border-t px-5 py-3"
+                style={{ backgroundColor: "#fff", borderColor: "#f0ede8" }}
+              >
+                {(isProvider ||
+                  (!isProvider && otherParticipantServices.length > 0)) && (
+                  <div className="mb-2 flex flex-wrap gap-2">
+                    {isProvider && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowOfferForm((v) => !v);
+                          setShowRequestForm(false);
+                        }}
+                        className="border px-3 py-1 text-[11px] font-medium transition-colors hover:bg-[#f7f5f2]"
+                        style={{
+                          borderRadius: 16,
+                          borderColor: BLUE,
+                          color: BLUE,
+                          backgroundColor: showOfferForm ? WARM : "#fff",
+                        }}
+                      >
+                        🏷️ Enviar oferta
+                      </button>
+                    )}
+                    {!isProvider && otherParticipantServices.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowRequestForm((v) => !v);
+                          setShowOfferForm(false);
+                        }}
+                        className="border px-3 py-1 text-[11px] font-medium transition-colors hover:bg-[#f7f5f2]"
+                        style={{
+                          borderRadius: 16,
+                          borderColor: AMBER,
+                          color: AMBER,
+                          backgroundColor: showRequestForm ? WARM : "#fff",
+                        }}
+                      >
+                        💬 Solicitar precio
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                <form onSubmit={handleSend} className="flex gap-2">
+                  <input
+                    type="text"
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    placeholder="Escribe un mensaje…"
+                    className="flex-1 border-0 px-4 py-2.5 text-xs outline-none"
+                    style={{
+                      borderRadius: 20,
+                      backgroundColor: WARM,
+                      color: DARK,
+                    }}
+                  />
+                  <button
+                    type="submit"
+                    disabled={sending || !draft.trim()}
+                    className="shrink-0 border-0 px-4 py-2.5 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                    style={{
+                      borderRadius: 20,
+                      backgroundColor: BLUE,
+                    }}
+                  >
+                    {sending ? "…" : "Enviar →"}
+                  </button>
+                </form>
+                <p className="mt-2 text-[9px] text-[#bbb]">
+                  Teléfonos y emails se ocultan automáticamente hasta confirmar la
+                  reserva.
+                </p>
               </div>
-            )}
-          </section>
-        </div>
-      </main>
+            </>
+          ) : (
+            <div className="flex flex-1 items-center justify-center text-xs text-[#aaa]">
+              Selecciona una conversación para ver los mensajes.
+            </div>
+          )}
+        </section>
+      </div>
     </div>
   );
 }
