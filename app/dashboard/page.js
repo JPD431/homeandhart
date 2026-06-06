@@ -1,1919 +1,244 @@
-"use client";
+'use client';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { createClient } from '@supabase/supabase-js';
+import Navbar from '@/app/components/Navbar';
 
-import { loadStripe } from "@stripe/stripe-js";
-import {
-  Elements,
-  PaymentElement,
-  useElements,
-  useStripe,
-} from "@stripe/react-stripe-js";
-import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
-import FavoritoButton from "@/app/components/FavoritoButton";
-import {
-  countFamiliaReservas,
-  getFamiliaInitials,
-  getFamiliaMiembros,
-  getUserFamiliaActiva,
-} from "@/app/lib/familia";
-import { buildReferralLink } from "@/app/lib/referidos";
-import { formatDateRange, loadUserViajes } from "@/app/lib/viajes";
-import Navbar from "@/app/components/Navbar";
-import ReportarModal from "@/app/components/ReportarModal";
-import { BRAND, SERIF } from "@/app/components/brand";
-import { supabase } from "@/lib/supabase";
-
-const stripePromise = loadStripe(
-  process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
-);
-
-const VERTICALS = {
-  alojamiento: { label: "Alojamiento", priceSuffix: "/ noche" },
-  ninos: { label: "Cuidado de niños", priceSuffix: "/ hora" },
-  mascotas: { label: "Cuidado de mascotas", priceSuffix: "/ día" },
+const BRAND = {
+  blue: '#1d4f91',
+  green: '#0e7a5c', 
+  amber: '#c47d1a',
+  warm: '#f7f5f2',
+  border: '#e8e4de',
+  dark: '#2a3a4a'
 };
 
-const STATUS_STYLES = {
-  pendiente: { bg: "#fef3c7", color: "#92400e", label: "Pendiente" },
-  confirmada: { bg: BRAND.light, color: BRAND.primary, label: "Confirmada" },
-  en_curso: { bg: "#e0e7ff", color: "#3730a3", label: "En curso" },
-  completada: { bg: "#dcfce7", color: "#166534", label: "Completada" },
-  incidencia: { bg: "#fee2e2", color: "#b91c1c", label: "Incidencia" },
-  cancelada: { bg: "#f3f4f6", color: "#6b7280", label: "Cancelada" },
-};
+export default function DashboardPage() {
+  const router = useRouter();
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  );
+  const [user, setUser] = useState(null);
+  const [perfil, setPerfil] = useState(null);
+  const [reservas, setReservas] = useState([]);
+  const [favoritos, setFavoritos] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [tabActiva, setTabActiva] = useState('cliente');
 
-// -- ALTER TABLE bookings ADD COLUMN IF NOT EXISTS confirmacion_cliente boolean DEFAULT false;
-// -- ALTER TABLE bookings ADD COLUMN IF NOT EXISTS incidencia_descripcion text;
-// -- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS stripe_account_id text;
-// -- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS stripe_customer_id text;
+  useEffect(() => {
+    async function load() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { router.replace('/login'); return; }
+      setUser(user);
+      const { data: p } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+      setPerfil(p);
+      if (p && !p.codigo_referido) {
+        const codigo = 'HH-' + (p.nombre || 'USER').substring(0, 4).toUpperCase() + Math.floor(1000 + Math.random() * 9000);
+        await supabase.from('profiles').update({ codigo_referido: codigo }).eq('id', user.id);
+        p.codigo_referido = codigo;
+      }
+      const { data: r } = await supabase.from('bookings').select('*, services(titulo, vertical, proveedor_id, profiles!proveedor_id(nombre, apellido))').eq('cliente_id', user.id).order('created_at', { ascending: false }).limit(10);
+      setReservas(r || []);
+      const { data: f } = await supabase.from('favoritos').select('*, profiles!proveedor_id(id, nombre, apellido)').eq('cliente_id', user.id);
+      setFavoritos(f || []);
+      setLoading(false);
+    }
+    load();
+  }, []);
 
-function getCardBrandLabel(brand) {
-  const labels = {
-    visa: "Visa",
-    mastercard: "Mastercard",
-    amex: "American Express",
+  const copiarLink = (codigo) => {
+    const link = `${window.location.origin}/registro?ref=${codigo}`;
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(link).then(() => alert('¡Link copiado!'));
+    } else {
+      const el = document.createElement('textarea');
+      el.value = link;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+      alert('¡Link copiado!');
+    }
   };
-  return labels[brand] ?? (brand ? brand.charAt(0).toUpperCase() + brand.slice(1) : "Tarjeta");
-}
 
-function AddCardForm({ onSuccess, onCancel }) {
-  const stripe = useStripe();
-  const elements = useElements();
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  if (loading) return <div style={{background: BRAND.warm, minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center'}}><p style={{color: '#aaa'}}>Cargando...</p></div>;
 
-  async function handleSubmit(e) {
-    e.preventDefault();
-    if (!stripe || !elements) return;
-
-    setSaving(true);
-    setError("");
-
-    const { error: confirmError } = await stripe.confirmSetup({
-      elements,
-      confirmParams: {
-        return_url: `${window.location.origin}/dashboard`,
-      },
-      redirect: "if_required",
-    });
-
-    setSaving(false);
-
-    if (confirmError) {
-      setError(confirmError.message);
-      return;
-    }
-
-    onSuccess();
-  }
+  const tabs = ['cliente', 'proveedor', 'familia', 'pasaporte', 'referidos'];
 
   return (
-    <form onSubmit={handleSubmit} className="mt-4 flex flex-col gap-3">
-      <PaymentElement />
-      {error && (
-        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
-      )}
-      <div className="flex flex-col gap-2 sm:flex-row">
-        <button
-          type="submit"
-          disabled={!stripe || saving}
-          className="rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
-          style={{ backgroundColor: BRAND.primary }}
-        >
-          {saving ? "Guardando…" : "Guardar tarjeta"}
-        </button>
-        <button
-          type="button"
-          onClick={onCancel}
-          disabled={saving}
-          className="rounded-xl border px-4 py-2.5 text-sm font-semibold text-[#666] transition-colors hover:bg-[#f7f5f2]"
-          style={{ borderColor: BRAND.border }}
-        >
-          Cancelar
-        </button>
+    <div style={{background: BRAND.warm, minHeight: '100vh'}}>
+      <Navbar />
+      
+      {/* TABS */}
+      <div style={{background: '#fff', borderBottom: `0.5px solid ${BRAND.border}`, display: 'flex', padding: '0 24px'}}>
+        {tabs.map(t => (
+          <button key={t} onClick={() => setTabActiva(t)} style={{padding: '14px 20px', fontSize: 12, color: tabActiva === t ? BRAND.blue : '#888', borderBottom: tabActiva === t ? `2px solid ${BRAND.blue}` : '2px solid transparent', fontWeight: tabActiva === t ? 500 : 400, background: 'none', border: 'none', borderBottom: tabActiva === t ? `2px solid ${BRAND.blue}` : '2px solid transparent', cursor: 'pointer', textTransform: 'capitalize', whiteSpace: 'nowrap'}}>
+            {t.charAt(0).toUpperCase() + t.slice(1)}
+          </button>
+        ))}
       </div>
-    </form>
-  );
-}
 
-function getBookingEstado(booking) {
-  return booking.estado ?? booking.status;
-}
+      {/* HEADER */}
+      <div style={{background: '#fff', borderBottom: `0.5px solid ${BRAND.border}`, padding: '28px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start'}}>
+        <div>
+          <div style={{fontSize: 26, fontWeight: 300, color: BRAND.dark, fontFamily: 'Georgia, serif'}}>Hola, <em style={{color: BRAND.blue}}>{perfil?.nombre || 'usuario'}.</em></div>
+          <div style={{fontSize: 12, color: '#aaa', marginTop: 4}}>Bienvenida a tu panel · Home&Heart</div>
+        </div>
+        <div style={{display: 'flex', gap: 8}}>
+          <button onClick={() => router.push('/editar-perfil')} style={{background: '#fff', color: BRAND.blue, border: `1px solid ${BRAND.blue}`, padding: '9px 18px', borderRadius: 4, fontSize: 12, cursor: 'pointer'}}>Editar perfil</button>
+          <button onClick={() => router.push('/buscar')} style={{background: BRAND.blue, color: '#fff', border: 'none', padding: '9px 18px', borderRadius: 4, fontSize: 12, cursor: 'pointer', fontWeight: 500}}>Buscar proveedores</button>
+        </div>
+      </div>
 
-function isFechaFinPast24h(fechaFin) {
-  if (!fechaFin) return false;
-  const end = new Date(`${fechaFin}T23:59:59`);
-  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
-  return end.getTime() < cutoff;
-}
-
-function needsClientConfirmation(booking) {
-  if (booking.confirmacion_cliente) return false;
-  if (!booking.payment_intent_id) return false;
-  const estado = getBookingEstado(booking);
-  if (estado === "incidencia" || estado === "cancelada" || estado === "pendiente") {
-    return false;
-  }
-  if (estado === "en_curso") return true;
-  if (estado === "completada") return true;
-  return false;
-}
-
-async function capturePayment(paymentIntentId, proveedores) {
-  const res = await fetch("/api/stripe/capture-payment", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ paymentIntentId, proveedores }),
-  });
-  const data = await res.json();
-  if (!res.ok || data.error) {
-    throw new Error(data.error || "No se pudo liberar el pago.");
-  }
-  return data;
-}
-
-async function buildProveedoresForPayment(booking, allBookings) {
-  const reservasGrupo = allBookings.filter(
-    (b) =>
-      b.payment_intent_id &&
-      b.payment_intent_id === booking.payment_intent_id,
-  );
-  console.log("Reservas del grupo:", reservasGrupo);
-
-  if (reservasGrupo.length === 0) return [];
-
-  const serviciosIds = [
-    ...new Set(reservasGrupo.map((b) => b.service_id).filter(Boolean)),
-  ];
-  console.log("Servicios de las reservas:", serviciosIds);
-
-  if (serviciosIds.length === 0) return [];
-
-  const { data: services, error: servicesError } = await supabase
-    .from("services")
-    .select(
-      `
-      id,
-      proveedor_id,
-      profiles!proveedor_id (
-        id,
-        stripe_account_id
-      )
-    `,
-    )
-    .in("id", serviciosIds);
-
-  if (servicesError) {
-    console.log("Error al cargar servicios/proveedores:", servicesError);
-    return [];
-  }
-
-  console.log("Servicios con perfiles:", services);
-
-  const proveedores = [];
-  const processedProveedorIds = new Set();
-
-  for (const service of services ?? []) {
-    const proveedorId = service.proveedor_id;
-    const profile = service.profiles;
-    const stripeAccountId = profile?.stripe_account_id;
-
-    if (!proveedorId || processedProveedorIds.has(proveedorId)) continue;
-
-    if (!stripeAccountId) {
-      console.log(
-        "Proveedor sin stripe_account_id:",
-        proveedorId,
-        profile,
-      );
-      processedProveedorIds.add(proveedorId);
-      continue;
-    }
-
-    const serviceIdsForProvider = (services ?? [])
-      .filter((s) => s.proveedor_id === proveedorId)
-      .map((s) => s.id);
-
-    const amount = reservasGrupo
-      .filter((b) => serviceIdsForProvider.includes(b.service_id))
-      .reduce((sum, b) => {
-        const precioBase = (Number(b.precio_total) || 0) / 1.14; // quitar 14% cliente
-        const netoProveedor = precioBase * 0.96; // quitar 4% comision H&H
-        return sum + netoProveedor;
-      }, 0);
-
-    if (amount > 0) {
-      proveedores.push({
-        stripe_account_id: stripeAccountId,
-        amount,
-      });
-    }
-
-    processedProveedorIds.add(proveedorId);
-  }
-
-  return proveedores;
-}
-
-function Section({ title, children }) {
-  return (
-    <section
-      className="rounded-2xl border bg-white p-6 sm:p-8"
-      style={{ borderColor: BRAND.border }}
-    >
-      <h2
-        className="text-xl font-semibold text-[#1a1a1a]"
-        style={{ fontFamily: SERIF }}
-      >
-        {title}
-      </h2>
-      <div className="mt-5">{children}</div>
-    </section>
-  );
-}
-
-function DangerZone({ onDeleteClick }) {
-  return (
-    <div
-      className="mt-8 border-t pt-6"
-      style={{ borderColor: BRAND.border }}
-    >
-      <p className="text-xs font-semibold uppercase tracking-wide text-[#888]">
-        Zona de peligro
-      </p>
-      <h3 className="mt-2 text-base font-semibold text-red-600">
-        Eliminar cuenta
-      </h3>
-      <p className="mt-2 text-sm leading-relaxed text-[#666]">
-        Esta acción es irreversible. Se eliminarán todos tus datos, reservas y
-        servicios.
-      </p>
-      <button
-        type="button"
-        onClick={onDeleteClick}
-        className="mt-4 rounded-xl border border-red-600 px-5 py-2.5 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50"
-      >
-        Eliminar mi cuenta
-      </button>
+      {/* CONTENIDO POR TAB */}
+      <div style={{padding: '20px 24px'}}>
+        {tabActiva === 'cliente' && <TabCliente perfil={perfil} reservas={reservas} favoritos={favoritos} router={router} BRAND={BRAND} copiarLink={copiarLink} />}
+        {tabActiva === 'proveedor' && <TabProveedor perfil={perfil} router={router} BRAND={BRAND} />}
+        {tabActiva === 'familia' && <TabFamilia perfil={perfil} router={router} BRAND={BRAND} />}
+        {tabActiva === 'pasaporte' && router.push('/pasaporte')}
+        {tabActiva === 'referidos' && <TabReferidos perfil={perfil} BRAND={BRAND} copiarLink={copiarLink} />}
+      </div>
     </div>
   );
 }
 
-function StatusBadge({ status }) {
-  const key = status?.toLowerCase?.() ?? "pendiente";
-  const style = STATUS_STYLES[key] ?? STATUS_STYLES.pendiente;
+function TabCliente({ perfil, reservas, favoritos, router, BRAND, copiarLink }) {
   return (
-    <span
-      className="rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize"
-      style={{ backgroundColor: style.bg, color: style.color }}
-    >
-      {style.label}
-    </span>
+    <div style={{display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: 14}}>
+      {/* RESERVAS */}
+      <div style={{gridColumn: '1/3', background: '#fff', borderRadius: 10, border: `0.5px solid ${BRAND.border}`, overflow: 'hidden'}}>
+        <div style={{padding: '13px 16px', borderBottom: `0.5px solid #f0ede8`, display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+          <span style={{fontSize: 11, fontWeight: 500, color: BRAND.dark}}>📅 Mis reservas</span>
+          <span style={{fontSize: 9, padding: '2px 7px', borderRadius: 8, background: '#e8f0fb', color: '#163a6b'}}>{reservas.filter(r => ['confirmada','pendiente','en_curso'].includes(r.estado)).length} activas</span>
+        </div>
+        <div style={{padding: '13px 16px'}}>
+          {reservas.length === 0 && <p style={{fontSize: 12, color: '#bbb', textAlign: 'center', padding: '16px 0'}}>No tienes reservas todavía</p>}
+          {reservas.slice(0, 5).map(r => (
+            <div key={r.id} style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '0.5px solid #f5f3f0'}}>
+              <div>
+                <div style={{fontSize: 12, color: BRAND.dark, fontWeight: 500}}>{r.services?.titulo} · {r.services?.profiles?.nombre}</div>
+                <div style={{fontSize: 10, color: '#aaa', marginTop: 1}}>{r.fecha_inicio}{r.fecha_fin ? ` – ${r.fecha_fin}` : ''} · {r.precio_total}€</div>
+              </div>
+              <span style={{fontSize: 9, padding: '2px 7px', borderRadius: 8, background: r.estado === 'confirmada' ? '#e8f0fb' : r.estado === 'completada' ? '#e6f4f0' : r.estado === 'en_curso' ? '#f0e8fb' : '#fef3c7', color: r.estado === 'confirmada' ? '#163a6b' : r.estado === 'completada' ? '#085041' : r.estado === 'en_curso' ? '#5b21b6' : '#92400e', whiteSpace: 'nowrap'}}>{r.estado}</span>
+            </div>
+          ))}
+          <button onClick={() => router.push('/historial')} style={{fontSize: 11, color: BRAND.blue, background: 'none', border: 'none', cursor: 'pointer', display: 'block', marginLeft: 'auto', marginTop: 8}}>Ver historial completo →</button>
+        </div>
+      </div>
+
+      {/* PERFIL */}
+      <div style={{background: '#fff', borderRadius: 10, border: `0.5px solid ${BRAND.border}`, overflow: 'hidden'}}>
+        <div style={{padding: '13px 16px', borderBottom: '0.5px solid #f0ede8'}}><span style={{fontSize: 11, fontWeight: 500, color: BRAND.dark}}>👤 Mi perfil</span></div>
+        <div style={{padding: '13px 16px'}}>
+          <div style={{display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10}}>
+            <div style={{width: 40, height: 40, borderRadius: '50%', background: BRAND.blue, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, color: '#fff', fontWeight: 300}}>{(perfil?.nombre || 'U')[0]}</div>
+            <div><div style={{fontSize: 13, fontWeight: 500, color: BRAND.dark}}>{perfil?.nombre} {perfil?.apellido}</div><div style={{fontSize: 10, color: '#aaa'}}>{perfil?.ciudad} · Cliente</div></div>
+          </div>
+          <div style={{display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 10}}>
+            {perfil?.codigo_referido && <span style={{fontSize: 8, padding: '2px 7px', borderRadius: 8, background: '#e8f0fb', color: '#163a6b'}}>{perfil.codigo_referido}</span>}
+            {perfil?.reservas_sin_comision > 0 && <span style={{fontSize: 8, padding: '2px 7px', borderRadius: 8, background: '#e6f4f0', color: '#085041'}}>{perfil.reservas_sin_comision} sin comisión 🎁</span>}
+          </div>
+          <button onClick={() => router.push('/editar-perfil')} style={{width: '100%', background: '#f7f5f2', color: BRAND.blue, border: `0.5px solid ${BRAND.blue}`, padding: 8, borderRadius: 5, fontSize: 10, cursor: 'pointer', fontWeight: 500}}>Editar perfil</button>
+        </div>
+      </div>
+
+      {/* FAVORITOS */}
+      <div style={{background: '#fff', borderRadius: 10, border: `0.5px solid ${BRAND.border}`, overflow: 'hidden'}}>
+        <div style={{padding: '13px 16px', borderBottom: '0.5px solid #f0ede8', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+          <span style={{fontSize: 11, fontWeight: 500, color: BRAND.dark}}>❤️ Favoritos</span>
+          <span style={{fontSize: 9, padding: '2px 7px', borderRadius: 8, background: '#fdf3e3', color: '#92400e'}}>{favoritos.length}</span>
+        </div>
+        <div style={{padding: '13px 16px'}}>
+          {favoritos.length === 0 && <p style={{fontSize: 12, color: '#bbb', textAlign: 'center', padding: '12px 0'}}>Guarda tus proveedores favoritos</p>}
+          {favoritos.slice(0, 3).map(f => (
+            <div key={f.id} style={{display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '0.5px solid #f5f3f0', cursor: 'pointer'}} onClick={() => router.push(`/proveedor/${f.proveedor_id}`)}>
+              <div style={{width: 32, height: 32, borderRadius: '50%', background: BRAND.blue, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 500, color: '#fff', flexShrink: 0}}>{(f.profiles?.nombre || 'P')[0]}</div>
+              <div style={{flex: 1}}><div style={{fontSize: 12, color: BRAND.dark, fontWeight: 500}}>{f.profiles?.nombre} {f.profiles?.apellido}</div></div>
+              <span style={{fontSize: 14, color: BRAND.amber}}>♥</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* PASAPORTE */}
+      <div style={{background: '#fff', borderRadius: 10, border: `0.5px solid ${BRAND.border}`, overflow: 'hidden'}}>
+        <div style={{padding: '13px 16px', borderBottom: '0.5px solid #f0ede8'}}><span style={{fontSize: 11, fontWeight: 500, color: BRAND.dark}}>🛂 Mi pasaporte</span></div>
+        <div style={{padding: 0}}>
+          <div onClick={() => router.push('/pasaporte')} style={{background: 'linear-gradient(135deg, #1d4f91 0%, #163a6b 100%)', padding: 16, cursor: 'pointer'}}>
+            <div style={{fontSize: 10, color: 'rgba(255,255,255,.5)', letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 6}}>Home&Heart · Pasaporte</div>
+            <div style={{fontSize: 16, fontWeight: 300, color: '#fff', fontFamily: 'Georgia, serif', marginBottom: 10}}>{perfil?.nombre} {perfil?.apellido}</div>
+            <div style={{display: 'flex', gap: 16}}>
+              <div><div style={{fontSize: 18, fontWeight: 200, color: '#fff'}}>—</div><div style={{fontSize: 9, color: 'rgba(255,255,255,.5)'}}>Ciudades</div></div>
+              <div><div style={{fontSize: 18, fontWeight: 200, color: '#fff'}}>—</div><div style={{fontSize: 9, color: 'rgba(255,255,255,.5)'}}>Reservas</div></div>
+            </div>
+            <div style={{fontSize: 10, color: 'rgba(255,255,255,.4)', marginTop: 10}}>Ver pasaporte completo →</div>
+          </div>
+        </div>
+      </div>
+
+      {/* VIAJES */}
+      <div style={{background: '#fff', borderRadius: 10, border: `0.5px solid ${BRAND.border}`, overflow: 'hidden'}}>
+        <div style={{padding: '13px 16px', borderBottom: '0.5px solid #f0ede8', display: 'flex', justifyContent: 'space-between'}}>
+          <span style={{fontSize: 11, fontWeight: 500, color: BRAND.dark}}>✈️ Mis viajes</span>
+        </div>
+        <div style={{padding: '13px 16px'}}>
+          <p style={{fontSize: 12, color: '#bbb', textAlign: 'center', padding: '8px 0', marginBottom: 8}}>Organiza todos tus servicios en un viaje</p>
+          <button onClick={() => router.push('/viaje/nuevo')} style={{width: '100%', background: BRAND.blue, color: '#fff', border: 'none', padding: 8, borderRadius: 5, fontSize: 10, cursor: 'pointer', fontWeight: 500}}>+ Nuevo viaje</button>
+        </div>
+      </div>
+
+      {/* REFERIDOS */}
+      <div style={{background: '#fff', borderRadius: 10, border: `0.5px solid ${BRAND.border}`, overflow: 'hidden'}}>
+        <div style={{padding: '13px 16px', borderBottom: '0.5px solid #f0ede8'}}><span style={{fontSize: 11, fontWeight: 500, color: BRAND.dark}}>🎁 Referidos</span></div>
+        <div style={{padding: '13px 16px'}}>
+          <div style={{background: '#f7f5f2', border: `0.5px solid ${BRAND.border}`, borderRadius: 6, padding: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8}}>
+            <div><div style={{fontSize: 9, color: '#bbb', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 2}}>Tu código</div><div style={{fontSize: 13, fontWeight: 500, color: BRAND.blue}}>{perfil?.codigo_referido || '—'}</div></div>
+            <button onClick={() => copiarLink(perfil?.codigo_referido)} style={{fontSize: 10, color: BRAND.blue, border: `0.5px solid ${BRAND.blue}`, padding: '4px 10px', borderRadius: 4, background: '#fff', cursor: 'pointer', whiteSpace: 'nowrap'}}>Copiar link</button>
+          </div>
+          <p style={{fontSize: 10, color: '#888', lineHeight: 1.5}}>Por cada amigo que reserve recibirás 1 reserva extra sin comisión.</p>
+          <div style={{marginTop: 8, fontSize: 11, color: '#666', display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '0.5px solid #f5f3f0'}}><span>Reservas sin comisión</span><span style={{fontWeight: 500, color: '#0e7a5c'}}>{perfil?.reservas_sin_comision || 0} 🎁</span></div>
+        </div>
+      </div>
+    </div>
   );
 }
 
-function getInitials(nombre, apellido) {
-  const first = nombre?.trim()?.[0] ?? "";
-  const last = apellido?.trim()?.[0] ?? "";
-  return (first + last).toUpperCase() || "?";
-}
-
-function formatPrice(precio, vertical) {
-  const config = VERTICALS[vertical] ?? VERTICALS.alojamiento;
-  if (precio == null || precio === "") return "Consultar";
-  return `${Number(precio)}€${config.priceSuffix}`;
-}
-
-export default function DashboardPage() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const [loading, setLoading] = useState(true);
-  const [profile, setProfile] = useState(null);
-  const [services, setServices] = useState([]);
-  const [bookings, setBookings] = useState([]);
-  const [reviewedBookingIds, setReviewedBookingIds] = useState(new Set());
-  const [incidentBookingId, setIncidentBookingId] = useState(null);
-  const [incidentText, setIncidentText] = useState("");
-  const [actionLoadingId, setActionLoadingId] = useState(null);
-  const [bookingFeedback, setBookingFeedback] = useState({});
-  const [connectingStripe, setConnectingStripe] = useState(false);
-  const [referralCopyMessage, setReferralCopyMessage] = useState("");
-  const [connectError, setConnectError] = useState("");
-  const [stripeCustomerId, setStripeCustomerId] = useState(null);
-  const [savedPaymentMethods, setSavedPaymentMethods] = useState([]);
-  const [paymentMethodsLoading, setPaymentMethodsLoading] = useState(false);
-  const [showAddCard, setShowAddCard] = useState(false);
-  const [setupClientSecret, setSetupClientSecret] = useState(null);
-  const [paymentMethodError, setPaymentMethodError] = useState("");
-  const [showRoleSwitchModal, setShowRoleSwitchModal] = useState(false);
-  const [roleSwitchLoading, setRoleSwitchLoading] = useState(false);
-  const [roleSwitchError, setRoleSwitchError] = useState("");
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [deleteConfirmText, setDeleteConfirmText] = useState("");
-  const [deleteLoading, setDeleteLoading] = useState(false);
-  const [deleteError, setDeleteError] = useState("");
-  const [reportModal, setReportModal] = useState(null);
-  const [favoritos, setFavoritos] = useState([]);
-  const [familiaData, setFamiliaData] = useState(null);
-  const [familiaMiembros, setFamiliaMiembros] = useState([]);
-  const [familiaReservasCount, setFamiliaReservasCount] = useState(0);
-  const [viajes, setViajes] = useState([]);
-
-  async function handleConfirmDeleteAccount() {
-    if (!profile?.id || deleteConfirmText !== "DELETE") return;
-
-    setDeleteLoading(true);
-    setDeleteError("");
-
-    try {
-      const response = await fetch("/api/auth/delete-account", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: profile.id }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok || data.error) {
-        throw new Error(data.error || "No se pudo eliminar la cuenta.");
-      }
-
-      await supabase.auth.signOut();
-      router.push("/");
-    } catch (err) {
-      setDeleteError(err.message || "Error al eliminar la cuenta.");
-      setDeleteLoading(false);
-    }
-  }
-
-  async function handleBecomeProvider() {
-    if (!profile?.id) return;
-
-    setRoleSwitchLoading(true);
-    setRoleSwitchError("");
-
-    const { error } = await supabase
-      .from("profiles")
-      .update({ role: "proveedor" })
-      .eq("id", profile.id);
-
-    setRoleSwitchLoading(false);
-
-    if (error) {
-      setRoleSwitchError(error.message);
-      return;
-    }
-
-    window.location.reload();
-  }
-
-  async function handleConfirmSwitchToClient() {
-    if (!profile?.id) return;
-
-    setRoleSwitchLoading(true);
-    setRoleSwitchError("");
-
-    const { error: profileError } = await supabase
-      .from("profiles")
-      .update({ role: "cliente" })
-      .eq("id", profile.id);
-
-    if (profileError) {
-      setRoleSwitchLoading(false);
-      setRoleSwitchError(profileError.message);
-      return;
-    }
-
-    const { error: servicesError } = await supabase
-      .from("services")
-      .update({ disponible: false })
-      .eq("proveedor_id", profile.id);
-
-    setRoleSwitchLoading(false);
-    setShowRoleSwitchModal(false);
-
-    if (servicesError) {
-      setRoleSwitchError(servicesError.message);
-      return;
-    }
-
-    window.location.reload();
-  }
-
-  async function completeBookingWithCapture(booking, allBookings) {
-    const proveedores = await buildProveedoresForPayment(booking, allBookings);
-    console.log("Intentando liberar pago:", booking.payment_intent_id);
-    console.log("Proveedores:", proveedores);
-    await capturePayment(booking.payment_intent_id, proveedores);
-
-    const relatedIds = allBookings
-      .filter((b) => b.payment_intent_id === booking.payment_intent_id)
-      .map((b) => b.id);
-
-    const { error } = await supabase
-      .from("bookings")
-      .update({
-        estado: "completada",
-        confirmacion_cliente: true,
-      })
-      .in("id", relatedIds);
-
-    if (error) throw new Error(error.message);
-  }
-
-  async function runAutoCaptureForBookings(clientBookings, userId) {
-    const eligible = clientBookings.filter(
-      (b) =>
-        getBookingEstado(b) === "confirmada" &&
-        !b.confirmacion_cliente &&
-        b.payment_intent_id &&
-        isFechaFinPast24h(b.fecha_fin),
-    );
-
-    if (eligible.length === 0) return clientBookings;
-
-    const capturedPaymentIntents = new Set();
-
-    for (const booking of eligible) {
-      if (capturedPaymentIntents.has(booking.payment_intent_id)) continue;
-      capturedPaymentIntents.add(booking.payment_intent_id);
-      // try {
-      //   await completeBookingWithCapture(booking, clientBookings);
-      // } catch {
-      //   // Siguiente reserva si una falla
-      // }
-    }
-
-    const { data: refreshed } = await supabase
-      .from("bookings")
-      .select("*")
-      .eq("cliente_id", userId)
-      .order("created_at", { ascending: false });
-
-    return refreshed ?? clientBookings;
-  }
-
-  useEffect(() => {
-    async function loadDashboard() {
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
-
-      if (userError || !user) {
-        router.replace("/login");
-        return;
-      }
-
-      const { data: profileData } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", user.id)
-        .single();
-
-      setProfile(profileData ?? null);
-
-      if (profileData?.role === "proveedor") {
-        const { data: servicesData } = await supabase
-          .from("services")
-          .select("*")
-          .eq("proveedor_id", user.id);
-
-        const providerServices = servicesData ?? [];
-        setServices(providerServices);
-
-        const serviceIds = providerServices.map((s) => s.id);
-        if (serviceIds.length > 0) {
-          const { data: bookingsData } = await supabase
-            .from("bookings")
-            .select("*")
-            .in("service_id", serviceIds)
-            .order("created_at", { ascending: false });
-
-          setBookings(bookingsData ?? []);
-        } else {
-          setBookings([]);
-        }
-        setFavoritos([]);
-        setFamiliaData(null);
-        setFamiliaMiembros([]);
-        setFamiliaReservasCount(0);
-        setViajes([]);
-      } else {
-        const { data: bookingsData } = await supabase
-          .from("bookings")
-          .select(
-            `
-            *,
-            services:service_id (
-              titulo,
-              proveedor_id,
-              profiles:proveedor_id (nombre, apellido)
-            )
-          `,
-          )
-          .eq("cliente_id", user.id)
-          .order("created_at", { ascending: false });
-
-        let clientBookings = bookingsData ?? [];
-        // clientBookings = await runAutoCaptureForBookings(clientBookings, user.id);
-        setBookings(clientBookings);
-
-        if (clientBookings.length > 0) {
-          const bookingIds = clientBookings.map((b) => b.id);
-          const { data: reviewsData } = await supabase
-            .from("reviews")
-            .select("booking_id")
-            .in("booking_id", bookingIds);
-
-          setReviewedBookingIds(
-            new Set((reviewsData ?? []).map((r) => r.booking_id)),
-          );
-        } else {
-          setReviewedBookingIds(new Set());
-        }
-
-        const { data: favoritosData } = await supabase
-          .from("favoritos")
-          .select(
-            `
-            id,
-            proveedor_id,
-            profiles:proveedor_id (
-              id,
-              nombre,
-              apellido,
-              ciudad,
-              foto_perfil,
-              avatar_url
-            )
-          `,
-          )
-          .eq("cliente_id", user.id)
-          .order("created_at", { ascending: false });
-
-        const favoritosList = favoritosData ?? [];
-        if (favoritosList.length > 0) {
-          const proveedorIds = favoritosList.map((f) => f.proveedor_id);
-          const { data: favServices } = await supabase
-            .from("services")
-            .select("id, proveedor_id, vertical, titulo")
-            .in("proveedor_id", proveedorIds);
-
-          const servicesByProvider = {};
-          for (const svc of favServices ?? []) {
-            if (!servicesByProvider[svc.proveedor_id]) {
-              servicesByProvider[svc.proveedor_id] = [];
-            }
-            servicesByProvider[svc.proveedor_id].push(svc);
-          }
-
-          setFavoritos(
-            favoritosList.map((f) => ({
-              ...f,
-              services: servicesByProvider[f.proveedor_id] ?? [],
-            })),
-          );
-        } else {
-          setFavoritos([]);
-        }
-
-        const familiaActiva = await getUserFamiliaActiva(supabase, user.id);
-        if (familiaActiva) {
-          setFamiliaData(familiaActiva.familia);
-          const miembros = await getFamiliaMiembros(
-            supabase,
-            familiaActiva.familia.id,
-          );
-          setFamiliaMiembros(miembros.filter((m) => m.estado === "activo"));
-          const reservasCount = await countFamiliaReservas(
-            supabase,
-            familiaActiva.familia.id,
-          );
-          setFamiliaReservasCount(reservasCount);
-        } else {
-          setFamiliaData(null);
-          setFamiliaMiembros([]);
-          setFamiliaReservasCount(0);
-        }
-
-        const { viajes: viajesData } = await loadUserViajes(
-          supabase,
-          user.id,
-          familiaActiva?.familia?.id ?? null,
-        );
-        setViajes(viajesData);
-
-        setPaymentMethodsLoading(true);
-        try {
-          const nombre = [profileData?.nombre, profileData?.apellido]
-            .filter(Boolean)
-            .join(" ");
-          const customerRes = await fetch("/api/stripe/customer", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              email: user.email,
-              nombre: nombre || "Cliente",
-              customer_id: profileData?.stripe_customer_id || undefined,
-            }),
-          });
-          const customerData = await customerRes.json();
-
-          if (customerRes.ok && customerData.customer_id) {
-            setStripeCustomerId(customerData.customer_id);
-            setSavedPaymentMethods(customerData.paymentMethods ?? []);
-
-            if (customerData.customer_id !== profileData?.stripe_customer_id) {
-              await supabase
-                .from("profiles")
-                .update({ stripe_customer_id: customerData.customer_id })
-                .eq("id", user.id);
-            }
-          }
-        } catch {
-          setSavedPaymentMethods([]);
-        } finally {
-          setPaymentMethodsLoading(false);
-        }
-      }
-
-      setLoading(false);
-    }
-
-    loadDashboard();
-  }, [router]);
-
-  async function handleConfirmService(booking) {
-    setActionLoadingId(booking.id);
-    setBookingFeedback((prev) => {
-      const next = { ...prev };
-      delete next[booking.id];
-      return next;
-    });
-
-    try {
-      await completeBookingWithCapture(booking, bookings);
-      setBookings((prev) =>
-        prev.map((b) =>
-          b.payment_intent_id === booking.payment_intent_id
-            ? { ...b, estado: "completada", confirmacion_cliente: true }
-            : b,
-        ),
-      );
-      setBookingFeedback((prev) => ({
-        ...prev,
-        [booking.id]: {
-          type: "released",
-          message: "¡Pago liberado al proveedor!",
-        },
-      }));
-      setIncidentBookingId(null);
-    } catch (err) {
-      setBookingFeedback((prev) => ({
-        ...prev,
-        [booking.id]: { type: "error", message: err.message },
-      }));
-    } finally {
-      setActionLoadingId(null);
-    }
-  }
-
-  async function handleSubmitIncident(booking) {
-    const descripcion = incidentText.trim();
-    if (!descripcion) return;
-
-    setActionLoadingId(booking.id);
-    setBookingFeedback((prev) => {
-      const next = { ...prev };
-      delete next[booking.id];
-      return next;
-    });
-
-    try {
-      const { error } = await supabase
-        .from("bookings")
-        .update({
-          estado: "incidencia",
-          incidencia_descripcion: descripcion,
-        })
-        .eq("id", booking.id);
-
-      if (error) throw new Error(error.message);
-
-      await fetch("/api/emails", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tipo: "incidencia",
-          booking_id: booking.id,
-          cliente_nombre:
-            [profile?.nombre, profile?.apellido].filter(Boolean).join(" ") ||
-            "Cliente",
-          fecha_inicio: booking.fecha_inicio,
-          fecha_fin: booking.fecha_fin,
-          descripcion,
-        }),
-      });
-
-      setBookings((prev) =>
-        prev.map((b) =>
-          b.id === booking.id
-            ? {
-                ...b,
-                estado: "incidencia",
-                incidencia_descripcion: descripcion,
-              }
-            : b,
-        ),
-      );
-      setBookingFeedback((prev) => ({
-        ...prev,
-        [booking.id]: {
-          type: "incident",
-          message:
-            "Incidencia registrada. Nuestro equipo la revisará en menos de 24h.",
-        },
-      }));
-      setIncidentBookingId(null);
-      setIncidentText("");
-    } catch (err) {
-      setBookingFeedback((prev) => ({
-        ...prev,
-        [booking.id]: { type: "error", message: err.message },
-      }));
-    } finally {
-      setActionLoadingId(null);
-    }
-  }
-
-  async function ensureStripeCustomer() {
-    if (stripeCustomerId) return stripeCustomerId;
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user || !profile?.id) return null;
-
-    const nombre = [profile.nombre, profile.apellido].filter(Boolean).join(" ");
-    const res = await fetch("/api/stripe/customer", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: profile.email_contacto || user.email,
-        nombre: nombre || "Cliente",
-      }),
-    });
-    const data = await res.json();
-    if (!res.ok || data.error) return null;
-
-    setStripeCustomerId(data.customer_id);
-    await supabase
-      .from("profiles")
-      .update({ stripe_customer_id: data.customer_id })
-      .eq("id", profile.id);
-
-    return data.customer_id;
-  }
-
-  async function handleAddCard() {
-    setPaymentMethodError("");
-    setPaymentMethodsLoading(true);
-
-    try {
-      const customerId = await ensureStripeCustomer();
-      if (!customerId) throw new Error("No se pudo crear el cliente de Stripe.");
-
-      const res = await fetch("/api/stripe/customer", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "setup_intent",
-          customer_id: customerId,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok || data.error) {
-        throw new Error(data.error || "No se pudo iniciar el alta de tarjeta.");
-      }
-
-      setSetupClientSecret(data.clientSecret);
-      setShowAddCard(true);
-    } catch (err) {
-      setPaymentMethodError(err.message);
-    } finally {
-      setPaymentMethodsLoading(false);
-    }
-  }
-
-  async function handleDeleteCard(paymentMethodId) {
-    setPaymentMethodError("");
-
-    try {
-      const res = await fetch("/api/stripe/customer", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "detach",
-          payment_method_id: paymentMethodId,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok || data.error) {
-        throw new Error(data.error || "No se pudo eliminar la tarjeta.");
-      }
-
-      setSavedPaymentMethods((prev) =>
-        prev.filter((pm) => pm.id !== paymentMethodId),
-      );
-    } catch (err) {
-      setPaymentMethodError(err.message);
-    }
-  }
-
-  async function refreshPaymentMethods() {
-    if (!stripeCustomerId) return;
-
-    const res = await fetch("/api/stripe/customer", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ customer_id: stripeCustomerId }),
-    });
-    const data = await res.json();
-    if (res.ok) {
-      setSavedPaymentMethods(data.paymentMethods ?? []);
-    }
-  }
-
-  async function handleConnectBankAccount() {
-    setConnectError("");
-    setConnectingStripe(true);
-
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user || !profile?.id) {
-        throw new Error("No se pudo identificar tu cuenta.");
-      }
-
-      const email = profile.email_contacto || user.email;
-      if (!email) {
-        throw new Error("Añade un email en tu perfil para conectar Stripe.");
-      }
-
-      const res = await fetch("/api/stripe/connect/create-account", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email,
-          proveedor_id: profile.id,
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok || data.error) {
-        throw new Error(data.error || "No se pudo iniciar la conexión con Stripe.");
-      }
-
-      const { error: updateError } = await supabase
-        .from("profiles")
-        .update({ stripe_account_id: data.accountId })
-        .eq("id", profile.id);
-
-      if (updateError) throw new Error(updateError.message);
-
-      window.location.href = data.url;
-    } catch (err) {
-      setConnectError(err.message);
-      setConnectingStripe(false);
-    }
-  }
-
-  const isProvider = profile?.role === "proveedor";
-  const greetingName = profile?.nombre?.trim();
-  const stripeReturn = searchParams.get("stripe");
-  const codigoReferido = profile?.codigo_referido || null;
-  const referidosCount = Number(profile?.referidos_count) || 0;
-  const reservasSinComision = Number(profile?.reservas_sin_comision) || 0;
-
-  async function handleCopyReferralLink() {
-    if (!codigoReferido) return;
-
-    const link = buildReferralLink(codigoReferido);
-    try {
-      await navigator.clipboard.writeText(link);
-      setReferralCopyMessage("Link copiado al portapapeles");
-    } catch {
-      setReferralCopyMessage(link);
-    }
-
-    setTimeout(() => setReferralCopyMessage(""), 3000);
-  }
-
-  if (loading) {
-    return (
-      <div
-        className="min-h-screen font-sans"
-        style={{ backgroundColor: BRAND.warm }}
-      >
-        <Navbar />
-        <main className="mx-auto max-w-4xl px-4 py-16 text-center text-sm text-[#666]">
-          Cargando tu panel…
-        </main>
-      </div>
-    );
-  }
-
+function TabProveedor({ perfil, router, BRAND }) {
   return (
-    <div
-      className="min-h-screen font-sans"
-      style={{ backgroundColor: BRAND.warm, color: "#1a1a1a" }}
-    >
-      <Navbar />
+    <div style={{textAlign: 'center', padding: '40px 0'}}>
+      <p style={{fontSize: 14, color: '#aaa', marginBottom: 16}}>Panel de proveedor</p>
+      <button onClick={() => router.push('/estadisticas')} style={{background: BRAND.blue, color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 4, fontSize: 12, cursor: 'pointer', marginRight: 8}}>Ver estadísticas</button>
+      <button onClick={() => router.push('/editar-perfil')} style={{background: '#fff', color: BRAND.blue, border: `1px solid ${BRAND.blue}`, padding: '10px 20px', borderRadius: 4, fontSize: 12, cursor: 'pointer'}}>Editar servicios</button>
+    </div>
+  );
+}
 
-      <main className="mx-auto max-w-4xl space-y-8 px-4 py-10 sm:px-6 lg:px-8 lg:py-12">
-        <header>
-          <h1
-            className="text-3xl font-bold text-[#1a1a1a] sm:text-4xl"
-            style={{ fontFamily: SERIF }}
-          >
-            {greetingName ? `Hola, ${greetingName}` : "Hola"}
-          </h1>
-          <p className="mt-2 text-lg text-[#5c5c5c]">
-            {isProvider ? "Tu panel de proveedor" : "Tu panel de cliente"}
-          </p>
-          {!isProvider && (
-            <Link
-              href="/pasaporte"
-              className="mt-4 inline-flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold no-underline transition-colors hover:bg-[#e8f0fb]"
-              style={{ borderColor: BRAND.primary, color: BRAND.primary }}
-            >
-              Mi pasaporte →
-            </Link>
-          )}
-        </header>
+function TabFamilia({ perfil, router, BRAND }) {
+  return (
+    <div style={{textAlign: 'center', padding: '40px 0'}}>
+      <p style={{fontSize: 14, color: '#aaa', marginBottom: 16}}>Gestiona tu grupo familiar</p>
+      <button onClick={() => router.push('/familia')} style={{background: BRAND.blue, color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 4, fontSize: 12, cursor: 'pointer'}}>Ir a mi familia</button>
+    </div>
+  );
+}
 
-        <Section title="Mi programa de referidos">
-          <div className="space-y-4">
-            <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-[#888]">
-                Tu código
-              </p>
-              <p
-                className="mt-1 text-xl font-bold tracking-wide"
-                style={{ color: BRAND.primary }}
-              >
-                {codigoReferido || "—"}
-              </p>
-            </div>
-
-            <button
-              type="button"
-              disabled={!codigoReferido}
-              onClick={handleCopyReferralLink}
-              className="rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-              style={{ backgroundColor: BRAND.primary }}
-            >
-              Copiar link de invitación
-            </button>
-
-            {referralCopyMessage && (
-              <p className="text-sm text-green-700">{referralCopyMessage}</p>
-            )}
-
-            <p className="text-sm text-[#444]">
-              Has invitado a{" "}
-              <strong className="text-[#1a1a1a]">{referidosCount}</strong>{" "}
-              {referidosCount === 1 ? "persona" : "personas"}
-            </p>
-
-            <p className="text-sm text-[#444]">
-              Te quedan{" "}
-              <strong className="text-[#1a1a1a]">{reservasSinComision}</strong>{" "}
-              reservas sin comisión 🎁
-            </p>
-
-            <p className="text-sm leading-relaxed text-[#666]">
-              Por cada amigo que invite y complete su primera reserva, recibirás
-              1 reserva extra sin comisión.
-            </p>
-          </div>
-        </Section>
-
-        {isProvider ? (
-          <>
-            <Section title="Mis servicios">
-              {services.length === 0 ? (
-                <div className="text-center">
-                  <p className="text-sm text-[#666]">
-                    Aún no has publicado ningún servicio.
-                  </p>
-                  <Link
-                    href="/ser-proveedor"
-                    className="mt-4 inline-block rounded-xl px-5 py-3 text-sm font-semibold text-white no-underline transition-opacity hover:opacity-90"
-                    style={{ backgroundColor: BRAND.primary }}
-                  >
-                    Publicar mi primer servicio
-                  </Link>
-                </div>
-              ) : (
-                <>
-                  <ul className="flex flex-col gap-3">
-                    {services.map((service) => {
-                      const vertical =
-                        VERTICALS[service.vertical] ?? VERTICALS.alojamiento;
-                      return (
-                        <li
-                          key={service.id}
-                          className="flex flex-col gap-2 rounded-xl border px-4 py-4 sm:flex-row sm:items-center sm:justify-between"
-                          style={{ borderColor: BRAND.border }}
-                        >
-                          <div>
-                            <p className="text-xs font-medium uppercase tracking-wide text-[#888]">
-                              {vertical.label}
-                            </p>
-                            <p className="font-semibold text-[#1a1a1a]">
-                              {service.titulo || vertical.label}
-                            </p>
-                          </div>
-                          <p
-                            className="text-lg font-bold"
-                            style={{ color: BRAND.primary }}
-                          >
-                            {formatPrice(service.precio, service.vertical)}
-                          </p>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                  <Link
-                    href="/ser-proveedor"
-                    className="mt-5 inline-block rounded-xl px-5 py-2.5 text-sm font-semibold text-white no-underline transition-opacity hover:opacity-90"
-                    style={{ backgroundColor: BRAND.primary }}
-                  >
-                    Añadir servicio
-                  </Link>
-                </>
-              )}
-            </Section>
-
-            <Section title="Cuenta bancaria">
-              {profile?.stripe_account_id ? (
-                <p className="text-sm font-semibold text-green-700">
-                  Cuenta bancaria conectada ✓
-                </p>
-              ) : (
-                <>
-                  <p className="text-sm text-[#666]">
-                    Conecta tu cuenta para recibir los pagos de tus reservas.
-                  </p>
-                  {connectError && (
-                    <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-                      {connectError}
-                    </p>
-                  )}
-                  <button
-                    type="button"
-                    disabled={connectingStripe}
-                    onClick={handleConnectBankAccount}
-                    className="mt-4 rounded-xl px-5 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
-                    style={{ backgroundColor: BRAND.primary }}
-                  >
-                    {connectingStripe
-                      ? "Conectando…"
-                      : "Conectar cuenta bancaria 🏦"}
-                  </button>
-                </>
-              )}
-              {stripeReturn === "success" && profile?.stripe_account_id && (
-                <p className="mt-3 text-sm text-green-700">
-                  Configuración de Stripe completada correctamente.
-                </p>
-              )}
-              {stripeReturn === "refresh" && !profile?.stripe_account_id && (
-                <p className="mt-3 text-sm text-[#666]">
-                  Puedes reintentar la conexión cuando quieras.
-                </p>
-              )}
-            </Section>
-
-            <Section title="Reservas recibidas">
-              {bookings.length === 0 ? (
-                <p className="text-sm text-[#666]">
-                  Aún no has recibido reservas.
-                </p>
-              ) : (
-                <ul className="flex flex-col gap-3">
-                  {bookings.map((booking) => (
-                    <li
-                      key={booking.id}
-                      className="flex flex-col gap-2 rounded-xl border px-4 py-4 sm:flex-row sm:items-center sm:justify-between"
-                      style={{ borderColor: BRAND.border }}
-                    >
-                      <div>
-                        <p className="font-medium text-[#1a1a1a]">
-                          Reserva #{booking.id?.slice?.(0, 8) ?? "—"}
-                        </p>
-                        {booking.fecha_inicio && (
-                          <p className="mt-0.5 text-xs text-[#888]">
-                            {booking.fecha_inicio}
-                            {booking.fecha_fin ? ` — ${booking.fecha_fin}` : ""}
-                          </p>
-                        )}
-                      </div>
-                      <StatusBadge status={booking.estado ?? booking.status} />
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Section>
-
-            <Section title="Mi perfil">
-              <dl className="space-y-3 text-sm">
-                <div>
-                  <dt className="text-xs font-medium uppercase tracking-wide text-[#888]">
-                    Nombre
-                  </dt>
-                  <dd className="mt-0.5 text-[#1a1a1a]">
-                    {[profile?.nombre, profile?.apellido]
-                      .filter(Boolean)
-                      .join(" ") || "—"}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-xs font-medium uppercase tracking-wide text-[#888]">
-                    Ciudad
-                  </dt>
-                  <dd className="mt-0.5 text-[#1a1a1a]">
-                    {profile?.ciudad || profile?.location_zone || "—"}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-xs font-medium uppercase tracking-wide text-[#888]">
-                    Descripción
-                  </dt>
-                  <dd className="mt-0.5 leading-relaxed text-[#5c5c5c]">
-                    {profile?.descripcion || "—"}
-                  </dd>
-                </div>
-              </dl>
-              <button
-                type="button"
-                disabled={roleSwitchLoading}
-                onClick={() => setShowRoleSwitchModal(true)}
-                className="mt-5 w-full rounded-xl border px-5 py-2.5 text-sm font-semibold text-[#666] transition-colors hover:bg-[#f7f5f2] disabled:opacity-60 sm:w-auto"
-                style={{ borderColor: BRAND.border }}
-              >
-                {roleSwitchLoading ? "Procesando…" : "Cambiar a modo cliente"}
-              </button>
-
-              <Link
-                href="/editar-perfil"
-                className="mt-3 inline-block rounded-xl border px-5 py-2.5 text-sm font-semibold no-underline transition-colors hover:bg-[#e8f0fb]"
-                style={{ borderColor: BRAND.primary, color: BRAND.primary }}
-              >
-                Editar perfil
-              </Link>
-
-              <Link
-                href="/estadisticas"
-                className="mt-3 inline-block rounded-xl border px-5 py-2.5 text-sm font-semibold no-underline transition-colors hover:bg-[#e8f0fb]"
-                style={{ borderColor: BRAND.primary, color: BRAND.primary }}
-              >
-                Ver estadísticas
-              </Link>
-
-              <DangerZone onDeleteClick={() => setShowDeleteModal(true)} />
-            </Section>
-          </>
-        ) : (
-          <>
-            <Section title="Mis reservas">
-              {bookings.length > 0 && (
-                <div className="-mt-2 mb-4 flex justify-end">
-                  <Link
-                    href="/historial"
-                    className="text-sm font-medium no-underline transition-opacity hover:opacity-80"
-                    style={{ color: BRAND.primary }}
-                  >
-                    Ver historial completo →
-                  </Link>
-                </div>
-              )}
-              {bookings.length === 0 ? (
-                <div className="text-center">
-                  <p className="text-sm text-[#666]">
-                    Aún no tienes reservas. Empieza a explorar proveedores.
-                  </p>
-                  <Link
-                    href="/buscar"
-                    className="mt-4 inline-block rounded-xl px-5 py-3 text-sm font-semibold text-white no-underline transition-opacity hover:opacity-90"
-                    style={{ backgroundColor: BRAND.primary }}
-                  >
-                    Buscar proveedores
-                  </Link>
-                </div>
-              ) : (
-                <ul className="flex flex-col gap-4">
-                  {bookings.map((booking) => {
-                    const estado = getBookingEstado(booking);
-                    const showConfirmation = needsClientConfirmation(booking);
-                    const feedback = bookingFeedback[booking.id];
-                    const isIncidentOpen = incidentBookingId === booking.id;
-                    const isLoading = actionLoadingId === booking.id;
-                    const canReview =
-                      estado === "completada" &&
-                      booking.confirmacion_cliente &&
-                      !reviewedBookingIds.has(booking.id);
-                    const showReviewAfterRelease = feedback?.type === "released";
-
-                    return (
-                      <li
-                        key={booking.id}
-                        className="flex flex-col gap-3 rounded-xl border px-4 py-4"
-                        style={{ borderColor: BRAND.border }}
-                      >
-                        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                          <div>
-                            <p className="font-medium text-[#1a1a1a]">
-                              Reserva #{booking.id?.slice?.(0, 8) ?? "—"}
-                            </p>
-                            {booking.fecha_inicio && (
-                              <p className="mt-0.5 text-xs text-[#888]">
-                                {booking.fecha_inicio}
-                                {booking.fecha_fin ? ` — ${booking.fecha_fin}` : ""}
-                              </p>
-                            )}
-                          </div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <StatusBadge status={estado} />
-                            {canReview && !showReviewAfterRelease && (
-                              <Link
-                                href={`/resena/${booking.id}`}
-                                className="rounded-xl border px-3 py-1.5 text-xs font-semibold no-underline transition-colors hover:bg-[#e8f0fb]"
-                                style={{
-                                  borderColor: BRAND.primary,
-                                  color: BRAND.primary,
-                                }}
-                              >
-                                Valorar
-                              </Link>
-                            )}
-                          </div>
-                        </div>
-
-                        {showConfirmation && !isIncidentOpen && (
-                          <div className="flex flex-col gap-2 sm:flex-row">
-                            <button
-                              type="button"
-                              disabled={isLoading}
-                              onClick={() => handleConfirmService(booking)}
-                              className="flex-1 rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
-                              style={{ backgroundColor: "#16a34a" }}
-                            >
-                              {isLoading ? "Procesando…" : "✅ Todo fue bien"}
-                            </button>
-                            <button
-                              type="button"
-                              disabled={isLoading}
-                              onClick={() => {
-                                setIncidentBookingId(booking.id);
-                                setIncidentText("");
-                                setBookingFeedback((prev) => {
-                                  const next = { ...prev };
-                                  delete next[booking.id];
-                                  return next;
-                                });
-                              }}
-                              className="flex-1 rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
-                              style={{ backgroundColor: "#dc2626" }}
-                            >
-                              ⚠️ Hubo un problema
-                            </button>
-                          </div>
-                        )}
-
-                        {showConfirmation && isIncidentOpen && (
-                          <div className="flex flex-col gap-3 rounded-xl border border-red-200 bg-red-50/50 p-4">
-                            <label
-                              htmlFor={`incident-${booking.id}`}
-                              className="text-sm font-medium text-[#444]"
-                            >
-                              Describe el problema
-                            </label>
-                            <textarea
-                              id={`incident-${booking.id}`}
-                              rows={3}
-                              value={incidentText}
-                              onChange={(e) => setIncidentText(e.target.value)}
-                              className="w-full resize-y rounded-xl border border-red-200 bg-white px-4 py-3 text-sm text-[#1a1a1a] outline-none focus:ring-2 focus:ring-red-200"
-                            />
-                            <div className="flex flex-col gap-2 sm:flex-row">
-                              <button
-                                type="button"
-                                disabled={isLoading || !incidentText.trim()}
-                                onClick={() => handleSubmitIncident(booking)}
-                                className="rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
-                                style={{ backgroundColor: "#dc2626" }}
-                              >
-                                {isLoading ? "Enviando…" : "Enviar incidencia"}
-                              </button>
-                              <button
-                                type="button"
-                                disabled={isLoading}
-                                onClick={() => {
-                                  setIncidentBookingId(null);
-                                  setIncidentText("");
-                                }}
-                                className="rounded-xl border px-4 py-2.5 text-sm font-semibold text-[#666] transition-colors hover:bg-white"
-                                style={{ borderColor: BRAND.border }}
-                              >
-                                Cancelar
-                              </button>
-                            </div>
-                          </div>
-                        )}
-
-                        {feedback?.type === "released" && (
-                          <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">
-                            {feedback.message}
-                          </p>
-                        )}
-
-                        {feedback?.type === "incident" && (
-                          <p className="rounded-lg bg-[#e8f0fb] px-3 py-2 text-sm text-[#1d4f91]">
-                            {feedback.message}
-                          </p>
-                        )}
-
-                        {feedback?.type === "error" && (
-                          <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-                            {feedback.message}
-                          </p>
-                        )}
-
-                        {(showReviewAfterRelease || canReview) && (
-                          <Link
-                            href={`/resena/${booking.id}`}
-                            className="inline-flex w-full justify-center rounded-xl px-4 py-2.5 text-sm font-semibold text-white no-underline transition-opacity hover:opacity-90 sm:w-auto"
-                            style={{ backgroundColor: BRAND.primary }}
-                          >
-                            Dejar una valoración
-                          </Link>
-                        )}
-
-                        {estado === "completada" && (
-                          <div className="flex flex-wrap items-center gap-4">
-                            <a
-                              href={`/api/facturas/${booking.id}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-sm text-[#1d4f91] underline"
-                            >
-                              Descargar factura 📄
-                            </a>
-                            {booking.services?.proveedor_id && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const proveedor = booking.services.profiles;
-                                  const proveedorNombre =
-                                    [proveedor?.nombre, proveedor?.apellido]
-                                      .filter(Boolean)
-                                      .join(" ") ||
-                                    booking.services.titulo ||
-                                    "Proveedor";
-                                  setReportModal({
-                                    reportedId: booking.services.proveedor_id,
-                                    reportedName: proveedorNombre,
-                                    bookingId: booking.id,
-                                    tipo: "proveedor",
-                                    fechaInicio: booking.fecha_inicio,
-                                    fechaFin: booking.fecha_fin,
-                                  });
-                                }}
-                                className="text-xs text-[#888] underline transition-colors hover:text-[#1d4f91]"
-                              >
-                                Reportar problema
-                              </button>
-                            )}
-                          </div>
-                        )}
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </Section>
-
-            <Section title="Mi familia">
-              {!familiaData ? (
-                <div>
-                  <p className="text-sm text-[#666]">
-                    Crea un grupo familiar y coordina reservas con toda la
-                    familia.
-                  </p>
-                  <Link
-                    href="/familia"
-                    className="mt-4 inline-block rounded-xl px-5 py-3 text-sm font-semibold text-white no-underline transition-opacity hover:opacity-90"
-                    style={{ backgroundColor: BRAND.primary }}
-                  >
-                    Crear grupo
-                  </Link>
-                </div>
-              ) : (
-                <div>
-                  <p
-                    className="text-lg font-semibold text-[#1a1a1a]"
-                    style={{ fontFamily: SERIF }}
-                  >
-                    {familiaData.nombre}
-                  </p>
-                  <div className="mt-3 flex flex-wrap items-center gap-2">
-                    {familiaMiembros.slice(0, 6).map((miembro) => {
-                      const perfil = miembro.profiles;
-                      const avatarUrl =
-                        perfil?.foto_perfil || perfil?.avatar_url || null;
-                      const initials = getFamiliaInitials(
-                        perfil?.nombre,
-                        perfil?.apellido,
-                      );
-                      return avatarUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          key={miembro.id}
-                          src={avatarUrl}
-                          alt=""
-                          title={
-                            [perfil?.nombre, perfil?.apellido]
-                              .filter(Boolean)
-                              .join(" ") || "Miembro"
-                          }
-                          className="h-9 w-9 rounded-full object-cover ring-2 ring-white"
-                        />
-                      ) : (
-                        <span
-                          key={miembro.id}
-                          title={
-                            [perfil?.nombre, perfil?.apellido]
-                              .filter(Boolean)
-                              .join(" ") || "Miembro"
-                          }
-                          className="flex h-9 w-9 items-center justify-center rounded-full text-xs font-semibold ring-2 ring-white"
-                          style={{
-                            backgroundColor: BRAND.light,
-                            color: BRAND.primary,
-                          }}
-                        >
-                          {initials}
-                        </span>
-                      );
-                    })}
-                    {familiaMiembros.length > 6 && (
-                      <span className="text-xs text-[#888]">
-                        +{familiaMiembros.length - 6}
-                      </span>
-                    )}
-                  </div>
-                  <p className="mt-3 text-sm text-[#666]">
-                    {familiaReservasCount} reserva
-                    {familiaReservasCount !== 1 ? "s" : ""} del grupo
-                  </p>
-                  <Link
-                    href="/familia"
-                    className="mt-4 inline-block text-sm font-medium no-underline transition-opacity hover:opacity-80"
-                    style={{ color: BRAND.primary }}
-                  >
-                    Gestionar familia →
-                  </Link>
-                </div>
-              )}
-            </Section>
-
-            <Section title="Mis viajes">
-              <div className="-mt-2 mb-4 flex justify-end">
-                <Link
-                  href="/viaje/nuevo"
-                  className="rounded-xl px-4 py-2 text-sm font-semibold text-white no-underline transition-opacity hover:opacity-90"
-                  style={{ backgroundColor: BRAND.primary }}
-                >
-                  Nuevo viaje
-                </Link>
-              </div>
-              {viajes.length === 0 ? (
-                <p className="text-sm text-[#666]">
-                  Crea un tablón de viaje para coordinar los servicios de tu
-                  familia en un solo lugar.
-                </p>
-              ) : (
-                <ul className="flex flex-col gap-3">
-                  {viajes.map((viaje) => (
-                    <li key={viaje.id}>
-                      <Link
-                        href={`/viaje/${viaje.id}`}
-                        className="flex flex-col gap-1 rounded-xl border px-4 py-4 no-underline transition-colors hover:bg-[#f7f5f2] sm:flex-row sm:items-center sm:justify-between"
-                        style={{ borderColor: BRAND.border, color: "#1a1a1a" }}
-                      >
-                        <div>
-                          <p className="font-semibold text-[#1a1a1a]">
-                            {viaje.nombre}
-                          </p>
-                          <p className="mt-0.5 text-xs text-[#888]">
-                            {formatDateRange(
-                              viaje.fecha_inicio,
-                              viaje.fecha_fin,
-                            )}
-                            {viaje.ciudad ? ` · ${viaje.ciudad}` : ""}
-                          </p>
-                        </div>
-                        <p className="text-sm font-medium" style={{ color: BRAND.primary }}>
-                          {viaje.serviciosCount} servicio
-                          {viaje.serviciosCount !== 1 ? "s" : ""} →
-                        </p>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Section>
-
-            <Section title="Mis favoritos">
-              {favoritos.length === 0 ? (
-                <p className="text-sm text-[#666]">
-                  Aún no tienes proveedores favoritos. Explora y guarda los que
-                  más te interesen.
-                </p>
-              ) : (
-                <ul className="flex flex-col gap-4">
-                  {favoritos.map((favorito) => {
-                    const proveedor = favorito.profiles ?? {};
-                    const nombreCompleto =
-                      [proveedor.nombre, proveedor.apellido]
-                        .filter(Boolean)
-                        .join(" ") || "Proveedor";
-                    const avatarUrl =
-                      proveedor.foto_perfil || proveedor.avatar_url || null;
-                    const initials = getInitials(
-                      proveedor.nombre,
-                      proveedor.apellido,
-                    );
-
-                    return (
-                      <li
-                        key={favorito.id}
-                        className="flex flex-col gap-4 rounded-xl border px-4 py-4 sm:flex-row sm:items-center sm:justify-between"
-                        style={{ borderColor: BRAND.border }}
-                      >
-                        <div className="flex min-w-0 flex-1 items-start gap-3">
-                          {avatarUrl ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={avatarUrl}
-                              alt={nombreCompleto}
-                              className="h-12 w-12 shrink-0 rounded-full object-cover"
-                            />
-                          ) : (
-                            <span
-                              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-sm font-semibold"
-                              style={{
-                                backgroundColor: BRAND.light,
-                                color: BRAND.primary,
-                              }}
-                            >
-                              {initials}
-                            </span>
-                          )}
-                          <div className="min-w-0">
-                            <p className="font-medium text-[#1a1a1a]">
-                              {nombreCompleto}
-                            </p>
-                            <p className="mt-0.5 text-xs text-[#888]">
-                              {proveedor.ciudad || "Ciudad no indicada"}
-                            </p>
-                            {favorito.services.length > 0 && (
-                              <ul className="mt-2 flex flex-wrap gap-1.5">
-                                {favorito.services.map((svc) => {
-                                  const verticalConfig =
-                                    VERTICALS[svc.vertical] ??
-                                    VERTICALS.alojamiento;
-                                  return (
-                                    <li key={svc.id}>
-                                      <span
-                                        className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
-                                        style={{
-                                          backgroundColor: BRAND.light,
-                                          color: BRAND.primary,
-                                        }}
-                                      >
-                                        {svc.titulo || verticalConfig.label}
-                                      </span>
-                                    </li>
-                                  );
-                                })}
-                              </ul>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex shrink-0 items-center gap-2 self-end sm:self-center">
-                          <Link
-                            href={`/proveedor/${favorito.proveedor_id}`}
-                            className="rounded-xl border px-4 py-2 text-sm font-semibold no-underline transition-colors hover:bg-[#e8f0fb]"
-                            style={{
-                              borderColor: BRAND.primary,
-                              color: BRAND.primary,
-                            }}
-                          >
-                            Ver perfil
-                          </Link>
-                          <FavoritoButton
-                            proveedorId={favorito.proveedor_id}
-                            onChange={(isFav) => {
-                              if (!isFav) {
-                                setFavoritos((prev) =>
-                                  prev.filter((f) => f.id !== favorito.id),
-                                );
-                              }
-                            }}
-                          />
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </Section>
-
-            <Section title="Mi perfil">
-              <dl className="space-y-3 text-sm">
-                <div>
-                  <dt className="text-xs font-medium uppercase tracking-wide text-[#888]">
-                    Nombre
-                  </dt>
-                  <dd className="mt-0.5 text-[#1a1a1a]">
-                    {profile?.nombre || "—"}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-xs font-medium uppercase tracking-wide text-[#888]">
-                    Apellido
-                  </dt>
-                  <dd className="mt-0.5 text-[#1a1a1a]">
-                    {profile?.apellido || "—"}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-xs font-medium uppercase tracking-wide text-[#888]">
-                    Ciudad
-                  </dt>
-                  <dd className="mt-0.5 text-[#1a1a1a]">
-                    {profile?.ciudad || profile?.location_zone || "—"}
-                  </dd>
-                </div>
-              </dl>
-
-              <div
-                className="mt-6 border-t pt-6"
-                style={{ borderColor: BRAND.border }}
-              >
-                <h3 className="text-base font-semibold text-[#1a1a1a]">
-                  Métodos de pago
-                </h3>
-
-                {paymentMethodError && (
-                  <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-                    {paymentMethodError}
-                  </p>
-                )}
-
-                {paymentMethodsLoading ? (
-                  <p className="mt-3 text-sm text-[#666]">Cargando tarjetas…</p>
-                ) : savedPaymentMethods.length === 0 ? (
-                  <p className="mt-2 text-sm text-[#666]">
-                    No tienes tarjetas guardadas.
-                  </p>
-                ) : (
-                  <ul className="mt-3 flex flex-col gap-2">
-                    {savedPaymentMethods.map((pm) => (
-                      <li
-                        key={pm.id}
-                        className="flex items-center justify-between gap-3 rounded-xl border px-4 py-3"
-                        style={{ borderColor: BRAND.border }}
-                      >
-                        <span className="text-sm font-medium text-[#1a1a1a]">
-                          {getCardBrandLabel(pm.card?.brand)} ···· {pm.card?.last4}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteCard(pm.id)}
-                          className="text-sm font-semibold text-red-600 hover:underline"
-                        >
-                          Eliminar
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-
-                {showAddCard && setupClientSecret ? (
-                  <Elements
-                    key={setupClientSecret}
-                    stripe={stripePromise}
-                    options={{ clientSecret: setupClientSecret }}
-                  >
-                    <AddCardForm
-                      onSuccess={async () => {
-                        setShowAddCard(false);
-                        setSetupClientSecret(null);
-                        await refreshPaymentMethods();
-                      }}
-                      onCancel={() => {
-                        setShowAddCard(false);
-                        setSetupClientSecret(null);
-                      }}
-                    />
-                  </Elements>
-                ) : (
-                  <button
-                    type="button"
-                    disabled={paymentMethodsLoading}
-                    onClick={handleAddCard}
-                    className="mt-4 rounded-xl border px-5 py-2.5 text-sm font-semibold no-underline transition-colors hover:bg-[#e8f0fb] disabled:opacity-60"
-                    style={{ borderColor: BRAND.primary, color: BRAND.primary }}
-                  >
-                    Añadir tarjeta
-                  </button>
-                )}
-              </div>
-
-              <button
-                type="button"
-                disabled={roleSwitchLoading}
-                onClick={handleBecomeProvider}
-                className="mt-5 w-full rounded-xl border px-5 py-2.5 text-sm font-semibold transition-colors hover:opacity-90 disabled:opacity-60 sm:w-auto"
-                style={{
-                  borderColor: BRAND.primary,
-                  backgroundColor: BRAND.light,
-                  color: BRAND.primary,
-                }}
-              >
-                {roleSwitchLoading
-                  ? "Procesando…"
-                  : "Quiero ser proveedor también →"}
-              </button>
-
-              {roleSwitchError && !showRoleSwitchModal && (
-                <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-                  {roleSwitchError}
-                </p>
-              )}
-
-              <Link
-                href="/editar-perfil"
-                className="mt-3 inline-block rounded-xl border px-5 py-2.5 text-sm font-semibold no-underline transition-colors hover:bg-[#e8f0fb]"
-                style={{ borderColor: BRAND.primary, color: BRAND.primary }}
-              >
-                Editar perfil
-              </Link>
-
-              <DangerZone onDeleteClick={() => setShowDeleteModal(true)} />
-            </Section>
-          </>
-        )}
-      </main>
-
-      {showDeleteModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div
-            className="w-full max-w-md rounded-2xl border bg-white p-6 shadow-lg"
-            style={{ borderColor: BRAND.border }}
-          >
-            <p className="text-lg font-semibold text-[#1a1a1a]">
-              ¿Estás seguro?
-            </p>
-            <p className="mt-2 text-sm leading-relaxed text-[#666]">
-              Escribe DELETE para confirmar la eliminación de tu cuenta.
-            </p>
-            <input
-              type="text"
-              value={deleteConfirmText}
-              onChange={(e) => setDeleteConfirmText(e.target.value)}
-              placeholder="DELETE"
-              className="mt-4 w-full rounded-xl border px-4 py-3 text-sm text-[#1a1a1a] outline-none focus:ring-2 focus:ring-red-500/30"
-              style={{ borderColor: BRAND.border }}
-            />
-            {deleteError && (
-              <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-                {deleteError}
-              </p>
-            )}
-            <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-end">
-              <button
-                type="button"
-                disabled={deleteLoading}
-                onClick={() => {
-                  setShowDeleteModal(false);
-                  setDeleteConfirmText("");
-                  setDeleteError("");
-                }}
-                className="rounded-xl border px-4 py-2.5 text-sm font-semibold text-[#666] transition-colors hover:bg-[#f7f5f2] disabled:opacity-60"
-                style={{ borderColor: BRAND.border }}
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                disabled={deleteLoading || deleteConfirmText !== "DELETE"}
-                onClick={handleConfirmDeleteAccount}
-                className="rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {deleteLoading ? "Eliminando…" : "Confirmar eliminación"}
-              </button>
-            </div>
-          </div>
+function TabReferidos({ perfil, BRAND, copiarLink }) {
+  return (
+    <div style={{maxWidth: 480, margin: '0 auto', padding: '20px 0'}}>
+      <div style={{background: '#fff', borderRadius: 10, border: `0.5px solid #e8e4de`, padding: 24}}>
+        <h2 style={{fontSize: 16, fontWeight: 300, color: '#2a3a4a', fontFamily: 'Georgia, serif', marginBottom: 16}}>Tu programa de referidos</h2>
+        <div style={{background: '#f7f5f2', border: '0.5px solid #e8e4de', borderRadius: 8, padding: 14, marginBottom: 14}}>
+          <div style={{fontSize: 9, color: '#bbb', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 4}}>Tu código único</div>
+          <div style={{fontSize: 20, fontWeight: 500, color: BRAND.blue, letterSpacing: '.04em'}}>{perfil?.codigo_referido || '—'}</div>
         </div>
-      )}
-
-      {reportModal && (
-        <ReportarModal
-          open
-          onClose={() => setReportModal(null)}
-          reportedName={reportModal.reportedName}
-          reportedId={reportModal.reportedId}
-          bookingId={reportModal.bookingId}
-          tipo={reportModal.tipo}
-          fechaInicio={reportModal.fechaInicio}
-          fechaFin={reportModal.fechaFin}
-        />
-      )}
-
-      {showRoleSwitchModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div
-            className="w-full max-w-md rounded-2xl border bg-white p-6 shadow-lg"
-            style={{ borderColor: BRAND.border }}
-          >
-            <p className="text-lg font-semibold text-[#1a1a1a]">
-              ¿Seguro que quieres cambiar a modo cliente?
-            </p>
-            <p className="mt-2 text-sm leading-relaxed text-[#666]">
-              Tu perfil de proveedor y servicios se desactivarán temporalmente.
-            </p>
-
-            {roleSwitchError && (
-              <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-                {roleSwitchError}
-              </p>
-            )}
-
-            <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-end">
-              <button
-                type="button"
-                disabled={roleSwitchLoading}
-                onClick={() => {
-                  setShowRoleSwitchModal(false);
-                  setRoleSwitchError("");
-                }}
-                className="rounded-xl border px-4 py-2.5 text-sm font-semibold text-[#666] transition-colors hover:bg-[#f7f5f2] disabled:opacity-60"
-                style={{ borderColor: BRAND.border }}
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                disabled={roleSwitchLoading}
-                onClick={handleConfirmSwitchToClient}
-                className="rounded-xl px-4 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
-                style={{ backgroundColor: BRAND.primary }}
-              >
-                {roleSwitchLoading ? "Procesando…" : "Confirmar"}
-              </button>
-            </div>
-          </div>
+        <p style={{fontSize: 12, color: '#888', lineHeight: 1.7, marginBottom: 16}}>Comparte tu código con amigos. Cada vez que alguien se registre con tu código y complete su primera reserva, recibirás 1 reserva extra sin comisión.</p>
+        <div style={{background: '#e6f4f0', borderRadius: 6, padding: 12, marginBottom: 14}}>
+          <div style={{fontSize: 11, color: '#085041', fontWeight: 500, marginBottom: 4}}>Tus reservas sin comisión</div>
+          <div style={{fontSize: 28, fontWeight: 200, color: '#0e7a5c'}}>{perfil?.reservas_sin_comision || 0}</div>
         </div>
-      )}
+        <button onClick={() => copiarLink(perfil?.codigo_referido)} style={{width: '100%', background: BRAND.blue, color: '#fff', border: 'none', padding: 10, borderRadius: 5, fontSize: 12, cursor: 'pointer', fontWeight: 500}}>Copiar link de invitación</button>
+      </div>
     </div>
   );
 }

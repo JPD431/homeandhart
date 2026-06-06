@@ -49,6 +49,8 @@ function RegistroForm() {
   const [mensajeVerificacion, setMensajeVerificacion] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
   const [resendMessage, setResendMessage] = useState("");
+  const [codigoInvitacion, setCodigoInvitacion] = useState(refCode || "");
+  const [mostrarCodigoInvitacion, setMostrarCodigoInvitacion] = useState(!!refCode);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -62,6 +64,20 @@ function RegistroForm() {
     if (password.length < 6) {
       setError("La contraseña debe tener al menos 6 caracteres.");
       return;
+    }
+
+    const codigoTrim = codigoInvitacion.trim();
+    if (codigoTrim) {
+      const { data: referidorCheck } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("codigo_referido", codigoTrim)
+        .maybeSingle();
+
+      if (!referidorCheck) {
+        setError("Código no válido");
+        return;
+      }
     }
 
     setLoading(true);
@@ -91,11 +107,40 @@ function RegistroForm() {
         codigo_referido: codigoReferido,
       };
 
-      if (refCode) {
-        profilePayload.referido_por = refCode;
+      if (codigoTrim) {
+        profilePayload.referido_por = codigoTrim;
       }
 
       await supabase.from("profiles").upsert(profilePayload);
+
+      const nuevoUsuarioId = data.user.id;
+
+      // Si viene referido — darle 1 reserva extra sin comisión (total 4)
+      if (codigoTrim) {
+        // Verificar que el código existe
+        const { data: referidor } = await supabase
+          .from("profiles")
+          .select("id, reservas_sin_comision, referidos_count")
+          .eq("codigo_referido", codigoTrim)
+          .single();
+
+        if (referidor) {
+          // Dar 1 reserva extra al nuevo usuario (total 4 en lugar de 3)
+          await supabase
+            .from("profiles")
+            .update({ reservas_sin_comision: 4 })
+            .eq("id", nuevoUsuarioId);
+
+          // Sumar +1 al que invitó
+          await supabase
+            .from("profiles")
+            .update({
+              reservas_sin_comision: referidor.reservas_sin_comision + 1,
+              referidos_count: (referidor.referidos_count || 0) + 1,
+            })
+            .eq("id", referidor.id);
+        }
+      }
     }
 
     setLoading(false);
@@ -316,6 +361,45 @@ function RegistroForm() {
               </a>{" "}
               de Home&Heart
             </label>
+          </div>
+
+          <div>
+            {!mostrarCodigoInvitacion ? (
+              <p className="text-xs text-[#888]">
+                ¿Tienes un código de invitación?{" "}
+                <button
+                  type="button"
+                  onClick={() => setMostrarCodigoInvitacion(true)}
+                  className="border-0 bg-transparent p-0 text-xs font-medium underline"
+                  style={{ color: BRAND.primary }}
+                >
+                  Añadir código
+                </button>
+              </p>
+            ) : (
+              <div>
+                <label
+                  htmlFor="codigoInvitacion"
+                  className="mb-1.5 block text-sm font-medium text-[#444]"
+                >
+                  Código de invitación (opcional)
+                </label>
+                <input
+                  id="codigoInvitacion"
+                  type="text"
+                  value={codigoInvitacion}
+                  onChange={(e) => setCodigoInvitacion(e.target.value)}
+                  placeholder="Ej: HH-MARIA3"
+                  className="w-full rounded-xl border px-4 py-3 text-sm text-[#1a1a1a] outline-none focus:ring-2 focus:ring-[#1d4f91]/30"
+                  style={{ borderColor: BRAND.border }}
+                />
+                {refCode && codigoInvitacion.trim() === refCode && (
+                  <p className="mt-2 rounded-lg bg-green-50 px-3 py-2 text-xs text-green-700">
+                    ✓ Código aplicado — recibirás 1 reserva extra sin comisión
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           <button
