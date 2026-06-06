@@ -1,46 +1,49 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import CalendarioDisponibilidad from "@/app/components/CalendarioDisponibilidad";
-import Navbar from "@/app/components/Navbar";
-import PreguntarButton from "@/app/components/PreguntarButton";
 import FavoritoButton from "@/app/components/FavoritoButton";
+import PreguntarButton from "@/app/components/PreguntarButton";
 import ReportarPerfilButton from "@/app/components/ReportarPerfilButton";
-import { BRAND, SERIF } from "@/app/components/brand";
+import { SERIF } from "@/app/components/brand";
 import {
   ProveedorBioText,
   ProveedorTranslateButton,
   ProveedorTranslateProvider,
   ServicioDescripcionText,
-  ServicioOfertaTituloText,
   ServicioTituloText,
 } from "./ProveedorTraduccion";
 import {
-  formatOfertaValidaHasta,
   getPrecioConDescuento,
   isOfertaActiva,
 } from "@/app/lib/ofertas";
-import { formatDescuentosDuracionList } from "@/app/lib/descuentosDuracion";
 import { getReferenteInitial } from "@/app/lib/referencias";
 import { supabase } from "@/lib/supabase";
 
-const DARK_BLUE = "#163a6b";
+const VERTICAL_THEME = {
+  alojamiento: {
+    label: "Alojamiento",
+    color: "#1d4f91",
+    light: "#e8f0fb",
+    priceSuffix: "/ noche",
+  },
+  ninos: {
+    label: "Cuidado de niños",
+    color: "#0e7a5c",
+    light: "#e6f4f0",
+    priceSuffix: "/ hora",
+  },
+  mascotas: {
+    label: "Cuidado de mascotas",
+    color: "#c47d1a",
+    light: "#fdf3e3",
+    priceSuffix: "/ día",
+  },
+};
 
 const CANCEL_POLICIES = {
-  flexible: {
-    name: "Flexible",
-    description:
-      "Cancelación gratuita hasta 24h antes · 50% de reembolso dentro de las 24h previas",
-  },
-  moderada: {
-    name: "Moderada",
-    description:
-      "Cancelación gratuita hasta 3 días antes · 50% entre 3 días y 24h antes",
-  },
-  estricta: {
-    name: "Estricta",
-    description:
-      "Cancelación gratuita hasta 7 días antes · 50% entre 7 y 3 días antes",
-  },
+  flexible: { name: "Flexible" },
+  moderada: { name: "Moderada" },
+  estricta: { name: "Estricta" },
 };
 
 const LEGACY_CANCEL_POLICIES = {
@@ -49,107 +52,21 @@ const LEGACY_CANCEL_POLICIES = {
   "7d": "estricta",
 };
 
+const DIAS_SEMANA_PILLS = [
+  { id: "lun", label: "Lun" },
+  { id: "mar", label: "Mar" },
+  { id: "mie", label: "Mié" },
+  { id: "jue", label: "Jue" },
+  { id: "vie", label: "Vie" },
+  { id: "sab", label: "Sáb" },
+  { id: "dom", label: "Dom" },
+];
+
+const GOLD = "#c8922a";
+
 function getCancelPolicy(policyKey) {
   const key = LEGACY_CANCEL_POLICIES[policyKey] ?? policyKey;
   return CANCEL_POLICIES[key];
-}
-
-const VERTICALS = {
-  alojamiento: {
-    label: "Alojamiento",
-    priceSuffix: "/ noche",
-    Icon: HomeIcon,
-  },
-  ninos: {
-    label: "Cuidado de niños",
-    priceSuffix: "/ hora",
-    Icon: PersonIcon,
-  },
-  mascotas: {
-    label: "Cuidado de mascotas",
-    priceSuffix: "/ día",
-    Icon: PetIcon,
-  },
-};
-
-function HomeIcon({ className }) {
-  return (
-    <svg
-      className={className}
-      fill="none"
-      viewBox="0 0 24 24"
-      strokeWidth={1.5}
-      stroke="currentColor"
-      aria-hidden
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"
-      />
-    </svg>
-  );
-}
-
-function PersonIcon({ className }) {
-  return (
-    <svg
-      className={className}
-      fill="none"
-      viewBox="0 0 24 24"
-      strokeWidth={1.5}
-      stroke="currentColor"
-      aria-hidden
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z"
-      />
-    </svg>
-  );
-}
-
-function PetIcon({ className }) {
-  return (
-    <svg
-      className={className}
-      width="22"
-      height="22"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.5}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <circle cx="7" cy="4" r="1.5" />
-      <circle cx="12" cy="3" r="1.5" />
-      <circle cx="17" cy="4" r="1.5" />
-      <circle cx="4.5" cy="8.5" r="1.5" />
-      <path d="M12 22c-3.5 0-7-2-7-6 0-2 1.5-3.5 3-4.5 1-.7 2.5-1 4-1s3 .3 4 1c1.5 1 3 2.5 3 4.5 0 4-3.5 6-7 6z" />
-    </svg>
-  );
-}
-
-function CheckBadgeIcon({ className }) {
-  return (
-    <svg
-      className={className}
-      fill="none"
-      viewBox="0 0 24 24"
-      strokeWidth={2}
-      stroke="currentColor"
-      aria-hidden
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
-      />
-    </svg>
-  );
 }
 
 function getInitials(nombre, apellido) {
@@ -168,41 +85,13 @@ function formatEstanciaMinima(service) {
   if (n == null || n === "" || Number(n) <= 0) return null;
   const count = Number(n);
   if (service.vertical === "alojamiento") {
-    return `Mínimo ${count} ${count === 1 ? "noche" : "noches"}`;
+    return `Mín. ${count} ${count === 1 ? "noche" : "noches"}`;
   }
   if (service.vertical === "ninos") {
-    return `Mínimo ${count} ${count === 1 ? "hora" : "horas"}`;
+    return `Mín. ${count} ${count === 1 ? "hora" : "horas"}`;
   }
-  return `Mínimo ${count} ${count === 1 ? "día" : "días"}`;
+  return `Mín. ${count} ${count === 1 ? "día" : "días"}`;
 }
-
-function formatAntelacionLabel(hours) {
-  const h = Number(hours);
-  if (h >= 24 && h % 24 === 0) {
-    const days = h / 24;
-    return days === 1 ? "1 día" : `${days} días`;
-  }
-  return h === 1 ? "1 hora" : `${h} horas`;
-}
-
-function formatAntelacionReserva(service) {
-  const h =
-    service.antelacion_minima != null && service.antelacion_minima !== ""
-      ? Number(service.antelacion_minima)
-      : null;
-  if (h == null || h <= 0) return null;
-  return `Reservar con ${formatAntelacionLabel(h)} de antelación`;
-}
-
-const DIAS_SEMANA_PILLS = [
-  { id: "lun", label: "Lun" },
-  { id: "mar", label: "Mar" },
-  { id: "mie", label: "Mié" },
-  { id: "jue", label: "Jue" },
-  { id: "vie", label: "Vie" },
-  { id: "sab", label: "Sáb" },
-  { id: "dom", label: "Dom" },
-];
 
 function normalizeDiasDisponiblesProveedor(dias) {
   if (!Array.isArray(dias) || dias.length === 0) {
@@ -211,9 +100,18 @@ function normalizeDiasDisponiblesProveedor(dias) {
   return dias;
 }
 
-const GOLD = "#c8922a";
+function hasPetFriendly(service) {
+  const desc = (service.descripcion || "").toLowerCase();
+  return /pet[-_\s]?friendly/i.test(desc);
+}
 
-function StarRating({ value, size = 16 }) {
+function getPrimaryVertical(services) {
+  if (!services?.length) return VERTICAL_THEME.alojamiento;
+  const vertical = services[0].vertical;
+  return VERTICAL_THEME[vertical] ?? VERTICAL_THEME.alojamiento;
+}
+
+function StarRating({ value, size = 12 }) {
   return (
     <div className="flex gap-0.5">
       {[1, 2, 3, 4, 5].map((star) => (
@@ -223,7 +121,7 @@ function StarRating({ value, size = 16 }) {
           height={size}
           viewBox="0 0 24 24"
           fill={star <= value ? GOLD : "none"}
-          stroke={star <= value ? GOLD : "#ccc"}
+          stroke={star <= value ? GOLD : "#ddd"}
           strokeWidth={1.5}
           aria-hidden
         >
@@ -238,13 +136,59 @@ function StarRating({ value, size = 16 }) {
   );
 }
 
-function formatReviewDate(value) {
-  if (!value) return "";
-  return new Date(value).toLocaleDateString("es-ES", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
+function Tag({ children, light, color }) {
+  return (
+    <span
+      className="rounded-full px-2 py-0.5 text-[9px] font-semibold"
+      style={{ backgroundColor: light, color }}
+    >
+      {children}
+    </span>
+  );
+}
+
+function StatItem({ value, label }) {
+  return (
+    <div>
+      <p className="text-[20px] leading-none" style={{ color: "#1d4f91", fontWeight: 200 }}>
+        {value}
+      </p>
+      <p className="mt-1 text-[9px] font-medium uppercase tracking-wide" style={{ color: "#bbb" }}>
+        {label}
+      </p>
+    </div>
+  );
+}
+
+function getServiceTags(service) {
+  const tags = [];
+  const cancelPolicy = getCancelPolicy(service.cancellation_policy);
+  const estanciaMinLabel = formatEstanciaMinima(service);
+
+  if (service.vertical === "alojamiento") {
+    tags.push({ text: "NRU ✓", light: "#e8f0fb", color: "#163a6b" });
+  }
+
+  if (
+    service.vertical === "alojamiento" &&
+    (service.disponible_para_viajar || hasPetFriendly(service))
+  ) {
+    tags.push({ text: "Pet-friendly 🐾", light: "#e6f4f0", color: "#085041" });
+  }
+
+  if (service.reserva_inmediata) {
+    tags.push({ text: "Reserva inmediata ⚡", light: "#fdf3e3", color: "#92400e" });
+  }
+
+  if (cancelPolicy) {
+    tags.push({ text: cancelPolicy.name, light: "#f7f5f2", color: "#888" });
+  }
+
+  if (estanciaMinLabel) {
+    tags.push({ text: estanciaMinLabel, light: "#f7f5f2", color: "#888" });
+  }
+
+  return tags;
 }
 
 export default async function ProveedorPage({ params }) {
@@ -267,13 +211,7 @@ export default async function ProveedorPage({ params }) {
     .eq("disponible", true);
 
   const serviceIds = (services ?? []).map((s) => s.id);
-  const hoy = new Date();
-  const en7d = new Date(hoy);
-  en7d.setDate(en7d.getDate() + 7);
-  const hoyStr = hoy.toISOString().split("T")[0];
-  const en7dStr = en7d.toISOString().split("T")[0];
 
-  const ocupadosProximos7Dias = new Set();
   let bloqueosCalendario = [];
   if (serviceIds.length > 0) {
     const { data: bloqueos } = await supabase
@@ -282,15 +220,10 @@ export default async function ProveedorPage({ params }) {
       .in("service_id", serviceIds);
 
     bloqueosCalendario = bloqueos ?? [];
-    bloqueosCalendario.forEach((b) => {
-      if (b.fecha_inicio <= en7dStr && b.fecha_fin >= hoyStr) {
-        ocupadosProximos7Dias.add(b.service_id);
-      }
-    });
   }
 
   const servicesParaCalendario = (services ?? []).map((service) => {
-    const vertical = VERTICALS[service.vertical] ?? VERTICALS.alojamiento;
+    const vertical = VERTICAL_THEME[service.vertical] ?? VERTICAL_THEME.alojamiento;
     return {
       id: service.id,
       titulo: service.titulo || vertical.label,
@@ -320,8 +253,16 @@ export default async function ProveedorPage({ params }) {
     .eq("estado", "completada")
     .order("created_at", { ascending: false });
 
-  const avalesCount = referenciasCompletadas?.length ?? 0;
+  let reservasCount = 0;
+  if (serviceIds.length > 0) {
+    const { count } = await supabase
+      .from("bookings")
+      .select("id", { count: "exact", head: true })
+      .in("service_id", serviceIds);
+    reservasCount = count ?? 0;
+  }
 
+  const avalesCount = referenciasCompletadas?.length ?? 0;
   const reviewCount = allRatings?.length ?? 0;
   const averageRating =
     reviewCount > 0
@@ -356,9 +297,15 @@ export default async function ProveedorPage({ params }) {
   const avatarUrl = profile.foto_perfil || profile.avatar_url || null;
   const initials = getInitials(profile.nombre, profile.apellido);
   const isVerified = profile.verificado === true;
+  const primaryTheme = getPrimaryVertical(services);
+  const hasAlojamiento = (services ?? []).some((s) => s.vertical === "alojamiento");
+  const respondeHoras = (services ?? []).length
+    ? Math.min(...(services ?? []).map((s) => Number(s.antelacion_minima) || 24))
+    : 24;
+  const firstServiceId = services?.[0]?.id;
 
   const servicesParaTraduccion = (services ?? []).map((service) => {
-    const vertical = VERTICALS[service.vertical] ?? VERTICALS.alojamiento;
+    const vertical = VERTICAL_THEME[service.vertical] ?? VERTICAL_THEME.alojamiento;
     return {
       id: service.id,
       titulo: service.titulo || vertical.label,
@@ -369,420 +316,432 @@ export default async function ProveedorPage({ params }) {
   });
 
   return (
-    <div
-      className="min-h-screen pb-24 font-sans md:pb-12"
-      style={{ backgroundColor: BRAND.warm, color: "#1a1a1a" }}
-    >
-      <Navbar />
+    <div className="min-h-screen font-sans" style={{ backgroundColor: "#f7f5f2", color: "#1a1a1a" }}>
+      {/* Navbar */}
+      <header
+        className="border-b"
+        style={{ backgroundColor: "#f7f5f2", borderColor: "#e8e4de" }}
+      >
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-4">
+          <Link href="/" className="shrink-0 no-underline">
+            <p className="text-[18px] leading-none text-[#111]" style={{ fontFamily: SERIF }}>
+              Home<span className="italic" style={{ color: "#1d4f91" }}>&</span>
+              Heart
+            </p>
+          </Link>
+          <div className="flex items-center gap-4">
+            <Link
+              href="/buscar"
+              className="text-[12px] no-underline transition-opacity hover:opacity-80"
+              style={{ color: "#888" }}
+            >
+              ← Buscar
+            </Link>
+            <Link
+              href="/dashboard"
+              className="px-3.5 py-1.5 text-[12px] font-semibold text-white no-underline transition-opacity hover:opacity-90"
+              style={{ backgroundColor: "#1d4f91", borderRadius: 4 }}
+            >
+              Mi cuenta
+            </Link>
+          </div>
+        </div>
+      </header>
 
-      <main className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
-        <ProveedorTranslateProvider
-          bio={bio}
-          services={servicesParaTraduccion}
-        >
-        {/* Header del proveedor */}
+      <ProveedorTranslateProvider bio={bio} services={servicesParaTraduccion}>
+        {/* Header proveedor */}
         <header
-          className="relative rounded-2xl border bg-white p-6 sm:p-8"
-          style={{ borderColor: BRAND.border }}
+          className="relative border-b bg-white"
+          style={{ borderColor: "#e8e4de", padding: 28 }}
         >
-          <FavoritoButton
-            proveedorId={id}
-            className="absolute right-4 top-4 z-10"
-          />
-          <div className="flex flex-col items-center gap-5 sm:flex-row sm:items-start">
+          <FavoritoButton proveedorId={id} className="absolute right-7 top-7 z-10" />
+
+          <div className="mx-auto grid max-w-6xl gap-6 lg:grid-cols-[72px_1fr_auto] lg:items-start">
+            {/* Avatar */}
             {avatarUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={avatarUrl}
                 alt={fullName}
-                className="h-24 w-24 shrink-0 rounded-full object-cover ring-4 ring-[#e8f0fb]"
+                className="mx-auto h-[72px] w-[72px] shrink-0 rounded-full object-cover lg:mx-0"
               />
             ) : (
               <span
-                className="flex h-24 w-24 shrink-0 items-center justify-center rounded-full text-2xl font-semibold"
-                style={{ backgroundColor: BRAND.light, color: BRAND.primary }}
+                className="mx-auto flex h-[72px] w-[72px] shrink-0 items-center justify-center rounded-full text-lg font-semibold text-white lg:mx-0"
+                style={{ backgroundColor: primaryTheme.color }}
               >
                 {initials}
               </span>
             )}
 
-            <div className="flex-1 text-center sm:text-left">
-              <div className="flex flex-col items-center gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-                <h1
-                  className="text-2xl font-bold text-[#1a1a1a] sm:text-3xl"
-                  style={{ fontFamily: SERIF }}
-                >
-                  {fullName || "Proveedor"}
-                </h1>
+            {/* Info */}
+            <div className="min-w-0 text-center lg:text-left">
+              <h1
+                className="text-[#111]"
+                style={{ fontFamily: SERIF, fontWeight: 300, fontSize: 22 }}
+              >
+                {fullName || "Proveedor"}
+              </h1>
+              <p className="mt-1 text-[12px] text-[#888]">{zone}</p>
+
+              <div className="mt-2 flex flex-wrap items-center justify-center gap-2 lg:justify-start">
                 {isVerified && (
-                  <span
-                    className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold"
-                    style={{
-                      backgroundColor: BRAND.light,
-                      color: BRAND.primary,
-                    }}
-                  >
-                    <CheckBadgeIcon className="h-3.5 w-3.5" />
-                    Verificado
-                  </span>
+                  <Tag light="#e8f0fb" color="#163a6b">
+                    Verificado ✓
+                  </Tag>
                 )}
                 {avalesCount > 0 && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
-                    {avalesCount} aval{avalesCount !== 1 ? "es" : ""} externos
-                    verificados
-                  </span>
+                  <Tag light="#e6f4f0" color="#085041">
+                    {avalesCount} aval{avalesCount !== 1 ? "es" : ""}
+                  </Tag>
+                )}
+                {hasAlojamiento && (
+                  <Tag light="#e8f0fb" color="#163a6b">
+                    NRU ✓
+                  </Tag>
                 )}
               </div>
+
               <ProveedorTranslateButton />
-              <p className="mt-1 text-sm text-[#666]">{zone}</p>
 
               {languages.length > 0 && (
-                <div className="mt-4 flex flex-wrap justify-center gap-2 sm:justify-start">
+                <div className="mt-3 flex flex-wrap justify-center gap-1.5 lg:justify-start">
                   {languages.map((lang) => (
                     <span
                       key={lang}
-                      className="rounded-full border px-3 py-1 text-xs font-medium"
-                      style={{
-                        borderColor: BRAND.border,
-                        backgroundColor: BRAND.warm,
-                        color: DARK_BLUE,
-                      }}
+                      className="rounded-full px-2.5 py-0.5 text-[10px] font-medium"
+                      style={{ backgroundColor: "#f7f5f2", color: "#666" }}
                     >
                       {lang}
                     </span>
                   ))}
                 </div>
               )}
+
+              <div className="proveedor-header-bio">
+                <ProveedorBioText bio={bio} />
+              </div>
+            </div>
+
+            {/* Acciones */}
+            <div className="flex flex-col items-center gap-2 lg:items-end">
+              {firstServiceId && (
+                <Link
+                  href={`/reservar/${firstServiceId}`}
+                  className="w-full min-w-[140px] rounded px-5 py-2.5 text-center text-[12px] font-semibold text-white no-underline transition-opacity hover:opacity-90 lg:w-auto"
+                  style={{ backgroundColor: "#1d4f91", borderRadius: 4 }}
+                >
+                  Reservar
+                </Link>
+              )}
+              <PreguntarButton
+                proveedorId={id}
+                className="w-full min-w-[140px] rounded border px-5 py-2.5 text-[12px] font-semibold transition-colors hover:bg-[#e8f0fb] disabled:opacity-60 lg:w-auto"
+                style={{ borderColor: "#1d4f91", color: "#1d4f91", borderRadius: 4 }}
+              >
+                Preguntar 💬
+              </PreguntarButton>
+              <div className="proveedor-reportar-wrap">
+                <ReportarPerfilButton
+                  proveedorId={id}
+                  proveedorNombre={fullName || "Proveedor"}
+                />
+              </div>
             </div>
           </div>
 
-          <ProveedorBioText bio={bio} />
+          {/* Stats */}
+          <div
+            className="mx-auto mt-5 flex max-w-6xl flex-wrap gap-6 border-t pt-4"
+            style={{ borderColor: "#f0ede8" }}
+          >
+            <StatItem
+              value={averageRating ?? "—"}
+              label="Valoración media"
+            />
+            <StatItem value={reservasCount} label="Nº reservas" />
+            <StatItem value={avalesCount} label="Nº avales externos" />
+            <StatItem value={`${respondeHoras}h`} label="Responde en" />
+          </div>
         </header>
 
-        {/* Servicios disponibles */}
-        <section className="mt-8">
-          <h2
-            className="text-xl font-bold text-[#1a1a1a] sm:text-2xl"
-            style={{ fontFamily: SERIF }}
+        {/* Body 2 columnas */}
+        <div className="mx-auto grid max-w-6xl lg:grid-cols-2">
+          {/* Columna izquierda */}
+          <div
+            className="border-b lg:border-b-0 lg:border-r"
+            style={{ borderColor: "#e8e4de", padding: "20px 24px" }}
           >
-            Servicios disponibles
-          </h2>
+            {/* Servicios */}
+            <section>
+              <h2
+                className="text-[13px] font-semibold uppercase tracking-wide text-[#888]"
+                style={{ fontFamily: SERIF }}
+              >
+                Servicios disponibles
+              </h2>
 
-          {(!services || services.length === 0) && (
-            <p
-              className="mt-4 rounded-2xl border bg-white px-5 py-6 text-sm text-[#666]"
-              style={{ borderColor: BRAND.border }}
-            >
-              Este proveedor no tiene servicios activos en este momento.
-            </p>
-          )}
+              {(!services || services.length === 0) && (
+                <p className="mt-3 text-[12px] text-[#888]">
+                  Este proveedor no tiene servicios activos en este momento.
+                </p>
+              )}
 
-          <ul className="mt-5 flex flex-col gap-4">
-            {(services ?? []).map((service) => {
-              const vertical =
-                VERTICALS[service.vertical] ?? VERTICALS.alojamiento;
-              const { Icon } = vertical;
-              const cancelPolicy = getCancelPolicy(service.cancellation_policy);
-              const estanciaMinLabel = formatEstanciaMinima(service);
-              const antelacionLabel = formatAntelacionReserva(service);
-              const diasDisponibles = normalizeDiasDisponiblesProveedor(
-                service.dias_disponibles,
-              );
-              const ocupadoProximos7Dias = ocupadosProximos7Dias.has(service.id);
-              const ofertaActiva = isOfertaActiva(service);
-              const precioConDescuento = ofertaActiva
-                ? getPrecioConDescuento(service.precio, service.oferta_descuento)
-                : null;
-              const descuentosDuracionLabel =
-                formatDescuentosDuracionList(service);
+              <ul className="mt-4 flex flex-col gap-3">
+                {(services ?? []).map((service) => {
+                  const vertical =
+                    VERTICAL_THEME[service.vertical] ?? VERTICAL_THEME.alojamiento;
+                  const ofertaActiva = isOfertaActiva(service);
+                  const precioConDescuento = ofertaActiva
+                    ? getPrecioConDescuento(service.precio, service.oferta_descuento)
+                    : null;
+                  const displayPrice = ofertaActiva
+                    ? formatPrice(precioConDescuento, vertical.priceSuffix)
+                    : formatPrice(service.precio, vertical.priceSuffix);
+                  const tags = getServiceTags(service);
 
-              return (
-                <li
-                  key={service.id}
-                  className="rounded-2xl border bg-white p-5 sm:p-6"
-                  style={{ borderColor: BRAND.border }}
-                >
-                  <div className="flex items-start gap-4">
-                    <span
-                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
-                      style={{
-                        backgroundColor: BRAND.light,
-                        color: BRAND.primary,
-                      }}
+                  return (
+                    <li
+                      key={service.id}
+                      className="rounded-lg border bg-white p-4"
+                      style={{ borderColor: "#e8e4de" }}
                     >
-                      <Icon className="h-6 w-6" />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-sm font-semibold uppercase tracking-wide text-[#888]">
-                          {vertical.label}
-                        </p>
-                        <span
-                          className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
-                          style={{
-                            backgroundColor: ocupadoProximos7Dias ? "#f3f4f6" : "#dcfce7",
-                            color: ocupadoProximos7Dias ? "#6b7280" : "#166534",
-                          }}
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span
+                            className="h-2 w-2 shrink-0 rounded-full"
+                            style={{ backgroundColor: vertical.color }}
+                            aria-hidden
+                          />
+                          <div className="proveedor-servicio-titulo min-w-0 truncate">
+                            <ServicioTituloText
+                              serviceId={service.id}
+                              titulo={service.titulo || vertical.label}
+                            />
+                          </div>
+                        </div>
+                        <p
+                          className="shrink-0 text-[15px] font-semibold"
+                          style={{ color: "#1d4f91" }}
                         >
-                          {ocupadoProximos7Dias ? "Ocupado" : "Disponible"}
-                        </span>
+                          {displayPrice}
+                        </p>
                       </div>
-                      <ServicioTituloText
-                        serviceId={service.id}
-                        titulo={service.titulo || vertical.label}
-                      />
-                      <ServicioDescripcionText
-                        serviceId={service.id}
-                        descripcion={service.descripcion || ""}
-                      />
-                      {service.oferta_descripcion && (
+
+                      <div className="proveedor-servicio-desc">
                         <ServicioDescripcionText
                           serviceId={service.id}
-                          descripcion={service.oferta_descripcion}
-                          field="oferta_descripcion"
+                          descripcion={service.descripcion || ""}
                         />
-                      )}
-                      {ofertaActiva && (
-                        <ServicioOfertaTituloText
-                          serviceId={service.id}
-                          ofertaTitulo={service.oferta_titulo || "Oferta especial"}
-                          descuento={service.oferta_descuento}
-                          validaHastaLabel={formatOfertaValidaHasta(
-                            service.oferta_valida_hasta,
-                          )}
-                        />
-                      )}
-                      {descuentosDuracionLabel && (
-                        <p className="mt-2 text-xs font-medium text-green-700">
-                          {descuentosDuracionLabel}
-                        </p>
-                      )}
-                      {ofertaActiva ? (
-                        <div className="mt-2 flex flex-wrap items-baseline gap-2">
-                          <p className="text-lg text-[#888] line-through">
-                            {formatPrice(service.precio, vertical.priceSuffix)}
-                          </p>
-                          <p className="text-2xl font-bold text-green-700">
-                            {formatPrice(precioConDescuento, vertical.priceSuffix)}
-                          </p>
-                        </div>
-                      ) : (
-                        <p
-                          className="mt-2 text-2xl font-bold"
-                          style={{ color: BRAND.primary }}
-                        >
-                          {formatPrice(service.precio, vertical.priceSuffix)}
-                        </p>
-                      )}
-                      {estanciaMinLabel && (
-                        <p className="mt-1 text-xs text-[#888]">{estanciaMinLabel}</p>
-                      )}
-                      {antelacionLabel && (
-                        <p className="mt-1 text-xs text-[#888]">{antelacionLabel}</p>
-                      )}
-                      <div className="mt-2 flex flex-wrap gap-1">
-                        {DIAS_SEMANA_PILLS.map((dia) => {
-                          const activo = diasDisponibles.includes(dia.id);
-                          return (
-                            <span
-                              key={dia.id}
-                              className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
-                              style={{
-                                backgroundColor: activo ? BRAND.light : "#f3f3f3",
-                                color: activo ? BRAND.primary : "#aaa",
-                                border: `1px solid ${activo ? BRAND.primary : "#e0e0e0"}`,
-                              }}
-                            >
-                              {dia.label}
-                            </span>
-                          );
-                        })}
                       </div>
-                      {cancelPolicy ? (
-                        <div className="mt-2">
-                          <p className="text-xs font-semibold text-[#444]">
-                            {cancelPolicy.name}
-                          </p>
-                          <p className="mt-0.5 text-xs leading-relaxed text-[#888]">
-                            {cancelPolicy.description}
-                          </p>
+
+                      {tags.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {tags.map((tag) => (
+                            <Tag key={tag.text} light={tag.light} color={tag.color}>
+                              {tag.text}
+                            </Tag>
+                          ))}
                         </div>
-                      ) : (
-                        <p className="mt-1 text-xs text-[#888]">
-                          {service.cancellation_policy}
-                        </p>
                       )}
-                      {service.reserva_inmediata ? (
-                        <span className="mt-2 inline-flex rounded-full bg-green-100 px-2.5 py-0.5 text-[11px] font-semibold text-green-800">
-                          Reserva inmediata ⚡
-                        </span>
-                      ) : (
-                        <span className="mt-2 inline-flex rounded-full bg-yellow-100 px-2.5 py-0.5 text-[11px] font-semibold text-yellow-800">
-                          Requiere confirmación 🕐
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="mt-5 flex flex-col gap-2 sm:flex-row">
-                    <Link
-                      href={`/reservar/${service.id}`}
-                      className="flex-1 rounded-xl py-3 text-center text-sm font-semibold text-white no-underline transition-opacity hover:opacity-90"
-                      style={{ backgroundColor: BRAND.primary }}
-                    >
-                      Reservar
-                    </Link>
-                    <PreguntarButton
-                      proveedorId={id}
-                      className="flex-1 rounded-xl border py-3 text-sm font-semibold transition-colors hover:bg-[#e8f0fb] disabled:opacity-60"
-                      style={{
-                        borderColor: BRAND.primary,
-                        color: BRAND.primary,
-                      }}
-                    />
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-
-        <CalendarioDisponibilidad
-          services={servicesParaCalendario}
-          bloqueos={bloqueosCalendario}
-        />
-
-        {avalesCount > 0 && (
-          <section
-            className="mt-8 rounded-2xl border bg-white p-6 sm:p-8"
-            style={{ borderColor: BRAND.border }}
-          >
-            <h2
-              className="text-xl font-bold text-[#1a1a1a] sm:text-2xl"
-              style={{ fontFamily: SERIF }}
-            >
-              Avales externos
-            </h2>
-            <p className="mt-1 text-sm text-[#666]">
-              Personas que conocen a {fullName || "este proveedor"} y avalan su
-              trabajo
-            </p>
-            <ul className="mt-6 flex flex-col gap-4">
-              {referenciasCompletadas.map((ref) => (
-                <li
-                  key={ref.id}
-                  className="rounded-xl border px-4 py-4"
-                  style={{ borderColor: BRAND.border }}
-                >
-                  <div className="flex items-start gap-3">
-                    <span
-                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold"
-                      style={{
-                        backgroundColor: BRAND.light,
-                        color: BRAND.primary,
-                      }}
-                    >
-                      {getReferenteInitial(ref.nombre_referente)}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-[#1a1a1a]">
-                        {ref.nombre_referente}
-                      </p>
-                      <p className="mt-0.5 text-xs text-[#888]">
-                        {ref.relacion}
-                        {ref.conoce_desde ? ` · ${ref.conoce_desde}` : ""}
-                      </p>
-                      {ref.comentario && (
-                        <p className="mt-2 text-sm leading-relaxed text-[#444]">
-                          {ref.comentario}
-                        </p>
-                      )}
-                      {ref.recomendaria === true && (
-                        <p className="mt-2 text-xs font-semibold text-green-700">
-                          ¿Recomendaría? ✓
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-
-        <section
-          className="mt-8 rounded-2xl border bg-white p-6 sm:p-8"
-          style={{ borderColor: BRAND.border }}
-        >
-          <h2
-            className="text-xl font-bold text-[#1a1a1a] sm:text-2xl"
-            style={{ fontFamily: SERIF }}
-          >
-            Lo que dicen los clientes
-          </h2>
-
-          {reviewCount === 0 ? (
-            <p className="mt-4 text-sm text-[#666]">Aún no tiene valoraciones</p>
-          ) : (
-            <>
-              <div className="mt-4 flex flex-wrap items-end gap-3">
-                <p className="text-4xl font-bold" style={{ color: GOLD }}>
-                  {averageRating}
-                </p>
-                <div>
-                  <StarRating value={Math.round(Number(averageRating))} size={18} />
-                  <p className="mt-1 text-sm text-[#666]">
-                    {reviewCount} reseña{reviewCount > 1 ? "s" : ""}
-                  </p>
-                </div>
-              </div>
-
-              <ul className="mt-6 flex flex-col gap-4 border-t pt-6" style={{ borderColor: BRAND.border }}>
-                {reviewsWithNames.map((review) => (
-                  <li key={review.id}>
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-sm font-semibold text-[#1a1a1a]">
-                        {review.cliente_nombre}
-                      </p>
-                      <p className="text-xs text-[#888]">
-                        {formatReviewDate(review.created_at)}
-                      </p>
-                    </div>
-                    <div className="mt-1">
-                      <StarRating value={review.valoracion} />
-                    </div>
-                    {review.comentario && (
-                      <p className="mt-2 text-sm leading-relaxed text-[#444]">
-                        {review.comentario}
-                      </p>
-                    )}
-                  </li>
-                ))}
+                    </li>
+                  );
+                })}
               </ul>
-            </>
-          )}
-        </section>
+            </section>
 
-        <ReportarPerfilButton
-          proveedorId={id}
-          proveedorNombre={fullName || "Proveedor"}
-        />
-        </ProveedorTranslateProvider>
-      </main>
+            {/* Reseñas */}
+            <section className="mt-8">
+              <h2
+                className="text-[13px] font-semibold uppercase tracking-wide text-[#888]"
+                style={{ fontFamily: SERIF }}
+              >
+                Reseñas
+              </h2>
 
-      {/* Botón flotante móvil */}
-      <div
-        className="fixed inset-x-0 bottom-0 border-t bg-white p-4 md:hidden"
-        style={{ borderColor: BRAND.border }}
-      >
-        <PreguntarButton
-          proveedorId={id}
-          className="w-full rounded-xl py-3.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
-          style={{ backgroundColor: DARK_BLUE }}
-        >
-          Contactar al proveedor
-        </PreguntarButton>
-      </div>
+              {reviewCount === 0 ? (
+                <p className="mt-3 text-[12px] text-[#888]">Aún no tiene valoraciones</p>
+              ) : (
+                <>
+                  <div
+                    className="mt-4 rounded-lg border bg-white p-4"
+                    style={{ borderColor: "#e8e4de" }}
+                  >
+                    <div className="flex items-center gap-3">
+                      <p
+                        className="text-[32px] leading-none"
+                        style={{ color: "#1d4f91", fontWeight: 200 }}
+                      >
+                        {averageRating}
+                      </p>
+                      <div>
+                        <StarRating
+                          value={Math.round(Number(averageRating))}
+                          size={14}
+                        />
+                        <p className="mt-1 text-[10px] text-[#aaa]">
+                          {reviewCount} reseña{reviewCount > 1 ? "s" : ""}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <ul className="mt-3 flex flex-col gap-3">
+                    {reviewsWithNames.map((review) => (
+                      <li
+                        key={review.id}
+                        className="rounded-lg border bg-white p-4"
+                        style={{ borderColor: "#e8e4de" }}
+                      >
+                        <StarRating value={review.valoracion} size={10} />
+                        {review.comentario && (
+                          <p className="mt-2 text-[11px] italic leading-relaxed text-[#666]">
+                            {review.comentario}
+                          </p>
+                        )}
+                        <p className="mt-2 text-[9px] text-[#aaa]">
+                          — {review.cliente_nombre}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </section>
+
+            {/* Avales */}
+            {avalesCount > 0 && (
+              <section className="mt-8">
+                <h2
+                  className="text-[13px] font-semibold uppercase tracking-wide text-[#888]"
+                  style={{ fontFamily: SERIF }}
+                >
+                  Avales externos
+                </h2>
+                <ul className="mt-4 flex flex-col gap-3">
+                  {referenciasCompletadas.map((ref) => (
+                    <li
+                      key={ref.id}
+                      className="rounded-lg border bg-white p-4"
+                      style={{ borderColor: "#e8e4de" }}
+                    >
+                      <div className="flex items-start gap-3">
+                        <span
+                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold"
+                          style={{ backgroundColor: "#e8f0fb", color: "#1d4f91" }}
+                        >
+                          {getReferenteInitial(ref.nombre_referente)}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[12px] font-semibold text-[#1a1a1a]">
+                            {ref.nombre_referente}
+                          </p>
+                          <p className="text-[10px] text-[#888]">{ref.relacion}</p>
+                          {ref.comentario && (
+                            <p className="mt-2 text-[11px] italic leading-relaxed text-[#666]">
+                              {ref.comentario}
+                            </p>
+                          )}
+                          {ref.recomendaria === true && (
+                            <p className="mt-2 text-[10px] font-semibold text-[#0e7a5c]">
+                              ✓ Recomendaría
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+          </div>
+
+          {/* Columna derecha — Disponibilidad */}
+          <div style={{ padding: "20px 24px" }}>
+            <div className="proveedor-calendario-panel">
+              <CalendarioDisponibilidad
+                services={servicesParaCalendario}
+                bloqueos={bloqueosCalendario}
+              />
+            </div>
+          </div>
+        </div>
+      </ProveedorTranslateProvider>
+
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
+            .proveedor-calendario-panel > section {
+              margin: 0 !important;
+              border: none !important;
+              padding: 0 !important;
+              background: transparent !important;
+              border-radius: 0 !important;
+            }
+            .proveedor-calendario-panel h2 {
+              font-size: 13px !important;
+              font-weight: 600 !important;
+              text-transform: uppercase !important;
+              letter-spacing: 0.05em !important;
+              color: #888 !important;
+              font-family: Georgia, serif !important;
+            }
+            .proveedor-calendario-panel > section > p {
+              display: none;
+            }
+            .proveedor-calendario-panel .lg\\:block {
+              display: none !important;
+            }
+            .proveedor-calendario-panel .lg\\:flex-row > div:last-child {
+              display: none !important;
+            }
+            .proveedor-calendario-panel button[aria-label="Mes anterior"],
+            .proveedor-calendario-panel button[aria-label="Mes siguiente"] {
+              border-radius: 4px !important;
+              border-color: #e8e4de !important;
+              height: 32px !important;
+              width: 32px !important;
+            }
+            .proveedor-calendario-panel .grid.grid-cols-7.gap-1.text-center {
+              color: #bbb !important;
+              font-size: 9px !important;
+            }
+            .proveedor-calendario-panel a[href*="/reservar/"] {
+              border-radius: 4px !important;
+              font-size: 12px !important;
+            }
+            .proveedor-header-bio p {
+              margin-top: 12px !important;
+              padding-top: 0 !important;
+              border-top: none !important;
+              font-size: 12px !important;
+              line-height: 1.7 !important;
+              color: #888 !important;
+            }
+            .proveedor-servicio-titulo p {
+              margin: 0 !important;
+              font-size: 13px !important;
+              font-weight: 600 !important;
+            }
+            .proveedor-servicio-desc p {
+              margin-top: 4px !important;
+              font-size: 11px !important;
+              color: #aaa !important;
+              line-height: 1.4 !important;
+            }
+            .proveedor-reportar-wrap p {
+              margin-top: 4px !important;
+              text-align: right !important;
+              font-size: 10px !important;
+              color: #bbb !important;
+            }
+            .proveedor-reportar-wrap button {
+              color: #bbb !important;
+              font-size: 10px !important;
+            }
+          `,
+        }}
+      />
     </div>
   );
 }

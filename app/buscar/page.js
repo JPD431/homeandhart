@@ -1,25 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import mapboxgl from "mapbox-gl";
-import "mapbox-gl/dist/mapbox-gl.css";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import FavoritoButton from "@/app/components/FavoritoButton";
-import Navbar from "@/app/components/Navbar";
+import CalendarioRangoFechas from "@/app/components/CalendarioRangoFechas";
+import { formatShortDate } from "@/app/components/calendario-shared";
 import { useLang } from "@/app/lib/LangContext";
-import { isOfertaActiva } from "@/app/lib/ofertas";
 import { useTranslation } from "@/app/lib/i18n";
-import { BRAND } from "@/app/components/brand";
+import { BRAND, SERIF } from "@/app/components/brand";
 import { supabase } from "@/lib/supabase";
 
-mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
-
 const FILTER_TABS = [
-  { id: "todo", label: "Todo" },
-  { id: "alojamiento", label: "Alojamiento" },
-  { id: "ninos", label: "Niños" },
-  { id: "mascotas", label: "Mascotas" },
+  { id: "todo", color: "#1d4f91", light: "#e8f0fb" },
+  { id: "alojamiento", color: "#1d4f91", light: "#e8f0fb" },
+  { id: "ninos", color: "#0e7a5c", light: "#e6f4f0" },
+  { id: "mascotas", color: "#c47d1a", light: "#fdf3e3" },
 ];
 
 const VERTICAL_THEME = {
@@ -28,6 +23,8 @@ const VERTICAL_THEME = {
     color: "#1d4f91",
     light: "#e8f0fb",
     priceSuffix: "/ noche",
+    priceShort: "n",
+    gradient: "linear-gradient(160deg, #c5d9ee, #4a85c0)",
     Icon: HomeIcon,
   },
   ninos: {
@@ -35,6 +32,8 @@ const VERTICAL_THEME = {
     color: "#0e7a5c",
     light: "#e6f4f0",
     priceSuffix: "/ hora",
+    priceShort: "h",
+    gradient: "linear-gradient(160deg, #a8d5c2, #3d9b86)",
     Icon: PersonIcon,
   },
   mascotas: {
@@ -42,6 +41,8 @@ const VERTICAL_THEME = {
     color: "#c47d1a",
     light: "#fdf3e3",
     priceSuffix: "/ día",
+    priceShort: "d",
+    gradient: "linear-gradient(160deg, #e8c99a, #b8843a)",
     Icon: PetIcon,
   },
 };
@@ -60,27 +61,74 @@ const MODALIDAD_LABELS = {
   ambas: "Ambas modalidades",
 };
 
-function HomeIcon({ className }) {
+const PIN_POSITIONS = [
+  { left: 36, top: 30 },
+  { left: 58, top: 22 },
+  { left: 26, top: 46 },
+  { left: 66, top: 40 },
+  { left: 44, top: 56 },
+  { left: 72, top: 28 },
+  { left: 32, top: 62 },
+  { left: 54, top: 38 },
+  { left: 48, top: 18 },
+  { left: 62, top: 54 },
+];
+
+const NEIGHBORHOOD_LABELS = [
+  { left: 14, top: 16, text: "Centro" },
+  { left: 52, top: 12, text: "Norte" },
+  { left: 22, top: 52, text: "Este" },
+  { left: 68, top: 48, text: "Oeste" },
+];
+
+const BUSCAR_EXTRA = {
+  es: {
+    miCuenta: "Mi cuenta",
+    reservar: (price, suffix) => `Reservar · ${price}${suffix}`,
+    reservarAhora: "Reservar ahora",
+    ubicacionAprox: "Ubicación aproximada · zona/barrio",
+    fechas: "Fechas",
+    estrellas: "4.9",
+  },
+  en: {
+    miCuenta: "My account",
+    reservar: (price, suffix) => `Book · ${price}${suffix}`,
+    reservarAhora: "Book now",
+    ubicacionAprox: "Approximate location · area/neighbourhood",
+    fechas: "Dates",
+    estrellas: "4.9",
+  },
+};
+
+function HomeIcon({ className, style }) {
   return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" aria-hidden>
+    <svg className={className} style={style} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" aria-hidden>
       <path strokeLinecap="round" strokeLinejoin="round" d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
     </svg>
   );
 }
 
-function PersonIcon({ className }) {
+function PersonIcon({ className, style }) {
   return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" aria-hidden>
+    <svg className={className} style={style} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" aria-hidden>
       <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
     </svg>
   );
 }
 
-function PetIcon({ className }) {
+function PetIcon({ className, style }) {
   return (
-    <svg className={className} width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <svg className={className} style={style} width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <circle cx="7" cy="4" r="1.5" /><circle cx="12" cy="3" r="1.5" /><circle cx="17" cy="4" r="1.5" /><circle cx="4.5" cy="8.5" r="1.5" />
       <path d="M12 22c-3.5 0-7-2-7-6 0-2 1.5-3.5 3-4.5 1-.7 2.5-1 4-1s3 .3 4 1c1.5 1 3 2.5 3 4.5 0 4-3.5 6-7 6z" />
+    </svg>
+  );
+}
+
+function SearchIcon({ className }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" aria-hidden>
+      <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
     </svg>
   );
 }
@@ -100,6 +148,11 @@ function formatShortName(nombre, apellido) {
 function formatPrice(precio, suffix) {
   if (precio == null || precio === "") return "Consultar";
   return `${Number(precio)}€${suffix}`;
+}
+
+function formatPinPrice(precio, priceShort) {
+  if (precio == null || precio === "") return "—";
+  return `${Number(precio)}€/${priceShort}`;
 }
 
 function getServiceZone(service, profile) {
@@ -122,353 +175,378 @@ function getSubtypeLabel(service) {
   return null;
 }
 
-function getActiveTabColor(verticalParam) {
-  if (verticalParam === "todo") return BRAND.primary;
-  return VERTICAL_THEME[verticalParam]?.color ?? BRAND.primary;
+function hasPetFriendlyInDescription(service) {
+  const desc = (service.descripcion || "").toLowerCase();
+  return /pet[-_\s]?friendly/i.test(desc);
 }
 
-function getMarkerCoords(service, index) {
-  const madridLat = 40.4168;
-  const madridLng = -3.7038;
-  const offset = 0.01;
+function getServiceTags(service, profile, lang) {
+  const tags = [];
 
-  const lat =
-    service.location_lat || madridLat + (index % 5 - 2) * offset;
-  const lng =
-    service.location_lng ||
-    madridLng + (Math.floor(index / 5) % 5 - 2) * offset;
+  if (service.reserva_inmediata === true) {
+    tags.push({ text: "Reserva inmediata ⚡", light: "#fdf3e3", color: "#92400e" });
+  } else {
+    tags.push({ text: "Reserva con confirmación 🕐", light: "#f7f5f2", color: "#888" });
+  }
 
-  return [Number(lng), Number(lat)];
+  if (profile?.verificado === true) {
+    tags.push({ text: "Verificado ✓", light: "#e8f0fb", color: "#163a6b" });
+  }
+
+  if (
+    service.vertical === "alojamiento" &&
+    (service.disponible_para_viajar || hasPetFriendlyInDescription(service))
+  ) {
+    tags.push({ text: "Pet-friendly 🐾", light: "#e6f4f0", color: "#085041" });
+  }
+
+  const languages = Array.isArray(profile?.idiomas) ? profile.idiomas : [];
+  if (languages[0]) {
+    tags.push({ text: languages[0], light: "#f3f3f3", color: "#666" });
+  }
+
+  const avalesCount = Number(service.avales_count) || 0;
+  if (avalesCount > 0) {
+    const avalesLabel =
+      lang === "en"
+        ? `${avalesCount} endorsement${avalesCount !== 1 ? "s" : ""}`
+        : `${avalesCount} aval${avalesCount !== 1 ? "es" : ""}`;
+    tags.push({ text: avalesLabel, light: "#f7f5f2", color: "#888" });
+  }
+
+  return tags;
 }
 
-function MapaResultados({ results, hoveredIndex, onPinHover, onPinLeave }) {
-  const mapContainerRef = useRef(null);
-  const mapRef = useRef(null);
-  const markersRef = useRef([]);
-
-  useEffect(() => {
-    if (!mapContainerRef.current || mapRef.current) return;
-
-    const map = new mapboxgl.Map({
-      container: mapContainerRef.current,
-      center: [-3.7038, 40.4168],
-      zoom: 11,
-      style: "mapbox://styles/mapbox/light-v11",
-    });
-
-    map.addControl(new mapboxgl.NavigationControl(), "top-right");
-    mapRef.current = map;
-
-    return () => {
-      markersRef.current.forEach(({ marker }) => marker.remove());
-      markersRef.current = [];
-      map.remove();
-      mapRef.current = null;
-    };
-  }, []);
-
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map) return;
-
-    function clearMarkers() {
-      markersRef.current.forEach(({ marker }) => marker.remove());
-      markersRef.current = [];
-    }
-
-    function addMarkers() {
-      clearMarkers();
-
-      results.forEach((service, index) => {
-        const profile = service.profiles ?? {};
-        const theme = VERTICAL_THEME[service.vertical] ?? VERTICAL_THEME.alojamiento;
-        const coords = getMarkerCoords(service, index);
-        const price =
-          service.precio != null && service.precio !== ""
-            ? `${service.precio}€`
-            : "—";
-        const providerName =
-          formatShortName(profile.nombre, profile.apellido) || "Proveedor";
-        const serviceType = service.titulo || theme.label;
-
-        const el = document.createElement("div");
-        el.className = "map-price-marker";
-        el.style.cssText = `
-          background-color: ${theme.color};
-          color: #fff;
-          padding: 5px 10px;
-          border-radius: 9999px;
-          font-size: 12px;
-          font-weight: 700;
-          line-height: 1;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-          cursor: pointer;
-          transition: transform 0.2s ease;
-          white-space: nowrap;
-        `;
-        el.textContent = price;
-
-        const popup = new mapboxgl.Popup({
-          offset: 20,
-          closeButton: true,
-          closeOnClick: false,
-        }).setHTML(`
-          <div style="font-family: system-ui, sans-serif; padding: 2px 0;">
-            <p style="margin: 0 0 4px; font-size: 14px; font-weight: 700; color: ${theme.color};">${price}</p>
-            <p style="margin: 0 0 4px; font-size: 13px; color: #1a1a1a;">${providerName}</p>
-            <p style="margin: 0; font-size: 12px; color: #666;">${serviceType}</p>
-          </div>
-        `);
-
-        const marker = new mapboxgl.Marker({ element: el, anchor: "center" })
-          .setLngLat(coords)
-          .setPopup(popup)
-          .addTo(map);
-
-        el.addEventListener("mouseenter", () => onPinHover(index));
-        el.addEventListener("mouseleave", onPinLeave);
-        el.addEventListener("click", (e) => {
-          e.stopPropagation();
-          map.flyTo({ center: coords, zoom: 14, duration: 800 });
-          marker.togglePopup();
-        });
-
-        markersRef.current.push({ marker, element: el, index });
-      });
-
-      if (results.length > 0) {
-        const bounds = new mapboxgl.LngLatBounds();
-        results.forEach((service, index) => {
-          bounds.extend(getMarkerCoords(service, index));
-        });
-        map.fitBounds(bounds, { padding: 48, maxZoom: 14, duration: 0 });
-      }
-    }
-
-    if (map.loaded()) {
-      addMarkers();
-    } else {
-      map.once("load", addMarkers);
-    }
-
-    return clearMarkers;
-  }, [results, onPinHover, onPinLeave]);
-
-  useEffect(() => {
-    markersRef.current.forEach(({ element, index }) => {
-      const isActive = hoveredIndex === index;
-      element.style.transform = isActive ? "scale(1.2)" : "scale(1)";
-      element.style.zIndex = isActive ? "10" : "1";
-    });
-  }, [hoveredIndex]);
-
+function BuscarNavbar({ user, t, extra }) {
   return (
-    <div
-      ref={mapContainerRef}
-      className="h-full min-h-[200px] w-full overflow-hidden rounded-xl lg:rounded-none lg:rounded-l-xl"
-    />
+    <header
+      className="border-b"
+      style={{ backgroundColor: "#f7f5f2", borderColor: "#e8e4de" }}
+    >
+      <div className="mx-auto flex max-w-[1600px] items-center justify-between gap-4 px-4 py-4 sm:px-6">
+        <Link href="/" className="shrink-0 no-underline">
+          <p className="text-[18px] leading-none text-[#111]" style={{ fontFamily: SERIF }}>
+            Home<span className="italic" style={{ color: "#1d4f91" }}>&</span>
+            Heart
+          </p>
+          <p className="mt-1 text-[9px]" style={{ color: "#bbb" }}>
+            {t.footer.slogan}
+          </p>
+        </Link>
+
+        <nav className="hidden items-center gap-6 md:flex" aria-label="Principal">
+          <Link href="/buscar" className="no-underline" style={{ color: "#1d4f91", fontSize: 12 }}>
+            {t.navbar.servicios}
+          </Link>
+          <Link href="/garantia" className="no-underline transition-colors hover:text-[#1d4f91]" style={{ color: "#888", fontSize: 12 }}>
+            {t.navbar.garantia}
+          </Link>
+          <Link href="/ser-proveedor" className="no-underline transition-colors hover:text-[#1d4f91]" style={{ color: "#888", fontSize: 12 }}>
+            {t.navbar.serProveedor}
+          </Link>
+        </nav>
+
+        <div className="flex items-center gap-3">
+          {user ? (
+            <Link
+              href="/dashboard"
+              className="px-3.5 py-1.5 text-[12px] font-semibold text-white no-underline transition-opacity hover:opacity-90"
+              style={{ backgroundColor: "#1d4f91", borderRadius: 4 }}
+            >
+              {extra.miCuenta}
+            </Link>
+          ) : (
+            <>
+              <Link href="/login" className="hidden text-[12px] font-medium no-underline sm:inline-block" style={{ color: "#1d4f91" }}>
+                {t.navbar.iniciarSesion}
+              </Link>
+              <Link
+                href="/registro"
+                className="px-3.5 py-1.5 text-[12px] font-semibold text-white no-underline transition-opacity hover:opacity-90"
+                style={{ backgroundColor: "#1d4f91", borderRadius: 4 }}
+              >
+                {t.navbar.registrarse}
+              </Link>
+            </>
+          )}
+        </div>
+      </div>
+    </header>
   );
 }
 
-function ServiceCard({ service, index, isHovered, onHover, onLeave, t }) {
-  const router = useRouter();
-  const [preguntando, setPreguntando] = useState(false);
-  const profile = service.profiles ?? {};
-  const theme = VERTICAL_THEME[service.vertical] ?? VERTICAL_THEME.alojamiento;
-  const { Icon } = theme;
-  const proveedorId = service.proveedor_id || profile.id;
-  const zone = getServiceZone(service, profile);
-  const subtype = getSubtypeLabel(service);
-  const languages = Array.isArray(profile.idiomas) ? profile.idiomas : [];
-  const ofertaActiva = isOfertaActiva(service);
-
-  async function handlePreguntar() {
-    setPreguntando(true);
-
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-
-    if (userError || !user) {
-      setPreguntando(false);
-      router.push("/login");
-      return;
-    }
-
-    const { data: existing } = await supabase
-      .from("conversations")
-      .select("id")
-      .or(
-        `and(participant_a_id.eq.${user.id},participant_b_id.eq.${proveedorId}),and(participant_a_id.eq.${proveedorId},participant_b_id.eq.${user.id})`,
-      )
-      .maybeSingle();
-
-    if (existing?.id) {
-      router.push(`/chat?conversation=${existing.id}`);
-      setPreguntando(false);
-      return;
-    }
-
-    const { data: created, error } = await supabase
-      .from("conversations")
-      .upsert({
-        participant_a_id: user.id,
-        participant_b_id: proveedorId,
-      })
-      .select("id")
-      .single();
-
-    setPreguntando(false);
-
-    if (error || !created) return;
-
-    router.push(`/chat?conversation=${created.id}`);
-  }
+function StaticMap({
+  results,
+  hoveredIndex,
+  selectedIndex,
+  onPinHover,
+  onPinLeave,
+  onPinSelect,
+  extra,
+  t,
+}) {
+  const selected = selectedIndex != null ? results[selectedIndex] : null;
+  const selectedProfile = selected?.profiles ?? {};
+  const selectedTheme = selected
+    ? VERTICAL_THEME[selected.vertical] ?? VERTICAL_THEME.alojamiento
+    : null;
+  const SelectedIcon = selectedTheme?.Icon;
 
   return (
-    <li
-      className="overflow-hidden rounded-2xl border bg-white transition-all duration-200 ease-out"
+    <div
+      className="relative w-full overflow-hidden"
       style={{
-        borderColor: isHovered ? theme.color : BRAND.border,
-        transform: isHovered ? "translateY(-2px)" : "translateY(0)",
-        boxShadow: isHovered ? `0 8px 24px ${theme.color}22` : "0 1px 4px rgba(0,0,0,0.06)",
+        height: "100%",
+        position: "relative",
+        backgroundColor: "#eef2f7",
+        backgroundImage: `
+          linear-gradient(rgba(200, 212, 228, 0.45) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(200, 212, 228, 0.45) 1px, transparent 1px)
+        `,
+        backgroundSize: "28px 28px",
       }}
-      onMouseEnter={() => onHover(index)}
-      onMouseLeave={onLeave}
     >
-      {(ofertaActiva || service.disponible_para_viajar) && (
-        <div className="flex flex-wrap gap-2 px-4 pt-3">
-          {ofertaActiva && (
-            <span
-              className="rounded-full px-2.5 py-1 text-[10px] font-semibold text-white"
-              style={{ backgroundColor: "#c47d1a" }}
-            >
-              🏷️ Oferta -{service.oferta_descuento}%
-            </span>
-          )}
-          {service.disponible_para_viajar && (
-            <span
-              className="rounded-full px-2.5 py-1 text-[10px] font-semibold text-white"
-              style={{ backgroundColor: BRAND.primary }}
-            >
-              ✈️ Viaja contigo
-            </span>
-          )}
+      {/* Calles simuladas */}
+      <div className="pointer-events-none absolute inset-0" aria-hidden>
+        <div className="absolute bottom-0 left-[22%] top-0 w-[2px]" style={{ backgroundColor: "#c8d4e4" }} />
+        <div className="absolute bottom-0 left-[52%] top-0 w-[3px]" style={{ backgroundColor: "#c8d4e4" }} />
+        <div className="absolute bottom-0 left-[78%] top-0 w-[2px]" style={{ backgroundColor: "#c8d4e4" }} />
+        <div className="absolute left-0 right-0 top-[34%] h-[2px]" style={{ backgroundColor: "#c8d4e4" }} />
+        <div className="absolute left-0 right-0 top-[58%] h-[3px]" style={{ backgroundColor: "#c8d4e4" }} />
+      </div>
+
+      {NEIGHBORHOOD_LABELS.map((label) => (
+        <span
+          key={label.text}
+          className="pointer-events-none absolute text-[8px] font-semibold uppercase tracking-widest"
+          style={{ left: `${label.left}%`, top: `${label.top}%`, color: "#c8d4e4" }}
+        >
+          {label.text}
+        </span>
+      ))}
+
+      {/* Leyenda */}
+      <div
+        className="absolute right-3 top-3 flex items-center gap-2 rounded-md px-2.5 py-1.5"
+        style={{ backgroundColor: "rgba(255,255,255,.75)" }}
+      >
+        {["alojamiento", "ninos", "mascotas"].map((key) => (
+          <span
+            key={key}
+            className="h-2 w-2 rounded-full"
+            style={{ backgroundColor: VERTICAL_THEME[key].color }}
+            aria-hidden
+          />
+        ))}
+      </div>
+
+      {/* Pins */}
+      {results.map((service, index) => {
+        const theme = VERTICAL_THEME[service.vertical] ?? VERTICAL_THEME.alojamiento;
+        const pos = PIN_POSITIONS[index % PIN_POSITIONS.length];
+        const isHovered = hoveredIndex === index;
+        const isSelected = selectedIndex === index;
+
+        return (
+          <button
+            key={service.id}
+            type="button"
+            onMouseEnter={() => onPinHover(index)}
+            onMouseLeave={onPinLeave}
+            onClick={() => onPinSelect(index)}
+            className="absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap border-0 px-2.5 py-1 text-[11px] font-bold text-white"
+            style={{
+              left: `${pos.left}%`,
+              top: `${pos.top}%`,
+              backgroundColor: theme.color,
+              borderRadius: 9999,
+              boxShadow: isSelected
+                ? `0 4px 14px ${theme.color}66`
+                : "0 2px 8px rgba(0,0,0,0.15)",
+              transform: `translate(-50%, -50%) scale(${isHovered || isSelected ? 1.06 : 1})`,
+              transition: "transform 0.15s ease, box-shadow 0.15s ease",
+              zIndex: isHovered || isSelected ? 10 : 1,
+            }}
+          >
+            {formatPinPrice(service.precio, theme.priceShort)}
+          </button>
+        );
+      })}
+
+      {/* Nota inferior */}
+      <p
+        className="pointer-events-none absolute bottom-2 left-0 right-0 text-center text-[9px]"
+        style={{ color: "#aab4c4", paddingBottom: selected ? 72 : 0 }}
+      >
+        {extra.ubicacionAprox}
+      </p>
+
+      {/* Panel de detalle */}
+      {selected && selectedTheme && (
+        <div
+          className="absolute bottom-0 left-0 right-0 border-t bg-white px-3 py-3"
+          style={{ borderColor: "#e8e4de" }}
+        >
+          <div className="flex items-center gap-3">
+            {selected.foto_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={selected.foto_url}
+                alt=""
+                className="h-11 w-11 shrink-0 object-cover"
+                style={{ borderRadius: 6 }}
+              />
+            ) : (
+              <div
+                className="flex h-11 w-11 shrink-0 items-center justify-center"
+                style={{ borderRadius: 6, background: selectedTheme.gradient }}
+              >
+                {SelectedIcon && <SelectedIcon className="h-5 w-5 text-white" />}
+              </div>
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[13px] font-semibold text-[#1a1a1a]">
+                {formatShortName(selectedProfile.nombre, selectedProfile.apellido) || "Proveedor"}
+              </p>
+              <p className="truncate text-[10px] text-[#888]">
+                {selected.titulo || selectedTheme.label} · {getServiceZone(selected, selectedProfile)}
+              </p>
+              <p className="text-[12px] font-bold" style={{ color: selectedTheme.color }}>
+                {formatPrice(selected.precio, selectedTheme.priceSuffix)}
+              </p>
+            </div>
+            <div className="flex shrink-0 flex-col gap-1.5 sm:flex-row">
+              <Link
+                href={`/reservar/${selected.id}`}
+                className="rounded px-3 py-1.5 text-center text-[11px] font-semibold text-white no-underline"
+                style={{ backgroundColor: BRAND.primary }}
+              >
+                {extra.reservarAhora}
+              </Link>
+              <Link
+                href={`/proveedor/${selected.proveedor_id || selectedProfile.id}`}
+                className="rounded border px-3 py-1.5 text-center text-[11px] font-semibold no-underline"
+                style={{ borderColor: BRAND.primary, color: BRAND.primary }}
+              >
+                {t.buscar.verPerfil}
+              </Link>
+            </div>
+          </div>
         </div>
       )}
+    </div>
+  );
+}
 
-      <div className="relative">
-        <FavoritoButton
-          proveedorId={proveedorId}
-          className="absolute right-3 top-3 z-10"
-        />
-        {service.foto_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={service.foto_url}
-            alt={service.titulo || theme.label}
-            className="h-[140px] w-full object-cover"
-          />
-        ) : (
-          <div
-            className="flex h-[140px] w-full items-center justify-center"
-            style={{ backgroundColor: theme.light }}
-          >
-            <Icon className="h-10 w-10" style={{ color: theme.color }} />
-          </div>
-        )}
+function ServiceCard({
+  service,
+  index,
+  isActive,
+  onHover,
+  onLeave,
+  onSelect,
+  extra,
+  t,
+  lang,
+}) {
+  const profile = service.profiles ?? {};
+  const theme = VERTICAL_THEME[service.vertical] ?? VERTICAL_THEME.alojamiento;
+  const zone = getServiceZone(service, profile);
+  const tags = getServiceTags(service, profile, lang);
+  const priceLabel = formatPrice(service.precio, theme.priceSuffix);
 
-        <span
-          className="absolute bottom-[-14px] left-3 flex h-8 w-8 items-center justify-center rounded-full border-2 border-white text-[11px] font-bold text-white shadow-md"
-          style={{ backgroundColor: theme.color }}
-        >
-          {getInitials(profile.nombre, profile.apellido)}
-        </span>
-      </div>
-
-      <div className="px-4 pb-4 pt-6">
-        <div className="flex flex-wrap items-center gap-2">
-          <p className="font-semibold text-[#1a1a1a]">
-            {formatShortName(profile.nombre, profile.apellido) || "Proveedor"}
-          </p>
-          {profile.verificado === true && (
-            <span className="inline-flex rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold text-green-700">
-              Verificado ✓
-            </span>
-          )}
-        </div>
-
-        <p className="mt-0.5 text-xs text-[#888]">{zone}</p>
-
-        {service.titulo && (
-          <p className="mt-1 text-sm text-[#444]">{service.titulo}</p>
-        )}
-
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          {subtype && (
-            <span
-              className="rounded-full px-2.5 py-0.5 text-[10px] font-semibold"
-              style={{ backgroundColor: theme.light, color: theme.color }}
-            >
-              {subtype}
-            </span>
-          )}
-          {service.reserva_inmediata ? (
-            <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold text-green-800">
-              Inmediata ⚡
-            </span>
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={() => onSelect(index)}
+        onMouseEnter={() => onHover(index)}
+        onMouseLeave={onLeave}
+        className="w-full overflow-hidden border-b text-left transition-colors"
+        style={{
+          borderColor: "#e8e4de",
+          borderLeft: isActive ? "2px solid #1d4f91" : "2px solid transparent",
+          backgroundColor: isActive ? "#fafaf9" : "#fff",
+        }}
+      >
+        <div className="relative h-[160px] w-full overflow-hidden">
+          {service.foto_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={service.foto_url} alt="" className="h-full w-full object-cover" />
           ) : (
-            <span className="rounded-full bg-yellow-100 px-2 py-0.5 text-[10px] font-semibold text-yellow-800">
-              Con confirmación 🕐
-            </span>
+            <div className="h-full w-full" style={{ background: theme.gradient }} />
           )}
+          <div
+            className="pointer-events-none absolute inset-0"
+            style={{
+              background:
+                "linear-gradient(to bottom, transparent 40%, rgba(0,0,0,.55) 100%)",
+            }}
+            aria-hidden
+          />
+          <span
+            className="absolute right-2.5 top-2.5 px-2.5 py-1 text-[10px] font-semibold"
+            style={{
+              backgroundColor: "rgba(255,255,255,.92)",
+              borderRadius: 14,
+              color: "#2a3a4a",
+            }}
+          >
+            {priceLabel}
+          </span>
+          <span
+            className="absolute bottom-2 left-2.5 flex h-[22px] w-[22px] items-center justify-center rounded-full text-[8px] font-bold text-white"
+            style={{
+              backgroundColor: theme.color,
+              border: "1.5px solid rgba(255,255,255,.7)",
+            }}
+          >
+            {getInitials(profile.nombre, profile.apellido)}
+          </span>
         </div>
 
-        <p className="mt-2 text-xl font-bold" style={{ color: theme.color }}>
-          {formatPrice(service.precio, theme.priceSuffix)}
-        </p>
-
-        {languages.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-1">
-            {languages.map((lang) => (
-              <span
-                key={lang}
-                className="rounded-full px-2 py-0.5 text-[10px] font-medium text-[#666]"
-                style={{ backgroundColor: BRAND.warm }}
-              >
-                {lang}
-              </span>
-            ))}
+        <div className="px-3 py-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <p className="min-w-0 truncate text-[12px] font-semibold text-[#1a1a1a]">
+              {formatShortName(profile.nombre, profile.apellido) || "Proveedor"}
+              <span className="font-normal text-[#888]"> · {zone}</span>
+            </p>
+            <span className="shrink-0 text-[10px] text-[#c47d1a]">
+              ★ {extra.estrellas}
+            </span>
           </div>
-        )}
 
-        <div className="mt-4 flex gap-2">
-          <Link
-            href={`/proveedor/${proveedorId}`}
-            className="flex-1 rounded-xl border py-2.5 text-center text-sm font-semibold no-underline transition-opacity hover:opacity-90"
-            style={{ borderColor: theme.color, color: theme.color }}
-          >
-            {t.buscar.verPerfil}
-          </Link>
-          <button
-            type="button"
-            onClick={handlePreguntar}
-            disabled={preguntando}
-            className="flex-1 rounded-xl border py-2.5 text-center text-sm font-semibold transition-opacity hover:opacity-90 disabled:cursor-wait disabled:opacity-60"
-            style={{ borderColor: theme.color, color: theme.color }}
-          >
-            {preguntando ? "…" : `${t.buscar.preguntar} 💬`}
-          </button>
+          {service.titulo && (
+            <p className="mt-0.5 truncate text-[10px] text-[#aaa]">{service.titulo}</p>
+          )}
+
+          {tags.length > 0 && (
+            <div className="mt-1.5 flex flex-wrap gap-1">
+              {tags.map((tag) => (
+                <span
+                  key={tag.text}
+                  className="rounded-full px-2 py-0.5 text-[9px] font-semibold"
+                  style={{ backgroundColor: tag.light, color: tag.color }}
+                >
+                  {tag.text}
+                </span>
+              ))}
+            </div>
+          )}
+
           <Link
             href={`/reservar/${service.id}`}
-            className="flex-1 rounded-xl py-2.5 text-center text-sm font-semibold text-white no-underline transition-opacity hover:opacity-90"
+            onClick={(e) => e.stopPropagation()}
+            className="mt-2 block w-full rounded py-2 text-center text-[11px] font-semibold text-white no-underline transition-opacity hover:opacity-90"
             style={{ backgroundColor: theme.color }}
           >
-            {t.buscar.reservar}
+            {extra.reservar(
+              service.precio != null && service.precio !== "" ? `${Number(service.precio)}€` : "—",
+              theme.priceSuffix,
+            )}
           </Link>
         </div>
-      </div>
+      </button>
     </li>
   );
 }
@@ -479,12 +557,18 @@ export default function BuscarPage() {
   const searchParams = useSearchParams();
   const { lang } = useLang();
   const t = useTranslation(lang);
+  const extra = BUSCAR_EXTRA[lang] || BUSCAR_EXTRA.es;
+  const calendarRef = useRef(null);
+  const navbarRef = useRef(null);
+  const filtersRef = useRef(null);
+  const [headerOffset, setHeaderOffset] = useState(0);
 
   const verticalParam = searchParams.get("vertical") || "todo";
   const ciudadParam = searchParams.get("ciudad") || "";
   const fechaBusquedaInicioParam = searchParams.get("desde") || "";
   const fechaBusquedaFinParam = searchParams.get("hasta") || "";
 
+  const [user, setUser] = useState(null);
   const [ciudadInput, setCiudadInput] = useState(ciudadParam);
   const [fechaDesdeInput, setFechaDesdeInput] = useState(fechaBusquedaInicioParam);
   const [fechaHastaInput, setFechaHastaInput] = useState(fechaBusquedaFinParam);
@@ -492,6 +576,8 @@ export default function BuscarPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [hoveredIndex, setHoveredIndex] = useState(null);
+  const [selectedIndex, setSelectedIndex] = useState(null);
+  const [calendarOpen, setCalendarOpen] = useState(false);
 
   const updateParams = useCallback(
     (vertical, ciudad, desde, hasta) => {
@@ -507,16 +593,48 @@ export default function BuscarPage() {
   );
 
   useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user: authUser } }) => {
+      setUser(authUser ?? null);
+    });
+  }, []);
+
+  useEffect(() => {
+    function measureHeaders() {
+      const navH = navbarRef.current?.offsetHeight ?? 0;
+      const filtH = filtersRef.current?.offsetHeight ?? 0;
+      setHeaderOffset(navH + filtH);
+    }
+
+    measureHeaders();
+    window.addEventListener("resize", measureHeaders);
+    return () => window.removeEventListener("resize", measureHeaders);
+  }, []);
+
+  useEffect(() => {
     setCiudadInput(ciudadParam);
     setFechaDesdeInput(fechaBusquedaInicioParam);
     setFechaHastaInput(fechaBusquedaFinParam);
   }, [ciudadParam, fechaBusquedaInicioParam, fechaBusquedaFinParam]);
 
   useEffect(() => {
+    if (!calendarOpen) return;
+
+    function handleClickOutside(e) {
+      if (calendarRef.current && !calendarRef.current.contains(e.target)) {
+        setCalendarOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [calendarOpen]);
+
+  useEffect(() => {
     async function fetchResults() {
       setLoading(true);
       setError("");
       setHoveredIndex(null);
+      setSelectedIndex(null);
 
       let query = supabase
         .from("services")
@@ -528,6 +646,7 @@ export default function BuscarPage() {
           precio,
           cancellation_policy,
           reserva_inmediata,
+          descripcion,
           foto_url,
           tipo_alojamiento,
           modalidad,
@@ -584,7 +703,31 @@ export default function BuscarPage() {
         setError(fetchError.message);
         setResults([]);
       } else {
-        setResults(data ?? []);
+        const services = data ?? [];
+        const proveedorIds = [
+          ...new Set(services.map((s) => s.proveedor_id).filter(Boolean)),
+        ];
+
+        let avalesByProveedor = {};
+        if (proveedorIds.length > 0) {
+          const { data: referencias } = await supabase
+            .from("referencias")
+            .select("proveedor_id")
+            .in("proveedor_id", proveedorIds)
+            .eq("estado", "completada");
+
+          for (const ref of referencias ?? []) {
+            avalesByProveedor[ref.proveedor_id] =
+              (avalesByProveedor[ref.proveedor_id] ?? 0) + 1;
+          }
+        }
+
+        setResults(
+          services.map((service) => ({
+            ...service,
+            avales_count: avalesByProveedor[service.proveedor_id] ?? 0,
+          })),
+        );
       }
 
       setLoading(false);
@@ -602,7 +745,16 @@ export default function BuscarPage() {
     updateParams(verticalParam, ciudadInput, fechaDesdeInput, fechaHastaInput);
   }
 
-  const activeTabColor = getActiveTabColor(verticalParam);
+  function handleRangeChange({ desde, hasta }) {
+    setFechaDesdeInput(desde);
+    setFechaHastaInput(hasta);
+  }
+
+  function handleSelect(index) {
+    setSelectedIndex(index);
+    setHoveredIndex(index);
+  }
+
   const resultCount = results.length;
 
   const filterTabs = FILTER_TABS.map((tab) => ({
@@ -613,179 +765,235 @@ export default function BuscarPage() {
   const resultadosLabel =
     resultCount === 1
       ? lang === "en"
-        ? "1 result found"
-        : "1 resultado encontrado"
+        ? "1 result"
+        : "1 resultado"
       : `${resultCount} ${t.buscar.resultados}`;
 
-  return (
-    <div className="flex min-h-screen flex-col font-sans" style={{ backgroundColor: BRAND.warm, color: "#1a1a1a" }}>
-      <Navbar />
+  const fechasDisplay =
+    fechaDesdeInput && fechaHastaInput
+      ? `${formatShortDate(fechaDesdeInput)} — ${formatShortDate(fechaHastaInput)}`
+      : fechaDesdeInput
+        ? formatShortDate(fechaDesdeInput)
+        : t.hero.annadeFecha;
 
-      {/* Header filtros */}
+  const splitHeight =
+    headerOffset > 0
+      ? `max(600px, calc(100vh - ${headerOffset}px))`
+      : "600px";
+
+  return (
+    <div
+      className="flex flex-col font-sans"
+      style={{
+        backgroundColor: "#f7f5f2",
+        color: "#1a1a1a",
+        display: "flex",
+        flexDirection: "column",
+        minHeight: "100vh",
+      }}
+    >
+      <div ref={navbarRef} className="shrink-0">
+        <BuscarNavbar user={user} t={t} extra={extra} />
+      </div>
+
+      {/* Barra de filtros */}
       <header
-        className="shrink-0 border-b bg-white px-4 py-4 sm:px-6"
-        style={{ borderColor: BRAND.border }}
+        ref={filtersRef}
+        className="shrink-0 border-b"
+        style={{ backgroundColor: "#f7f5f2", borderColor: "#e8e4de", padding: "12px 20px" }}
       >
-        <div className="mx-auto flex max-w-[1600px] flex-col gap-4">
-          <h1
-            className="text-xl font-bold text-[#1a1a1a] sm:text-2xl"
-            style={{ fontFamily: "Georgia, serif" }}
-          >
-            {t.buscar.titulo}
-          </h1>
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-wrap gap-2">
+        <form
+          onSubmit={handleBuscarSubmit}
+          className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-3"
+        >
+          <div className="flex flex-wrap items-center gap-2">
             {filterTabs.map((tab) => {
               const isActive = verticalParam === tab.id;
-              const tabColor =
-                tab.id === "todo"
-                  ? BRAND.primary
-                  : VERTICAL_THEME[tab.id]?.color ?? BRAND.primary;
-              const tabLight =
-                tab.id === "todo"
-                  ? BRAND.light
-                  : VERTICAL_THEME[tab.id]?.light ?? BRAND.light;
-
               return (
                 <button
                   key={tab.id}
                   type="button"
                   onClick={() => handleVerticalChange(tab.id)}
-                  className="rounded-full border px-4 py-2 text-sm font-medium transition-colors"
+                  className="flex items-center gap-1.5 border px-3 py-1.5 text-[11px] font-medium transition-colors"
                   style={{
-                    borderColor: isActive ? tabColor : BRAND.border,
-                    backgroundColor: isActive ? tabLight : "#fff",
-                    color: isActive ? tabColor : "#444",
+                    borderRadius: 9999,
+                    borderColor: isActive ? tab.color : "#e8e4de",
+                    backgroundColor: isActive ? tab.light : "#fff",
+                    color: isActive ? tab.color : "#666",
                   }}
                 >
+                  {tab.id !== "todo" && (
+                    <span
+                      className="h-1.5 w-1.5 rounded-full"
+                      style={{ backgroundColor: tab.color }}
+                      aria-hidden
+                    />
+                  )}
+                  {tab.id === "todo" && (
+                    <span
+                      className="h-1.5 w-1.5 rounded-full"
+                      style={{ backgroundColor: tab.color }}
+                      aria-hidden
+                    />
+                  )}
                   {tab.label}
                 </button>
               );
             })}
           </div>
 
-          <form
-            onSubmit={handleBuscarSubmit}
-            className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end lg:max-w-3xl"
+          <div
+            className="hidden h-6 w-px shrink-0 sm:block"
+            style={{ backgroundColor: "#e8e4de" }}
+            aria-hidden
+          />
+
+          <div
+            className="flex min-w-[160px] flex-1 items-center gap-2 border px-3 py-2"
+            style={{ backgroundColor: "#fff", borderColor: "#e8e4de", borderRadius: 6, maxWidth: 220 }}
           >
+            <SearchIcon className="h-3.5 w-3.5 shrink-0 text-[#bbb]" />
             <input
               type="text"
               value={ciudadInput}
               onChange={(e) => setCiudadInput(e.target.value)}
-              placeholder="Ciudad, barrio o zona…"
-              className="min-w-0 flex-1 rounded-xl border px-4 py-2.5 text-sm text-[#1a1a1a] outline-none focus:ring-2 focus:ring-[#1d4f91]/30 sm:min-w-[140px]"
-              style={{ borderColor: BRAND.border }}
+              placeholder={t.hero.placeholder}
+              className="min-w-0 flex-1 bg-transparent text-[12px] outline-none placeholder:text-[#bbb]"
+              style={{ color: "#2a3a4a" }}
             />
-            <div className="flex gap-2">
-              <div>
-                <label className="mb-1 block text-[10px] font-medium text-[#888]">
-                  Desde
-                </label>
-                <input
-                  type="date"
-                  value={fechaDesdeInput}
-                  onChange={(e) => setFechaDesdeInput(e.target.value)}
-                  className="rounded-xl border px-3 py-2.5 text-sm text-[#1a1a1a] outline-none focus:ring-2 focus:ring-[#1d4f91]/30"
-                  style={{ borderColor: BRAND.border }}
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-[10px] font-medium text-[#888]">
-                  Hasta
-                </label>
-                <input
-                  type="date"
-                  value={fechaHastaInput}
-                  min={fechaDesdeInput || undefined}
-                  onChange={(e) => setFechaHastaInput(e.target.value)}
-                  className="rounded-xl border px-3 py-2.5 text-sm text-[#1a1a1a] outline-none focus:ring-2 focus:ring-[#1d4f91]/30"
-                  style={{ borderColor: BRAND.border }}
-                />
-              </div>
-            </div>
-            <button
-              type="submit"
-              className="shrink-0 rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 sm:self-end"
-              style={{ backgroundColor: activeTabColor }}
-            >
-              {t.hero.buscar}
-            </button>
-          </form>
           </div>
-        </div>
 
-        <p className="mx-auto mt-3 max-w-[1600px] text-xs text-[#888]">
-          {loading ? (lang === "en" ? "Searching…" : "Buscando proveedores…") : resultadosLabel}
-        </p>
+          <div ref={calendarRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setCalendarOpen((o) => !o)}
+              className="flex min-w-[160px] items-center border px-3 py-2 text-left"
+              style={{ backgroundColor: "#fff", borderColor: "#e8e4de", borderRadius: 6 }}
+            >
+              <span className="text-[12px]" style={{ color: fechaDesdeInput ? "#2a3a4a" : "#bbb" }}>
+                {fechasDisplay}
+              </span>
+            </button>
+
+            {calendarOpen && (
+              <div
+                className="absolute left-0 z-50 mt-1 rounded-lg border bg-white p-4 shadow-xl"
+                style={{ borderColor: "#e8e4de", minWidth: 320 }}
+              >
+                <CalendarioRangoFechas
+                  fechaInicio={fechaDesdeInput}
+                  fechaFin={fechaHastaInput}
+                  onChange={handleRangeChange}
+                  onRangeComplete={() => setCalendarOpen(false)}
+                />
+              </div>
+            )}
+          </div>
+
+          <button
+            type="submit"
+            className="sr-only"
+            tabIndex={-1}
+            aria-hidden
+          >
+            {t.hero.buscar}
+          </button>
+
+          <p className="ml-auto shrink-0 text-[11px]" style={{ color: "#bbb" }}>
+            {loading ? (lang === "en" ? "Searching…" : "Buscando…") : resultadosLabel}
+          </p>
+        </form>
       </header>
 
       {error && (
-        <p className="mx-4 mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 sm:mx-6">
+        <p className="mx-5 mt-3 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
           {error}
         </p>
       )}
 
       {/* Split layout */}
-      <div className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col lg:flex-row">
-        {/* Mapa — móvil 200px, desktop 45% */}
-        <div className="h-[200px] shrink-0 lg:h-auto lg:w-[45%] lg:min-h-[calc(100vh-180px)] lg:p-4 lg:pr-2">
-          {!loading && results.length > 0 ? (
-            <MapaResultados
-              results={results}
-              hoveredIndex={hoveredIndex}
-              onPinHover={setHoveredIndex}
-              onPinLeave={() => setHoveredIndex(null)}
-            />
-          ) : (
-            <div
-              className="flex h-full items-center justify-center rounded-xl text-sm text-[#888] lg:rounded-l-xl"
-              style={{
-                backgroundColor: "#e8f0fb",
-                backgroundImage: `
-                  linear-gradient(rgba(29, 79, 145, 0.06) 1px, transparent 1px),
-                  linear-gradient(90deg, rgba(29, 79, 145, 0.06) 1px, transparent 1px)
-                `,
-                backgroundSize: "32px 32px",
-              }}
-            >
-              {loading ? "Cargando mapa…" : "Sin resultados en el mapa"}
-            </div>
-          )}
-        </div>
+      <div
+        className="mx-auto grid w-full max-w-[1600px] min-h-0 grid-cols-1 overflow-hidden md:grid-cols-2"
+        style={{
+          flex: 1,
+          overflow: "hidden",
+          minHeight: 600,
+          height: splitHeight,
+        }}
+      >
+        {/* Lista */}
+        <div
+          className="h-full min-h-0 overflow-y-auto border-r [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+          style={{ borderColor: "#e8e4de" }}
+        >
 
-        {/* Lista — 55% scrolleable */}
-        <div className="flex-1 overflow-y-auto lg:w-[55%] lg:max-h-[calc(100vh-180px)] lg:p-4 lg:pl-2">
           {loading && (
-            <div className="flex flex-col gap-4 p-4">
+            <div className="flex flex-col">
               {[1, 2, 3].map((n) => (
-                <div key={n} className="h-72 animate-pulse rounded-2xl bg-white/80" />
+                <div key={n} className="h-48 animate-pulse border-b bg-white/60" style={{ borderColor: "#e8e4de" }} />
               ))}
             </div>
           )}
 
           {!loading && !error && results.length === 0 && (
-            <p
-              className="m-4 rounded-2xl border bg-white px-6 py-10 text-center text-sm leading-relaxed text-[#666]"
-              style={{ borderColor: BRAND.border }}
-            >
+            <p className="px-5 py-10 text-center text-[12px] leading-relaxed text-[#888]">
               {t.buscar.sinResultados}
             </p>
           )}
 
           {!loading && results.length > 0 && (
-            <ul className="flex flex-col gap-4 p-4 pt-2 lg:pt-0">
+            <ul className="flex flex-col">
               {results.map((service, index) => (
                 <ServiceCard
                   key={service.id}
                   service={service}
                   index={index}
-                  isHovered={hoveredIndex === index}
+                  isActive={selectedIndex === index}
                   onHover={setHoveredIndex}
                   onLeave={() => setHoveredIndex(null)}
+                  onSelect={handleSelect}
+                  extra={extra}
                   t={t}
+                  lang={lang}
                 />
               ))}
             </ul>
+          )}
+        </div>
+
+        {/* Mapa estático */}
+        <div
+          className="relative min-h-0 overflow-hidden"
+          style={{ height: "100%", position: "relative" }}
+        >
+          {!loading && results.length > 0 ? (
+            <StaticMap
+              results={results}
+              hoveredIndex={hoveredIndex}
+              selectedIndex={selectedIndex}
+              onPinHover={setHoveredIndex}
+              onPinLeave={() => setHoveredIndex(null)}
+              onPinSelect={handleSelect}
+              extra={extra}
+              t={t}
+            />
+          ) : (
+            <div
+              className="flex items-center justify-center text-[12px]"
+              style={{
+                height: "100%",
+                position: "relative",
+                backgroundColor: "#eef2f7",
+                color: "#aab4c4",
+                backgroundImage: `
+                  linear-gradient(rgba(200, 212, 228, 0.45) 1px, transparent 1px),
+                  linear-gradient(90deg, rgba(200, 212, 228, 0.45) 1px, transparent 1px)
+                `,
+                backgroundSize: "28px 28px",
+              }}
+            >
+              {loading ? (lang === "en" ? "Loading map…" : "Cargando mapa…") : t.buscar.sinResultados}
+            </div>
           )}
         </div>
       </div>
