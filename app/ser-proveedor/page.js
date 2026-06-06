@@ -179,7 +179,7 @@ const MODALIDAD_OPTIONS = {
 const DOCUMENT_CATALOG = {
   dni_propietario: { title: "DNI o pasaporte", required: true },
   nru: { title: "NRU", required: true },
-  dni_nie: { title: "DNI o NIE", required: true },
+  dni_nie: { title: "DNI / NIE / Pasaporte", required: true },
   certificado_antecedentes: { title: "Antecedentes penales", required: true },
   certificado_delitos_sexuales: {
     title: "Antecedentes sexuales",
@@ -296,18 +296,16 @@ function getVisibleSteps(verticales) {
 }
 
 function getDocsForVertical(vertical) {
-  if (vertical === "alojamiento")
-    return ["dni_propietario", "nru", "seguro_hogar"];
+  if (vertical === "alojamiento") return ["nru", "seguro_hogar"];
   if (vertical === "ninos")
     return [
-      "dni_nie",
       "certificado_antecedentes",
       "certificado_delitos_sexuales",
       "primeros_auxilios",
       "titulaciones",
     ];
   if (vertical === "mascotas")
-    return ["dni_nie", "certificado_antecedentes", "certificaciones"];
+    return ["certificado_antecedentes", "certificaciones"];
   return [];
 }
 
@@ -320,13 +318,8 @@ function getRequiredDocuments(verticales) {
       docs.push({ id, ...DOCUMENT_CATALOG[id] });
     }
   };
-  if (verticales.includes("alojamiento")) {
-    add("dni_propietario");
-    add("nru");
-  }
-  if (verticales.includes("ninos") || verticales.includes("mascotas")) {
-    add("dni_nie");
-  }
+  if (verticales.length > 0) add("dni_nie");
+  if (verticales.includes("alojamiento")) add("nru");
   if (verticales.includes("ninos")) {
     add("certificado_antecedentes");
     add("certificado_delitos_sexuales");
@@ -675,7 +668,13 @@ function calcCompletion(verticales, fields, documentFiles) {
   }
   getRequiredDocuments(verticales)
     .filter((d) => d.required)
-    .forEach((d) => check(!!documentFiles[d.id]));
+    .forEach((d) => {
+      if (d.id === "dni_nie") {
+        check(!!documentFiles.dni_nie || !!documentFiles.dni_propietario);
+      } else {
+        check(!!documentFiles[d.id]);
+      }
+    });
   return total > 0 ? Math.round((done / total) * 100) : 0;
 }
 
@@ -709,7 +708,7 @@ export default function SerProveedorPage() {
   });
   const [documentFiles, setDocumentFiles] = useState({});
   const [activeDocumentId, setActiveDocumentId] = useState(null);
-  const [submitting, setSubmitting] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [customTags, setCustomTags] = useState({
@@ -880,7 +879,13 @@ export default function SerProveedorPage() {
       }
     }
     if (stepId === 6) {
-      const missing = requiredDocuments.filter((d) => d.required && !documentFiles[d.id]);
+      const missing = requiredDocuments.filter((d) => {
+        if (!d.required) return false;
+        if (d.id === "dni_nie") {
+          return !documentFiles.dni_nie && !documentFiles.dni_propietario;
+        }
+        return !documentFiles[d.id];
+      });
       if (missing.length > 0) {
         setErrorMessage(`Faltan documentos obligatorios: ${missing.map((d) => d.title).join(", ")}`);
         return false;
@@ -900,39 +905,20 @@ export default function SerProveedorPage() {
     if (idx > 0) setPasoActual(visibleSteps[idx - 1].id);
   }
 
-  async function handleSubmit(e) {
-    e.preventDefault();
-    if (!validateStep(6)) {
-      setPasoActual(6);
-      return;
-    }
+  async function handleSubmit() {
+    setLoading(true);
     setErrorMessage("");
-    setSuccessMessage("");
-    setSubmitting(true);
-
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-
-    if (userError || !user) {
-      setSubmitting(false);
-      setErrorMessage("Debes iniciar sesión para enviar tu perfil.");
-      return;
-    }
-
     try {
-      let fotoUrl = null;
-      if (profilePhoto) {
-        fotoUrl = await uploadProfilePhoto(user.id, profilePhoto);
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser();
+      if (authError || !user) {
+        setErrorMessage("No hay sesión activa. Por favor inicia sesión.");
+        setLoading(false);
+        return;
       }
-
-      const docUrls = {};
-      for (const [docId, file] of Object.entries(documentFiles)) {
-        const field = DOC_PROFILE_FIELDS[docId];
-        if (!field || !file) continue;
-        docUrls[field] = await uploadDocumentToStorage(user.id, docId, file);
-      }
+      console.log("Usuario:", user.id);
 
       const descripcionParts = [sobreTi.trim()];
       if (personalidad.trim()) descripcionParts.push(`Personalidad: ${personalidad.trim()}`);
@@ -942,97 +928,65 @@ export default function SerProveedorPage() {
 
       const { error: profileError } = await supabase.from("profiles").upsert({
         id: user.id,
-        role: "proveedor",
         nombre: nombre.trim(),
         apellido: apellido.trim(),
         ciudad: ciudad.trim(),
         descripcion: descripcionParts.join("\n\n"),
-        location_zone: ciudad.trim(),
         idiomas,
-        email_contacto: user.email,
-        foto_perfil: fotoUrl,
-        ...docUrls,
+        role: "proveedor",
       });
 
-      if (profileError) throw profileError;
+      if (profileError) {
+        console.error("Error perfil:", profileError);
+        setErrorMessage("Error al guardar perfil: " + profileError.message);
+        setLoading(false);
+        return;
+      }
+      console.log("Perfil guardado");
 
-      if (verticalesSeleccionados.length > 0) {
-        const ciudadTrimmed = ciudad.trim();
-        const detailsForInsert = await geocodeLocationZonesForServices(
-          verticalesSeleccionados,
-          {
-            ...serviceDetails,
-            ninos: {
-              ...serviceDetails.ninos,
-              edades: (serviceDetails.ninos.edadesTags || []).join(", "),
-              certificacion: (serviceDetails.ninos.formacionTags || []).join(", "),
-              location_zone: serviceDetails.ninos.location_zone || ciudadTrimmed,
-            },
-            mascotas: {
-              ...serviceDetails.mascotas,
-              tipos: (serviceDetails.mascotas.animalesTags || []).join(", "),
-              location_zone: serviceDetails.mascotas.location_zone || ciudadTrimmed,
-            },
-            alojamiento: {
-              ...serviceDetails.alojamiento,
-              location_zone: serviceDetails.alojamiento.location_zone || ciudadTrimmed,
-            },
-          },
-          ciudadTrimmed,
-        );
+      for (const vertical of verticalesSeleccionados) {
+        const servicioData =
+          vertical === "alojamiento"
+            ? serviceDetails.alojamiento
+            : vertical === "ninos"
+              ? serviceDetails.ninos
+              : serviceDetails.mascotas;
 
-        const serviceRows = await Promise.all(
-          verticalesSeleccionados.map(async (serviceId) => {
-            const details = detailsForInsert[serviceId];
-            const photos = servicePhotos[serviceId] || [];
-            const photoUrls = await Promise.all(
-              photos.map((file, i) => uploadServicePhoto(user.id, serviceId, file, i)),
-            );
+        const { error: serviceError } = await supabase.from("services").insert({
+          proveedor_id: user.id,
+          vertical,
+          titulo: servicioData.titulo || `Servicio de ${vertical}`,
+          precio: parseFloat(servicioData.precio) || 0,
+          ciudad: ciudad.trim(),
+          disponible: false,
+        });
 
-            return {
-              proveedor_id: user.id,
-              vertical: serviceId,
-              titulo: details.titulo.trim(),
-              descripcion: details.descripcion?.trim() || null,
-              precio: details.precio ? Number(details.precio) : null,
-              estancia_minima: details.estancia_minima ? Number(details.estancia_minima) : null,
-              estancia_maxima: details.estancia_maxima ? Number(details.estancia_maxima) : null,
-              antelacion_minima:
-                details.antelacion_minima != null && details.antelacion_minima !== ""
-                  ? Number(details.antelacion_minima)
-                  : 24,
-              dias_disponibles:
-                Array.isArray(details.dias_disponibles) && details.dias_disponibles.length > 0
-                  ? details.dias_disponibles
-                  : DIAS_DISPONIBLES_DEFAULT,
-              cancellation_policy: details.cancelacion,
-              ciudad: ciudadTrimmed,
-              location_zone: details.location_zone?.trim() || null,
-              location_lat: details.location_lat ?? null,
-              location_lng: details.location_lng ?? null,
-              disponible: true,
-              reserva_inmediata: details.reserva_inmediata === true,
-              modalidad: serviceId === "alojamiento" ? null : details.modalidad || null,
-              tipo_alojamiento:
-                serviceId === "alojamiento" ? details.tipo_alojamiento || null : null,
-              disponible_para_viajar: details.disponible_para_viajar === true,
-              descuentos_duracion: serializeDescuentosDuracionForDb(details),
-              proveedor_emergencia: details.proveedor_emergencia === true,
-              foto_url: photoUrls[0] || null,
-            };
-          }),
-        );
-
-        const { error: servicesError } = await supabase.from("services").insert(serviceRows);
-        if (servicesError) throw servicesError;
+        if (serviceError) {
+          console.error("Error servicio:", serviceError);
+          setErrorMessage("Error al guardar servicio: " + serviceError.message);
+          setLoading(false);
+          return;
+        }
+        console.log("Servicio guardado:", vertical);
       }
 
-      setSubmitting(false);
-      setSuccessMessage("Perfil enviado correctamente. Te avisamos en menos de 24h.");
-      setTimeout(() => router.push("/dashboard"), 2000);
+      await fetch("/api/emails", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tipo: "nuevo_proveedor",
+          nombre: nombre.trim(),
+          email: user.email,
+          verticales: verticalesSeleccionados,
+        }),
+      });
+
+      setPasoActual(8);
     } catch (err) {
-      setSubmitting(false);
-      setErrorMessage(err.message || "Error al enviar el perfil.");
+      console.error("Error inesperado:", err);
+      setErrorMessage("Error inesperado: " + err.message);
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -1066,16 +1020,29 @@ export default function SerProveedorPage() {
                   key={v.id}
                   type="button"
                   onClick={() => toggleVertical(v.id)}
-                  className="relative overflow-hidden rounded-2xl border-2 text-left transition-all"
+                  className="relative border-2 text-left transition-all"
                   style={{
                     borderColor: selected ? v.color : BRAND.border,
+                    borderRadius: "10px",
+                    overflow: "hidden",
+                    padding: 0,
                     boxShadow: selected ? `0 0 0 1px ${v.color}` : "none",
                   }}
                 >
-                  <div className="px-4 py-3 text-white" style={{ backgroundColor: v.color }}>
+                  <div
+                    className="relative text-white"
+                    style={{
+                      backgroundColor: v.color,
+                      borderRadius: 0,
+                      padding: "16px",
+                    }}
+                  >
                     <span
                       className="absolute right-3 top-3 flex h-6 w-6 items-center justify-center rounded-full border-2 bg-white text-xs"
-                      style={{ borderColor: v.color, color: selected ? v.color : "transparent" }}
+                      style={{
+                        borderColor: v.color,
+                        color: selected ? v.color : "transparent",
+                      }}
                     >
                       {selected ? "✓" : ""}
                     </span>
@@ -1552,21 +1519,16 @@ export default function SerProveedorPage() {
             Resumen de toda tu documentación
           </p>
           <div className="mt-6 rounded-xl border p-4" style={{ borderColor: BRAND.border }}>
-            <p className="text-sm font-semibold">DNI común a todos los servicios</p>
-            <div className="mt-2">
-              {["dni_propietario", "dni_nie"]
-                .filter((id) => requiredDocuments.some((d) => d.id === id))
-                .map((docId) => (
-                  <div key={docId} className="flex items-center gap-2 py-1 text-sm">
-                    <span style={{ color: documentFiles[docId] ? GREEN : ORANGE }}>
-                      {documentFiles[docId] ? "✓" : "⚠️"}
-                    </span>
-                    <span>{DOCUMENT_CATALOG[docId].title}</span>
-                    <span className="text-xs text-[#888]">
-                      {documentFiles[docId] ? "subido" : "pendiente"}
-                    </span>
-                  </div>
-                ))}
+            <p className="text-sm font-semibold">DNI / NIE / Pasaporte</p>
+            <p className="mt-0.5 text-xs text-[#666]">Obligatorio para todos los servicios</p>
+            <div className="mt-3">
+              <DocUploadRow
+                docId="dni_nie"
+                title="DNI / NIE / Pasaporte"
+                required
+                file={documentFiles.dni_nie || documentFiles.dni_propietario}
+                onUpload={openDocumentUpload}
+              />
             </div>
           </div>
           {verticalesSeleccionados.map((v) => {
@@ -1600,16 +1562,18 @@ export default function SerProveedorPage() {
             );
           })}
           <div className="mt-6 space-y-2">
-            {requiredDocuments.map((doc) => (
-              <DocUploadRow
-                key={doc.id}
-                docId={doc.id}
-                title={doc.title}
-                required={doc.required}
-                file={documentFiles[doc.id]}
-                onUpload={openDocumentUpload}
-              />
-            ))}
+            {requiredDocuments
+              .filter((doc) => doc.id !== "dni_nie")
+              .map((doc) => (
+                <DocUploadRow
+                  key={doc.id}
+                  docId={doc.id}
+                  title={doc.title}
+                  required={doc.required}
+                  file={documentFiles[doc.id]}
+                  onUpload={openDocumentUpload}
+                />
+              ))}
           </div>
         </div>
       );
@@ -1633,7 +1597,10 @@ export default function SerProveedorPage() {
           .filter((d) => d.required)
           .map((d) => ({
             label: d.title,
-            ok: !!documentFiles[d.id],
+            ok:
+              d.id === "dni_nie"
+                ? !!(documentFiles.dni_nie || documentFiles.dni_propietario)
+                : !!documentFiles[d.id],
           })),
       ];
 
@@ -1724,18 +1691,78 @@ export default function SerProveedorPage() {
               ))}
             </ul>
           </div>
-          {successMessage && (
-            <p className="mt-4 rounded-xl bg-green-50 px-4 py-3 text-sm text-green-800">
-              {successMessage}
-            </p>
-          )}
           <button
-            type="submit"
-            disabled={submitting}
+            type="button"
+            onClick={handleSubmit}
+            disabled={loading}
             className="mt-6 w-full rounded-xl py-3.5 text-sm font-semibold text-white transition-opacity disabled:opacity-60"
             style={{ backgroundColor: PRIMARY }}
           >
-            {submitting ? "Enviando…" : "Enviar para revisión"}
+            {loading ? "Enviando..." : "Enviar para revisión →"}
+          </button>
+        </div>
+      );
+    }
+
+    if (pasoActual === 8) {
+      return (
+        <div style={{ textAlign: "center", padding: "60px 24px" }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>🎉</div>
+          <h2
+            style={{
+              fontSize: 24,
+              fontWeight: 300,
+              color: "#2a3a4a",
+              fontFamily: "Georgia,serif",
+              marginBottom: 8,
+            }}
+          >
+            ¡Perfil enviado para revisión!
+          </h2>
+          <p
+            style={{
+              fontSize: 14,
+              color: "#888",
+              marginBottom: 24,
+              lineHeight: 1.7,
+            }}
+          >
+            Nuestro equipo revisará tu perfil y documentos en menos de 24 horas.
+            <br />
+            Te avisaremos por email cuando esté verificado.
+          </p>
+          <div
+            style={{
+              background: "#e6f4f0",
+              borderRadius: 8,
+              padding: "16px 24px",
+              display: "inline-block",
+              marginBottom: 24,
+            }}
+          >
+            <div style={{ fontSize: 12, color: "#0e7a5c", fontWeight: 500 }}>
+              🎁 Recuerda
+            </div>
+            <div style={{ fontSize: 11, color: "#555", marginTop: 4 }}>
+              Tus primeras 3 reservas son sin comisión
+            </div>
+          </div>
+          <br />
+          <button
+            type="button"
+            onClick={() => router.push("/dashboard")}
+            style={{
+              background: "#1d4f91",
+              color: "#fff",
+              border: "none",
+              padding: "11px 28px",
+              borderRadius: 6,
+              fontSize: 13,
+              cursor: "pointer",
+              fontWeight: 500,
+            }}
+          >
+            Ir a mi dashboard →
           </button>
         </div>
       );
@@ -1744,6 +1771,7 @@ export default function SerProveedorPage() {
     return null;
   };
 
+  const isConfirmStep = pasoActual === 8;
   const isLastStep = pasoActual === 7;
   const isFirstStep = pasoActual === 1;
 
@@ -1760,58 +1788,62 @@ export default function SerProveedorPage() {
 
       <input ref={documentInputRef} type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={handleDocumentFile} />
 
-      <form onSubmit={handleSubmit} className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
-        <div className="grid grid-cols-1 gap-8 lg:grid-cols-[1fr_290px]">
-          <div>
-            {errorMessage && (
-              <p className="mb-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
-                {errorMessage}
-              </p>
-            )}
-            {renderStep()}
-            {!isLastStep && (
-              <div className="mt-10 flex items-center justify-between gap-4">
+      <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
+        {isConfirmStep ? (
+          renderStep()
+        ) : (
+          <div className="grid grid-cols-1 gap-8 lg:grid-cols-[1fr_290px]">
+            <div>
+              {errorMessage && (
+                <p className="mb-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {errorMessage}
+                </p>
+              )}
+              {renderStep()}
+              {!isLastStep && (
+                <div className="mt-10 flex items-center justify-between gap-4">
+                  <button
+                    type="button"
+                    onClick={goBack}
+                    disabled={isFirstStep}
+                    className="rounded-xl border px-6 py-3 text-sm font-semibold transition-opacity disabled:opacity-30"
+                    style={{ borderColor: "#ccc", color: "#666" }}
+                  >
+                    ← Volver
+                  </button>
+                  <button
+                    type="button"
+                    onClick={goNext}
+                    className="rounded-xl px-6 py-3 text-sm font-semibold text-white"
+                    style={{ backgroundColor: PRIMARY }}
+                  >
+                    Siguiente →
+                  </button>
+                </div>
+              )}
+              {isLastStep && !isFirstStep && (
                 <button
                   type="button"
                   onClick={goBack}
-                  disabled={isFirstStep}
-                  className="rounded-xl border px-6 py-3 text-sm font-semibold transition-opacity disabled:opacity-30"
+                  className="mt-6 rounded-xl border px-6 py-3 text-sm font-semibold"
                   style={{ borderColor: "#ccc", color: "#666" }}
                 >
                   ← Volver
                 </button>
-                <button
-                  type="button"
-                  onClick={goNext}
-                  className="rounded-xl px-6 py-3 text-sm font-semibold text-white"
-                  style={{ backgroundColor: PRIMARY }}
-                >
-                  Siguiente →
-                </button>
-              </div>
-            )}
-            {isLastStep && !isFirstStep && (
-              <button
-                type="button"
-                onClick={goBack}
-                className="mt-6 rounded-xl border px-6 py-3 text-sm font-semibold"
-                style={{ borderColor: "#ccc", color: "#666" }}
-              >
-                ← Volver
-              </button>
-            )}
+              )}
+            </div>
+            <PreviewPanel
+              profilePhotoPreview={profilePhotoPreview}
+              nombre={nombre}
+              apellido={apellido}
+              ciudad={ciudad}
+              verticales={verticalesSeleccionados}
+              serviceDetails={serviceDetails}
+              idiomas={idiomas}
+            />
           </div>
-          <PreviewPanel
-            profilePhotoPreview={profilePhotoPreview}
-            nombre={nombre}
-            apellido={apellido}
-            ciudad={ciudad}
-            verticales={verticalesSeleccionados}
-            serviceDetails={serviceDetails}
-            idiomas={idiomas}
-          />
-        </div>
-      </form>
+        )}
+      </div>
     </div>
   );
 }

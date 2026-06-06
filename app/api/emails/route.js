@@ -746,6 +746,46 @@ export async function POST(request) {
       return Response.json({ success: true });
     }
 
+    if (tipo === "nuevo_proveedor") {
+      const adminEmail = process.env.ADMIN_EMAIL || FROM;
+      const baseUrl = process.env.NEXT_PUBLIC_URL || "https://homeandheart.es";
+      const adminUrl = `${baseUrl}/admin`;
+      const verticalLabels = {
+        alojamiento: "Alojamiento",
+        ninos: "Niñera",
+        mascotas: "Mascotas",
+      };
+      const verticales = Array.isArray(data.verticales) ? data.verticales : [];
+      const verticalesHtml =
+        verticales.map((v) => verticalLabels[v] || v).join(", ") || "—";
+
+      const result = await resend.emails.send({
+        from: FROM,
+        to: adminEmail,
+        subject: "Nuevo proveedor pendiente de revisión",
+        html: emailLayout({
+          title: "Nuevo proveedor pendiente de revisión",
+          bodyHtml: `
+            <h1 style="margin:0 0 16px;font-size:20px;color:${BRAND_PRIMARY};">Nuevo proveedor pendiente de revisión</h1>
+            <p style="margin:0 0 8px;font-size:14px;line-height:1.6;"><strong>Nombre:</strong> ${data.nombre ?? "—"}</p>
+            <p style="margin:0 0 8px;font-size:14px;line-height:1.6;"><strong>Email:</strong> ${data.email ?? "—"}</p>
+            <p style="margin:0 0 24px;font-size:14px;line-height:1.6;"><strong>Servicios:</strong> ${verticalesHtml}</p>
+            <p style="margin:0;text-align:center;">
+              <a href="${adminUrl}" style="display:inline-block;background-color:${BRAND_PRIMARY};color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:8px;font-size:15px;font-weight:600;">
+                Ver en admin →
+              </a>
+            </p>
+          `,
+        }),
+      });
+
+      if (result.error) {
+        return Response.json({ error: result.error.message }, { status: 400 });
+      }
+
+      return Response.json({ success: true });
+    }
+
     if (tipo === "incidencia") {
       const adminEmail = process.env.ADMIN_EMAIL || FROM;
       const result = await resend.emails.send({
