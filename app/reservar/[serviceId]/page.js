@@ -7,9 +7,9 @@ import {
   useElements,
   useStripe,
 } from "@stripe/react-stripe-js";
+import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Navbar from "@/app/components/Navbar";
 import { BRAND, SERIF } from "@/app/components/brand";
 import { applyBestDiscountToBase } from "@/app/lib/descuentosDuracion";
 import { getUserFamiliaActiva } from "@/app/lib/familia";
@@ -447,6 +447,220 @@ function formatEuro(amount) {
   return `${Number(amount).toFixed(2)}€`;
 }
 
+const GOLD = "#c8922a";
+
+const BUNDLE_TABS = [
+  { id: "alojamiento", label: "🏠 Alojamiento" },
+  { id: "ninos", label: "🧒 Niñera" },
+  { id: "mascotas", label: "🐾 Mascotas" },
+];
+
+function formatFechaDisplay(dateStr) {
+  if (!dateStr) return "—";
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const months = [
+    "ene", "feb", "mar", "abr", "may", "jun",
+    "jul", "ago", "sep", "oct", "nov", "dic",
+  ];
+  return `${d} ${months[m - 1]} ${y}`;
+}
+
+function formatFechasRango(inicio, fin) {
+  if (!inicio) return "Selecciona fechas";
+  const finStr = fin && fin !== inicio ? ` – ${formatFechaDisplay(fin)}` : "";
+  return `${formatFechaDisplay(inicio)}${finStr}`;
+}
+
+function hasPetFriendly(service) {
+  const desc = (service.descripcion || "").toLowerCase();
+  return /pet[-_\s]?friendly/i.test(desc);
+}
+
+function getServiceDisplayTags(service) {
+  const tags = [];
+  if (service.vertical === "alojamiento") {
+    tags.push({ text: "NRU ✓", light: "#e8f0fb", color: "#163a6b" });
+  }
+  if (
+    service.vertical === "alojamiento" &&
+    (service.disponible_para_viajar || hasPetFriendly(service))
+  ) {
+    tags.push({ text: "Pet-friendly 🐾", light: "#e6f4f0", color: "#085041" });
+  }
+  if (service.reserva_inmediata) {
+    tags.push({ text: "Reserva inmediata ⚡", light: "#fdf3e3", color: "#92400e" });
+  }
+  return tags;
+}
+
+function getInitials(nombre, apellido) {
+  const first = nombre?.trim()?.[0] ?? "";
+  const last = apellido?.trim()?.[0] ?? "";
+  return (first + last).toUpperCase() || "?";
+}
+
+function getFreeCancelDeadline(serviceStartAt, policyKey) {
+  if (!serviceStartAt) return null;
+  const key = normalizeCancelPolicy(policyKey);
+  const deadline = new Date(serviceStartAt);
+  if (key === "flexible") {
+    deadline.setHours(deadline.getHours() - 24);
+  } else if (key === "moderada") {
+    deadline.setDate(deadline.getDate() - 3);
+  } else if (key === "estricta") {
+    deadline.setDate(deadline.getDate() - 7);
+  } else {
+    return null;
+  }
+  return deadline;
+}
+
+function formatCancelDeadline(date) {
+  if (!date) return null;
+  const d = date.getDate();
+  const months = [
+    "enero", "febrero", "marzo", "abril", "mayo", "junio",
+    "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+  ];
+  return `${d} de ${months[date.getMonth()]}`;
+}
+
+function StarRating({ value, size = 10 }) {
+  const rounded = Math.round(Number(value) || 0);
+  return (
+    <div className="flex gap-0.5">
+      {[1, 2, 3, 4, 5].map((star) => (
+        <svg
+          key={star}
+          width={size}
+          height={size}
+          viewBox="0 0 24 24"
+          fill={star <= rounded ? GOLD : "none"}
+          stroke={star <= rounded ? GOLD : "#ddd"}
+          strokeWidth={1.5}
+          aria-hidden
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M11.48 3.499a.562.562 0 0 1 1.04 0l2.125 5.111a.563.563 0 0 0 .475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 0 0-.182.557l1.285 5.385a.562.562 0 0 1-.84.61l-4.725-2.885a.562.562 0 0 0-.586 0L6.982 20.54a.562.562 0 0 1-.84-.61l1.285-5.386a.562.562 0 0 0-.182-.557l-4.204-3.602a.562.562 0 0 1 .321-.988l5.518-.442a.563.563 0 0 0 .475-.345L11.48 3.5Z"
+          />
+        </svg>
+      ))}
+    </div>
+  );
+}
+
+function ServiceTag({ text, light, color }) {
+  return (
+    <span
+      className="rounded-full px-2 py-0.5 text-[9px] font-semibold"
+      style={{ backgroundColor: light, color }}
+    >
+      {text}
+    </span>
+  );
+}
+
+function ProgressBar({ datesReady, aceptaPolitica, precioListo }) {
+  const steps = [
+    { id: 1, label: "Elige fechas" },
+    { id: 2, label: "Confirma" },
+    { id: 3, label: "Paga" },
+  ];
+
+  function getStepStatus(stepId) {
+    if (stepId === 1) {
+      if (datesReady) return "completed";
+      return "active";
+    }
+    if (stepId === 2) {
+      if (aceptaPolitica && datesReady) return "completed";
+      if (datesReady) return "active";
+      return "pending";
+    }
+    if (stepId === 3) {
+      if (precioListo && aceptaPolitica && datesReady) return "active";
+      if (aceptaPolitica && datesReady) return "active";
+      return "pending";
+    }
+    return "pending";
+  }
+
+  return (
+    <div
+      className="border-b bg-white"
+      style={{ borderColor: "#e8e4de", padding: "16px 24px" }}
+    >
+      <div className="mx-auto flex max-w-[1100px] items-center justify-center">
+        {steps.map((step, index) => {
+          const status = getStepStatus(step.id);
+          const isLast = index === steps.length - 1;
+          return (
+            <div key={step.id} className="flex items-center">
+              <div className="flex flex-col items-center gap-1.5">
+                <div
+                  className="flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-semibold"
+                  style={
+                    status === "completed"
+                      ? { backgroundColor: "#1d4f91", color: "#fff" }
+                      : status === "active"
+                        ? {
+                            backgroundColor: "#1d4f91",
+                            color: "#fff",
+                            boxShadow: "0 0 0 4px rgba(29,79,145,.2)",
+                          }
+                        : {
+                            backgroundColor: "#f7f5f2",
+                            border: "1px solid #e8e4de",
+                            color: "#bbb",
+                          }
+                  }
+                >
+                  {status === "completed" ? "✓" : step.id}
+                </div>
+                <span
+                  className="text-[10px] font-medium"
+                  style={{ color: status === "pending" ? "#bbb" : "#1d4f91" }}
+                >
+                  {step.label}
+                </span>
+              </div>
+              {!isLast && (
+                <div
+                  className="mx-3 h-px w-16 sm:w-24"
+                  style={{
+                    backgroundColor: status === "completed" ? "#1d4f91" : "#e8e4de",
+                  }}
+                />
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function SectionHeader({ number, title }) {
+  return (
+    <div className="mb-4 flex items-center gap-2.5">
+      <span
+        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold text-white"
+        style={{ backgroundColor: "#1d4f91" }}
+      >
+        {number}
+      </span>
+      <h2
+        className="text-[14px] font-semibold text-[#1a1a1a]"
+        style={{ fontFamily: SERIF }}
+      >
+        {title}
+      </h2>
+    </div>
+  );
+}
+
 function getCardBrandLabel(brand) {
   const labels = {
     visa: "Visa",
@@ -669,10 +883,10 @@ function SavedCardCheckout({
         type="button"
         disabled={paying || disabled}
         onClick={handlePayWithSaved}
-        className="mt-4 w-full rounded-xl py-3.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-        style={{ backgroundColor: BRAND.primary }}
+        className="mt-4 w-full rounded py-[13px] text-[13px] font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+        style={{ backgroundColor: "#1d4f91", borderRadius: 4 }}
       >
-        {paying ? "Procesando pago…" : "Pagar con esta tarjeta"}
+        {paying ? "Procesando pago…" : `Pagar ${precioTotal.toFixed(2)}€ →`}
       </button>
       <button
         type="button"
@@ -871,10 +1085,10 @@ function CheckoutForm({
       <button
         type="submit"
         disabled={!stripe || paying || disabled}
-        className="mt-4 w-full rounded-xl py-3.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-        style={{ backgroundColor: BRAND.primary }}
+        className="mt-4 w-full rounded py-[13px] text-[13px] font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+        style={{ backgroundColor: "#1d4f91", borderRadius: 4 }}
       >
-        {paying ? "Procesando pago…" : `Pagar ${precioTotal.toFixed(2)}€`}
+        {paying ? "Procesando pago…" : `Pagar ${precioTotal.toFixed(2)}€ →`}
       </button>
     </form>
   );
@@ -918,6 +1132,14 @@ export default function ReservarPage() {
   const [paymentMethodsLoading, setPaymentMethodsLoading] = useState(false);
   const [disponibilidadChecking, setDisponibilidadChecking] = useState(false);
   const [calendarioError, setCalendarioError] = useState("");
+  const [showFechas, setShowFechas] = useState(true);
+  const [bundleTab, setBundleTab] = useState("alojamiento");
+  const [tabServices, setTabServices] = useState([]);
+  const [tabServicesLoading, setTabServicesLoading] = useState(false);
+  const [providerAvgRating, setProviderAvgRating] = useState(null);
+  const [providerReviewCount, setProviderReviewCount] = useState(0);
+  const [tabReviewsMap, setTabReviewsMap] = useState({});
+  const [filteredComplementary, setFilteredComplementary] = useState([]);
 
   useEffect(() => {
     async function load() {
@@ -1009,9 +1231,25 @@ export default function ReservarPage() {
 
       setService(data);
 
+      const { data: ratings } = await supabase
+        .from("reviews")
+        .select("valoracion")
+        .eq("proveedor_id", data.proveedor_id);
+
+      const reviewCount = ratings?.length ?? 0;
+      setProviderReviewCount(reviewCount);
+      if (reviewCount > 0) {
+        const avg =
+          ratings.reduce((sum, r) => sum + Number(r.valoracion), 0) / reviewCount;
+        setProviderAvgRating(avg.toFixed(1));
+      }
+
       const complementaryVerticals =
         COMPLEMENTARY_VERTICALS[data.vertical] ?? [];
       const city = data.ciudad?.trim();
+      const defaultTab =
+        complementaryVerticals[0] ?? "alojamiento";
+      setBundleTab(defaultTab);
 
       if (city && complementaryVerticals.length > 0) {
         const suggestions = [];
@@ -1025,11 +1263,13 @@ export default function ReservarPage() {
               titulo,
               vertical,
               precio,
+              descripcion,
               estancia_minima,
               estancia_maxima,
               antelacion_minima,
               dias_disponibles,
               reserva_inmediata,
+              disponible_para_viajar,
               ciudad,
               proveedor_id,
               direccion_exacta,
@@ -1040,7 +1280,8 @@ export default function ReservarPage() {
               descuentos_duracion,
               profiles (
                 nombre,
-                apellido
+                apellido,
+                verificado
               )
             `,
             )
@@ -1048,6 +1289,7 @@ export default function ReservarPage() {
             .eq("vertical", compVertical)
             .ilike("ciudad", `%${city}%`)
             .neq("proveedor_id", data.proveedor_id)
+            .neq("id", data.id)
             .limit(3);
 
           if (compData?.length) {
@@ -1133,9 +1375,17 @@ export default function ReservarPage() {
     );
   }, [service?.cancellation_policy, serviceStartAt]);
 
+  const allBundleCandidates = useMemo(() => {
+    const map = new Map();
+    [...complementaryServices, ...tabServices, ...filteredComplementary].forEach(
+      (s) => map.set(s.id, s),
+    );
+    return Array.from(map.values());
+  }, [complementaryServices, tabServices, filteredComplementary]);
+
   const bundleServices = useMemo(
-    () => complementaryServices.filter((s) => bundleIds.includes(s.id)),
-    [complementaryServices, bundleIds],
+    () => allBundleCandidates.filter((s) => bundleIds.includes(s.id)),
+    [allBundleCandidates, bundleIds],
   );
 
   const selectedServices = useMemo(
@@ -1284,6 +1534,159 @@ export default function ReservarPage() {
     (disponibilidadChecking
       ? "Comprobando disponibilidad…"
       : priceSummary.detail);
+
+  const datesReady = useMemo(() => {
+    if (!fechaInicio) return false;
+    if (vertical === "ninos") {
+      return Boolean(hora && duracionHoras);
+    }
+    if (vertical === "alojamiento" || vertical === "mascotas") {
+      return Boolean(fechaFin);
+    }
+    return true;
+  }, [fechaInicio, fechaFin, hora, duracionHoras, vertical]);
+
+  const loadServicesForVertical = useCallback(
+    async (tabVertical, inicio, fin) => {
+      if (!service || !inicio) return [];
+      const city = service.ciudad?.trim();
+      if (!city) return [];
+
+      const { data: compData } = await supabase
+        .from("services")
+        .select(
+          `
+          id,
+          titulo,
+          vertical,
+          precio,
+          descripcion,
+          estancia_minima,
+          estancia_maxima,
+          antelacion_minima,
+          dias_disponibles,
+          reserva_inmediata,
+          disponible_para_viajar,
+          ciudad,
+          proveedor_id,
+          direccion_exacta,
+          telefono_contacto,
+          modalidad,
+          oferta_descuento,
+          oferta_valida_hasta,
+          descuentos_duracion,
+          profiles (
+            nombre,
+            apellido,
+            verificado
+          )
+        `,
+        )
+        .eq("disponible", true)
+        .eq("vertical", tabVertical)
+        .ilike("ciudad", `%${city}%`)
+        .neq("proveedor_id", service.proveedor_id)
+        .neq("id", service.id)
+        .limit(12);
+
+      if (!compData?.length) return [];
+
+      const end = fin || inicio;
+      const available = await Promise.all(
+        compData.map(async (svc) => {
+          const avail = await verificarDisponibilidad(svc.id, inicio, end);
+          const diaError = validateDiaDisponible(svc, inicio);
+          return avail && !diaError ? svc : null;
+        }),
+      );
+      return available.filter(Boolean);
+    },
+    [service],
+  );
+
+  useEffect(() => {
+    if (!datesReady || !fechaInicio || !service) {
+      setFilteredComplementary([]);
+      return;
+    }
+
+    let cancelled = false;
+    async function filterComplementary() {
+      const fin = fechaFin || fechaInicio;
+      const results = await Promise.all(
+        complementaryServices.map(async (svc) => {
+          const avail = await verificarDisponibilidad(svc.id, fechaInicio, fin);
+          const diaError = validateDiaDisponible(svc, fechaInicio);
+          return avail && !diaError ? svc : null;
+        }),
+      );
+      if (!cancelled) {
+        setFilteredComplementary(results.filter(Boolean));
+      }
+    }
+
+    filterComplementary();
+    return () => {
+      cancelled = true;
+    };
+  }, [complementaryServices, fechaInicio, fechaFin, datesReady, service]);
+
+  useEffect(() => {
+    if (!datesReady || !fechaInicio || !service) {
+      setTabServices([]);
+      return;
+    }
+
+    let cancelled = false;
+    setTabServicesLoading(true);
+
+    async function loadTab() {
+      const fin = fechaFin || fechaInicio;
+      const services = await loadServicesForVertical(bundleTab, fechaInicio, fin);
+      if (cancelled) return;
+
+      setTabServices(services);
+
+      if (services.length > 0) {
+        const proveedorIds = [...new Set(services.map((s) => s.proveedor_id))];
+        const { data: reviews } = await supabase
+          .from("reviews")
+          .select("proveedor_id, valoracion")
+          .in("proveedor_id", proveedorIds);
+
+        const map = {};
+        for (const pid of proveedorIds) {
+          const provReviews = (reviews ?? []).filter((r) => r.proveedor_id === pid);
+          const count = provReviews.length;
+          const avg =
+            count > 0
+              ? (
+                  provReviews.reduce((sum, r) => sum + Number(r.valoracion), 0) /
+                  count
+                ).toFixed(1)
+              : null;
+          map[pid] = { count, avg };
+        }
+        if (!cancelled) setTabReviewsMap(map);
+      } else {
+        setTabReviewsMap({});
+      }
+
+      if (!cancelled) setTabServicesLoading(false);
+    }
+
+    loadTab();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    bundleTab,
+    datesReady,
+    fechaInicio,
+    fechaFin,
+    service,
+    loadServicesForVertical,
+  ]);
 
   const paymentMetadata = useMemo(() => {
     if (!userId || !serviceId || !grupoReserva) return null;
@@ -1542,9 +1945,13 @@ export default function ReservarPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen font-sans" style={{ backgroundColor: BRAND.warm }}>
-        <Navbar />
-        <main className="mx-auto max-w-5xl px-4 py-16 text-center text-sm text-[#666]">
+      <div className="min-h-screen font-sans" style={{ backgroundColor: "#f7f5f2" }}>
+        <header className="border-b bg-white px-6 py-4" style={{ borderColor: "#e8e4de" }}>
+          <p className="text-[18px] text-[#111]" style={{ fontFamily: SERIF }}>
+            Home<span className="italic" style={{ color: "#1d4f91" }}>&</span>Heart
+          </p>
+        </header>
+        <main className="mx-auto max-w-[1100px] px-6 py-16 text-center text-sm text-[#666]">
           Cargando servicio…
         </main>
       </div>
@@ -1553,9 +1960,13 @@ export default function ReservarPage() {
 
   if (!service) {
     return (
-      <div className="min-h-screen font-sans" style={{ backgroundColor: BRAND.warm }}>
-        <Navbar />
-        <main className="mx-auto max-w-5xl px-4 py-16 text-center">
+      <div className="min-h-screen font-sans" style={{ backgroundColor: "#f7f5f2" }}>
+        <header className="border-b bg-white px-6 py-4" style={{ borderColor: "#e8e4de" }}>
+          <p className="text-[18px] text-[#111]" style={{ fontFamily: SERIF }}>
+            Home<span className="italic" style={{ color: "#1d4f91" }}>&</span>Heart
+          </p>
+        </header>
+        <main className="mx-auto max-w-[1100px] px-6 py-16 text-center">
           <p className="text-sm text-red-600">{errorMessage || "Servicio no disponible."}</p>
         </main>
       </div>
@@ -1565,433 +1976,535 @@ export default function ReservarPage() {
   const { Icon } = verticalConfig;
   const zone =
     service.ciudad || profile.location_zone || profile.ciudad || "España";
+  const fullProviderName =
+    formatShortName(profile.nombre, profile.apellido) || "Proveedor";
+  const serviceTags = getServiceDisplayTags(service);
+  const freeCancelDeadline = getFreeCancelDeadline(
+    serviceStartAt,
+    service.cancellation_policy,
+  );
+  const freeCancelDateStr = formatCancelDeadline(freeCancelDeadline);
+  const buscarUrl = fechaInicio
+    ? `/buscar?desde=${fechaInicio}${fechaFin ? `&hasta=${fechaFin}` : ""}`
+    : "/buscar";
+  const mainPriceLine =
+    priceSummary.lines.find((l) => l.id === service.id) ?? priceSummary.lines[0];
+  const bundleLines = priceSummary.lines.filter((l) => l.id !== service.id);
+  const durationCount = getServiceDuration(service, {
+    fechaInicio,
+    fechaFin,
+    duracionHoras,
+    mainVertical: vertical,
+  });
+  const unitBase =
+    mainPriceLine?.base && durationCount
+      ? mainPriceLine.base / durationCount
+      : Number(service.precio) || 0;
+  const unitClientPrice = applyClientPrice(unitBase);
+
+  function getCompAddPrice(comp) {
+    const calc = calculateServiceBasePrice(comp, {
+      fechaInicio,
+      fechaFin,
+      duracionHoras,
+      mainVertical: vertical,
+    });
+    if (calc.ready) return applyClientPrice(calc.base);
+    if (comp.precio) return applyClientPrice(Number(comp.precio));
+    return 0;
+  }
 
   return (
     <div
       className="min-h-screen font-sans"
-      style={{ backgroundColor: BRAND.warm, color: "#1a1a1a" }}
+      style={{ backgroundColor: "#f7f5f2", color: "#1a1a1a" }}
     >
-      <Navbar />
-
-      <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-10 lg:py-12">
-        <header className="mb-8">
-          <h1
-            className="text-2xl font-bold text-[#1a1a1a] sm:text-3xl"
-            style={{ fontFamily: SERIF }}
+      <header
+        className="border-b bg-white px-6 py-4"
+        style={{ borderColor: "#e8e4de" }}
+      >
+        <div className="mx-auto flex max-w-[1100px] items-center justify-between">
+          <Link
+            href={`/proveedor/${service.proveedor_id}`}
+            className="text-[12px] no-underline transition-opacity hover:opacity-80"
+            style={{ color: "#888" }}
           >
-            Reservar servicio
-          </h1>
-          <p className="mt-1 text-base text-[#666]">
-            {service.titulo || verticalConfig.label}
-          </p>
-        </header>
+            ← Volver al perfil
+          </Link>
+          <Link href="/" className="no-underline">
+            <p className="text-[18px] leading-none text-[#111]" style={{ fontFamily: SERIF }}>
+              Home<span className="italic" style={{ color: "#1d4f91" }}>&</span>Heart
+            </p>
+          </Link>
+        </div>
+      </header>
 
-        <div className="grid gap-6 lg:grid-cols-2 lg:gap-8">
-          <aside
-            className="rounded-2xl border bg-white p-6 sm:p-7"
-            style={{ borderColor: BRAND.border }}
-          >
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="text-lg font-semibold text-[#1a1a1a]">
-                {formatShortName(profile.nombre, profile.apellido) || "Proveedor"}
-              </p>
-              {profile.verificado === true && (
-                <span
-                  className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold"
-                  style={{ backgroundColor: verticalConfig.light, color: verticalConfig.color }}
-                >
-                  <CheckBadgeIcon className="h-3.5 w-3.5" />
-                  Verificado
-                </span>
-              )}
-            </div>
-            <p className="mt-1 text-sm text-[#888]">{zone}</p>
+      <ProgressBar
+        datesReady={datesReady}
+        aceptaPolitica={aceptaPolitica}
+        precioListo={precioListo}
+      />
 
-            <div
-              className="mt-6 flex items-center gap-3 border-t pt-6"
-              style={{ borderColor: BRAND.border }}
+      <main className="mx-auto max-w-[1100px] p-6">
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_380px]">
+          {/* Columna izquierda */}
+          <div className="flex flex-col gap-5">
+            {/* Sección 1 — Tu reserva */}
+            <section
+              className="rounded-[10px] border bg-white p-5"
+              style={{ borderColor: "#e8e4de" }}
             >
-              <span
-                className="flex h-11 w-11 items-center justify-center rounded-xl"
-                style={{ backgroundColor: verticalConfig.light, color: verticalConfig.color }}
-              >
-                <Icon className="h-6 w-6" />
-              </span>
-              <div>
-                <p className="text-xs font-medium uppercase tracking-wide text-[#888]">
-                  {verticalConfig.label}
-                </p>
-                {precioEspecialChat ? (
-                  <div>
-                    <p className="text-sm font-medium text-green-700">
-                      Precio especial acordado con el proveedor 🏷️
+              <SectionHeader number={1} title="Tu reserva" />
+
+              <div className="flex gap-3">
+                <div
+                  className="flex h-16 w-20 shrink-0 items-center justify-center rounded-lg"
+                  style={{
+                    background: `linear-gradient(135deg, ${verticalConfig.color}22, ${verticalConfig.color}55)`,
+                    borderRadius: 8,
+                  }}
+                >
+                  <Icon className="h-7 w-7" style={{ color: verticalConfig.color }} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-[13px] font-semibold text-[#1a1a1a]">
+                      {fullProviderName}
                     </p>
-                    <div className="mt-1 flex flex-wrap items-baseline gap-2">
-                      <p className="text-lg text-[#888] line-through">
-                        {unitPrice
-                          ? `${unitPrice}€${verticalConfig.priceSuffix}`
-                          : "Consultar"}
+                    {profile.verificado === true && (
+                      <ServiceTag text="Verificada ✓" light="#e8f0fb" color="#163a6b" />
+                    )}
+                  </div>
+                  <p className="mt-0.5 text-[11px] text-[#888]">
+                    {service.titulo || verticalConfig.label} · {zone}
+                  </p>
+                  {serviceTags.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {serviceTags.map((tag) => (
+                        <ServiceTag key={tag.text} {...tag} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {(showFechas || !datesReady) ? (
+                <div className="mt-4 flex flex-col gap-3">
+                  <div>
+                    <label htmlFor="fecha-inicio" className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-[#bbb]">
+                      {vertical === "ninos" ? "Fecha" : "Llegada"}
+                    </label>
+                    <FechaInicioConDias
+                      id="fecha-inicio"
+                      value={fechaInicio}
+                      min={new Date().toISOString().split("T")[0]}
+                      diasDisponibles={service?.dias_disponibles}
+                      onChange={setFechaInicio}
+                      onValidationError={setErrorMessage}
+                      inputClass={inputClass}
+                      borderColor="#e8e4de"
+                    />
+                  </div>
+                  {(vertical === "alojamiento" || vertical === "mascotas") && (
+                    <div>
+                      <label htmlFor="fecha-fin" className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-[#bbb]">
+                        Salida
+                      </label>
+                      <input
+                        id="fecha-fin"
+                        type="date"
+                        required
+                        min={fechaInicio || undefined}
+                        value={fechaFin}
+                        onChange={(e) => setFechaFin(e.target.value)}
+                        className={inputClass}
+                        style={{ borderColor: "#e8e4de" }}
+                      />
+                    </div>
+                  )}
+                  {vertical === "ninos" && (
+                    <>
+                      <div>
+                        <label htmlFor="hora" className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-[#bbb]">
+                          Hora
+                        </label>
+                        <input
+                          id="hora"
+                          type="time"
+                          required
+                          min={getMinHora()}
+                          value={hora}
+                          onChange={(e) => setHora(e.target.value)}
+                          className={inputClass}
+                          style={{ borderColor: "#e8e4de" }}
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="duracion" className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-[#bbb]">
+                          Duración (horas)
+                        </label>
+                        <input
+                          id="duracion"
+                          type="number"
+                          min="1"
+                          step="1"
+                          required
+                          value={duracionHoras}
+                          onChange={(e) => setDuracionHoras(e.target.value)}
+                          className={inputClass}
+                          style={{ borderColor: "#e8e4de" }}
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
+              ) : (
+                <div className="mt-4 grid grid-cols-2 gap-3">
+                  <div
+                    className="rounded-lg border p-3"
+                    style={{ backgroundColor: "#f7f5f2", borderColor: "#e8e4de" }}
+                  >
+                    <p className="text-[8px] font-medium uppercase tracking-wide text-[#bbb]">
+                      {vertical === "ninos" ? "Fecha" : "Llegada"}
+                    </p>
+                    <p className="mt-1 text-[13px] text-[#2a3a4a]">
+                      {formatFechaDisplay(fechaInicio)}
+                      {vertical === "ninos" && hora ? ` · ${hora}` : ""}
+                    </p>
+                  </div>
+                  {(vertical === "alojamiento" || vertical === "mascotas") && (
+                    <div
+                      className="rounded-lg border p-3"
+                      style={{ backgroundColor: "#f7f5f2", borderColor: "#e8e4de" }}
+                    >
+                      <p className="text-[8px] font-medium uppercase tracking-wide text-[#bbb]">
+                        Salida
                       </p>
-                      <p className="text-2xl font-bold text-green-700">
-                        {precioEspecialChat}€{verticalConfig.priceSuffix}
+                      <p className="mt-1 text-[13px] text-[#2a3a4a]">
+                        {formatFechaDisplay(fechaFin)}
                       </p>
                     </div>
-                  </div>
-                ) : ofertaActiva ? (
-                  <div className="flex flex-wrap items-baseline gap-2">
-                    <p className="text-lg text-[#888] line-through">
-                      {unitPrice ? `${unitPrice}€${verticalConfig.priceSuffix}` : "Consultar"}
-                    </p>
-                    <p className="text-2xl font-bold text-green-700">
-                      {precioEfectivo
-                        ? `${precioEfectivo}€${verticalConfig.priceSuffix}`
-                        : "Consultar"}
-                    </p>
-                  </div>
-                ) : (
-                  <p className="text-2xl font-bold" style={{ color: verticalConfig.color }}>
-                    {unitPrice ? `${unitPrice}€${verticalConfig.priceSuffix}` : "Consultar"}
-                  </p>
-                )}
-              </div>
-            </div>
+                  )}
+                  {vertical === "ninos" && (
+                    <div
+                      className="rounded-lg border p-3"
+                      style={{ backgroundColor: "#f7f5f2", borderColor: "#e8e4de" }}
+                    >
+                      <p className="text-[8px] font-medium uppercase tracking-wide text-[#bbb]">
+                        Duración
+                      </p>
+                      <p className="mt-1 text-[13px] text-[#2a3a4a]">
+                        {duracionHoras} hora{Number(duracionHoras) > 1 ? "s" : ""}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
 
+              {datesReady && (
+                <button
+                  type="button"
+                  onClick={() => setShowFechas((v) => !v)}
+                  className="mt-2 border-0 bg-transparent p-0 text-[11px] font-medium hover:underline"
+                  style={{ color: "#1d4f91" }}
+                >
+                  {showFechas ? "Ocultar fechas" : "Cambiar fechas →"}
+                </button>
+              )}
+
+              <textarea
+                id="mensaje"
+                rows={3}
+                value={mensaje}
+                onChange={(e) => setMensaje(e.target.value)}
+                placeholder={`Mensaje para ${profile.nombre || "el proveedor"} (opcional)...`}
+                className="mt-4 w-full resize-y rounded-lg border px-3 py-2.5 text-[12px] text-[#1a1a1a] outline-none focus:ring-2 focus:ring-[#1d4f91]/20"
+                style={{ borderColor: "#e8e4de" }}
+              />
+
+              {precioListo && priceSummary.total > 0 && familiaInfo && (
+                <div
+                  className="mt-4 flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5"
+                  style={{ borderColor: "#e8e4de", backgroundColor: "#f7f5f2" }}
+                >
+                  <label htmlFor="reservar-familia" className="text-[11px] font-medium text-[#444]">
+                    Reservar bajo el grupo familiar {familiaInfo.nombre}
+                  </label>
+                  <button
+                    type="button"
+                    id="reservar-familia"
+                    role="switch"
+                    aria-checked={reservarComoFamilia}
+                    onClick={() => setReservarComoFamilia((prev) => !prev)}
+                    className="relative h-6 w-11 shrink-0 rounded-full transition-colors"
+                    style={{
+                      backgroundColor: reservarComoFamilia ? "#1d4f91" : "#d1d5db",
+                    }}
+                  >
+                    <span
+                      className="absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform"
+                      style={{ left: reservarComoFamilia ? "20px" : "2px" }}
+                    />
+                  </button>
+                </div>
+              )}
+
+              {(precioEspecialChat || ofertaActiva) && (
+                <p className="mt-3 text-[11px] font-medium text-green-700">
+                  {precioEspecialChat
+                    ? "Precio especial acordado con el proveedor 🏷️"
+                    : `Oferta activa: ${precioEfectivo}€${verticalConfig.priceSuffix}`}
+                </p>
+              )}
+            </section>
+
+            {/* Sección 2 — Política de cancelación */}
             {cancelPolicy && (
-              <div className="mt-5 flex gap-3 rounded-xl bg-[#fef9c3] px-4 py-3">
-                <InfoIcon className="mt-0.5 h-5 w-5 shrink-0 text-[#ca8a04]" />
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-[#92400e]">
-                    Política de cancelación
+              <section
+                className="rounded-[10px] border bg-white p-5"
+                style={{ borderColor: "#e8e4de" }}
+              >
+                <SectionHeader number={2} title="Política de cancelación" />
+                <div
+                  className="rounded-lg border p-4"
+                  style={{ backgroundColor: "#fdf3e3", borderColor: "#e8c47a" }}
+                >
+                  <p className="text-[12px] font-semibold text-[#854d0e]">
+                    🛡️ {cancelPolicy.name}
                   </p>
-                  <p className="mt-0.5 text-sm font-semibold text-[#854d0e]">
-                    {cancelPolicy.name}
-                  </p>
-                  <p className="mt-0.5 text-sm leading-relaxed text-[#854d0e]">
+                  <p className="mt-1 text-[11px] leading-relaxed text-[#854d0e]">
                     {cancelPolicy.description}
                   </p>
-                </div>
-              </div>
-            )}
-
-            {formatEstanciaInfo(
-              vertical,
-              service.estancia_minima,
-              service.estancia_maxima,
-            ).length > 0 && (
-              <div
-                className="mt-4 flex gap-3 rounded-xl px-4 py-3"
-                style={{ backgroundColor: verticalConfig.light }}
-              >
-                <InfoIcon
-                  className="mt-0.5 h-5 w-5 shrink-0"
-                  style={{ color: verticalConfig.color }}
-                />
-                <div>
-                  <p
-                    className="text-xs font-semibold uppercase tracking-wide"
-                    style={{ color: verticalConfig.color }}
-                  >
-                    Estancia
-                  </p>
-                  {formatEstanciaInfo(
-                    vertical,
-                    service.estancia_minima,
-                    service.estancia_maxima,
-                  ).map((line) => (
-                    <p
-                      key={line}
-                      className="mt-0.5 text-sm leading-relaxed text-[#444]"
-                    >
-                      {line}
+                  {refundPercentNow !== null && precioListo && (
+                    <p className="mt-2 text-[10px] text-[#92400e]">
+                      Si cancelaras ahora: {refundPercentNow}% de reembolso
                     </p>
-                  ))}
+                  )}
                 </div>
-              </div>
-            )}
-
-            {formatAntelacionInfo(service.antelacion_minima) && (
-              <div
-                className="mt-4 flex gap-3 rounded-xl px-4 py-3"
-                style={{ backgroundColor: verticalConfig.light }}
-              >
-                <InfoIcon
-                  className="mt-0.5 h-5 w-5 shrink-0"
-                  style={{ color: verticalConfig.color }}
-                />
-                <div>
-                  <p
-                    className="text-xs font-semibold uppercase tracking-wide"
-                    style={{ color: verticalConfig.color }}
-                  >
-                    Antelación
-                  </p>
-                  <p className="mt-0.5 text-sm leading-relaxed text-[#444]">
-                    {formatAntelacionInfo(service.antelacion_minima)}
-                  </p>
-                </div>
-              </div>
-            )}
-          </aside>
-
-          <div
-            className="rounded-2xl border bg-white p-6 sm:p-7"
-            style={{ borderColor: BRAND.border }}
-          >
-            <h2 className="text-lg font-semibold text-[#1a1a1a]">Detalles de la reserva</h2>
-
-            <div className="mt-5 flex flex-col gap-4">
-              <div>
-                <label htmlFor="fecha-inicio" className="mb-1.5 block text-xs font-medium text-[#444]">
-                  Fecha de inicio
-                </label>
-                <FechaInicioConDias
-                  id="fecha-inicio"
-                  value={fechaInicio}
-                  min={new Date().toISOString().split("T")[0]}
-                  diasDisponibles={service?.dias_disponibles}
-                  onChange={setFechaInicio}
-                  onValidationError={setErrorMessage}
-                  inputClass={inputClass}
-                  borderColor={BRAND.border}
-                />
-              </div>
-
-              {(vertical === "alojamiento" || vertical === "mascotas") && (
-                <div>
-                  <label htmlFor="fecha-fin" className="mb-1.5 block text-xs font-medium text-[#444]">
-                    Fecha de fin
+                {precioListo && priceSummary.total > 0 && (
+                  <label className="mt-4 flex cursor-pointer items-start gap-3">
+                    <input
+                      type="checkbox"
+                      checked={aceptaPolitica}
+                      onChange={(e) => setAceptaPolitica(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded border-[#1d4f91] accent-[#1d4f91]"
+                      style={{ backgroundColor: aceptaPolitica ? "#e8f0fb" : "#fff" }}
+                    />
+                    <span className="text-[11px] leading-relaxed text-[#444]">
+                      He leído y acepto la política de cancelación{" "}
+                      <strong style={{ color: "#1d4f91" }}>{cancelPolicy.name}</strong>{" "}
+                      y las condiciones del servicio
+                    </span>
                   </label>
-                  <input
-                    id="fecha-fin"
-                    type="date"
-                    required
-                    min={fechaInicio || undefined}
-                    value={fechaFin}
-                    onChange={(e) => setFechaFin(e.target.value)}
-                    onInput={(e) => setFechaFin(e.target.value)}
-                    className={inputClass}
-                    style={{ borderColor: BRAND.border }}
-                  />
-                </div>
-              )}
-
-              {vertical === "ninos" && (
-                <>
-                  <div>
-                    <label htmlFor="hora" className="mb-1.5 block text-xs font-medium text-[#444]">
-                      Hora
-                    </label>
-                    <input
-                      id="hora"
-                      type="time"
-                      required
-                      min={getMinHora()}
-                      value={hora}
-                      onChange={(e) => setHora(e.target.value)}
-                      className={inputClass}
-                      style={{ borderColor: BRAND.border }}
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="duracion" className="mb-1.5 block text-xs font-medium text-[#444]">
-                      Duración (horas)
-                    </label>
-                    <input
-                      id="duracion"
-                      type="number"
-                      min="1"
-                      step="1"
-                      required
-                      value={duracionHoras}
-                      onChange={(e) => setDuracionHoras(e.target.value)}
-                      className={inputClass}
-                      style={{ borderColor: BRAND.border }}
-                    />
-                  </div>
-                </>
-              )}
-
-              <div>
-                <label htmlFor="mensaje" className="mb-1.5 block text-xs font-medium text-[#444]">
-                  Cuéntale algo al proveedor (opcional)
-                </label>
-                <textarea
-                  id="mensaje"
-                  rows={4}
-                  value={mensaje}
-                  onChange={(e) => setMensaje(e.target.value)}
-                  className={`${inputClass} resize-y`}
-                  style={{ borderColor: BRAND.border }}
-                />
-              </div>
-            </div>
-
-            {complementaryServices.length > 0 && (
-              <section className="mt-6 border-t pt-6" style={{ borderColor: BRAND.border }}>
-                <h3 className="text-base font-semibold text-[#1a1a1a]">
-                  ¿Quieres añadir más servicios para esas fechas?
-                </h3>
-                <p className="mt-1 text-sm text-[#888]">
-                  Todo en una sola reserva y un solo pago.
-                </p>
-
-                <div className="-mx-1 mt-4 flex gap-3 overflow-x-auto px-1 pb-2">
-                  {complementaryServices.map((comp) => {
-                    const compConfig = VERTICALS[comp.vertical] ?? VERTICALS.alojamiento;
-                    const CompIcon = compConfig.Icon;
-                    const isAdded = bundleIds.includes(comp.id);
-                    const providerName = formatShortName(
-                      comp.profiles?.nombre,
-                      comp.profiles?.apellido,
-                    );
-
-                    return (
-                      <div
-                        key={comp.id}
-                        className="flex w-[220px] shrink-0 flex-col rounded-xl border bg-white p-3"
-                        style={{ borderColor: BRAND.border }}
-                      >
-                        <div className="flex items-start gap-2">
-                          <span
-                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
-                            style={{
-                              backgroundColor: compConfig.light,
-                              color: compConfig.color,
-                            }}
-                          >
-                            <CompIcon className="h-5 w-5" />
-                          </span>
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-semibold text-[#1a1a1a]">
-                              {providerName || "Proveedor"}
-                            </p>
-                            <p className="text-xs font-bold" style={{ color: compConfig.color }}>
-                              {comp.precio
-                                ? `${comp.precio}€${compConfig.priceSuffix}`
-                                : "Consultar"}
-                            </p>
-                          </div>
-                        </div>
-
-                        {comp.titulo && (
-                          <p className="mt-2 line-clamp-2 text-xs text-[#666]">{comp.titulo}</p>
-                        )}
-
-                        <div className="mt-2">
-                          {comp.reserva_inmediata ? (
-                            <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold text-green-800">
-                              Inmediata ⚡
-                            </span>
-                          ) : (
-                            <span className="rounded-full bg-yellow-100 px-2 py-0.5 text-[10px] font-semibold text-yellow-800">
-                              Con confirmación 🕐
-                            </span>
-                          )}
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => toggleBundleService(comp.id)}
-                          className="mt-3 w-full rounded-lg py-2 text-xs font-semibold transition-colors"
-                          style={
-                            isAdded
-                              ? { backgroundColor: "#16a34a", color: "#fff" }
-                              : {
-                                  border: `1.5px solid ${compConfig.color}`,
-                                  color: compConfig.color,
-                                  backgroundColor: "#fff",
-                                }
-                          }
-                        >
-                          {isAdded ? "Añadido ✓" : "Añadir +"}
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
+                )}
               </section>
             )}
 
-            <div
-              className="mt-6 rounded-xl px-4 py-4"
-              style={{ backgroundColor: verticalConfig.light }}
+            {/* Sección 3 — ¿Añades más servicios? */}
+            <section
+              className="rounded-[10px] border bg-white p-5"
+              style={{ borderColor: "#e8e4de" }}
             >
-              <p className="text-xs font-medium uppercase tracking-wide text-[#666]">
-                Resumen del precio
-              </p>
+              <SectionHeader number={3} title="¿Añades más servicios?" />
 
-              {precioListo ? (
+              {datesReady ? (
                 <>
-                  <div className="mt-3 flex flex-col gap-2">
-                    {priceSummary.lines.map((line) => {
-                      const lineConfig = VERTICALS[line.vertical] ?? verticalConfig;
-                      return (
-                        <div
-                          key={line.id}
-                          className="flex items-start justify-between gap-3 text-sm"
-                        >
-                          <span className="text-[#444]">{line.name}</span>
-                          <span className="shrink-0 font-semibold" style={{ color: lineConfig.color }}>
-                            {formatEuro(line.total)}
-                          </span>
-                        </div>
-                      );
-                    })}
+                  <div
+                    className="rounded-lg p-4"
+                    style={{ backgroundColor: "#e8f0fb" }}
+                  >
+                    <p className="text-[11px] font-semibold text-[#1d4f91]">
+                      ✨ Disponibles para tus fechas · {formatFechasRango(fechaInicio, fechaFin)}
+                    </p>
+                    {filteredComplementary.length > 0 ? (
+                      <ul className="mt-3 flex flex-col gap-2">
+                        {filteredComplementary.map((comp) => {
+                          const compConfig = VERTICALS[comp.vertical] ?? VERTICALS.alojamiento;
+                          const isAdded = bundleIds.includes(comp.id);
+                          const addPrice = getCompAddPrice(comp);
+                          const providerName = formatShortName(
+                            comp.profiles?.nombre,
+                            comp.profiles?.apellido,
+                          );
+                          return (
+                            <li
+                              key={comp.id}
+                              className="flex items-center justify-between gap-2 rounded-lg bg-white/70 px-3 py-2"
+                            >
+                              <div className="flex min-w-0 items-center gap-2">
+                                <span
+                                  className="h-2 w-2 shrink-0 rounded-full"
+                                  style={{ backgroundColor: compConfig.color }}
+                                />
+                                <div className="min-w-0">
+                                  <p className="truncate text-[11px] font-semibold text-[#1a1a1a]">
+                                    {providerName || "Proveedor"}
+                                  </p>
+                                  <p className="truncate text-[10px] text-[#888]">
+                                    {comp.titulo || compConfig.label}
+                                  </p>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => toggleBundleService(comp.id)}
+                                className="shrink-0 rounded px-2.5 py-1 text-[10px] font-semibold transition-colors"
+                                style={
+                                  isAdded
+                                    ? { backgroundColor: "#0e7a5c", color: "#fff" }
+                                    : {
+                                        border: `1px solid ${compConfig.color}`,
+                                        color: compConfig.color,
+                                        backgroundColor: "#fff",
+                                      }
+                                }
+                              >
+                                {isAdded ? "✓" : `+ ${addPrice ? formatEuro(addPrice) : "Añadir"}`}
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    ) : (
+                      <p className="mt-2 text-[10px] text-[#666]">
+                        No hay servicios complementarios disponibles para estas fechas.
+                      </p>
+                    )}
                   </div>
 
-                  <p
-                    className="mt-3 text-2xl font-bold"
-                    style={{ color: verticalConfig.color }}
-                  >
-                    {formatEuro(priceSummary.total)}
+                  <p className="my-4 text-center text-[10px] text-[#bbb]">
+                    ¿No encuentras lo que buscas?
                   </p>
 
-                  <p className="mt-1 text-xs text-[#888]">
-                    Gastos de gestión incluidos
-                  </p>
-                  {precioEspecialChat && (
-                    <p className="mt-2 text-sm font-medium text-green-700">
-                      Precio especial acordado con el proveedor 🏷️
+                  <div className="flex flex-wrap gap-2">
+                    {BUNDLE_TABS.map((tab) => (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => setBundleTab(tab.id)}
+                        className="rounded-full px-3 py-1.5 text-[10px] font-semibold transition-colors"
+                        style={
+                          bundleTab === tab.id
+                            ? { backgroundColor: "#1d4f91", color: "#fff" }
+                            : {
+                                backgroundColor: "#f7f5f2",
+                                border: "1px solid #e8e4de",
+                                color: "#666",
+                              }
+                        }
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {tabServicesLoading ? (
+                    <p className="mt-4 text-center text-[11px] text-[#888]">
+                      Buscando proveedores…
+                    </p>
+                  ) : tabServices.length > 0 ? (
+                    <ul className="mt-4 flex flex-col gap-3">
+                      {tabServices.map((comp) => {
+                        const compConfig = VERTICALS[comp.vertical] ?? VERTICALS.alojamiento;
+                        const isAdded = bundleIds.includes(comp.id);
+                        const addPrice = getCompAddPrice(comp);
+                        const providerName = formatShortName(
+                          comp.profiles?.nombre,
+                          comp.profiles?.apellido,
+                        );
+                        const reviews = tabReviewsMap[comp.proveedor_id];
+                        const compTags = getServiceDisplayTags(comp);
+                        return (
+                          <li
+                            key={comp.id}
+                            className="rounded-lg border bg-white p-3"
+                            style={{ borderColor: "#e8e4de" }}
+                          >
+                            <div className="flex items-start gap-3">
+                              <span
+                                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white"
+                                style={{ backgroundColor: compConfig.color }}
+                              >
+                                {getInitials(comp.profiles?.nombre, comp.profiles?.apellido)}
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="min-w-0">
+                                    <p className="text-[12px] font-semibold text-[#1a1a1a]">
+                                      {providerName}
+                                    </p>
+                                    <p className="text-[10px] text-[#888]">
+                                      {comp.titulo || compConfig.label}
+                                    </p>
+                                    {reviews?.avg && (
+                                      <div className="mt-1 flex items-center gap-1">
+                                        <StarRating value={reviews.avg} size={9} />
+                                        <span className="text-[9px] text-[#aaa]">
+                                          {reviews.avg} · {reviews.count} reseña{reviews.count !== 1 ? "s" : ""}
+                                        </span>
+                                      </div>
+                                    )}
+                                    {compTags.length > 0 && (
+                                      <div className="mt-1.5 flex flex-wrap gap-1">
+                                        {compTags.map((tag) => (
+                                          <ServiceTag key={tag.text} {...tag} />
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                  <p className="shrink-0 text-[12px] font-semibold" style={{ color: compConfig.color }}>
+                                    {comp.precio ? `${comp.precio}€` : "—"}
+                                  </p>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleBundleService(comp.id)}
+                                  className="mt-2 rounded px-3 py-1 text-[10px] font-semibold transition-colors"
+                                  style={
+                                    isAdded
+                                      ? { backgroundColor: "#0e7a5c", color: "#fff" }
+                                      : {
+                                          border: `1px solid ${compConfig.color}`,
+                                          color: compConfig.color,
+                                          backgroundColor: "#fff",
+                                        }
+                                  }
+                                >
+                                  {isAdded ? "Añadido ✓" : `+ Añadir${addPrice ? ` · ${formatEuro(addPrice)}` : ""}`}
+                                </button>
+                              </div>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : (
+                    <p className="mt-4 text-center text-[11px] text-[#888]">
+                      No hay proveedores de este tipo disponibles para tus fechas.
                     </p>
                   )}
-                  {priceSummary.lines.some(
-                    (line) =>
-                      line.discountSource === "duration" && line.discountPct > 0,
-                  ) && (
-                    <div className="mt-3 flex flex-col gap-1">
-                      {priceSummary.lines
-                        .filter(
-                          (line) =>
-                            line.discountSource === "duration" &&
-                            line.discountPct > 0,
-                        )
-                        .map((line) => (
-                          <p
-                            key={line.id}
-                            className="text-sm font-medium text-green-700"
-                          >
-                            Descuento por estancia larga: -{line.discountPct}%
-                            {priceSummary.lines.length > 1
-                              ? ` (${line.name})`
-                              : ""}
-                          </p>
-                        ))}
-                    </div>
-                  )}
-                </>
-              ) : (
-                <>
-                  <p className="mt-1 text-sm text-[#444]">{precioDetail}</p>
-                  <p className="mt-2 text-2xl font-bold" style={{ color: verticalConfig.color }}>
-                    —
+
+                  <Link
+                    href={buscarUrl}
+                    className="mt-4 block text-center text-[11px] font-semibold no-underline hover:underline"
+                    style={{ color: "#1d4f91" }}
+                  >
+                    🔍 Ver todos los proveedores disponibles →
+                  </Link>
+                  <p className="mt-1 text-center text-[9px] text-[#bbb]">
+                    Se abrirá el buscador con tus fechas ya seleccionadas
                   </p>
                 </>
+              ) : (
+                <p className="text-[11px] text-[#888]">
+                  Completa las fechas de tu reserva para ver servicios adicionales disponibles.
+                </p>
               )}
-            </div>
+            </section>
 
             {successMessage && (
               <p
-                className={`mt-4 rounded-lg px-4 py-3 text-sm ${
+                className={`rounded-lg px-4 py-3 text-sm ${
                   successVariant === "blue"
                     ? "bg-[#e8f0fb] text-[#1d4f91]"
                     : "bg-green-50 text-green-700"
@@ -2001,203 +2514,226 @@ export default function ReservarPage() {
               </p>
             )}
             {errorMessage && (
-              <p className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+              <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
                 {errorMessage}
               </p>
             )}
+          </div>
 
-            {service.reserva_inmediata ? (
-              <span className="mt-6 inline-flex rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-800">
-                Reserva inmediata ⚡
-              </span>
-            ) : (
-              <span className="mt-6 inline-flex rounded-full bg-yellow-100 px-3 py-1 text-xs font-semibold text-yellow-800">
-                Requiere confirmación 🕐
-              </span>
-            )}
-
-            {cancelPolicy && (
-              <div
-                className="mt-6 rounded-xl border-2 px-4 py-4"
-                style={{
-                  borderColor: verticalConfig.color,
-                  backgroundColor: verticalConfig.light,
-                }}
+          {/* Columna derecha — Resumen */}
+          <aside className="lg:sticky lg:top-5 lg:self-start">
+            <div
+              className="rounded-[10px] border bg-white p-5"
+              style={{ borderColor: "#e8e4de" }}
+            >
+              <h3
+                className="text-[13px] font-semibold text-[#1a1a1a]"
+                style={{ fontFamily: SERIF }}
               >
-                <p
-                  className="text-sm font-bold"
-                  style={{ color: verticalConfig.color }}
-                >
-                  Política de cancelación — {cancelPolicy.name}
-                </p>
-                <p className="mt-1 text-sm leading-relaxed text-[#444]">
-                  {cancelPolicy.description}
-                </p>
-                <ul className="mt-4 flex flex-col gap-2.5">
-                  {cancelPolicy.tiers.map((tier) => (
-                    <li
-                      key={tier.label}
-                      className="flex items-center justify-between gap-3 rounded-lg bg-white/80 px-3 py-2 text-sm"
-                    >
-                      <span className="text-[#444]">{tier.label}</span>
-                      <span
-                        className="shrink-0 font-bold tabular-nums"
-                        style={{ color: verticalConfig.color }}
-                      >
-                        {tier.percent}% reembolso
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-                {refundPercentNow !== null && precioListo && (
-                  <p
-                    className="mt-4 border-t pt-3 text-sm font-medium"
-                    style={{
-                      borderColor: `${verticalConfig.color}33`,
-                      color: verticalConfig.color,
-                    }}
-                  >
-                    Si cancelaras ahora: {refundPercentNow}% de reembolso (
-                    {formatEuro(
-                      Math.round(
-                        (priceSummary.total * refundPercentNow) / 100 * 100,
-                      ) / 100,
-                    )}
-                    )
-                  </p>
-                )}
-              </div>
-            )}
+                Resumen del pedido
+              </h3>
 
-            {precioListo && priceSummary.total > 0 && familiaInfo && (
-              <div
-                className="my-4 flex items-center justify-between gap-3 rounded-xl border px-4 py-3"
-                style={{ borderColor: BRAND.border, backgroundColor: BRAND.warm }}
-              >
-                <label
-                  htmlFor="reservar-familia"
-                  className="text-sm font-medium text-[#444]"
-                >
-                  Reservar bajo el grupo familiar {familiaInfo.nombre}
-                </label>
-                <button
-                  type="button"
-                  id="reservar-familia"
-                  role="switch"
-                  aria-checked={reservarComoFamilia}
-                  onClick={() => setReservarComoFamilia((prev) => !prev)}
-                  className="relative h-7 w-12 shrink-0 rounded-full transition-colors"
+              <div className="mt-4 flex gap-2.5">
+                <div
+                  className="flex h-10 w-12 shrink-0 items-center justify-center rounded"
                   style={{
-                    backgroundColor: reservarComoFamilia
-                      ? BRAND.primary
-                      : "#d1d5db",
+                    background: `linear-gradient(135deg, ${verticalConfig.color}22, ${verticalConfig.color}55)`,
+                    borderRadius: 6,
                   }}
                 >
-                  <span
-                    className="absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform"
-                    style={{
-                      left: reservarComoFamilia ? "22px" : "2px",
-                    }}
-                  />
-                </button>
+                  <Icon className="h-5 w-5" style={{ color: verticalConfig.color }} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[12px] font-semibold text-[#1a1a1a]">{fullProviderName}</p>
+                  <p className="text-[10px] text-[#888]">
+                    {profile.verificado === true && "Verificada ✓ · "}
+                    {providerAvgRating ? `${providerAvgRating} ★` : "Sin valoraciones"}
+                    {providerReviewCount > 0 &&
+                      ` · ${providerReviewCount} reseña${providerReviewCount !== 1 ? "s" : ""}`}
+                  </p>
+                </div>
               </div>
-            )}
 
-            {precioListo && priceSummary.total > 0 && (
-              <div className="my-4 flex items-start gap-3">
-                <input
-                  type="checkbox"
-                  id="acepta-politica"
-                  required
-                  checked={aceptaPolitica}
-                  onChange={(e) => setAceptaPolitica(e.target.checked)}
-                  className="mt-1 cursor-pointer"
-                />
-                <label htmlFor="acepta-politica" className="text-sm text-[#444]">
-                  He leído y acepto la política de cancelación{" "}
-                  <span className="font-medium text-[#1d4f91]">
-                    {service?.cancellation_policy === "flexible"
-                      ? "Flexible"
-                      : service?.cancellation_policy === "moderada"
-                        ? "Moderada"
-                        : "Estricta"}
-                  </span>{" "}
-                  y las condiciones de este servicio
-                </label>
-              </div>
-            )}
-
-            {precioListo && priceSummary.total > 0 ? (
-              paymentMethodsLoading || paymentIntentLoading ? (
-                <p className="mt-6 text-center text-sm text-[#666]">
-                  Preparando formulario de pago…
-                </p>
-              ) : savedPaymentMethods.length > 0 &&
-                !useNewCard &&
-                selectedPaymentMethod &&
-                paymentMetadata &&
-                stripeCustomerId ? (
-                <SavedCardCheckout
-                  precioTotal={priceSummary.total}
-                  paymentMethod={selectedPaymentMethod}
-                  stripeCustomerId={stripeCustomerId}
-                  userId={userId}
-                  metadata={paymentMetadata}
-                  onPaymentSuccess={completeBooking}
-                  onUseNewCard={() => setUseNewCard(true)}
-                  getBookingDateError={() =>
-                    validateBookingDates(vertical, fechaInicio, hora)
-                  }
-                  disabled={!!successMessage || !aceptaPolitica}
-                />
-              ) : clientSecret && paymentMetadata ? (
+              {precioListo ? (
                 <>
-                  <Elements
-                    key={clientSecret}
-                    stripe={stripePromise}
-                    options={{ clientSecret }}
-                  >
-                    <CheckoutForm
-                      precioTotal={priceSummary.total}
-                      paymentIntentId={paymentIntentId}
-                      metadata={paymentMetadata}
-                      stripeCustomerId={stripeCustomerId}
-                      userId={userId}
-                      userEmail={userEmail}
-                      clienteNombre={[perfilCliente?.nombre, perfilCliente?.apellido]
-                        .filter(Boolean)
-                        .join(" ")}
-                      onPaymentSuccess={completeBooking}
-                      vertical={vertical}
-                      fechaInicio={fechaInicio}
-                      hora={hora}
-                      setErrorMessage={setErrorMessage}
-                      service={service}
-                      disabled={!!successMessage || !aceptaPolitica}
-                    />
-                  </Elements>
-                  {savedPaymentMethods.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setUseNewCard(false)}
-                      className="mt-3 w-full text-center text-sm font-medium no-underline hover:underline"
-                      style={{ color: BRAND.primary }}
+                  <div className="mt-4 flex items-start justify-between gap-2 text-[11px]">
+                    <div>
+                      <p className="text-[#444]">
+                        {mainPriceLine?.detail} × {formatEuro(unitClientPrice)}
+                      </p>
+                      <p className="mt-0.5 text-[10px] font-medium text-[#0e7a5c]">
+                        ✓ Pago protegido incluido
+                      </p>
+                    </div>
+                    <span className="shrink-0 font-semibold text-[#1a1a1a]">
+                      {mainPriceLine ? formatEuro(mainPriceLine.total) : "—"}
+                    </span>
+                  </div>
+
+                  {bundleLines.map((line) => (
+                    <div
+                      key={line.id}
+                      className="mt-2 flex items-center justify-between gap-2 text-[11px]"
                     >
-                      Usar tarjeta guardada
-                    </button>
+                      <div className="flex min-w-0 items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => toggleBundleService(line.id)}
+                          className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-0 text-[10px] text-[#888] hover:bg-[#f7f5f2]"
+                          aria-label="Eliminar servicio"
+                        >
+                          ×
+                        </button>
+                        <span className="truncate text-[#666]">{line.name}</span>
+                      </div>
+                      <span className="shrink-0 font-medium text-[#1a1a1a]">
+                        {formatEuro(line.total)}
+                      </span>
+                    </div>
+                  ))}
+
+                  <div className="my-3 h-px" style={{ backgroundColor: "#e8e4de" }} />
+
+                  <div className="flex items-center justify-between text-[11px] text-[#666]">
+                    <span>Gastos de gestión</span>
+                    <span>{formatEuro(priceSummary.commission)}</span>
+                  </div>
+
+                  {precioEspecialChat && (
+                    <div className="mt-2 flex items-center justify-between text-[11px] font-medium text-green-700">
+                      <span>Precio especial 🏷️</span>
+                      <span>Aplicado</span>
+                    </div>
                   )}
+
+                  {priceSummary.lines
+                    .filter((l) => l.discountSource === "duration" && l.discountPct > 0)
+                    .map((line) => (
+                      <div
+                        key={line.id}
+                        className="mt-2 flex items-center justify-between text-[11px] font-medium text-green-700"
+                      >
+                        <span>Descuento estancia -{line.discountPct}%</span>
+                        <span>✓</span>
+                      </div>
+                    ))}
+
+                  <div className="my-3 h-px" style={{ backgroundColor: "#e8e4de" }} />
+
+                  <div className="flex items-center justify-between">
+                    <span className="text-[13px] font-medium text-[#1a1a1a]">Total</span>
+                    <span className="text-[15px] font-medium text-[#1a1a1a]">
+                      {formatEuro(priceSummary.total)}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-[9px] text-[#bbb]">
+                    IVA incluido · Pago único seguro
+                  </p>
                 </>
               ) : (
-                <p className="mt-6 text-center text-sm text-red-600">
-                  No se pudo cargar el pago. Revisa las fechas e inténtalo de nuevo.
+                <p className="mt-4 text-[11px] text-[#888]">{precioDetail}</p>
+              )}
+
+              <div
+                className="mt-4 rounded-lg p-3 text-[10px] leading-relaxed text-[#666]"
+                style={{ backgroundColor: "#f7f5f2" }}
+              >
+                🛡️ Pago retenido hasta que el servicio se completa. Reembolso total si algo falla.
+              </div>
+
+              {precioListo && priceSummary.total > 0 ? (
+                paymentMethodsLoading || paymentIntentLoading ? (
+                  <p className="mt-4 text-center text-[11px] text-[#666]">
+                    Preparando formulario de pago…
+                  </p>
+                ) : savedPaymentMethods.length > 0 &&
+                  !useNewCard &&
+                  selectedPaymentMethod &&
+                  paymentMetadata &&
+                  stripeCustomerId ? (
+                  <SavedCardCheckout
+                    precioTotal={priceSummary.total}
+                    paymentMethod={selectedPaymentMethod}
+                    stripeCustomerId={stripeCustomerId}
+                    userId={userId}
+                    metadata={paymentMetadata}
+                    onPaymentSuccess={completeBooking}
+                    onUseNewCard={() => setUseNewCard(true)}
+                    getBookingDateError={() =>
+                      validateBookingDates(vertical, fechaInicio, hora)
+                    }
+                    disabled={!!successMessage || !aceptaPolitica}
+                  />
+                ) : clientSecret && paymentMetadata ? (
+                  <>
+                    <Elements
+                      key={clientSecret}
+                      stripe={stripePromise}
+                      options={{ clientSecret }}
+                    >
+                      <CheckoutForm
+                        precioTotal={priceSummary.total}
+                        paymentIntentId={paymentIntentId}
+                        metadata={paymentMetadata}
+                        stripeCustomerId={stripeCustomerId}
+                        userId={userId}
+                        userEmail={userEmail}
+                        clienteNombre={[perfilCliente?.nombre, perfilCliente?.apellido]
+                          .filter(Boolean)
+                          .join(" ")}
+                        onPaymentSuccess={completeBooking}
+                        vertical={vertical}
+                        fechaInicio={fechaInicio}
+                        hora={hora}
+                        setErrorMessage={setErrorMessage}
+                        service={service}
+                        disabled={!!successMessage || !aceptaPolitica}
+                      />
+                    </Elements>
+                    {savedPaymentMethods.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setUseNewCard(false)}
+                        className="mt-3 w-full text-center text-[11px] font-medium no-underline hover:underline"
+                        style={{ color: "#1d4f91" }}
+                      >
+                        Usar tarjeta guardada
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    disabled
+                    className="mt-4 w-full rounded py-[13px] text-[13px] font-semibold text-white opacity-60"
+                    style={{ backgroundColor: "#1d4f91", borderRadius: 4 }}
+                  >
+                    Pagar {priceSummary.total > 0 ? formatEuro(priceSummary.total) : ""} →
+                  </button>
+                )
+              ) : (
+                <button
+                  type="button"
+                  disabled
+                  className="mt-4 w-full rounded py-[13px] text-[13px] font-semibold text-white opacity-60"
+                  style={{ backgroundColor: "#1d4f91", borderRadius: 4 }}
+                >
+                  Pagar →
+                </button>
+              )}
+
+              {freeCancelDateStr && (
+                <p className="mt-3 text-center text-[9px] text-[#bbb]">
+                  Pago seguro con Stripe · Cancelación gratuita hasta {freeCancelDateStr}
                 </p>
-              )
-            ) : (
-              <p className="mt-6 text-center text-sm text-[#888]">
-                Completa las fechas para habilitar el pago.
-              </p>
-            )}
-          </div>
+              )}
+              {!freeCancelDateStr && (
+                <p className="mt-3 text-center text-[9px] text-[#bbb]">
+                  Pago seguro con Stripe
+                </p>
+              )}
+            </div>
+          </aside>
         </div>
       </main>
     </div>
