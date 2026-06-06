@@ -1,7 +1,5 @@
 import ActivityBar from "./components/ActivityBar";
-import Navbar from "./components/Navbar";
 import Hero from "./components/Hero";
-import MetricsBar from "./components/MetricsBar";
 import ProblemSection from "./components/ProblemSection";
 import EcosystemSection from "./components/EcosystemSection";
 import ReviewsSection from "./components/ReviewsSection";
@@ -15,9 +13,7 @@ export default function Home() {
   return (
     <main>
       <ActivityBar />
-      <Navbar />
       <Hero />
-      <MetricsBar />
       <ProblemSection />
       <EcosystemSection />
       <ReviewsSection />

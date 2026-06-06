@@ -1,54 +1,104 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import CalendarioRangoFechas from "@/app/components/CalendarioRangoFechas";
 import { formatShortDate } from "@/app/components/calendario-shared";
 import { useLang } from "@/app/lib/LangContext";
 import { useTranslation } from "@/app/lib/i18n";
-import { BRAND } from "./brand";
+import { supabase } from "@/lib/supabase";
+import { BRAND, SERIF } from "./brand";
 
-const TAB_IDS = [
-  { id: "todo", color: BRAND.primary },
-  { id: "alojamiento", color: "#1d4f91" },
-  { id: "ninos", color: "#0e7a5c" },
-  { id: "mascotas", color: "#c47d1a" },
+const TAB_IDS = ["todo", "alojamiento", "ninos", "mascotas"];
+
+const VERTICAL_CARDS = [
+  {
+    id: "alojamiento",
+    bg: "#1d4f91",
+    borderTop: "#163a6b",
+    titleKey: "alojamiento",
+    labelKey: "alojamiento",
+    fallbackCount: 124,
+    fallbackPrice: 45,
+    priceUnit: { es: "por noche", en: "per night" },
+  },
+  {
+    id: "ninos",
+    bg: "#0e7a5c",
+    borderTop: "#085041",
+    titleKey: "ninos",
+    labelKey: "ninos",
+    fallbackCount: 86,
+    fallbackPrice: 15,
+    priceUnit: { es: "por hora", en: "per hour" },
+  },
+  {
+    id: "mascotas",
+    bg: "#c47d1a",
+    borderTop: "#92400e",
+    titleKey: "mascotas",
+    labelKey: "mascotas",
+    fallbackCount: 58,
+    fallbackPrice: 20,
+    priceUnit: { es: "por día", en: "per day" },
+  },
 ];
 
-function SearchIcon({ className }) {
-  return (
-    <svg
-      className={className}
-      fill="none"
-      viewBox="0 0 24 24"
-      strokeWidth={2.5}
-      stroke="currentColor"
-      aria-hidden
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"
-      />
-    </svg>
-  );
-}
+const METRICS = [
+  { value: "340+", key: "proveedores" },
+  { value: "1.200+", key: "reservas" },
+  { value: "4.9", key: "valoracion" },
+  { value: "30min", key: "garantia", isGarantia: true },
+  { value: "98%", key: "satisfaccion" },
+];
+
+const HERO_EXTRA = {
+  es: {
+    headlineMain: "Todo lo que necesita tu familia, ",
+    headlineEm: "aquí.",
+    ciudad: "Ciudad",
+    miCuenta: "Mi cuenta",
+    buscarBtn: "Buscar →",
+    garantia: "Garantía",
+    disponibles: (n) => `${n} disponibles`,
+    desde: (n) => `desde ${n}€`,
+    trust: [
+      { color: "#1d4f91", text: "340+ verificados" },
+      { color: "#0e7a5c", text: "Garantía 30 min" },
+      { color: "#c47d1a", text: "Un solo pago" },
+      { color: "#888", text: "Sin comisiones ocultas" },
+    ],
+  },
+  en: {
+    headlineMain: "Everything your family needs, ",
+    headlineEm: "here.",
+    ciudad: "City",
+    miCuenta: "My account",
+    buscarBtn: "Search →",
+    garantia: "Guarantee",
+    disponibles: (n) => `${n} available`,
+    desde: (n) => `from €${n}`,
+    trust: [
+      { color: "#1d4f91", text: "340+ verified" },
+      { color: "#0e7a5c", text: "30 min guarantee" },
+      { color: "#c47d1a", text: "One payment" },
+      { color: "#888", text: "No hidden fees" },
+    ],
+  },
+};
 
 function VerticalDivider() {
   return (
     <div
-      className="hidden shrink-0 self-center lg:block"
-      style={{
-        width: 1,
-        height: 32,
-        backgroundColor: BRAND.border,
-      }}
+      className="hidden shrink-0 self-stretch md:block"
+      style={{ width: 1, backgroundColor: "#e8e4de" }}
       aria-hidden
     />
   );
 }
 
-function SearchSection({ label, children, className = "", onClick }) {
+function SearchField({ label, children, onClick }) {
   return (
     <div
       role={onClick ? "button" : undefined}
@@ -64,12 +114,15 @@ function SearchSection({ label, children, className = "", onClick }) {
             }
           : undefined
       }
-      className={`group flex min-w-0 flex-1 flex-col justify-center px-5 py-4 transition-colors hover:bg-[#f7f7f7] lg:py-3 ${onClick ? "cursor-pointer" : ""} ${className}`}
+      className={`flex min-w-0 flex-1 flex-col justify-center px-5 ${onClick ? "cursor-pointer" : ""}`}
     >
-      <span className="text-[11px] font-semibold uppercase tracking-wide text-[#888]">
+      <span
+        className="text-[8px] font-medium uppercase tracking-wide"
+        style={{ color: "#bbb" }}
+      >
         {label}
       </span>
-      <div className="mt-0.5 min-h-[28px]">{children}</div>
+      <div className="mt-0.5 min-h-[20px]">{children}</div>
     </div>
   );
 }
@@ -77,11 +130,84 @@ function SearchSection({ label, children, className = "", onClick }) {
 function DateTrigger({ value, placeholder }) {
   return (
     <span
-      className="block w-full text-sm"
-      style={{ color: value ? "#1a1a1a" : "#999" }}
+      className="block w-full text-[13px]"
+      style={{ color: value ? "#2a3a4a" : "#bbb" }}
     >
       {value ? formatShortDate(value) : placeholder}
     </span>
+  );
+}
+
+function ArrowIcon() {
+  return (
+    <svg
+      className="h-5 w-5"
+      fill="none"
+      viewBox="0 0 24 24"
+      strokeWidth={1.5}
+      stroke="currentColor"
+      aria-hidden
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="m4.5 19.5 15-15m0 0H8.25m11.25 0V11.25"
+      />
+    </svg>
+  );
+}
+
+function VerticalCard({ card, stats, lang, extra, title, label, onClick }) {
+  const count = stats?.count ?? card.fallbackCount;
+  const minPrice = stats?.minPrice ?? card.fallbackPrice;
+  const priceUnit = card.priceUnit[lang] || card.priceUnit.es;
+
+  return (
+    <button
+      type="button"
+      onClick={() => onClick(card.id)}
+      className="relative w-full text-left transition-opacity hover:opacity-95"
+      style={{
+        backgroundColor: card.bg,
+        borderTop: `3px solid ${card.borderTop}`,
+        padding: "28px 24px 24px",
+      }}
+    >
+      <span
+        className="absolute right-5 top-5"
+        style={{ color: "rgba(255,255,255,.2)" }}
+      >
+        <ArrowIcon />
+      </span>
+
+      <p
+        className="text-[9px] font-semibold uppercase tracking-widest"
+        style={{ color: "rgba(255,255,255,.45)" }}
+      >
+        {label}
+      </p>
+
+      <h3
+        className="mt-2 leading-snug text-white"
+        style={{ fontFamily: SERIF, fontWeight: 300, fontSize: 22 }}
+      >
+        {title}
+      </h3>
+
+      <p className="mt-2 text-[11px]" style={{ color: "rgba(255,255,255,.4)" }}>
+        {extra.disponibles(count)}
+      </p>
+
+      <p
+        className="mt-5 leading-none text-white"
+        style={{ fontSize: 28, fontWeight: 200 }}
+      >
+        {extra.desde(minPrice)}
+      </p>
+      <p className="mt-1 text-[10px]" style={{ color: "rgba(255,255,255,.4)" }}>
+        {priceUnit}
+      </p>
+    </button>
   );
 }
 
@@ -89,18 +215,61 @@ export default function Hero() {
   const router = useRouter();
   const { lang } = useLang();
   const t = useTranslation(lang);
+  const extra = HERO_EXTRA[lang] || HERO_EXTRA.es;
   const pickerRef = useRef(null);
+
+  const [user, setUser] = useState(null);
   const [activeTab, setActiveTab] = useState("todo");
   const [query, setQuery] = useState("");
   const [fechaDesde, setFechaDesde] = useState("");
   const [fechaHasta, setFechaHasta] = useState("");
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [verticalStats, setVerticalStats] = useState({});
 
-  const tabs = TAB_IDS.map((tab) => ({
-    ...tab,
-    label: t.hero[tab.id],
+  const tabs = TAB_IDS.map((id) => ({
+    id,
+    label: t.hero[id],
   }));
-  const activeTabConfig = tabs.find((tab) => tab.id === activeTab) ?? tabs[0];
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user: authUser } }) => {
+      setUser(authUser ?? null);
+    });
+  }, []);
+
+  useEffect(() => {
+    async function loadVerticalStats() {
+      const { data, error } = await supabase
+        .from("services")
+        .select("vertical, precio")
+        .eq("disponible", true);
+
+      if (error || !data?.length) return;
+
+      const grouped = {};
+      for (const service of data) {
+        const vertical = service.vertical;
+        if (!vertical) continue;
+
+        if (!grouped[vertical]) {
+          grouped[vertical] = { count: 0, minPrice: null };
+        }
+
+        grouped[vertical].count += 1;
+        const precio = Number(service.precio);
+        if (!Number.isNaN(precio)) {
+          grouped[vertical].minPrice =
+            grouped[vertical].minPrice == null
+              ? precio
+              : Math.min(grouped[vertical].minPrice, precio);
+        }
+      }
+
+      setVerticalStats(grouped);
+    }
+
+    loadVerticalStats();
+  }, []);
 
   useEffect(() => {
     if (!calendarOpen) return;
@@ -138,135 +307,314 @@ export default function Hero() {
     router.push(qs ? `/buscar?${qs}` : "/buscar");
   }
 
+  function handleVerticalClick(vertical) {
+    if (!user) {
+      router.push("/registro");
+      return;
+    }
+    router.push(`/buscar?vertical=${vertical}`);
+  }
+
+  function getCardTitle(card) {
+    if (card.titleKey === "alojamiento") return t.footer.alojamiento;
+    if (card.titleKey === "ninos") return t.footer.ninos;
+    return t.footer.mascotas;
+  }
+
+  function getCardLabel(card) {
+    if (card.labelKey === "alojamiento") return t.hero.alojamiento;
+    if (card.labelKey === "ninos") return t.hero.ninos;
+    return t.hero.mascotas;
+  }
+
   return (
-    <section className="px-4 pb-8 pt-12 sm:px-6 sm:pt-16 lg:px-8 lg:pt-20">
-      <div className="mx-auto max-w-3xl text-center">
-        <p
-          className="mb-4 inline-block rounded-full px-4 py-1.5 text-xs font-medium tracking-wide sm:text-sm"
+    <div style={{ backgroundColor: "#f7f5f2" }}>
+      {/* Navbar */}
+      <header
+        className="border-b"
+        style={{ backgroundColor: "#f7f5f2", borderColor: "#e8e4de" }}
+      >
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
+          <Link href="/" className="shrink-0 no-underline">
+            <p
+              className="text-[18px] leading-none text-[#111]"
+              style={{ fontFamily: SERIF }}
+            >
+              Home<span className="italic" style={{ color: "#1d4f91" }}>&</span>
+              Heart
+            </p>
+            <p className="mt-1 text-[9px]" style={{ color: "#bbb" }}>
+              {t.footer.slogan}
+            </p>
+          </Link>
+
+          <nav
+            className="hidden items-center gap-6 md:flex"
+            aria-label="Principal"
+          >
+            <Link
+              href="/buscar"
+              className="no-underline transition-colors hover:text-[#1d4f91]"
+              style={{ color: "#888", fontSize: 12 }}
+            >
+              {t.navbar.servicios}
+            </Link>
+            <Link
+              href="/garantia"
+              className="no-underline transition-colors hover:text-[#1d4f91]"
+              style={{ color: "#888", fontSize: 12 }}
+            >
+              {t.navbar.garantia}
+            </Link>
+            <Link
+              href="/ser-proveedor"
+              className="no-underline transition-colors hover:text-[#1d4f91]"
+              style={{ color: "#888", fontSize: 12 }}
+            >
+              {t.navbar.serProveedor}
+            </Link>
+          </nav>
+
+          <div className="flex items-center gap-3">
+            {user ? (
+              <Link
+                href="/dashboard"
+                className="px-3.5 py-1.5 text-[12px] font-semibold text-white no-underline transition-opacity hover:opacity-90"
+                style={{ backgroundColor: "#1d4f91", borderRadius: 4 }}
+              >
+                {extra.miCuenta}
+              </Link>
+            ) : (
+              <>
+                <Link
+                  href="/login"
+                  className="hidden text-[12px] font-medium no-underline transition-opacity hover:opacity-80 sm:inline-block"
+                  style={{ color: "#1d4f91" }}
+                >
+                  {t.navbar.iniciarSesion}
+                </Link>
+                <Link
+                  href="/registro"
+                  className="px-3.5 py-1.5 text-[12px] font-semibold text-white no-underline transition-opacity hover:opacity-90"
+                  style={{ backgroundColor: "#1d4f91", borderRadius: 4 }}
+                >
+                  {t.navbar.registrarse}
+                </Link>
+              </>
+            )}
+          </div>
+        </div>
+      </header>
+
+      {/* Headline */}
+      <section
+        className="mx-auto max-w-6xl text-center"
+        style={{ padding: "48px 28px 32px" }}
+      >
+        <div className="flex items-center justify-center gap-3">
+          <span
+            className="shrink-0"
+            style={{ width: 32, height: 1, backgroundColor: "#1d4f91" }}
+            aria-hidden
+          />
+          <p
+            className="text-[9px] font-semibold uppercase tracking-widest"
+            style={{ color: "#1d4f91" }}
+          >
+            {t.hero.badge}
+          </p>
+          <span
+            className="shrink-0"
+            style={{ width: 32, height: 1, backgroundColor: "#1d4f91" }}
+            aria-hidden
+          />
+        </div>
+
+        <h1
+          className="mx-auto mt-5 max-w-3xl leading-[1.15] text-[#111]"
           style={{
-            backgroundColor: BRAND.light,
-            color: BRAND.primary,
+            fontFamily: SERIF,
+            fontWeight: 300,
+            fontSize: 42,
           }}
         >
-          {t.hero.badge}
-        </p>
-        <h1 className="text-3xl font-bold leading-tight tracking-tight text-[#1a1a1a] sm:text-4xl lg:text-5xl">
-          {t.hero.titulo}
+          {extra.headlineMain}
+          <em className="italic" style={{ color: "#1d4f91" }}>
+            {extra.headlineEm}
+          </em>
         </h1>
-        <p className="mx-auto mt-4 max-w-xl text-base leading-relaxed text-[#5c5c5c] sm:text-lg">
+
+        <p
+          className="mx-auto mt-4 text-[13px] leading-[1.7]"
+          style={{ color: "#888", maxWidth: 480 }}
+        >
           {t.hero.subtitulo}
         </p>
-      </div>
+      </section>
 
-      <div ref={pickerRef} className="relative mx-auto mt-10 max-w-5xl">
+      {/* 3 vertical cards */}
+      <section className="mx-auto max-w-6xl">
+        <div className="grid grid-cols-1 md:grid-cols-3">
+          {VERTICAL_CARDS.map((card) => (
+            <VerticalCard
+              key={card.id}
+              card={card}
+              stats={verticalStats[card.id]}
+              lang={lang}
+              extra={extra}
+              title={getCardTitle(card)}
+              label={getCardLabel(card)}
+              onClick={handleVerticalClick}
+            />
+          ))}
+        </div>
+      </section>
+
+      {/* Search bar */}
+      <div ref={pickerRef} className="relative">
         <form
           onSubmit={handleSearch}
-          className="overflow-hidden rounded-[32px] border border-[#ebebeb] bg-white shadow-lg lg:rounded-[50px]"
+          className="border-y bg-white"
+          style={{ borderColor: "#e8e4de", height: 64 }}
         >
-          <div className="flex flex-col lg:flex-row lg:items-stretch">
-            <SearchSection label={t.hero.donde} className="lg:rounded-l-[50px]">
+          <div className="mx-auto flex h-full max-w-6xl flex-col md:flex-row md:items-stretch">
+            <SearchField label={extra.ciudad}>
               <input
                 id="hero-ciudad"
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder={t.hero.placeholder}
-                className="w-full bg-transparent text-sm text-[#1a1a1a] outline-none placeholder:text-[#999]"
+                className="w-full bg-transparent text-[13px] outline-none placeholder:text-[#bbb]"
+                style={{ color: "#2a3a4a" }}
               />
-            </SearchSection>
+            </SearchField>
 
             <div
-              className="mx-5 h-px shrink-0 bg-[#ebebeb] lg:hidden"
+              className="mx-5 h-px shrink-0 md:hidden"
+              style={{ backgroundColor: "#e8e4de" }}
               aria-hidden
             />
             <VerticalDivider />
 
-            <SearchSection label={t.hero.llegada} onClick={openCalendar}>
-              <DateTrigger
-                value={fechaDesde}
-                placeholder={t.hero.annadeFecha}
-              />
-            </SearchSection>
+            <SearchField label={t.hero.llegada} onClick={openCalendar}>
+              <DateTrigger value={fechaDesde} placeholder={t.hero.annadeFecha} />
+            </SearchField>
 
             <div
-              className="mx-5 h-px shrink-0 bg-[#ebebeb] lg:hidden"
+              className="mx-5 h-px shrink-0 md:hidden"
+              style={{ backgroundColor: "#e8e4de" }}
               aria-hidden
             />
             <VerticalDivider />
 
-            <SearchSection label={t.hero.salida} onClick={openCalendar}>
-              <DateTrigger
-                value={fechaHasta}
-                placeholder={t.hero.annadeFecha}
-              />
-            </SearchSection>
+            <SearchField label={t.hero.salida} onClick={openCalendar}>
+              <DateTrigger value={fechaHasta} placeholder={t.hero.annadeFecha} />
+            </SearchField>
 
             <div
-              className="mx-5 h-px shrink-0 bg-[#ebebeb] lg:hidden"
+              className="mx-5 h-px shrink-0 md:hidden"
+              style={{ backgroundColor: "#e8e4de" }}
               aria-hidden
             />
             <VerticalDivider />
 
-            <SearchSection label={t.hero.queNecesitas}>
-              <div className="relative flex items-center gap-2">
-                <span
-                  className="h-2 w-2 shrink-0 rounded-full"
-                  style={{ backgroundColor: activeTabConfig.color }}
-                  aria-hidden
-                />
-                <select
-                  id="hero-vertical"
-                  value={activeTab}
-                  onChange={(e) => setActiveTab(e.target.value)}
-                  className="w-full cursor-pointer appearance-none bg-transparent pr-6 text-sm font-medium outline-none"
-                  style={{ color: activeTabConfig.color }}
-                >
-                  {tabs.map((tab) => (
-                    <option key={tab.id} value={tab.id}>
-                      {tab.label}
-                    </option>
-                  ))}
-                </select>
-                <svg
-                  className="pointer-events-none absolute right-0 h-4 w-4 text-[#888]"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  strokeWidth={2}
-                  stroke="currentColor"
-                  aria-hidden
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="m19 9-7 7-7-7" />
-                </svg>
-              </div>
-            </SearchSection>
-
-            <div className="flex items-center justify-center p-3 lg:pr-3">
-              <button
-                type="submit"
-                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-white transition-opacity hover:opacity-90 lg:h-12 lg:w-12"
-                style={{ backgroundColor: BRAND.primary }}
-                aria-label={t.hero.buscar}
+            <SearchField
+              label={t.hero.queNecesitas.replace("¿", "").replace("?", "")}
+            >
+              <select
+                id="hero-vertical"
+                value={activeTab}
+                onChange={(e) => setActiveTab(e.target.value)}
+                className="w-full cursor-pointer appearance-none bg-transparent text-[13px] font-medium outline-none"
+                style={{ color: "#2a3a4a" }}
               >
-                <SearchIcon className="h-5 w-5" />
-              </button>
-            </div>
+                {tabs.map((tab) => (
+                  <option key={tab.id} value={tab.id}>
+                    {tab.label}
+                  </option>
+                ))}
+              </select>
+            </SearchField>
+
+            <button
+              type="submit"
+              className="shrink-0 text-[13px] font-semibold text-white transition-opacity hover:opacity-90 md:h-full"
+              style={{
+                backgroundColor: "#1d4f91",
+                padding: "0 28px",
+                borderRadius: 0,
+              }}
+            >
+              {extra.buscarBtn}
+            </button>
           </div>
         </form>
 
         {calendarOpen && (
           <div
-            className="absolute left-0 right-0 z-50 mt-3 rounded-2xl border bg-white p-5 shadow-xl sm:p-6"
+            className="absolute left-0 right-0 z-50 border-b bg-white p-5 shadow-xl"
             style={{ borderColor: BRAND.border }}
           >
-            <CalendarioRangoFechas
-              fechaInicio={fechaDesde}
-              fechaFin={fechaHasta}
-              onChange={handleRangeChange}
-              onRangeComplete={() => setCalendarOpen(false)}
-            />
+            <div className="mx-auto max-w-6xl">
+              <CalendarioRangoFechas
+                fechaInicio={fechaDesde}
+                fechaFin={fechaHasta}
+                onChange={handleRangeChange}
+                onRangeComplete={() => setCalendarOpen(false)}
+              />
+            </div>
           </div>
         )}
       </div>
-    </section>
+
+      {/* Stats bar */}
+      <section
+        style={{ backgroundColor: "#ede9e3" }}
+        aria-label="Estadísticas de la plataforma"
+      >
+        <div className="mx-auto grid max-w-6xl grid-cols-2 gap-6 px-4 py-8 sm:grid-cols-3 lg:grid-cols-5 lg:px-6">
+          {METRICS.map((metric) => (
+            <div key={metric.key} className="text-center">
+              <p
+                className="text-[20px] leading-none"
+                style={{ color: "#1d4f91", fontWeight: 300 }}
+              >
+                {metric.value}
+              </p>
+              <p
+                className="mt-1.5 text-[9px] font-medium uppercase tracking-wide"
+                style={{ color: "#999" }}
+              >
+                {metric.isGarantia
+                  ? extra.garantia
+                  : t.metricsBar[metric.key]}
+              </p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Trust row */}
+      <section
+        className="border-t"
+        style={{ backgroundColor: "#f7f5f2", borderColor: "#e8e4de" }}
+      >
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-x-8 gap-y-3 px-4 py-5 sm:px-6">
+          {extra.trust.map((item) => (
+            <div key={item.text} className="flex items-center gap-2">
+              <span
+                className="h-1.5 w-1.5 shrink-0 rounded-full"
+                style={{ backgroundColor: item.color }}
+                aria-hidden
+              />
+              <span className="text-[11px]" style={{ color: "#aaa" }}>
+                {item.text}
+              </span>
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
   );
 }
