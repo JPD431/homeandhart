@@ -1,100 +1,345 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { BRAND, SERIF } from "@/app/components/brand";
-import ProveedorEmergenciaToggle from "@/app/components/ProveedorEmergenciaToggle";
 import { serializeDescuentosDuracionForDb } from "@/app/lib/descuentosDuracion";
 
+const PRIMARY = "#1d4f91";
 const DARK_BLUE = "#163a6b";
-
-const SERVICES = [
-  { id: "alojamiento", label: "Alojamiento" },
-  { id: "ninos", label: "Cuidado de niños" },
-  { id: "mascotas", label: "Cuidado de mascotas" },
-];
-
-const LANGUAGES = [
-  "Español",
-  "Inglés",
-  "Francés",
-  "Alemán",
-  "Italiano",
-  "Portugués",
-];
-
-const CANCEL_POLICIES = [
-  {
-    value: "flexible",
-    label: "Flexible",
-    description:
-      "Cancelación gratuita hasta 24h antes · 50% de reembolso dentro de las 24h previas",
-  },
-  {
-    value: "moderada",
-    label: "Moderada",
-    description:
-      "Cancelación gratuita hasta 3 días antes · 50% entre 3 días y 24h antes",
-  },
-  {
-    value: "estricta",
-    label: "Estricta",
-    description:
-      "Cancelación gratuita hasta 7 días antes · 50% entre 7 y 3 días antes",
-  },
-];
-
-const TITULO_PLACEHOLDERS = {
-  alojamiento: "Ej: Apartamento luminoso en el centro de Madrid",
-  ninos: "Ej: Niñera certificada con experiencia en bebés",
-  mascotas: "Ej: Cuidador de perros con jardín en Salamanca",
-};
-
-const LOCATION_ZONE_PLACEHOLDERS = {
-  alojamiento: "Ej: Salamanca, Centro, Malasaña...",
-  ninos: "Ej: Salamanca, Retiro, Chamberí...",
-  mascotas: "Ej: Malasaña, Lavapiés, Chamartín...",
-};
-
-const ESTANCIA_PLACEHOLDERS = {
-  alojamiento: {
-    min: "Mínimo de noches (ej: 2)",
-    max: "Máximo de noches (ej: 30) — opcional",
-  },
-  ninos: {
-    min: "Mínimo de horas (ej: 2)",
-    max: "Máximo de horas (ej: 8) — opcional",
-  },
-  mascotas: {
-    min: "Mínimo de días (ej: 1)",
-    max: "Máximo de días (ej: 14) — opcional",
-  },
-};
+const GREEN = "#0e7a5c";
+const ORANGE = "#c47d1a";
 
 const DIAS_SEMANA = [
-  { id: "lun", label: "Lun" },
-  { id: "mar", label: "Mar" },
-  { id: "mie", label: "Mié" },
-  { id: "jue", label: "Jue" },
-  { id: "vie", label: "Vie" },
-  { id: "sab", label: "Sáb" },
-  { id: "dom", label: "Dom" },
+  { id: "lun", label: "L" },
+  { id: "mar", label: "M" },
+  { id: "mie", label: "X" },
+  { id: "jue", label: "J" },
+  { id: "vie", label: "V" },
+  { id: "sab", label: "S" },
+  { id: "dom", label: "D" },
 ];
 
 const DIAS_DISPONIBLES_DEFAULT = DIAS_SEMANA.map((d) => d.id);
 
-const ANTELACION_OPTIONS = [
-  { value: 0, label: "Sin restricción" },
-  { value: 1, label: "Al menos 1 hora antes" },
-  { value: 3, label: "Al menos 3 horas antes" },
-  { value: 6, label: "Al menos 6 horas antes" },
-  { value: 12, label: "Al menos 12 horas antes" },
-  { value: 24, label: "Al menos 24 horas antes" },
-  { value: 48, label: "Al menos 48 horas antes" },
-  { value: 72, label: "Al menos 3 días antes" },
-  { value: 168, label: "Al menos 7 días antes" },
+const IDIOMAS_DEFAULT = [
+  "Español",
+  "English",
+  "Français",
+  "Deutsch",
+  "Italiano",
+  "Português",
+  "中文",
 ];
+
+const VERTICALES_CARDS = [
+  {
+    id: "alojamiento",
+    nombre: "Alojamiento",
+    color: PRIMARY,
+    icono: "🏠",
+    subtitulo: "Hospeda familias en tu espacio",
+    precioRef: "desde 45€/noche",
+    beneficios: [
+      "Tú pones el precio y las normas",
+      "Pagos seguros con Stripe",
+      "Sin comisión los primeros 3 meses",
+    ],
+  },
+  {
+    id: "ninos",
+    nombre: "Niñera",
+    color: GREEN,
+    icono: "🧒",
+    subtitulo: "Cuidado infantil de confianza",
+    precioRef: "desde 12€/hora",
+    beneficios: [
+      "Horarios flexibles",
+      "Referencias verificadas",
+      "Familias de tu zona",
+    ],
+  },
+  {
+    id: "mascotas",
+    nombre: "Mascotas",
+    color: ORANGE,
+    icono: "🐾",
+    subtitulo: "Cuidado y compañía animal",
+    precioRef: "desde 18€/día",
+    beneficios: [
+      "Mascotas de todos los tamaños",
+      "Actualizaciones en tiempo real",
+      "Seguro de responsabilidad",
+    ],
+  },
+];
+
+const TIPO_ALOJAMIENTO_OPTIONS = [
+  { value: "completo", label: "Entero", desc: "Piso o casa completa" },
+  { value: "habitacion_privada", label: "Hab. privada", desc: "Habitación propia" },
+  { value: "habitacion_compartida", label: "Compartida", desc: "Compartes habitación" },
+  { value: "habitacion_hotel", label: "Hotel", desc: "Habitación de hotel" },
+  { value: "otros", label: "Otro", desc: "Otro tipo de alojamiento" },
+];
+
+const AMENITIES_GROUPS = [
+  {
+    title: "Esenciales",
+    items: [
+      { id: "wifi", label: "Wifi", icon: "📶" },
+      { id: "calefaccion", label: "Calefacción", icon: "🔥" },
+      { id: "ac", label: "Aire acond.", icon: "❄️" },
+      { id: "tv", label: "TV", icon: "📺" },
+      { id: "agua_caliente", label: "Agua caliente", icon: "🚿" },
+      { id: "ascensor", label: "Ascensor", icon: "🛗" },
+      { id: "parking", label: "Parking", icon: "🅿️" },
+      { id: "accesible", label: "Accesible", icon: "♿" },
+    ],
+  },
+  {
+    title: "Baño / dormitorio",
+    items: [
+      { id: "sabanas", label: "Sábanas", icon: "🛏️" },
+      { id: "toallas", label: "Toallas", icon: "🧺" },
+      { id: "secador", label: "Secador", icon: "💨" },
+      { id: "armario", label: "Armario", icon: "🚪" },
+      { id: "escritorio", label: "Escritorio", icon: "🖥️" },
+      { id: "cuna", label: "Cuna", icon: "👶" },
+      { id: "trona", label: "Trona", icon: "🪑" },
+      { id: "chimenea", label: "Chimenea", icon: "🪵" },
+    ],
+  },
+  {
+    title: "Cocina / extras",
+    items: [
+      { id: "cocina", label: "Cocina", icon: "🍳" },
+      { id: "nevera", label: "Nevera", icon: "🧊" },
+      { id: "microondas", label: "Microondas", icon: "📻" },
+      { id: "lavadora", label: "Lavadora", icon: "🫧" },
+      { id: "secadora", label: "Secadora", icon: "👕" },
+      { id: "cafetera", label: "Cafetera", icon: "☕" },
+      { id: "jardin", label: "Jardín", icon: "🌿" },
+      { id: "terraza", label: "Terraza", icon: "🌅" },
+    ],
+  },
+];
+
+const EDADES_TAGS = ["0-1", "1-3", "3-6", "6-12", "12+"];
+const FORMACION_TAGS = [
+  "Educación infantil",
+  "Primeros auxilios",
+  "Enfermería",
+  "Magisterio",
+  "Monitor ocio",
+];
+const ACTIVIDADES_TAGS = [
+  "Lectura",
+  "Manualidades",
+  "Música",
+  "Naturaleza",
+  "Cocina",
+  "Deporte",
+  "Juegos",
+  "Tecnología",
+  "Idiomas",
+  "Teatro",
+  "Mindfulness",
+];
+const ANIMALES_TAGS = [
+  "Perros",
+  "Gatos",
+  "Conejos",
+  "Aves",
+  "Roedores",
+  "Peces",
+  "Reptiles",
+];
+const TAMANO_PERRO_TAGS = ["Pequeño", "Mediano", "Grande", "Cualquier tamaño"];
+const CERT_MASCOTAS_TAGS = [
+  "Adiestrador",
+  "Auxiliar vet.",
+  "Primeros auxilios animal",
+  "Etología",
+];
+
+const MODALIDAD_OPTIONS = {
+  ninos: [
+    { value: "domicilio_cliente", label: "En domicilio del cliente" },
+    { value: "domicilio_proveedor", label: "En mi domicilio" },
+    { value: "ambas", label: "Ambas opciones" },
+  ],
+  mascotas: [
+    { value: "domicilio_cliente", label: "En domicilio del cliente" },
+    { value: "domicilio_proveedor", label: "En mi domicilio" },
+    { value: "ambas", label: "Ambas opciones" },
+  ],
+};
+
+const DOCUMENT_CATALOG = {
+  dni_propietario: { title: "DNI o pasaporte", required: true },
+  nru: { title: "NRU", required: true },
+  dni_nie: { title: "DNI o NIE", required: true },
+  certificado_antecedentes: { title: "Antecedentes penales", required: true },
+  certificado_delitos_sexuales: {
+    title: "Antecedentes sexuales",
+    required: true,
+  },
+  seguro_hogar: { title: "Seguro del hogar", required: false },
+  primeros_auxilios: { title: "Primeros auxilios", required: false },
+  titulaciones: { title: "Titulaciones", required: false },
+  certificaciones: { title: "Certificaciones", required: false },
+};
+
+const DOC_PROFILE_FIELDS = {
+  dni_propietario: "doc_dni_url",
+  dni_nie: "doc_dni_url",
+  certificado_antecedentes: "doc_antecedentes_url",
+  certificado_delitos_sexuales: "doc_antecedentes_sexuales_url",
+};
+
+const STORAGE_BUCKET = "Documentos";
+
+const EMPTY_SERVICE_DETAILS = {
+  alojamiento: {
+    titulo: "",
+    descripcion: "",
+    location_zone: "",
+    location_lat: null,
+    location_lng: null,
+    tipo_alojamiento: "",
+    precio: "",
+    estancia_minima: "",
+    estancia_maxima: "",
+    nru: "",
+    cancelacion: "moderada",
+    reserva_inmediata: false,
+    antelacion_minima: 24,
+    dias_disponibles: [...DIAS_DISPONIBLES_DEFAULT],
+    capacidad: { personas: 2, habitaciones: 1, camas: 1, banos: 1 },
+    amenities: [],
+    normas: { petFriendly: false, bebes: false, fumar: false, fiestas: false },
+    check_in: "15:00",
+    check_out: "11:00",
+    disponible_para_viajar: false,
+    descuentos_duracion_activa: false,
+    descuentos_duracion: [{ minDias: "", descuento: "" }],
+    proveedor_emergencia: false,
+  },
+  ninos: {
+    titulo: "",
+    descripcion: "",
+    anos_experiencia: "",
+    location_zone: "",
+    location_lat: null,
+    location_lng: null,
+    precio: "",
+    modalidad: "domicilio_cliente",
+    edadesTags: [],
+    formacionTags: [],
+    actividadesTags: [],
+    dias_disponibles: [...DIAS_DISPONIBLES_DEFAULT],
+    disponible_para_viajar: false,
+    nochesFinde: false,
+    carnetConducir: false,
+    cancelacion: "moderada",
+    reserva_inmediata: false,
+    antelacion_minima: 24,
+    estancia_minima: "",
+    estancia_maxima: "",
+    proveedor_emergencia: false,
+    descuentos_duracion_activa: false,
+    descuentos_duracion: [{ minDias: "", descuento: "" }],
+  },
+  mascotas: {
+    titulo: "",
+    descripcion: "",
+    anos_experiencia: "",
+    location_zone: "",
+    location_lat: null,
+    location_lng: null,
+    precio: "",
+    modalidad: "domicilio_cliente",
+    animalesTags: [],
+    tamanoPerro: "",
+    certificacionesTags: [],
+    jardin: false,
+    paseosIncluidos: false,
+    fotosActualizaciones: false,
+    cercaVeterinario: false,
+    disponible_para_viajar: false,
+    cancelacion: "moderada",
+    reserva_inmediata: false,
+    antelacion_minima: 24,
+    estancia_minima: "",
+    estancia_maxima: "",
+    proveedor_emergencia: false,
+    descuentos_duracion_activa: false,
+    descuentos_duracion: [{ minDias: "", descuento: "" }],
+  },
+};
+
+function getVisibleSteps(verticales) {
+  const steps = [
+    { id: 1, key: "servicios", label: "Servicios" },
+    { id: 2, key: "perfil", label: "Tu perfil" },
+  ];
+  if (verticales.includes("alojamiento"))
+    steps.push({ id: 3, key: "alojamiento", label: "🏠 Alojamiento" });
+  if (verticales.includes("ninos"))
+    steps.push({ id: 4, key: "ninos", label: "🧒 Niñera" });
+  if (verticales.includes("mascotas"))
+    steps.push({ id: 5, key: "mascotas", label: "🐾 Mascotas" });
+  steps.push({ id: 6, key: "documentos", label: "Documentos" });
+  steps.push({ id: 7, key: "revision", label: "Revisión" });
+  return steps;
+}
+
+function getDocsForVertical(vertical) {
+  if (vertical === "alojamiento")
+    return ["dni_propietario", "nru", "seguro_hogar"];
+  if (vertical === "ninos")
+    return [
+      "dni_nie",
+      "certificado_antecedentes",
+      "certificado_delitos_sexuales",
+      "primeros_auxilios",
+      "titulaciones",
+    ];
+  if (vertical === "mascotas")
+    return ["dni_nie", "certificado_antecedentes", "certificaciones"];
+  return [];
+}
+
+function getRequiredDocuments(verticales) {
+  const docs = [];
+  const added = new Set();
+  const add = (id) => {
+    if (!added.has(id) && DOCUMENT_CATALOG[id]) {
+      added.add(id);
+      docs.push({ id, ...DOCUMENT_CATALOG[id] });
+    }
+  };
+  if (verticales.includes("alojamiento")) {
+    add("dni_propietario");
+    add("nru");
+  }
+  if (verticales.includes("ninos") || verticales.includes("mascotas")) {
+    add("dni_nie");
+  }
+  if (verticales.includes("ninos")) {
+    add("certificado_antecedentes");
+    add("certificado_delitos_sexuales");
+    add("primeros_auxilios");
+    add("titulaciones");
+  }
+  if (verticales.includes("mascotas")) {
+    add("certificado_antecedentes");
+    add("certificaciones");
+  }
+  if (verticales.includes("alojamiento")) add("seguro_hogar");
+  return docs;
+}
 
 async function geocodeBarrio(barrio, ciudad) {
   const query = `${barrio}, ${ciudad}, España`;
@@ -129,192 +374,35 @@ async function geocodeLocationZonesForServices(selectedIds, detailsByService, ci
   return result;
 }
 
-const TIPO_ALOJAMIENTO_OPTIONS = [
-  {
-    value: "completo",
-    label: "Alojamiento completo — piso o casa entera",
-  },
-  {
-    value: "habitacion_privada",
-    label: "Habitación privada — habitación propia en piso compartido",
-  },
-  {
-    value: "habitacion_compartida",
-    label: "Habitación compartida — compartes la habitación",
-  },
-  {
-    value: "habitacion_hotel",
-    label: "Habitación de hotel",
-  },
-  {
-    value: "otros",
-    label: "Otros",
-  },
-];
-
-const EMPTY_SERVICE_DETAILS = {
-  alojamiento: {
-    titulo: "",
-    location_zone: "",
-    location_lat: null,
-    location_lng: null,
-    tipo_alojamiento: "",
-    precio: "",
-    estancia_minima: "",
-    estancia_maxima: "",
-    antelacion_minima: 24,
-    dias_disponibles: [...DIAS_DISPONIBLES_DEFAULT],
-    nru: "",
-    cancelacion: "moderada",
-    reserva_inmediata: false,
-    direccion_exacta: "",
-    telefono_contacto: "",
-    oferta_activa: false,
-    oferta_titulo: "",
-    oferta_descuento: "",
-    oferta_valida_hasta: "",
-    oferta_descripcion: "",
-    disponible_para_viajar: false,
-    descuentos_duracion_activa: false,
-    descuentos_duracion: [{ minDias: "", descuento: "" }],
-    proveedor_emergencia: false,
-  },
-  ninos: {
-    titulo: "",
-    location_zone: "",
-    location_lat: null,
-    location_lng: null,
-    precio: "",
-    estancia_minima: "",
-    estancia_maxima: "",
-    antelacion_minima: 24,
-    dias_disponibles: [...DIAS_DISPONIBLES_DEFAULT],
-    edades: "",
-    certificacion: "",
-    cancelacion: "moderada",
-    reserva_inmediata: false,
-    telefono_contacto: "",
-    modalidad: "domicilio_cliente",
-    direccion_exacta: "",
-    oferta_activa: false,
-    oferta_titulo: "",
-    oferta_descuento: "",
-    oferta_valida_hasta: "",
-    oferta_descripcion: "",
-    disponible_para_viajar: false,
-    descuentos_duracion_activa: false,
-    descuentos_duracion: [{ minDias: "", descuento: "" }],
-    proveedor_emergencia: false,
-  },
-  mascotas: {
-    titulo: "",
-    location_zone: "",
-    location_lat: null,
-    location_lng: null,
-    precio: "",
-    estancia_minima: "",
-    estancia_maxima: "",
-    antelacion_minima: 24,
-    dias_disponibles: [...DIAS_DISPONIBLES_DEFAULT],
-    tipos: "",
-    cancelacion: "moderada",
-    reserva_inmediata: false,
-    telefono_contacto: "",
-    modalidad: "domicilio_cliente",
-    direccion_exacta: "",
-    oferta_activa: false,
-    oferta_titulo: "",
-    oferta_descuento: "",
-    oferta_valida_hasta: "",
-    oferta_descripcion: "",
-    disponible_para_viajar: false,
-    descuentos_duracion_activa: false,
-    descuentos_duracion: [{ minDias: "", descuento: "" }],
-    proveedor_emergencia: false,
-  },
-};
-
-const DOCUMENT_CATALOG = {
-  dni_propietario: {
-    title: "DNI o pasaporte del propietario",
-    note: null,
-    noteRed: false,
-  },
-  nru: {
-    title: "NRU — Número de Registro Único",
-    note: "Obligatorio por ley desde julio 2024",
-    noteRed: false,
-  },
-  dni_nie: {
-    title: "DNI o NIE vigente",
-    note: null,
-    noteRed: false,
-  },
-  certificado_antecedentes: {
-    title: "Certificado de antecedentes penales",
-    note: null,
-    noteRed: false,
-  },
-  certificado_delitos_sexuales: {
-    title: "Certificado de delitos de naturaleza sexual",
-    note:
-      "Obligatorio por Ley Orgánica 1/1996 de Protección Jurídica del Menor · Renovar cada 6 meses",
-    noteRed: true,
-  },
-};
-
-function getRequiredDocuments(selectedServices) {
-  const docs = [];
-  const added = new Set();
-  const hasAlojamiento = selectedServices.includes("alojamiento");
-  const hasNinos = selectedServices.includes("ninos");
-  const hasMascotas = selectedServices.includes("mascotas");
-
-  function add(id, overrides = {}) {
-    if (!added.has(id)) {
-      added.add(id);
-      docs.push({ id, ...DOCUMENT_CATALOG[id], ...overrides });
-    }
-  }
-
-  if (hasAlojamiento) {
-    add("dni_propietario");
-    add("nru");
-  }
-  if (hasNinos || hasMascotas) {
-    add("dni_nie", hasNinos ? { note: "Obligatorio" } : {});
-  }
-  if (hasNinos) {
-    add("certificado_antecedentes", {
-      note: "Emitido por el Ministerio de Justicia",
-    });
-    add("certificado_delitos_sexuales");
-  } else if (hasMascotas) {
-    add("certificado_antecedentes", { note: "Recomendado" });
-  }
-
-  return docs;
-}
-
-const STORAGE_BUCKET = "Documentos";
-
-const DOC_PROFILE_FIELDS = {
-  dni_propietario: "doc_dni_url",
-  dni_nie: "doc_dni_url",
-  certificado_antecedentes: "doc_antecedentes_url",
-  certificado_delitos_sexuales: "doc_antecedentes_sexuales_url",
-};
-
 async function uploadDocumentToStorage(userId, docId, file) {
   const ext = file.name.includes(".") ? file.name.split(".").pop() : "pdf";
   const filePath = `${userId}/${docId}-${Date.now()}.${ext}`;
-
-  const { error: uploadError } = await supabase.storage
+  const { error } = await supabase.storage
     .from(STORAGE_BUCKET)
     .upload(filePath, file, { upsert: true, contentType: file.type });
+  if (error) throw error;
+  const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(filePath);
+  return data.publicUrl;
+}
 
-  if (uploadError) throw uploadError;
+async function uploadProfilePhoto(userId, file) {
+  const ext = file.name.includes(".") ? file.name.split(".").pop() : "jpg";
+  const filePath = `profiles/foto/${userId}-${Date.now()}.${ext}`;
+  const { error } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .upload(filePath, file, { upsert: true, contentType: file.type });
+  if (error) throw error;
+  const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(filePath);
+  return data.publicUrl;
+}
 
+async function uploadServicePhoto(userId, vertical, file, index) {
+  const ext = file.name.includes(".") ? file.name.split(".").pop() : "jpg";
+  const filePath = `${userId}/service-${vertical}-${index}-${Date.now()}.${ext}`;
+  const { error } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .upload(filePath, file, { upsert: true, contentType: file.type });
+  if (error) throw error;
   const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(filePath);
   return data.publicUrl;
 }
@@ -322,1026 +410,375 @@ async function uploadDocumentToStorage(userId, docId, file) {
 const inputClass =
   "w-full rounded-xl border px-4 py-3 text-sm text-[#1a1a1a] outline-none focus:ring-2 focus:ring-[#1d4f91]/30";
 
-function SectionLabel({ number, title }) {
+
+function TagPill({ label, selected, onClick, color = PRIMARY }) {
   return (
-    <p
-      className="text-[11px] font-semibold uppercase tracking-[0.12em]"
-      style={{ color: BRAND.primary }}
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors"
+      style={{
+        borderColor: selected ? color : BRAND.border,
+        backgroundColor: selected ? `${color}14` : "#fff",
+        color: selected ? color : "#666",
+      }}
     >
-      {number} · {title}
-    </p>
+      {label}
+    </button>
   );
 }
 
-function PersonOutlineIcon({ className }) {
+function ToggleRow({ label, checked, onChange }) {
   return (
-    <svg
-      className={className}
-      fill="none"
-      viewBox="0 0 24 24"
-      strokeWidth={1.5}
-      stroke="currentColor"
-      aria-hidden
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z"
-      />
-    </svg>
+    <div className="flex items-center justify-between gap-4 py-2">
+      <span className="text-sm text-[#444]">{label}</span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        onClick={() => onChange(!checked)}
+        className="relative h-7 w-12 shrink-0 rounded-full transition-colors"
+        style={{ backgroundColor: checked ? PRIMARY : "#d1d5db" }}
+      >
+        <span
+          className="absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform"
+          style={{ left: checked ? "calc(100% - 1.625rem)" : "0.125rem" }}
+        />
+      </button>
+    </div>
   );
 }
 
-function UploadIcon({ className }) {
+function CounterField({ label, value, onChange, min = 0 }) {
   return (
-    <svg
-      className={className}
-      fill="none"
-      viewBox="0 0 24 24"
-      strokeWidth={1.5}
-      stroke="currentColor"
-      aria-hidden
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5"
-      />
-    </svg>
-  );
-}
-
-function CancelPolicySelect({ value, onChange }) {
-  return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className={inputClass}
-      style={{ borderColor: BRAND.border }}
-    >
-      {CANCEL_POLICIES.map((policy) => (
-        <option key={policy.value} value={policy.value}>
-          {policy.label} — {policy.description}
-        </option>
-      ))}
-    </select>
-  );
-}
-
-function FieldNote({ children }) {
-  return <p className="mt-1 text-xs text-[#888]">{children}</p>;
-}
-
-function ModalidadServiceSelector({ serviceId, value, onChange }) {
-  const enMiDomicilioLabel =
-    serviceId === "mascotas"
-      ? "En mi domicilio — el cliente trae la mascota"
-      : "En mi domicilio — el cliente trae al niño";
-
-  const options = [
-    {
-      value: "domicilio_cliente",
-      label: "En domicilio del cliente — yo me desplazo",
-    },
-    {
-      value: "domicilio_proveedor",
-      label: enMiDomicilioLabel,
-    },
-    {
-      value: "ambas",
-      label: "Ambas opciones disponibles",
-    },
-  ];
-
-  return (
-    <div className="sm:col-span-2">
-      <p className="mb-2 text-xs font-medium text-[#444]">Modalidad de servicio</p>
-      <div className="flex flex-col gap-2">
-        {options.map((option) => {
-          const selected = value === option.value;
-          return (
-            <button
-              key={option.value}
-              type="button"
-              onClick={() => onChange(option.value)}
-              className="rounded-xl border p-3 text-left transition-colors"
-              style={{
-                borderColor: selected ? BRAND.primary : BRAND.border,
-                backgroundColor: selected ? BRAND.light : "#fff",
-              }}
-            >
-              <span className="text-sm font-semibold text-[#1a1a1a]">
-                {option.label}
-              </span>
-            </button>
-          );
-        })}
+    <div className="rounded-xl border p-3 text-center" style={{ borderColor: BRAND.border }}>
+      <p className="text-xs text-[#666]">{label}</p>
+      <div className="mt-2 flex items-center justify-center gap-3">
+        <button
+          type="button"
+          onClick={() => onChange(Math.max(min, value - 1))}
+          className="flex h-8 w-8 items-center justify-center rounded-full border text-lg"
+          style={{ borderColor: BRAND.border }}
+        >
+          −
+        </button>
+        <span className="w-6 text-center text-lg font-semibold">{value}</span>
+        <button
+          type="button"
+          onClick={() => onChange(value + 1)}
+          className="flex h-8 w-8 items-center justify-center rounded-full border text-lg"
+          style={{ borderColor: BRAND.border }}
+        >
+          +
+        </button>
       </div>
     </div>
   );
 }
 
-function OfertaEspecialSection({ serviceId, details, onChange }) {
-  const enabled = details.oferta_activa === true;
-  const showViajar = serviceId === "ninos" || serviceId === "mascotas";
+function StepBar({ steps, pasoActual }) {
+  const currentIdx = steps.findIndex((s) => s.id === pasoActual);
+  return (
+    <div
+      className="flex gap-0 overflow-x-auto border-b"
+      style={{ borderColor: BRAND.border }}
+    >
+      {steps.map((step, idx) => {
+        const isActive = step.id === pasoActual;
+        const isCompleted = idx < currentIdx;
+        return (
+          <div
+            key={step.id}
+            className="flex shrink-0 items-center gap-1.5 px-4 py-3 text-xs font-semibold whitespace-nowrap"
+            style={{
+              borderBottom: isActive || isCompleted ? `2px solid ${PRIMARY}` : "2px solid transparent",
+              color: PRIMARY,
+              opacity: isActive ? 1 : isCompleted ? 0.7 : 0.45,
+            }}
+          >
+            {isCompleted && (
+              <span className="text-green-600" aria-hidden>
+                ✓
+              </span>
+            )}
+            {step.label}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
-  function update(field, val) {
-    onChange({ ...details, [field]: val });
-  }
+function DocUploadRow({ docId, title, required, file, onUpload }) {
+  return (
+    <div
+      className="flex items-center justify-between gap-3 rounded-xl border p-3"
+      style={{ borderColor: BRAND.border }}
+    >
+      <div>
+        <p className="text-sm font-medium text-[#1a1a1a]">
+          {title}
+          {!required && (
+            <span className="ml-1 text-xs font-normal text-[#888]">(opcional)</span>
+          )}
+        </p>
+        <p className="text-xs" style={{ color: file ? GREEN : required ? ORANGE : "#888" }}>
+          {file ? "✓ Subido" : required ? "⚠️ Pendiente" : "Opcional"}
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={() => onUpload(docId)}
+        className="shrink-0 rounded-lg border px-3 py-1.5 text-xs font-semibold"
+        style={{ borderColor: PRIMARY, color: PRIMARY }}
+      >
+        {file ? "Cambiar" : "Subir"}
+      </button>
+    </div>
+  );
+}
+
+function PhotoUploadGrid({ previews, onAdd, onRemove, multiple = true, label }) {
+  return (
+    <div>
+      {label && <p className="mb-2 text-xs font-medium text-[#444]">{label}</p>}
+      <div className="flex flex-wrap gap-2">
+        {previews.map((src, i) => (
+          <div key={i} className="relative h-24 w-24 overflow-hidden rounded-xl border" style={{ borderColor: BRAND.border }}>
+            <img src={src} alt="" className="h-full w-full object-cover" />
+            <button
+              type="button"
+              onClick={() => onRemove(i)}
+              className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-xs text-white"
+            >
+              ×
+            </button>
+          </div>
+        ))}
+        {(multiple || previews.length === 0) && (
+          <button
+            type="button"
+            onClick={onAdd}
+            className="flex h-24 w-24 flex-col items-center justify-center rounded-xl border border-dashed text-xs text-[#888]"
+            style={{ borderColor: BRAND.border }}
+          >
+            <span className="text-2xl">+</span>
+            Foto
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PreviewPanel({
+  profilePhotoPreview,
+  nombre,
+  apellido,
+  ciudad,
+  verticales,
+  serviceDetails,
+  idiomas,
+}) {
+  const displayName = [nombre, apellido].filter(Boolean).join(" ") || "Tu nombre";
+  const badges = VERTICALES_CARDS.filter((v) => verticales.includes(v.id));
+  const firstPrice = verticales.includes("alojamiento")
+    ? serviceDetails.alojamiento.precio
+    : verticales.includes("ninos")
+      ? serviceDetails.ninos.precio
+      : verticales.includes("mascotas")
+        ? serviceDetails.mascotas.precio
+        : null;
+  const priceUnit = verticales.includes("alojamiento")
+    ? "/noche"
+    : verticales.includes("ninos")
+      ? "/hora"
+      : "/día";
 
   return (
     <div
-      className="mt-6 border-t pt-6"
+      className="sticky top-4 rounded-2xl border bg-white p-4 shadow-sm"
       style={{ borderColor: BRAND.border }}
     >
-      <div className="flex items-center justify-between gap-4">
-        <p className="text-sm font-semibold text-[#1a1a1a]">
-          ¿Tienes una oferta especial?
-        </p>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={enabled}
-          onClick={() => update("oferta_activa", !enabled)}
-          className="relative h-7 w-12 shrink-0 rounded-full transition-colors"
-          style={{
-            backgroundColor: enabled ? BRAND.primary : "#d1d5db",
-          }}
-        >
-          <span
-            className="absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform"
-            style={{
-              left: enabled ? "calc(100% - 1.625rem)" : "0.125rem",
-            }}
-          />
-        </button>
-      </div>
-
-      {enabled && (
-        <div className="mt-4 grid gap-4 sm:grid-cols-2">
-          <div className="sm:col-span-2">
-            <label className="mb-1.5 block text-xs font-medium text-[#444]">
-              Título de la oferta
-            </label>
-            <input
-              type="text"
-              value={details.oferta_titulo}
-              onChange={(e) => update("oferta_titulo", e.target.value)}
-              placeholder="Ej: Semana de verano — 20% descuento"
-              className={inputClass}
-              style={{ borderColor: BRAND.border }}
-            />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-[#444]">
-              Descuento (%)
-            </label>
-            <input
-              type="number"
-              min="1"
-              max="90"
-              value={details.oferta_descuento}
-              onChange={(e) => update("oferta_descuento", e.target.value)}
-              className={inputClass}
-              style={{ borderColor: BRAND.border }}
-            />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-[#444]">
-              Válida hasta
-            </label>
-            <input
-              type="date"
-              min={new Date().toISOString().split("T")[0]}
-              value={details.oferta_valida_hasta}
-              onChange={(e) => update("oferta_valida_hasta", e.target.value)}
-              className={inputClass}
-              style={{ borderColor: BRAND.border }}
-            />
-          </div>
-          <div className="sm:col-span-2">
-            <label className="mb-1.5 block text-xs font-medium text-[#444]">
-              Descripción de la oferta
-            </label>
-            <textarea
-              rows={3}
-              value={details.oferta_descripcion}
-              onChange={(e) => update("oferta_descripcion", e.target.value)}
-              placeholder="Cuéntanos más sobre esta oferta..."
-              className={`${inputClass} resize-y`}
-              style={{ borderColor: BRAND.border }}
-            />
-          </div>
-          {showViajar && (
-            <div className="sm:col-span-2">
-              <div className="flex items-center justify-between gap-4 rounded-xl border px-4 py-3"
-                style={{ borderColor: BRAND.border }}
-              >
-                <div>
-                  <p className="text-sm font-semibold text-[#1a1a1a]">
-                    Disponible para viajar
-                  </p>
-                  <p className="mt-0.5 text-xs text-[#666]">
-                    Puedo desplazarme fuera de mi ciudad
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={details.disponible_para_viajar === true}
-                  onClick={() =>
-                    update(
-                      "disponible_para_viajar",
-                      !details.disponible_para_viajar,
-                    )
-                  }
-                  className="relative h-7 w-12 shrink-0 rounded-full transition-colors"
-                  style={{
-                    backgroundColor: details.disponible_para_viajar
-                      ? BRAND.primary
-                      : "#d1d5db",
-                  }}
+      <p className="mb-3 text-[10px] font-semibold uppercase tracking-widest text-[#888]">
+        Vista previa
+      </p>
+      <div className="overflow-hidden rounded-xl border" style={{ borderColor: BRAND.border }}>
+        <div className="flex h-32 items-center justify-center bg-[#f5f3ef]">
+          {profilePhotoPreview ? (
+            <img src={profilePhotoPreview} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <span className="text-4xl text-[#ccc]">👤</span>
+          )}
+        </div>
+        <div className="p-3">
+          <h3 className="font-semibold text-[#1a1a1a]" style={{ fontFamily: SERIF }}>
+            {displayName}
+          </h3>
+          {ciudad && <p className="text-xs text-[#666]">{ciudad}</p>}
+          {badges.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1">
+              {badges.map((b) => (
+                <span
+                  key={b.id}
+                  className="rounded-full px-2 py-0.5 text-[10px] font-semibold text-white"
+                  style={{ backgroundColor: b.color }}
                 >
-                  <span
-                    className="absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform"
-                    style={{
-                      left: details.disponible_para_viajar
-                        ? "calc(100% - 1.625rem)"
-                        : "0.125rem",
-                    }}
-                  />
-                </button>
-              </div>
+                  {b.nombre}
+                </span>
+              ))}
             </div>
           )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-const MAX_DESCUENTOS_DURACION = 3;
-
-function getDuracionUnitSingular(serviceId) {
-  if (serviceId === "alojamiento") return "noches";
-  if (serviceId === "ninos") return "horas";
-  return "días";
-}
-
-function DescuentosDuracionSection({ serviceId, details, onChange }) {
-  const enabled = details.descuentos_duracion_activa === true;
-  const niveles = Array.isArray(details.descuentos_duracion)
-    ? details.descuentos_duracion
-    : [{ minDias: "", descuento: "" }];
-  const unitLabel = getDuracionUnitSingular(serviceId);
-
-  function update(field, val) {
-    onChange({ ...details, [field]: val });
-  }
-
-  function updateNivel(index, field, val) {
-    const next = niveles.map((n, i) =>
-      i === index ? { ...n, [field]: val } : n,
-    );
-    update("descuentos_duracion", next);
-  }
-
-  function addNivel() {
-    if (niveles.length >= MAX_DESCUENTOS_DURACION) return;
-    update("descuentos_duracion", [...niveles, { minDias: "", descuento: "" }]);
-  }
-
-  return (
-    <div
-      className="mt-6 border-t pt-6"
-      style={{ borderColor: BRAND.border }}
-    >
-      <p className="text-sm font-semibold text-[#1a1a1a]">
-        Descuentos por duración
-      </p>
-      <div className="mt-3 flex items-center justify-between gap-4">
-        <p className="text-sm text-[#444]">
-          ¿Ofreces descuento por estancias largas?
-        </p>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={enabled}
-          onClick={() => {
-            const next = !enabled;
-            onChange({
-              ...details,
-              descuentos_duracion_activa: next,
-              descuentos_duracion:
-                next && niveles.length === 0
-                  ? [{ minDias: "", descuento: "" }]
-                  : niveles,
-            });
-          }}
-          className="relative h-7 w-12 shrink-0 rounded-full transition-colors"
-          style={{
-            backgroundColor: enabled ? BRAND.primary : "#d1d5db",
-          }}
-        >
-          <span
-            className="absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform"
-            style={{
-              left: enabled ? "calc(100% - 1.625rem)" : "0.125rem",
-            }}
-          />
-        </button>
-      </div>
-
-      {enabled && (
-        <div className="mt-4 flex flex-col gap-4">
-          {niveles.map((nivel, index) => {
-            const min = Number(nivel.minDias);
-            const pct = Number(nivel.descuento);
-            const preview =
-              min > 0 && pct >= 1
-                ? `${min}+ ${unitLabel} → ${pct}%`
-                : null;
-
-            return (
-              <div
-                key={index}
-                className="rounded-xl border p-4"
-                style={{ borderColor: BRAND.border }}
-              >
-                <p className="mb-3 text-xs font-semibold text-[#444]">
-                  Nivel {index + 1}
-                </p>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <label className="mb-1.5 block text-xs font-medium text-[#444]">
-                      A partir de X {unitLabel}
-                    </label>
-                    <input
-                      type="number"
-                      min="1"
-                      value={nivel.minDias}
-                      onChange={(e) =>
-                        updateNivel(index, "minDias", e.target.value)
-                      }
-                      className={inputClass}
-                      style={{ borderColor: BRAND.border }}
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1.5 block text-xs font-medium text-[#444]">
-                      Descuento (%)
-                    </label>
-                    <input
-                      type="number"
-                      min="1"
-                      max="50"
-                      value={nivel.descuento}
-                      onChange={(e) =>
-                        updateNivel(index, "descuento", e.target.value)
-                      }
-                      className={inputClass}
-                      style={{ borderColor: BRAND.border }}
-                    />
-                  </div>
-                </div>
-                {preview && (
-                  <p
-                    className="mt-3 text-sm font-medium"
-                    style={{ color: BRAND.primary }}
-                  >
-                    {preview}
-                  </p>
-                )}
-              </div>
-            );
-          })}
-
-          {niveles.length < MAX_DESCUENTOS_DURACION && (
-            <button
-              type="button"
-              onClick={addNivel}
-              className="self-start text-sm font-semibold transition-opacity hover:opacity-80"
-              style={{ color: BRAND.primary }}
-            >
-              Añadir otro nivel
-            </button>
+          {idiomas.length > 0 && (
+            <p className="mt-2 text-xs text-[#888]">{idiomas.slice(0, 3).join(" · ")}</p>
           )}
+          {firstPrice && (
+            <p className="mt-2 text-lg font-bold" style={{ color: PRIMARY }}>
+              {firstPrice}€
+              <span className="text-sm font-normal text-[#666]">{priceUnit}</span>
+            </p>
+          )}
+          <button
+            type="button"
+            className="mt-3 w-full rounded-xl py-2.5 text-sm font-semibold text-white"
+            style={{ backgroundColor: PRIMARY }}
+          >
+            Reservar
+          </button>
         </div>
-      )}
-    </div>
-  );
-}
-
-function ReservaModeSelector({ value, onChange }) {
-  const isImmediate = value === true;
-
-  return (
-    <div className="sm:col-span-2">
-      <p className="mb-2 text-xs font-medium text-[#444]">Tipo de reserva</p>
-      <div className="flex flex-col gap-2">
-        <button
-          type="button"
-          onClick={() => onChange(false)}
-          className="rounded-xl border p-3 text-left transition-colors"
-          style={{
-            borderColor: !isImmediate ? BRAND.primary : BRAND.border,
-            backgroundColor: !isImmediate ? BRAND.light : "#fff",
-          }}
-        >
-          <span className="text-sm font-semibold text-[#1a1a1a]">
-            Con confirmación
-          </span>
-          <span className="mt-0.5 block text-xs text-[#666]">
-            Tú aceptas o rechazas cada reserva
-          </span>
-        </button>
-        <button
-          type="button"
-          onClick={() => onChange(true)}
-          className="rounded-xl border p-3 text-left transition-colors"
-          style={{
-            borderColor: isImmediate ? BRAND.primary : BRAND.border,
-            backgroundColor: isImmediate ? BRAND.light : "#fff",
-          }}
-        >
-          <span className="text-sm font-semibold text-[#1a1a1a]">
-            Reserva inmediata
-          </span>
-          <span className="mt-0.5 block text-xs text-[#666]">
-            El cliente reserva directamente sin esperar confirmación
-          </span>
-        </button>
       </div>
     </div>
   );
 }
 
-function TituloAnuncioField({ serviceId, value, onChange }) {
-  return (
-    <div className="sm:col-span-2">
-      <label className="mb-1.5 block text-xs font-medium text-[#444]">
-        Título de tu anuncio
-      </label>
-      <input
-        type="text"
-        required
-        placeholder={TITULO_PLACEHOLDERS[serviceId]}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className={inputClass}
-        style={{ borderColor: BRAND.border }}
-      />
-    </div>
-  );
-}
-
-function LocationZoneField({ serviceId, value, onChange, onBlur }) {
-  const isAlojamiento = serviceId === "alojamiento";
-
-  return (
-    <div className="sm:col-span-2">
-      <label className="mb-1.5 block text-xs font-medium text-[#444]">
-        {isAlojamiento ? "Barrio" : "Barrio o zona donde operas"}
-      </label>
-      <input
-        type="text"
-        placeholder={LOCATION_ZONE_PLACEHOLDERS[serviceId]}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onBlur={onBlur}
-        className={inputClass}
-        style={{ borderColor: BRAND.border }}
-      />
-      {!isAlojamiento && (
-        <FieldNote>
-          Aparecerá en el mapa de búsqueda como ubicación aproximada
-        </FieldNote>
-      )}
-    </div>
-  );
-}
-
-function EstanciaFields({ serviceId, details, onChange }) {
-  const placeholders = ESTANCIA_PLACEHOLDERS[serviceId];
-
-  function update(field, val) {
-    onChange({ ...details, [field]: val });
+function calcCompletion(verticales, fields, documentFiles) {
+  let total = 0;
+  let done = 0;
+  const check = (ok) => {
+    total++;
+    if (ok) done++;
+  };
+  check(verticales.length > 0);
+  check(fields.nombre.trim() && fields.apellido.trim() && fields.ciudad.trim());
+  check(fields.sobreTi.trim());
+  if (verticales.includes("alojamiento")) {
+    const d = fields.serviceDetails.alojamiento;
+    check(d.titulo.trim() && d.precio && d.tipo_alojamiento);
   }
-
-  return (
-    <>
-      <div>
-        <label className="mb-1.5 block text-xs font-medium text-[#444]">
-          Estancia mínima
-        </label>
-        <input
-          type="number"
-          min="1"
-          placeholder={placeholders.min}
-          value={details.estancia_minima}
-          onChange={(e) => update("estancia_minima", e.target.value)}
-          className={inputClass}
-          style={{ borderColor: BRAND.border }}
-        />
-      </div>
-      <div>
-        <label className="mb-1.5 block text-xs font-medium text-[#444]">
-          Estancia máxima
-        </label>
-        <input
-          type="number"
-          min="1"
-          placeholder={placeholders.max}
-          value={details.estancia_maxima}
-          onChange={(e) => update("estancia_maxima", e.target.value)}
-          className={inputClass}
-          style={{ borderColor: BRAND.border }}
-        />
-      </div>
-    </>
-  );
+  if (verticales.includes("ninos")) {
+    const d = fields.serviceDetails.ninos;
+    check(d.titulo.trim() && d.precio);
+  }
+  if (verticales.includes("mascotas")) {
+    const d = fields.serviceDetails.mascotas;
+    check(d.titulo.trim() && d.precio);
+  }
+  getRequiredDocuments(verticales)
+    .filter((d) => d.required)
+    .forEach((d) => check(!!documentFiles[d.id]));
+  return total > 0 ? Math.round((done / total) * 100) : 0;
 }
 
-function DiasDisponiblesSelector({ value, onChange }) {
-  const selected = Array.isArray(value) && value.length > 0 ? value : DIAS_DISPONIBLES_DEFAULT;
-
-  function toggle(diaId) {
-    const next = selected.includes(diaId)
-      ? selected.filter((d) => d !== diaId)
-      : [...selected, diaId];
-    onChange(next.length > 0 ? next : []);
-  }
-
-  return (
-    <div className="sm:col-span-2">
-      <p className="mb-2 text-xs font-medium text-[#444]">Días disponibles</p>
-      <div className="flex flex-wrap gap-2">
-        {DIAS_SEMANA.map((dia) => {
-          const isSelected = selected.includes(dia.id);
-          return (
-            <button
-              key={dia.id}
-              type="button"
-              onClick={() => toggle(dia.id)}
-              className="rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors"
-              style={{
-                borderColor: isSelected ? BRAND.primary : BRAND.border,
-                backgroundColor: isSelected ? BRAND.light : "#fff",
-                color: isSelected ? DARK_BLUE : "#666",
-              }}
-            >
-              {dia.label}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function AntelacionMinimaSelector({ value, onChange }) {
-  const selected = value != null && value !== "" ? Number(value) : 24;
-
-  return (
-    <div className="sm:col-span-2">
-      <label className="mb-1.5 block text-xs font-medium text-[#444]">
-        Antelación mínima para reservar
-      </label>
-      <select
-        value={String(selected)}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className={inputClass}
-        style={{ borderColor: BRAND.border }}
-      >
-        {ANTELACION_OPTIONS.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
-}
-
-function TipoAlojamientoSelector({ value, onChange }) {
-  return (
-    <div className="sm:col-span-2">
-      <input type="hidden" required value={value || ""} readOnly />
-      <p className="mb-2 text-xs font-medium text-[#444]">Tipo de alojamiento</p>
-      <div className="flex flex-col gap-2">
-        {TIPO_ALOJAMIENTO_OPTIONS.map((option) => {
-          const selected = value === option.value;
-          return (
-            <button
-              key={option.value}
-              type="button"
-              onClick={() => onChange(option.value)}
-              className="rounded-xl border p-3 text-left transition-colors"
-              style={{
-                borderColor: selected ? BRAND.primary : BRAND.border,
-                backgroundColor: selected ? BRAND.light : "#fff",
-              }}
-            >
-              <span className="text-sm font-semibold text-[#1a1a1a]">
-                {option.label}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function ServiceFields({ serviceId, details, onChange, onLocationZoneBlur }) {
-  function update(field, val) {
-    onChange({ ...details, [field]: val });
-  }
-
-  const locationZoneBlur = onLocationZoneBlur
-    ? () => onLocationZoneBlur(serviceId)
-    : undefined;
-
-  if (serviceId === "alojamiento") {
-    return (
-      <div className="mt-4 grid gap-4 sm:grid-cols-2">
-        <TituloAnuncioField
-          serviceId={serviceId}
-          value={details.titulo}
-          onChange={(v) => update("titulo", v)}
-        />
-        <LocationZoneField
-          serviceId={serviceId}
-          value={details.location_zone}
-          onChange={(v) => update("location_zone", v)}
-          onBlur={locationZoneBlur}
-        />
-        <TipoAlojamientoSelector
-          value={details.tipo_alojamiento}
-          onChange={(v) => update("tipo_alojamiento", v)}
-        />
-        <div>
-          <label className="mb-1.5 block text-xs font-medium text-[#444]">
-            Precio / noche (€)
-          </label>
-          <input
-            type="number"
-            min="0"
-            value={details.precio}
-            onChange={(e) => update("precio", e.target.value)}
-            className={inputClass}
-            style={{ borderColor: BRAND.border }}
-          />
-        </div>
-        <EstanciaFields
-          serviceId={serviceId}
-          details={details}
-          onChange={onChange}
-        />
-        <AntelacionMinimaSelector
-          value={details.antelacion_minima}
-          onChange={(v) => update("antelacion_minima", v)}
-        />
-        <DiasDisponiblesSelector
-          value={details.dias_disponibles}
-          onChange={(v) => update("dias_disponibles", v)}
-        />
-        <div>
-          <label className="mb-1.5 block text-xs font-medium text-[#444]">
-            NRU
-          </label>
-          <input
-            type="text"
-            value={details.nru}
-            onChange={(e) => update("nru", e.target.value)}
-            className={inputClass}
-            style={{ borderColor: BRAND.border }}
-          />
-        </div>
-        <div className="sm:col-span-2">
-          <label className="mb-1.5 block text-xs font-medium text-[#444]">
-            Política de cancelación
-          </label>
-          <CancelPolicySelect
-            value={details.cancelacion}
-            onChange={(v) => update("cancelacion", v)}
-          />
-        </div>
-        <div className="sm:col-span-2">
-          <label className="mb-1.5 block text-xs font-medium text-[#444]">
-            Dirección exacta del alojamiento
-          </label>
-          <input
-            type="text"
-            value={details.direccion_exacta}
-            onChange={(e) => update("direccion_exacta", e.target.value)}
-            className={inputClass}
-            style={{ borderColor: BRAND.border }}
-          />
-          <FieldNote>
-            Solo se comparte con el cliente cuando la reserva está confirmada.
-            Nunca aparece en tu perfil público.
-          </FieldNote>
-        </div>
-        <div className="sm:col-span-2">
-          <label className="mb-1.5 block text-xs font-medium text-[#444]">
-            Teléfono de contacto
-          </label>
-          <input
-            type="text"
-            value={details.telefono_contacto}
-            onChange={(e) => update("telefono_contacto", e.target.value)}
-            className={inputClass}
-            style={{ borderColor: BRAND.border }}
-          />
-          <FieldNote>Solo se comparte al confirmar la reserva.</FieldNote>
-        </div>
-        <ReservaModeSelector
-          value={details.reserva_inmediata}
-          onChange={(v) => update("reserva_inmediata", v)}
-        />
-      </div>
-    );
-  }
-
-  if (serviceId === "ninos") {
-    return (
-      <div className="mt-4 grid gap-4 sm:grid-cols-2">
-        <TituloAnuncioField
-          serviceId={serviceId}
-          value={details.titulo}
-          onChange={(v) => update("titulo", v)}
-        />
-        <LocationZoneField
-          serviceId={serviceId}
-          value={details.location_zone}
-          onChange={(v) => update("location_zone", v)}
-          onBlur={locationZoneBlur}
-        />
-        <div>
-          <label className="mb-1.5 block text-xs font-medium text-[#444]">
-            Precio / hora (€)
-          </label>
-          <input
-            type="number"
-            min="0"
-            value={details.precio}
-            onChange={(e) => update("precio", e.target.value)}
-            className={inputClass}
-            style={{ borderColor: BRAND.border }}
-          />
-        </div>
-        <EstanciaFields
-          serviceId={serviceId}
-          details={details}
-          onChange={onChange}
-        />
-        <AntelacionMinimaSelector
-          value={details.antelacion_minima}
-          onChange={(v) => update("antelacion_minima", v)}
-        />
-        <DiasDisponiblesSelector
-          value={details.dias_disponibles}
-          onChange={(v) => update("dias_disponibles", v)}
-        />
-        <div>
-          <label className="mb-1.5 block text-xs font-medium text-[#444]">
-            Edades
-          </label>
-          <input
-            type="text"
-            placeholder="Ej. 0–12 años"
-            value={details.edades}
-            onChange={(e) => update("edades", e.target.value)}
-            className={inputClass}
-            style={{ borderColor: BRAND.border }}
-          />
-        </div>
-        <div>
-          <label className="mb-1.5 block text-xs font-medium text-[#444]">
-            Certificación
-          </label>
-          <input
-            type="text"
-            value={details.certificacion}
-            onChange={(e) => update("certificacion", e.target.value)}
-            className={inputClass}
-            style={{ borderColor: BRAND.border }}
-          />
-        </div>
-        <div>
-          <label className="mb-1.5 block text-xs font-medium text-[#444]">
-            Política de cancelación
-          </label>
-          <CancelPolicySelect
-            value={details.cancelacion}
-            onChange={(v) => update("cancelacion", v)}
-          />
-        </div>
-        <div className="sm:col-span-2">
-          <label className="mb-1.5 block text-xs font-medium text-[#444]">
-            Teléfono de contacto
-          </label>
-          <input
-            type="text"
-            value={details.telefono_contacto}
-            onChange={(e) => update("telefono_contacto", e.target.value)}
-            className={inputClass}
-            style={{ borderColor: BRAND.border }}
-          />
-        </div>
-        <ModalidadServiceSelector
-          serviceId="ninos"
-          value={details.modalidad}
-          onChange={(v) => update("modalidad", v)}
-        />
-        {(details.modalidad === "domicilio_proveedor" ||
-          details.modalidad === "ambas") && (
-          <div className="sm:col-span-2">
-            <label className="mb-1.5 block text-xs font-medium text-[#444]">
-              Dirección de tu domicilio
-            </label>
-            <input
-              type="text"
-              value={details.direccion_exacta}
-              onChange={(e) => update("direccion_exacta", e.target.value)}
-              className={inputClass}
-              style={{ borderColor: BRAND.border }}
-            />
-            <FieldNote>Solo se comparte al confirmar la reserva.</FieldNote>
-          </div>
-        )}
-        <ReservaModeSelector
-          value={details.reserva_inmediata}
-          onChange={(v) => update("reserva_inmediata", v)}
-        />
-      </div>
-    );
-  }
-
-  if (serviceId === "mascotas") {
-    return (
-      <div className="mt-4 grid gap-4 sm:grid-cols-2">
-        <TituloAnuncioField
-          serviceId={serviceId}
-          value={details.titulo}
-          onChange={(v) => update("titulo", v)}
-        />
-        <LocationZoneField
-          serviceId={serviceId}
-          value={details.location_zone}
-          onChange={(v) => update("location_zone", v)}
-          onBlur={locationZoneBlur}
-        />
-        <div>
-          <label className="mb-1.5 block text-xs font-medium text-[#444]">
-            Precio / día (€)
-          </label>
-          <input
-            type="number"
-            min="0"
-            value={details.precio}
-            onChange={(e) => update("precio", e.target.value)}
-            className={inputClass}
-            style={{ borderColor: BRAND.border }}
-          />
-        </div>
-        <EstanciaFields
-          serviceId={serviceId}
-          details={details}
-          onChange={onChange}
-        />
-        <AntelacionMinimaSelector
-          value={details.antelacion_minima}
-          onChange={(v) => update("antelacion_minima", v)}
-        />
-        <DiasDisponiblesSelector
-          value={details.dias_disponibles}
-          onChange={(v) => update("dias_disponibles", v)}
-        />
-        <div>
-          <label className="mb-1.5 block text-xs font-medium text-[#444]">
-            Tipos de animales
-          </label>
-          <input
-            type="text"
-            placeholder="Ej. perros, gatos"
-            value={details.tipos}
-            onChange={(e) => update("tipos", e.target.value)}
-            className={inputClass}
-            style={{ borderColor: BRAND.border }}
-          />
-        </div>
-        <div className="sm:col-span-2">
-          <label className="mb-1.5 block text-xs font-medium text-[#444]">
-            Política de cancelación
-          </label>
-          <CancelPolicySelect
-            value={details.cancelacion}
-            onChange={(v) => update("cancelacion", v)}
-          />
-        </div>
-        <div className="sm:col-span-2">
-          <label className="mb-1.5 block text-xs font-medium text-[#444]">
-            Teléfono de contacto
-          </label>
-          <input
-            type="text"
-            value={details.telefono_contacto}
-            onChange={(e) => update("telefono_contacto", e.target.value)}
-            className={inputClass}
-            style={{ borderColor: BRAND.border }}
-          />
-        </div>
-        <ModalidadServiceSelector
-          serviceId="mascotas"
-          value={details.modalidad}
-          onChange={(v) => update("modalidad", v)}
-        />
-        {(details.modalidad === "domicilio_proveedor" ||
-          details.modalidad === "ambas") && (
-          <div className="sm:col-span-2">
-            <label className="mb-1.5 block text-xs font-medium text-[#444]">
-              Dirección de tu domicilio
-            </label>
-            <input
-              type="text"
-              value={details.direccion_exacta}
-              onChange={(e) => update("direccion_exacta", e.target.value)}
-              className={inputClass}
-              style={{ borderColor: BRAND.border }}
-            />
-            <FieldNote>Solo se comparte al confirmar la reserva.</FieldNote>
-          </div>
-        )}
-        <ReservaModeSelector
-          value={details.reserva_inmediata}
-          onChange={(v) => update("reserva_inmediata", v)}
-        />
-      </div>
-    );
-  }
-
-  return null;
-}
 
 export default function SerProveedorPage() {
   const router = useRouter();
-
   const profilePhotoRef = useRef(null);
-  const servicePhotosRef = useRef(null);
+  const servicePhotoRefs = useRef({ alojamiento: null, ninos: null, mascotas: null });
   const documentInputRef = useRef(null);
+  const activePhotoVerticalRef = useRef(null);
 
+  const [pasoActual, setPasoActual] = useState(1);
+  const [verticalesSeleccionados, setVerticalesSeleccionados] = useState([]);
   const [profilePhoto, setProfilePhoto] = useState(null);
   const [profilePhotoPreview, setProfilePhotoPreview] = useState(null);
   const [nombre, setNombre] = useState("");
   const [apellido, setApellido] = useState("");
   const [ciudad, setCiudad] = useState("");
+  const [anosExperiencia, setAnosExperiencia] = useState("");
   const [sobreTi, setSobreTi] = useState("");
-  const [selectedServices, setSelectedServices] = useState([]);
+  const [personalidad, setPersonalidad] = useState("");
+  const [motivacion, setMotivacion] = useState("");
+  const [idiomas, setIdiomas] = useState([]);
+  const [customIdiomas, setCustomIdiomas] = useState([]);
   const [serviceDetails, setServiceDetails] = useState(EMPTY_SERVICE_DETAILS);
-  const [servicePhotos, setServicePhotos] = useState([]);
-  const [servicePhotoPreviews, setServicePhotoPreviews] = useState([]);
-  const [selectedLanguages, setSelectedLanguages] = useState([]);
+  const [servicePhotos, setServicePhotos] = useState({ alojamiento: [], ninos: [], mascotas: [] });
+  const [servicePhotoPreviews, setServicePhotoPreviews] = useState({
+    alojamiento: [],
+    ninos: [],
+    mascotas: [],
+  });
   const [documentFiles, setDocumentFiles] = useState({});
   const [activeDocumentId, setActiveDocumentId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [customTags, setCustomTags] = useState({
+    formacion: [],
+    actividades: [],
+    animales: [],
+    certMascotas: [],
+  });
 
-  function toggleService(id) {
-    setSelectedServices((prev) =>
-      prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id],
+  const visibleSteps = useMemo(
+    () => getVisibleSteps(verticalesSeleccionados),
+    [verticalesSeleccionados],
+  );
+  const requiredDocuments = useMemo(
+    () => getRequiredDocuments(verticalesSeleccionados),
+    [verticalesSeleccionados],
+  );
+  const completionPct = calcCompletion(verticalesSeleccionados, {
+    nombre,
+    apellido,
+    ciudad,
+    sobreTi,
+    serviceDetails,
+  }, documentFiles);
+
+  const allIdiomas = [...IDIOMAS_DEFAULT, ...customIdiomas];
+
+  function toggleVertical(id) {
+    setVerticalesSeleccionados((prev) =>
+      prev.includes(id) ? prev.filter((v) => v !== id) : [...prev, id],
     );
   }
 
-  function toggleLanguage(lang) {
-    setSelectedLanguages((prev) =>
+  function toggleIdioma(lang) {
+    setIdiomas((prev) =>
       prev.includes(lang) ? prev.filter((l) => l !== lang) : [...prev, lang],
     );
   }
 
-  function updateServiceDetails(serviceId, details) {
-    setServiceDetails((prev) => ({ ...prev, [serviceId]: details }));
+  function addCustomIdioma() {
+    const val = window.prompt("Añadir idioma:");
+    if (val?.trim() && !allIdiomas.includes(val.trim())) {
+      setCustomIdiomas((prev) => [...prev, val.trim()]);
+      setIdiomas((prev) => [...prev, val.trim()]);
+    }
   }
 
-  async function handleLocationZoneBlur(serviceId) {
-    const details = serviceDetails[serviceId];
-    const barrio = details.location_zone?.trim();
-    const ciudadTrimmed = ciudad.trim();
-    if (!barrio || !ciudadTrimmed) {
-      updateServiceDetails(serviceId, {
-        ...details,
-        location_lat: null,
-        location_lng: null,
-      });
-      return;
-    }
-    const coords = await geocodeBarrio(barrio, ciudadTrimmed);
-    updateServiceDetails(serviceId, {
-      ...details,
-      location_lat: coords?.lat ?? null,
-      location_lng: coords?.lng ?? null,
+  function updateServiceDetails(vertical, details) {
+    setServiceDetails((prev) => ({ ...prev, [vertical]: details }));
+  }
+
+  function toggleTag(vertical, field, tag) {
+    const d = serviceDetails[vertical];
+    const arr = d[field] || [];
+    const next = arr.includes(tag) ? arr.filter((t) => t !== tag) : [...arr, tag];
+    updateServiceDetails(vertical, { ...d, [field]: next });
+  }
+
+  function addCustomTag(vertical, field, customKey) {
+    const val = window.prompt("Añadir:");
+    if (!val?.trim()) return;
+    setCustomTags((prev) => ({
+      ...prev,
+      [customKey]: [...(prev[customKey] || []), val.trim()],
+    }));
+    const d = serviceDetails[vertical];
+    updateServiceDetails(vertical, {
+      ...d,
+      [field]: [...(d[field] || []), val.trim()],
     });
   }
 
@@ -1352,22 +789,39 @@ export default function SerProveedorPage() {
     setProfilePhotoPreview(URL.createObjectURL(file));
   }
 
+  function openServicePhotoUpload(vertical) {
+    activePhotoVerticalRef.current = vertical;
+    servicePhotoRefs.current[vertical]?.click();
+  }
+
   function handleServicePhotos(e) {
+    const vertical = activePhotoVerticalRef.current;
+    if (!vertical) return;
     const files = Array.from(e.target.files ?? []);
-    const remaining = 6 - servicePhotos.length;
+    const max = vertical === "alojamiento" ? 8 : 6;
+    const remaining = max - servicePhotos[vertical].length;
     const toAdd = files.slice(0, remaining);
     if (toAdd.length === 0) return;
-    setServicePhotos((prev) => [...prev, ...toAdd]);
-    setServicePhotoPreviews((prev) => [
+    setServicePhotos((prev) => ({
       ...prev,
-      ...toAdd.map((f) => URL.createObjectURL(f)),
-    ]);
+      [vertical]: [...prev[vertical], ...toAdd],
+    }));
+    setServicePhotoPreviews((prev) => ({
+      ...prev,
+      [vertical]: [...prev[vertical], ...toAdd.map((f) => URL.createObjectURL(f))],
+    }));
     e.target.value = "";
   }
 
-  function removeServicePhoto(index) {
-    setServicePhotos((prev) => prev.filter((_, i) => i !== index));
-    setServicePhotoPreviews((prev) => prev.filter((_, i) => i !== index));
+  function removeServicePhoto(vertical, index) {
+    setServicePhotos((prev) => ({
+      ...prev,
+      [vertical]: prev[vertical].filter((_, i) => i !== index),
+    }));
+    setServicePhotoPreviews((prev) => ({
+      ...prev,
+      [vertical]: prev[vertical].filter((_, i) => i !== index),
+    }));
   }
 
   function openDocumentUpload(docId) {
@@ -1382,8 +836,76 @@ export default function SerProveedorPage() {
     e.target.value = "";
   }
 
+  function validateStep(stepId) {
+    setErrorMessage("");
+    if (stepId === 1) {
+      if (verticalesSeleccionados.length === 0) {
+        setErrorMessage("Selecciona al menos un servicio.");
+        return false;
+      }
+    }
+    if (stepId === 2) {
+      if (!nombre.trim() || !apellido.trim() || !ciudad.trim()) {
+        setErrorMessage("Completa nombre, apellidos y ciudad.");
+        return false;
+      }
+      if (!sobreTi.trim()) {
+        setErrorMessage("Cuéntanos por qué deberían elegirte.");
+        return false;
+      }
+    }
+    if (stepId === 3) {
+      const d = serviceDetails.alojamiento;
+      if (!d.titulo.trim() || !d.precio || !d.tipo_alojamiento) {
+        setErrorMessage("Completa título, precio y tipo de alojamiento.");
+        return false;
+      }
+      if (!d.nru?.trim()) {
+        setErrorMessage("El NRU es obligatorio para alojamiento.");
+        return false;
+      }
+    }
+    if (stepId === 4) {
+      const d = serviceDetails.ninos;
+      if (!d.titulo.trim() || !d.precio) {
+        setErrorMessage("Completa título y precio del servicio de niñera.");
+        return false;
+      }
+    }
+    if (stepId === 5) {
+      const d = serviceDetails.mascotas;
+      if (!d.titulo.trim() || !d.precio) {
+        setErrorMessage("Completa título y precio del servicio de mascotas.");
+        return false;
+      }
+    }
+    if (stepId === 6) {
+      const missing = requiredDocuments.filter((d) => d.required && !documentFiles[d.id]);
+      if (missing.length > 0) {
+        setErrorMessage(`Faltan documentos obligatorios: ${missing.map((d) => d.title).join(", ")}`);
+        return false;
+      }
+    }
+    return true;
+  }
+
+  function goNext() {
+    if (!validateStep(pasoActual)) return;
+    const idx = visibleSteps.findIndex((s) => s.id === pasoActual);
+    if (idx < visibleSteps.length - 1) setPasoActual(visibleSteps[idx + 1].id);
+  }
+
+  function goBack() {
+    const idx = visibleSteps.findIndex((s) => s.id === pasoActual);
+    if (idx > 0) setPasoActual(visibleSteps[idx - 1].id);
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
+    if (!validateStep(6)) {
+      setPasoActual(6);
+      return;
+    }
     setErrorMessage("");
     setSuccessMessage("");
     setSubmitting(true);
@@ -1399,540 +921,898 @@ export default function SerProveedorPage() {
       return;
     }
 
-    const docUrls = {};
-    for (const [docId, file] of Object.entries(documentFiles)) {
-      const field = DOC_PROFILE_FIELDS[docId];
-      if (!field || !file) continue;
-
-      try {
-        docUrls[field] = await uploadDocumentToStorage(user.id, docId, file);
-      } catch (uploadErr) {
-        setSubmitting(false);
-        setErrorMessage(
-          uploadErr.message || "Error al subir la documentación.",
-        );
-        return;
+    try {
+      let fotoUrl = null;
+      if (profilePhoto) {
+        fotoUrl = await uploadProfilePhoto(user.id, profilePhoto);
       }
-    }
 
-    // -- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS doc_dni_url text;
-    // -- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS doc_antecedentes_url text;
-    // -- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS doc_antecedentes_sexuales_url text;
-    const { error: profileError } = await supabase.from("profiles").upsert({
-      id: user.id,
-      role: "proveedor",
-      nombre: nombre.trim(),
-      apellido: apellido.trim(),
-      ciudad: ciudad.trim(),
-      descripcion: sobreTi.trim(),
-      location_zone: ciudad.trim(),
-      idiomas: selectedLanguages,
-      email_contacto: user.email,
-      ...docUrls,
-    });
+      const docUrls = {};
+      for (const [docId, file] of Object.entries(documentFiles)) {
+        const field = DOC_PROFILE_FIELDS[docId];
+        if (!field || !file) continue;
+        docUrls[field] = await uploadDocumentToStorage(user.id, docId, file);
+      }
 
-    if (profileError) {
-      setSubmitting(false);
-      setErrorMessage(profileError.message);
-      return;
-    }
+      const descripcionParts = [sobreTi.trim()];
+      if (personalidad.trim()) descripcionParts.push(`Personalidad: ${personalidad.trim()}`);
+      if (motivacion.trim()) descripcionParts.push(`Motivación: ${motivacion.trim()}`);
+      if (anosExperiencia.trim())
+        descripcionParts.push(`Experiencia: ${anosExperiencia.trim()} años`);
 
-    if (selectedServices.length > 0) {
-      // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS direccion_exacta text;
-      // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS telefono_contacto text;
-      // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS modalidad text;
-      // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS tipo_alojamiento text;
-      // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS estancia_minima integer;
-      // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS estancia_maxima integer;
-      // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS antelacion_minima integer DEFAULT 24;
-      // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS dias_disponibles text[];
-      // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS oferta_titulo text;
-      // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS oferta_descuento integer;
-      // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS oferta_valida_hasta date;
-      // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS oferta_descripcion text;
-      // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS disponible_para_viajar boolean DEFAULT false;
-      // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS descuentos_duracion jsonb;
-      // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS proveedor_emergencia boolean DEFAULT false;
-      const ciudadTrimmed = ciudad.trim();
-      const detailsForInsert = await geocodeLocationZonesForServices(
-        selectedServices,
-        serviceDetails,
-        ciudadTrimmed,
-      );
-
-      const serviceRows = selectedServices.map((serviceId) => {
-        const details = detailsForInsert[serviceId];
-        return {
-          proveedor_id: user.id,
-          vertical: serviceId,
-          titulo: details.titulo.trim(),
-          precio: details.precio ? Number(details.precio) : null,
-          estancia_minima: details.estancia_minima
-            ? Number(details.estancia_minima)
-            : null,
-          estancia_maxima: details.estancia_maxima
-            ? Number(details.estancia_maxima)
-            : null,
-          antelacion_minima:
-            details.antelacion_minima != null && details.antelacion_minima !== ""
-              ? Number(details.antelacion_minima)
-              : 24,
-          dias_disponibles:
-            Array.isArray(details.dias_disponibles) &&
-            details.dias_disponibles.length > 0
-              ? details.dias_disponibles
-              : DIAS_DISPONIBLES_DEFAULT,
-          cancellation_policy: details.cancelacion,
-          ciudad: ciudadTrimmed,
-          location_zone: details.location_zone?.trim() || null,
-          location_lat: details.location_lat ?? null,
-          location_lng: details.location_lng ?? null,
-          disponible: true,
-          reserva_inmediata: details.reserva_inmediata === true,
-          direccion_exacta: details.direccion_exacta?.trim() || null,
-          telefono_contacto: details.telefono_contacto?.trim() || null,
-          modalidad:
-            serviceId === "alojamiento" ? null : details.modalidad || null,
-          tipo_alojamiento:
-            serviceId === "alojamiento" ? details.tipo_alojamiento || null : null,
-          oferta_titulo: details.oferta_activa
-            ? details.oferta_titulo?.trim() || null
-            : null,
-          oferta_descuento:
-            details.oferta_activa && details.oferta_descuento
-              ? Math.min(90, Math.max(1, Number(details.oferta_descuento)))
-              : null,
-          oferta_valida_hasta:
-            details.oferta_activa && details.oferta_valida_hasta
-              ? details.oferta_valida_hasta
-              : null,
-          oferta_descripcion: details.oferta_activa
-            ? details.oferta_descripcion?.trim() || null
-            : null,
-          disponible_para_viajar:
-            details.oferta_activa &&
-            (serviceId === "ninos" || serviceId === "mascotas") &&
-            details.disponible_para_viajar === true,
-          descuentos_duracion: serializeDescuentosDuracionForDb(details),
-          proveedor_emergencia: details.proveedor_emergencia === true,
-        };
+      const { error: profileError } = await supabase.from("profiles").upsert({
+        id: user.id,
+        role: "proveedor",
+        nombre: nombre.trim(),
+        apellido: apellido.trim(),
+        ciudad: ciudad.trim(),
+        descripcion: descripcionParts.join("\n\n"),
+        location_zone: ciudad.trim(),
+        idiomas,
+        email_contacto: user.email,
+        foto_perfil: fotoUrl,
+        ...docUrls,
       });
 
-      const { error: servicesError } = await supabase
-        .from("services")
-        .insert(serviceRows);
+      if (profileError) throw profileError;
 
-      if (servicesError) {
-        setSubmitting(false);
-        setErrorMessage(servicesError.message);
-        return;
+      if (verticalesSeleccionados.length > 0) {
+        const ciudadTrimmed = ciudad.trim();
+        const detailsForInsert = await geocodeLocationZonesForServices(
+          verticalesSeleccionados,
+          {
+            ...serviceDetails,
+            ninos: {
+              ...serviceDetails.ninos,
+              edades: (serviceDetails.ninos.edadesTags || []).join(", "),
+              certificacion: (serviceDetails.ninos.formacionTags || []).join(", "),
+              location_zone: serviceDetails.ninos.location_zone || ciudadTrimmed,
+            },
+            mascotas: {
+              ...serviceDetails.mascotas,
+              tipos: (serviceDetails.mascotas.animalesTags || []).join(", "),
+              location_zone: serviceDetails.mascotas.location_zone || ciudadTrimmed,
+            },
+            alojamiento: {
+              ...serviceDetails.alojamiento,
+              location_zone: serviceDetails.alojamiento.location_zone || ciudadTrimmed,
+            },
+          },
+          ciudadTrimmed,
+        );
+
+        const serviceRows = await Promise.all(
+          verticalesSeleccionados.map(async (serviceId) => {
+            const details = detailsForInsert[serviceId];
+            const photos = servicePhotos[serviceId] || [];
+            const photoUrls = await Promise.all(
+              photos.map((file, i) => uploadServicePhoto(user.id, serviceId, file, i)),
+            );
+
+            return {
+              proveedor_id: user.id,
+              vertical: serviceId,
+              titulo: details.titulo.trim(),
+              descripcion: details.descripcion?.trim() || null,
+              precio: details.precio ? Number(details.precio) : null,
+              estancia_minima: details.estancia_minima ? Number(details.estancia_minima) : null,
+              estancia_maxima: details.estancia_maxima ? Number(details.estancia_maxima) : null,
+              antelacion_minima:
+                details.antelacion_minima != null && details.antelacion_minima !== ""
+                  ? Number(details.antelacion_minima)
+                  : 24,
+              dias_disponibles:
+                Array.isArray(details.dias_disponibles) && details.dias_disponibles.length > 0
+                  ? details.dias_disponibles
+                  : DIAS_DISPONIBLES_DEFAULT,
+              cancellation_policy: details.cancelacion,
+              ciudad: ciudadTrimmed,
+              location_zone: details.location_zone?.trim() || null,
+              location_lat: details.location_lat ?? null,
+              location_lng: details.location_lng ?? null,
+              disponible: true,
+              reserva_inmediata: details.reserva_inmediata === true,
+              modalidad: serviceId === "alojamiento" ? null : details.modalidad || null,
+              tipo_alojamiento:
+                serviceId === "alojamiento" ? details.tipo_alojamiento || null : null,
+              disponible_para_viajar: details.disponible_para_viajar === true,
+              descuentos_duracion: serializeDescuentosDuracionForDb(details),
+              proveedor_emergencia: details.proveedor_emergencia === true,
+              foto_url: photoUrls[0] || null,
+            };
+          }),
+        );
+
+        const { error: servicesError } = await supabase.from("services").insert(serviceRows);
+        if (servicesError) throw servicesError;
       }
+
+      setSubmitting(false);
+      setSuccessMessage("Perfil enviado correctamente. Te avisamos en menos de 24h.");
+      setTimeout(() => router.push("/dashboard"), 2000);
+    } catch (err) {
+      setSubmitting(false);
+      setErrorMessage(err.message || "Error al enviar el perfil.");
     }
-
-    setSubmitting(false);
-    setSuccessMessage(
-      "Perfil enviado correctamente. Te avisamos en menos de 24h.",
-    );
-
-    setTimeout(() => {
-      router.push("/dashboard");
-    }, 2000);
   }
 
-  const photoSlots = Math.min(
-    6,
-    Math.max(3, servicePhotoPreviews.length + 1),
-  );
 
-  const requiredDocuments = getRequiredDocuments(selectedServices);
-
-  return (
-    <div
-      className="min-h-screen font-sans"
-      style={{ backgroundColor: BRAND.warm, color: "#1a1a1a" }}
-    >
-      <header
-        className="sticky top-0 z-50 px-4 py-5 text-white sm:px-6"
-        style={{ backgroundColor: BRAND.primary }}
-      >
-        <div className="mx-auto max-w-2xl">
-          <h1 className="text-xl font-semibold sm:text-2xl">
-            Crea tu perfil de proveedor
-          </h1>
-          <p
-            className="mt-1 text-sm"
-            style={{ color: "rgba(255, 255, 255, 0.75)" }}
+  const renderStep = () => {
+    if (pasoActual === 1) {
+      return (
+        <div>
+          <div
+            className="mb-8 rounded-2xl p-6 text-white"
+            style={{ background: `linear-gradient(135deg, ${PRIMARY} 0%, ${DARK_BLUE} 100%)` }}
           >
-            Tarda unos minutos. Puedes editarlo después.
-          </p>
-        </div>
-      </header>
-
-      <form
-        onSubmit={handleSubmit}
-        className="mx-auto max-w-2xl px-4 py-8 sm:px-6 sm:py-10"
-      >
-        {/* 01 — Foto de perfil */}
-        <section
-          className="border-b pb-10"
-          style={{ borderColor: BRAND.border }}
-        >
-          <SectionLabel number="01" title="Foto de perfil" />
-          <h2
-            className="mt-3 text-xl text-[#1a1a1a]"
-            style={{ fontFamily: SERIF }}
-          >
-            Ponle cara a tu perfil
+            <h2 className="text-xl font-semibold" style={{ fontFamily: SERIF }}>
+              Empieza a ganar con lo que ya sabes hacer
+            </h2>
+            <div className="mt-4 flex flex-wrap gap-6 text-sm" style={{ opacity: 0.9 }}>
+              <span>340+ proveedores</span>
+              <span>1.200+ reservas</span>
+              <span>3 meses sin comisión</span>
+            </div>
+          </div>
+          <h2 className="text-2xl text-[#1a1a1a]" style={{ fontFamily: SERIF }}>
+            ¿Qué servicios ofreces?
           </h2>
-          <input
-            ref={profilePhotoRef}
-            type="file"
-            accept="image/jpeg,image/png"
-            className="hidden"
-            onChange={handleProfilePhoto}
-          />
+          <p className="mt-1 text-sm text-[#666]">Puedes seleccionar más de uno</p>
+          <div className="mt-6 grid gap-4 sm:grid-cols-3">
+            {VERTICALES_CARDS.map((v) => {
+              const selected = verticalesSeleccionados.includes(v.id);
+              return (
+                <button
+                  key={v.id}
+                  type="button"
+                  onClick={() => toggleVertical(v.id)}
+                  className="relative overflow-hidden rounded-2xl border-2 text-left transition-all"
+                  style={{
+                    borderColor: selected ? v.color : BRAND.border,
+                    boxShadow: selected ? `0 0 0 1px ${v.color}` : "none",
+                  }}
+                >
+                  <div className="px-4 py-3 text-white" style={{ backgroundColor: v.color }}>
+                    <span
+                      className="absolute right-3 top-3 flex h-6 w-6 items-center justify-center rounded-full border-2 bg-white text-xs"
+                      style={{ borderColor: v.color, color: selected ? v.color : "transparent" }}
+                    >
+                      {selected ? "✓" : ""}
+                    </span>
+                    <span className="text-3xl">{v.icono}</span>
+                    <p className="mt-2 text-lg font-bold">{v.nombre}</p>
+                    <p className="text-xs opacity-80">{v.subtitulo}</p>
+                  </div>
+                  <div className="p-4">
+                    <p className="text-sm font-semibold" style={{ color: v.color }}>
+                      {v.precioRef}
+                    </p>
+                    <ul className="mt-3 space-y-1.5">
+                      {v.beneficios.map((b) => (
+                        <li key={b} className="text-xs text-[#555]">
+                          <span style={{ color: v.color }}>✓</span> {b}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+
+    if (pasoActual === 2) {
+      return (
+        <div>
+          <h2 className="text-2xl text-[#1a1a1a]" style={{ fontFamily: SERIF }}>
+            Tu perfil personal
+          </h2>
+          <p className="mt-1 text-sm text-[#666]">Así te verán las familias</p>
+          <input ref={profilePhotoRef} type="file" accept="image/*" className="hidden" onChange={handleProfilePhoto} />
           <button
             type="button"
             onClick={() => profilePhotoRef.current?.click()}
-            className="mt-5 flex w-full flex-col items-center rounded-2xl border-2 border-dashed px-6 py-10 transition-colors hover:bg-white/60"
-            style={{ borderColor: BRAND.border }}
+            className="mt-6 flex items-center gap-4"
           >
-            {profilePhotoPreview ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={profilePhotoPreview}
-                alt="Vista previa"
-                className="mb-3 h-24 w-24 rounded-full object-cover"
-              />
-            ) : (
-              <PersonOutlineIcon className="mb-3 h-10 w-10 text-[#1d4f91]" />
-            )}
-            <span className="text-sm font-medium text-[#1a1a1a]">
+            <div
+              className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border-2"
+              style={{ borderColor: PRIMARY }}
+            >
+              {profilePhotoPreview ? (
+                <img src={profilePhotoPreview} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <span className="text-2xl text-[#ccc]">📷</span>
+              )}
+            </div>
+            <span className="text-sm font-semibold" style={{ color: PRIMARY }}>
               Subir foto de perfil
             </span>
-            <span className="mt-1 text-xs text-[#888]">
-              JPG o PNG · máx 5MB
-            </span>
           </button>
-        </section>
-
-        {/* 02 — Datos personales */}
-        <section
-          className="border-b py-10"
-          style={{ borderColor: BRAND.border }}
-        >
-          <SectionLabel number="02" title="Datos personales" />
-          <div className="mt-5 grid gap-4 sm:grid-cols-2">
+          <div className="mt-6 grid gap-4 sm:grid-cols-2">
             <div>
-              <label htmlFor="nombre" className="mb-1.5 block text-xs font-medium text-[#444]">
-                Nombre
-              </label>
-              <input
-                id="nombre"
-                type="text"
-                value={nombre}
-                onChange={(e) => setNombre(e.target.value)}
-                className={inputClass}
-                style={{ borderColor: BRAND.border }}
-              />
+              <label className="mb-1.5 block text-xs font-medium text-[#444]">Nombre</label>
+              <input value={nombre} onChange={(e) => setNombre(e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
             </div>
             <div>
-              <label htmlFor="apellido" className="mb-1.5 block text-xs font-medium text-[#444]">
-                Apellido
-              </label>
-              <input
-                id="apellido"
-                type="text"
-                value={apellido}
-                onChange={(e) => setApellido(e.target.value)}
-                className={inputClass}
-                style={{ borderColor: BRAND.border }}
-              />
+              <label className="mb-1.5 block text-xs font-medium text-[#444]">Apellidos</label>
+              <input value={apellido} onChange={(e) => setApellido(e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-[#444]">Ciudad</label>
+              <input value={ciudad} onChange={(e) => setCiudad(e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-[#444]">Años de experiencia</label>
+              <input type="number" min="0" value={anosExperiencia} onChange={(e) => setAnosExperiencia(e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
             </div>
           </div>
           <div className="mt-4">
-            <label htmlFor="ciudad" className="mb-1.5 block text-xs font-medium text-[#444]">
-              Ciudad
+            <label className="mb-1.5 block text-xs font-medium text-[#444]">
+              ¿Por qué deberían elegirte? <span className="text-red-500">*</span>
             </label>
-            <input
-              id="ciudad"
-              type="text"
-              value={ciudad}
-              onChange={(e) => setCiudad(e.target.value)}
-              className={inputClass}
-              style={{ borderColor: BRAND.border }}
-            />
+            <textarea rows={4} value={sobreTi} onChange={(e) => setSobreTi(e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
           </div>
           <div className="mt-4">
-            <label htmlFor="sobreTi" className="mb-1.5 block text-xs font-medium text-[#444]">
-              Sobre ti
+            <label className="mb-1.5 block text-xs font-medium text-[#444]">
+              ¿Qué te gusta hacer? Tu personalidad <span className="text-[#888]">(opcional)</span>
             </label>
-            <textarea
-              id="sobreTi"
-              rows={5}
-              value={sobreTi}
-              onChange={(e) => setSobreTi(e.target.value)}
-              placeholder="Cuéntanos quién eres, tu experiencia y por qué las familias pueden confiar en ti..."
-              className={`${inputClass} resize-y`}
-              style={{ borderColor: BRAND.border }}
+            <textarea rows={3} value={personalidad} onChange={(e) => setPersonalidad(e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
+          </div>
+          <div className="mt-4">
+            <label className="mb-1.5 block text-xs font-medium text-[#444]">
+              ¿Qué te motivó a ofrecer este servicio? <span className="text-[#888]">(opcional)</span>
+            </label>
+            <textarea rows={3} value={motivacion} onChange={(e) => setMotivacion(e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
+          </div>
+          <div className="mt-4">
+            <p className="mb-2 text-xs font-medium text-[#444]">Idiomas</p>
+            <div className="flex flex-wrap gap-2">
+              {allIdiomas.map((lang) => (
+                <TagPill key={lang} label={lang} selected={idiomas.includes(lang)} onClick={() => toggleIdioma(lang)} />
+              ))}
+              <TagPill label="+ Añadir" selected={false} onClick={addCustomIdioma} color="#666" />
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (pasoActual === 3) {
+      const d = serviceDetails.alojamiento;
+      const upd = (field, val) => updateServiceDetails("alojamiento", { ...d, [field]: val });
+      const updCap = (key, val) =>
+        updateServiceDetails("alojamiento", { ...d, capacidad: { ...d.capacidad, [key]: val } });
+      const updNorma = (key, val) =>
+        updateServiceDetails("alojamiento", { ...d, normas: { ...d.normas, [key]: val } });
+      const toggleAmenity = (id) => {
+        const next = d.amenities.includes(id) ? d.amenities.filter((a) => a !== id) : [...d.amenities, id];
+        upd("amenities", next);
+      };
+      const alojDocs = getDocsForVertical("alojamiento");
+
+      return (
+        <div>
+          <h2 className="text-2xl text-[#1a1a1a]" style={{ fontFamily: SERIF }}>🏠 Alojamiento</h2>
+          <p className="mt-1 text-sm text-[#666]">Detalles de tu espacio</p>
+          <input ref={(el) => { servicePhotoRefs.current.alojamiento = el; }} type="file" accept="image/*" multiple className="hidden" onChange={handleServicePhotos} />
+          <div className="mt-6">
+            <PhotoUploadGrid
+              label="Fotos del alojamiento"
+              previews={servicePhotoPreviews.alojamiento}
+              onAdd={() => openServicePhotoUpload("alojamiento")}
+              onRemove={(i) => removeServicePhoto("alojamiento", i)}
             />
           </div>
-        </section>
-
-        {/* 03 — Servicios */}
-        <section
-          className="border-b py-10"
-          style={{ borderColor: BRAND.border }}
-        >
-          <SectionLabel number="03" title="Servicios" />
-          <h2
-            className="mt-3 text-xl text-[#1a1a1a]"
-            style={{ fontFamily: SERIF }}
-          >
-            ¿Qué puedes hacer por las familias?
-          </h2>
-          <div className="mt-5 flex flex-wrap gap-2">
-            {SERVICES.map((service) => {
-              const selected = selectedServices.includes(service.id);
-              return (
-                <button
-                  key={service.id}
-                  type="button"
-                  onClick={() => toggleService(service.id)}
-                  className="rounded-full border px-4 py-2 text-sm font-medium transition-colors"
-                  style={{
-                    borderColor: selected ? BRAND.primary : BRAND.border,
-                    backgroundColor: selected ? BRAND.light : "#fff",
-                    color: selected ? DARK_BLUE : "#444",
-                  }}
-                >
-                  {service.label}
-                </button>
-              );
-            })}
+          <div className="mt-6 grid gap-4 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <label className="mb-1.5 block text-xs font-medium text-[#444]">Título</label>
+              <input value={d.titulo} onChange={(e) => upd("titulo", e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="mb-1.5 block text-xs font-medium text-[#444]">Descripción</label>
+              <textarea rows={4} value={d.descripcion} onChange={(e) => upd("descripcion", e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-[#444]">Precio / noche (€)</label>
+              <input type="number" min="0" value={d.precio} onChange={(e) => upd("precio", e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-[#444]">NRU</label>
+              <input value={d.nru} onChange={(e) => upd("nru", e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
+            </div>
           </div>
-          {selectedServices.map((serviceId) => {
-            const service = SERVICES.find((s) => s.id === serviceId);
-            return (
-              <div
-                key={serviceId}
-                className="mt-5 rounded-2xl border bg-white p-5"
-                style={{ borderColor: BRAND.border }}
+          <p className="mt-6 mb-3 text-xs font-medium text-[#444]">Tipo de alojamiento</p>
+          <div className="grid gap-2 sm:grid-cols-5">
+            {TIPO_ALOJAMIENTO_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => upd("tipo_alojamiento", opt.value)}
+                className="rounded-xl border p-3 text-center transition-colors"
+                style={{
+                  borderColor: d.tipo_alojamiento === opt.value ? PRIMARY : BRAND.border,
+                  backgroundColor: d.tipo_alojamiento === opt.value ? `${PRIMARY}10` : "#fff",
+                }}
               >
-                <p className="text-sm font-semibold" style={{ color: BRAND.primary }}>
-                  {service?.label}
-                </p>
-                <ServiceFields
-                  serviceId={serviceId}
-                  details={serviceDetails[serviceId]}
-                  onLocationZoneBlur={handleLocationZoneBlur}
-                  onChange={(details) =>
-                    updateServiceDetails(serviceId, details)
-                  }
+                <p className="text-sm font-semibold">{opt.label}</p>
+                <p className="mt-0.5 text-[10px] text-[#888]">{opt.desc}</p>
+              </button>
+            ))}
+          </div>
+          <p className="mt-6 mb-3 text-xs font-medium text-[#444]">Capacidad</p>
+          <div className="grid grid-cols-4 gap-3">
+            <CounterField label="Personas" value={d.capacidad.personas} onChange={(v) => updCap("personas", v)} min={1} />
+            <CounterField label="Habitaciones" value={d.capacidad.habitaciones} onChange={(v) => updCap("habitaciones", v)} min={1} />
+            <CounterField label="Camas" value={d.capacidad.camas} onChange={(v) => updCap("camas", v)} min={1} />
+            <CounterField label="Baños" value={d.capacidad.banos} onChange={(v) => updCap("banos", v)} min={1} />
+          </div>
+          {AMENITIES_GROUPS.map((group) => (
+            <div key={group.title} className="mt-6">
+              <p className="mb-3 text-xs font-semibold text-[#444]">{group.title}</p>
+              <div className="grid grid-cols-4 gap-2">
+                {group.items.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => toggleAmenity(item.id)}
+                    className="flex flex-col items-center rounded-xl border p-2 text-center transition-colors"
+                    style={{
+                      borderColor: d.amenities.includes(item.id) ? PRIMARY : BRAND.border,
+                      backgroundColor: d.amenities.includes(item.id) ? `${PRIMARY}10` : "#fff",
+                    }}
+                  >
+                    <span className="text-lg">{item.icon}</span>
+                    <span className="mt-1 text-[10px] text-[#555]">{item.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+          <div className="mt-6 rounded-xl border p-4" style={{ borderColor: BRAND.border }}>
+            <p className="mb-3 text-xs font-semibold text-[#444]">Normas</p>
+            <ToggleRow label="Pet-friendly" checked={d.normas.petFriendly} onChange={(v) => updNorma("petFriendly", v)} />
+            <ToggleRow label="Bebés" checked={d.normas.bebes} onChange={(v) => updNorma("bebes", v)} />
+            <ToggleRow label="Fumar" checked={d.normas.fumar} onChange={(v) => updNorma("fumar", v)} />
+            <ToggleRow label="Fiestas" checked={d.normas.fiestas} onChange={(v) => updNorma("fiestas", v)} />
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-[#444]">Check-in</label>
+                <input type="time" value={d.check_in} onChange={(e) => upd("check_in", e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-[#444]">Check-out</label>
+                <input type="time" value={d.check_out} onChange={(e) => upd("check_out", e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-[#444]">Estancia mínima (noches)</label>
+                <input type="number" min="1" value={d.estancia_minima} onChange={(e) => upd("estancia_minima", e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-[#444]">Estancia máxima (noches)</label>
+                <input type="number" min="1" value={d.estancia_maxima} onChange={(e) => upd("estancia_maxima", e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
+              </div>
+            </div>
+          </div>
+          <div className="mt-6 space-y-2">
+            <p className="text-xs font-semibold text-[#444]">Documentos</p>
+            {alojDocs.map((docId) => (
+              <DocUploadRow
+                key={docId}
+                docId={docId}
+                title={DOCUMENT_CATALOG[docId].title}
+                required={DOCUMENT_CATALOG[docId].required}
+                file={documentFiles[docId]}
+                onUpload={openDocumentUpload}
+              />
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+
+    if (pasoActual === 4) {
+      const d = serviceDetails.ninos;
+      const upd = (field, val) => updateServiceDetails("ninos", { ...d, [field]: val });
+      const ninosDocs = getDocsForVertical("ninos");
+      const allFormacion = [...FORMACION_TAGS, ...customTags.formacion];
+      const allActividades = [...ACTIVIDADES_TAGS, ...customTags.actividades];
+
+      return (
+        <div>
+          <h2 className="text-2xl text-[#1a1a1a]" style={{ fontFamily: SERIF }}>🧒 Niñera</h2>
+          <p className="mt-1 text-sm text-[#666]">Tu servicio de cuidado infantil</p>
+          <input ref={(el) => { servicePhotoRefs.current.ninos = el; }} type="file" accept="image/*" className="hidden" onChange={handleServicePhotos} />
+          <div className="mt-6">
+            <PhotoUploadGrid
+              label="Foto del servicio"
+              previews={servicePhotoPreviews.ninos}
+              onAdd={() => openServicePhotoUpload("ninos")}
+              onRemove={(i) => removeServicePhoto("ninos", i)}
+              multiple={false}
+            />
+          </div>
+          <div className="mt-6 grid gap-4 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <label className="mb-1.5 block text-xs font-medium text-[#444]">Título</label>
+              <input value={d.titulo} onChange={(e) => upd("titulo", e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-[#444]">Años de experiencia</label>
+              <input type="number" min="0" value={d.anos_experiencia} onChange={(e) => upd("anos_experiencia", e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-[#444]">Precio / hora (€)</label>
+              <input type="number" min="0" value={d.precio} onChange={(e) => upd("precio", e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
+            </div>
+            <div className="sm:col-span-2">
+              <p className="mb-2 text-xs font-medium text-[#444]">Modalidad</p>
+              <div className="flex flex-wrap gap-2">
+                {MODALIDAD_OPTIONS.ninos.map((opt) => (
+                  <TagPill key={opt.value} label={opt.label} selected={d.modalidad === opt.value} onClick={() => upd("modalidad", opt.value)} color={GREEN} />
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="mt-4">
+            <p className="mb-2 text-xs font-medium text-[#444]">Rango de edad</p>
+            <div className="flex flex-wrap gap-2">
+              {EDADES_TAGS.map((tag) => (
+                <TagPill key={tag} label={tag} selected={(d.edadesTags || []).includes(tag)} onClick={() => toggleTag("ninos", "edadesTags", tag)} color={GREEN} />
+              ))}
+            </div>
+          </div>
+          <div className="mt-4">
+            <p className="mb-2 text-xs font-medium text-[#444]">Formación</p>
+            <div className="flex flex-wrap gap-2">
+              {allFormacion.map((tag) => (
+                <TagPill key={tag} label={tag} selected={(d.formacionTags || []).includes(tag)} onClick={() => toggleTag("ninos", "formacionTags", tag)} color={GREEN} />
+              ))}
+              <TagPill label="+ Otro" selected={false} onClick={() => addCustomTag("ninos", "formacionTags", "formacion")} color="#666" />
+            </div>
+          </div>
+          <div className="mt-4">
+            <label className="mb-1.5 block text-xs font-medium text-[#444]">Descripción del servicio</label>
+            <textarea rows={4} value={d.descripcion} onChange={(e) => upd("descripcion", e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
+          </div>
+          <div className="mt-4">
+            <p className="mb-2 text-xs font-medium text-[#444]">Actividades</p>
+            <div className="flex flex-wrap gap-2">
+              {allActividades.map((tag) => (
+                <TagPill key={tag} label={tag} selected={(d.actividadesTags || []).includes(tag)} onClick={() => toggleTag("ninos", "actividadesTags", tag)} color={GREEN} />
+              ))}
+              <TagPill label="+ Otro" selected={false} onClick={() => addCustomTag("ninos", "actividadesTags", "actividades")} color="#666" />
+            </div>
+          </div>
+          <div className="mt-4">
+            <p className="mb-2 text-xs font-medium text-[#444]">Días disponibles</p>
+            <div className="flex flex-wrap gap-2">
+              {DIAS_SEMANA.map((dia) => (
+                <TagPill
+                  key={dia.id}
+                  label={dia.label}
+                  selected={(d.dias_disponibles || []).includes(dia.id)}
+                  onClick={() => {
+                    const arr = d.dias_disponibles || [];
+                    const next = arr.includes(dia.id) ? arr.filter((x) => x !== dia.id) : [...arr, dia.id];
+                    upd("dias_disponibles", next.length ? next : []);
+                  }}
+                  color={GREEN}
                 />
-                <OfertaEspecialSection
-                  serviceId={serviceId}
-                  details={serviceDetails[serviceId]}
-                  onChange={(details) =>
-                    updateServiceDetails(serviceId, details)
-                  }
-                />
-                <DescuentosDuracionSection
-                  serviceId={serviceId}
-                  details={serviceDetails[serviceId]}
-                  onChange={(details) =>
-                    updateServiceDetails(serviceId, details)
-                  }
-                />
-                <ProveedorEmergenciaToggle
-                  checked={serviceDetails[serviceId]?.proveedor_emergencia === true}
-                  onChange={(value) =>
-                    updateServiceDetails(serviceId, {
-                      ...serviceDetails[serviceId],
-                      proveedor_emergencia: value,
-                    })
-                  }
-                />
+              ))}
+            </div>
+          </div>
+          <div className="mt-4 rounded-xl border p-4" style={{ borderColor: BRAND.border }}>
+            <ToggleRow label="Disponible para viajar" checked={d.disponible_para_viajar} onChange={(v) => upd("disponible_para_viajar", v)} />
+            <ToggleRow label="Noches y fines de semana" checked={d.nochesFinde} onChange={(v) => upd("nochesFinde", v)} />
+            <ToggleRow label="Carnet de conducir" checked={d.carnetConducir} onChange={(v) => upd("carnetConducir", v)} />
+          </div>
+          <div className="mt-6 rounded-xl border p-4" style={{ borderColor: BRAND.border, backgroundColor: `${GREEN}08` }}>
+            <p className="text-sm font-semibold text-[#1a1a1a]">Referencias externas</p>
+            <p className="mt-1 text-xs text-[#666]">Pide a familias anteriores que confirmen tu experiencia</p>
+            <button
+              type="button"
+              className="mt-3 rounded-xl border px-4 py-2 text-sm font-semibold"
+              style={{ borderColor: GREEN, color: GREEN }}
+              onClick={() => window.alert("Te enviaremos un enlace para solicitar referencias tras enviar tu perfil.")}
+            >
+              Solicitar referencia
+            </button>
+          </div>
+          <div className="mt-6 space-y-2">
+            <p className="text-xs font-semibold text-[#444]">Documentos</p>
+            {ninosDocs.map((docId) => (
+              <DocUploadRow
+                key={docId}
+                docId={docId}
+                title={DOCUMENT_CATALOG[docId].title}
+                required={DOCUMENT_CATALOG[docId].required}
+                file={documentFiles[docId]}
+                onUpload={openDocumentUpload}
+              />
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    if (pasoActual === 5) {
+      const d = serviceDetails.mascotas;
+      const upd = (field, val) => updateServiceDetails("mascotas", { ...d, [field]: val });
+      const mascotasDocs = getDocsForVertical("mascotas");
+      const allAnimales = [...ANIMALES_TAGS, ...customTags.animales];
+      const allCert = [...CERT_MASCOTAS_TAGS, ...customTags.certMascotas];
+
+      return (
+        <div>
+          <h2 className="text-2xl text-[#1a1a1a]" style={{ fontFamily: SERIF }}>🐾 Mascotas</h2>
+          <p className="mt-1 text-sm text-[#666]">Tu servicio de cuidado animal</p>
+          <input ref={(el) => { servicePhotoRefs.current.mascotas = el; }} type="file" accept="image/*" className="hidden" onChange={handleServicePhotos} />
+          <div className="mt-6">
+            <PhotoUploadGrid
+              label="Foto del servicio"
+              previews={servicePhotoPreviews.mascotas}
+              onAdd={() => openServicePhotoUpload("mascotas")}
+              onRemove={(i) => removeServicePhoto("mascotas", i)}
+              multiple={false}
+            />
+          </div>
+          <div className="mt-6 grid gap-4 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <label className="mb-1.5 block text-xs font-medium text-[#444]">Título</label>
+              <input value={d.titulo} onChange={(e) => upd("titulo", e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-[#444]">Años de experiencia</label>
+              <input type="number" min="0" value={d.anos_experiencia} onChange={(e) => upd("anos_experiencia", e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-[#444]">Precio / día (€)</label>
+              <input type="number" min="0" value={d.precio} onChange={(e) => upd("precio", e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
+            </div>
+            <div className="sm:col-span-2">
+              <p className="mb-2 text-xs font-medium text-[#444]">Modalidad</p>
+              <div className="flex flex-wrap gap-2">
+                {MODALIDAD_OPTIONS.mascotas.map((opt) => (
+                  <TagPill key={opt.value} label={opt.label} selected={d.modalidad === opt.value} onClick={() => upd("modalidad", opt.value)} color={ORANGE} />
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="mt-4">
+            <label className="mb-1.5 block text-xs font-medium text-[#444]">Descripción</label>
+            <textarea rows={4} value={d.descripcion} onChange={(e) => upd("descripcion", e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
+          </div>
+          <div className="mt-4">
+            <p className="mb-2 text-xs font-medium text-[#444]">Animales</p>
+            <div className="flex flex-wrap gap-2">
+              {allAnimales.map((tag) => (
+                <TagPill key={tag} label={tag} selected={(d.animalesTags || []).includes(tag)} onClick={() => toggleTag("mascotas", "animalesTags", tag)} color={ORANGE} />
+              ))}
+              <TagPill label="+ Otro" selected={false} onClick={() => addCustomTag("mascotas", "animalesTags", "animales")} color="#666" />
+            </div>
+          </div>
+          <div className="mt-4">
+            <p className="mb-2 text-xs font-medium text-[#444]">Tamaño perro</p>
+            <div className="flex flex-wrap gap-2">
+              {TAMANO_PERRO_TAGS.map((tag) => (
+                <TagPill key={tag} label={tag} selected={d.tamanoPerro === tag} onClick={() => upd("tamanoPerro", tag)} color={ORANGE} />
+              ))}
+            </div>
+          </div>
+          <div className="mt-4 rounded-xl border p-4" style={{ borderColor: BRAND.border }}>
+            <ToggleRow label="Tiene jardín" checked={d.jardin} onChange={(v) => upd("jardin", v)} />
+            <ToggleRow label="Paseos incluidos" checked={d.paseosIncluidos} onChange={(v) => upd("paseosIncluidos", v)} />
+            <ToggleRow label="Envía fotos y actualizaciones" checked={d.fotosActualizaciones} onChange={(v) => upd("fotosActualizaciones", v)} />
+            <ToggleRow label="Cerca de veterinario" checked={d.cercaVeterinario} onChange={(v) => upd("cercaVeterinario", v)} />
+            <ToggleRow label="Disponible para viajar" checked={d.disponible_para_viajar} onChange={(v) => upd("disponible_para_viajar", v)} />
+          </div>
+          <div className="mt-4">
+            <p className="mb-2 text-xs font-medium text-[#444]">Certificaciones</p>
+            <div className="flex flex-wrap gap-2">
+              {allCert.map((tag) => (
+                <TagPill key={tag} label={tag} selected={(d.certificacionesTags || []).includes(tag)} onClick={() => toggleTag("mascotas", "certificacionesTags", tag)} color={ORANGE} />
+              ))}
+              <TagPill label="+ Otro" selected={false} onClick={() => addCustomTag("mascotas", "certificacionesTags", "certMascotas")} color="#666" />
+            </div>
+          </div>
+          <div className="mt-6 space-y-2">
+            <p className="text-xs font-semibold text-[#444]">Documentos</p>
+            {mascotasDocs.map((docId) => (
+              <DocUploadRow
+                key={docId}
+                docId={docId}
+                title={DOCUMENT_CATALOG[docId].title}
+                required={DOCUMENT_CATALOG[docId].required}
+                file={documentFiles[docId]}
+                onUpload={openDocumentUpload}
+              />
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+
+    if (pasoActual === 6) {
+      const verticalLabels = {
+        alojamiento: "🏠 Alojamiento",
+        ninos: "🧒 Niñera",
+        mascotas: "🐾 Mascotas",
+      };
+
+      return (
+        <div>
+          <h2 className="text-2xl text-[#1a1a1a]" style={{ fontFamily: SERIF }}>
+            Documentos generales
+          </h2>
+          <p className="mt-1 text-sm text-[#666]">
+            Resumen de toda tu documentación
+          </p>
+          <div className="mt-6 rounded-xl border p-4" style={{ borderColor: BRAND.border }}>
+            <p className="text-sm font-semibold">DNI común a todos los servicios</p>
+            <div className="mt-2">
+              {["dni_propietario", "dni_nie"]
+                .filter((id) => requiredDocuments.some((d) => d.id === id))
+                .map((docId) => (
+                  <div key={docId} className="flex items-center gap-2 py-1 text-sm">
+                    <span style={{ color: documentFiles[docId] ? GREEN : ORANGE }}>
+                      {documentFiles[docId] ? "✓" : "⚠️"}
+                    </span>
+                    <span>{DOCUMENT_CATALOG[docId].title}</span>
+                    <span className="text-xs text-[#888]">
+                      {documentFiles[docId] ? "subido" : "pendiente"}
+                    </span>
+                  </div>
+                ))}
+            </div>
+          </div>
+          {verticalesSeleccionados.map((v) => {
+            const docs = getDocsForVertical(v);
+            return (
+              <div key={v} className="mt-4 rounded-xl border p-4" style={{ borderColor: BRAND.border }}>
+                <p className="text-sm font-semibold">{verticalLabels[v]}</p>
+                <div className="mt-2 space-y-1">
+                  {docs.map((docId) => (
+                    <div key={docId} className="flex items-center justify-between text-sm">
+                      <span className="flex items-center gap-2">
+                        <span style={{ color: documentFiles[docId] ? GREEN : DOCUMENT_CATALOG[docId].required ? ORANGE : "#888" }}>
+                          {documentFiles[docId] ? "✓" : DOCUMENT_CATALOG[docId].required ? "⚠️" : "○"}
+                        </span>
+                        {DOCUMENT_CATALOG[docId].title}
+                      </span>
+                      {!documentFiles[docId] && (
+                        <button
+                          type="button"
+                          onClick={() => openDocumentUpload(docId)}
+                          className="text-xs font-semibold"
+                          style={{ color: PRIMARY }}
+                        >
+                          Subir
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
             );
           })}
-        </section>
-
-        {/* 04 — Fotos */}
-        <section
-          className="border-b py-10"
-          style={{ borderColor: BRAND.border }}
-        >
-          <SectionLabel number="04" title="Fotos" />
-          <input
-            ref={servicePhotosRef}
-            type="file"
-            accept="image/jpeg,image/png"
-            multiple
-            className="hidden"
-            onChange={handleServicePhotos}
-          />
-          <div className="mt-5 grid grid-cols-3 gap-3">
-            {Array.from({ length: photoSlots }).map((_, index) => {
-              const preview = servicePhotoPreviews[index];
-              const isAddSlot = index === servicePhotoPreviews.length;
-
-              if (preview) {
-                return (
-                  <div
-                    key={index}
-                    className="relative aspect-square overflow-hidden rounded-xl border"
-                    style={{ borderColor: BRAND.border }}
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={preview}
-                      alt={`Foto ${index + 1}`}
-                      className="h-full w-full object-cover"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removeServicePhoto(index)}
-                      className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/50 text-xs text-white"
-                      aria-label="Eliminar foto"
-                    >
-                      ×
-                    </button>
-                  </div>
-                );
-              }
-
-              if (isAddSlot && servicePhotos.length < 6) {
-                return (
-                  <button
-                    key={index}
-                    type="button"
-                    onClick={() => servicePhotosRef.current?.click()}
-                    className="flex aspect-square items-center justify-center rounded-xl border-2 border-dashed text-2xl text-[#aaa] transition-colors hover:border-[#1d4f91] hover:text-[#1d4f91]"
-                    style={{ borderColor: BRAND.border }}
-                  >
-                    +
-                  </button>
-                );
-              }
-
-              return (
-                <div
-                  key={index}
-                  className="aspect-square rounded-xl border border-dashed bg-white/50"
-                  style={{ borderColor: BRAND.border }}
-                />
-              );
-            })}
+          <div className="mt-6 space-y-2">
+            {requiredDocuments.map((doc) => (
+              <DocUploadRow
+                key={doc.id}
+                docId={doc.id}
+                title={doc.title}
+                required={doc.required}
+                file={documentFiles[doc.id]}
+                onUpload={openDocumentUpload}
+              />
+            ))}
           </div>
-          <p className="mt-3 text-xs text-[#888]">
-            Hasta 6 fotos · JPG o PNG · máx 5MB
+        </div>
+      );
+    }
+
+    if (pasoActual === 7) {
+      const checklist = [
+        { label: "Servicios seleccionados", ok: verticalesSeleccionados.length > 0 },
+        { label: "Perfil personal", ok: nombre.trim() && apellido.trim() && sobreTi.trim() },
+        { label: "Foto de perfil", ok: !!profilePhotoPreview },
+        ...(verticalesSeleccionados.includes("alojamiento")
+          ? [{ label: "Alojamiento", ok: serviceDetails.alojamiento.titulo.trim() && serviceDetails.alojamiento.precio }]
+          : []),
+        ...(verticalesSeleccionados.includes("ninos")
+          ? [{ label: "Niñera", ok: serviceDetails.ninos.titulo.trim() && serviceDetails.ninos.precio }]
+          : []),
+        ...(verticalesSeleccionados.includes("mascotas")
+          ? [{ label: "Mascotas", ok: serviceDetails.mascotas.titulo.trim() && serviceDetails.mascotas.precio }]
+          : []),
+        ...requiredDocuments
+          .filter((d) => d.required)
+          .map((d) => ({
+            label: d.title,
+            ok: !!documentFiles[d.id],
+          })),
+      ];
+
+      return (
+        <div>
+          <h2 className="text-2xl text-[#1a1a1a]" style={{ fontFamily: SERIF }}>
+            Revisión
+          </h2>
+          <p className="mt-1 text-sm text-[#666]">
+            Así verán tu perfil las familias
           </p>
-        </section>
-
-        {/* 05 — Idiomas */}
-        <section
-          className="border-b py-10"
-          style={{ borderColor: BRAND.border }}
-        >
-          <SectionLabel number="05" title="Idiomas" />
-          <div className="mt-5 flex flex-wrap gap-2">
-            {LANGUAGES.map((lang) => {
-              const selected = selectedLanguages.includes(lang);
+          <div
+            className="mt-6 rounded-2xl border bg-white p-5"
+            style={{ borderColor: BRAND.border }}
+          >
+            <div className="flex items-center gap-4">
+              <div className="h-16 w-16 overflow-hidden rounded-full bg-[#f5f3ef]">
+                {profilePhotoPreview ? (
+                  <img src={profilePhotoPreview} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-2xl">👤</div>
+                )}
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold" style={{ fontFamily: SERIF }}>
+                  {[nombre, apellido].filter(Boolean).join(" ") || "Tu nombre"}
+                </h3>
+                <p className="text-sm text-[#666]">{ciudad}</p>
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {VERTICALES_CARDS.filter((v) => verticalesSeleccionados.includes(v.id)).map((v) => (
+                    <span
+                      key={v.id}
+                      className="rounded-full px-2 py-0.5 text-[10px] font-semibold text-white"
+                      style={{ backgroundColor: v.color }}
+                    >
+                      {v.nombre}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+            {sobreTi && (
+              <p className="mt-4 text-sm text-[#444] leading-relaxed">{sobreTi}</p>
+            )}
+            {verticalesSeleccionados.map((v) => {
+              const d = serviceDetails[v];
+              const card = VERTICALES_CARDS.find((c) => c.id === v);
               return (
-                <button
-                  key={lang}
-                  type="button"
-                  onClick={() => toggleLanguage(lang)}
-                  className="rounded-full border px-4 py-2 text-sm font-medium transition-colors"
-                  style={{
-                    borderColor: selected ? BRAND.primary : BRAND.border,
-                    backgroundColor: selected ? BRAND.light : "#fff",
-                    color: selected ? DARK_BLUE : "#444",
-                  }}
-                >
-                  {lang}
-                </button>
+                <div key={v} className="mt-4 border-t pt-4" style={{ borderColor: BRAND.border }}>
+                  <p className="text-sm font-semibold" style={{ color: card?.color }}>
+                    {card?.icono} {card?.nombre}
+                  </p>
+                  <p className="text-sm text-[#1a1a1a]">{d.titulo || "—"}</p>
+                  {d.descripcion && (
+                    <p className="mt-1 text-xs text-[#666]">{d.descripcion}</p>
+                  )}
+                  {d.precio && (
+                    <p className="mt-1 text-sm font-bold" style={{ color: PRIMARY }}>
+                      {d.precio}€
+                      {v === "alojamiento" ? "/noche" : v === "ninos" ? "/hora" : "/día"}
+                    </p>
+                  )}
+                </div>
               );
             })}
           </div>
-        </section>
-
-        {/* 06 — Documentación */}
-        <section className="pb-10">
-          <SectionLabel number="06" title="Documentación" />
-          <input
-            ref={documentInputRef}
-            type="file"
-            accept="image/jpeg,image/png,application/pdf"
-            className="hidden"
-            onChange={handleDocumentFile}
-          />
-          <div className="mt-5 flex flex-col gap-4">
-            {requiredDocuments.length === 0 ? (
-              <p className="rounded-2xl border bg-white px-5 py-5 text-sm text-[#888]" style={{ borderColor: BRAND.border }}>
-                Selecciona al menos un servicio en la sección 03 para ver los
-                documentos requeridos.
+          <div className="mt-6 rounded-xl border p-4" style={{ borderColor: BRAND.border }}>
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold">Completitud del perfil</p>
+              <p className="text-lg font-bold" style={{ color: PRIMARY }}>
+                {completionPct}%
               </p>
-            ) : (
-              requiredDocuments.map((doc) => (
-                <button
-                  key={doc.id}
-                  type="button"
-                  onClick={() => openDocumentUpload(doc.id)}
-                  className="flex items-center gap-4 rounded-2xl border-2 border-dashed bg-white px-5 py-5 text-left transition-colors hover:bg-[#fafafa]"
-                  style={{ borderColor: BRAND.border }}
-                >
-                  <UploadIcon className="h-6 w-6 shrink-0 text-[#1d4f91]" />
-                  <div>
-                    <p className="text-sm font-medium text-[#1a1a1a]">
-                      {doc.title}
-                    </p>
-                    {doc.note && (
-                      <p
-                        className={`mt-0.5 text-xs ${doc.noteRed ? "text-red-600" : "text-[#888]"}`}
-                      >
-                        {doc.note}
-                      </p>
-                    )}
-                    <p className="mt-1 text-xs text-[#888]">
-                      {documentFiles[doc.id]
-                        ? documentFiles[doc.id].name
-                        : "JPG, PNG o PDF · máx 5MB"}
-                    </p>
-                  </div>
-                </button>
-              ))
-            )}
+            </div>
+            <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#eee]">
+              <div
+                className="h-full rounded-full transition-all"
+                style={{ width: `${completionPct}%`, backgroundColor: PRIMARY }}
+              />
+            </div>
+            <ul className="mt-4 space-y-1.5">
+              {checklist.map((item) => (
+                <li key={item.label} className="flex items-center gap-2 text-sm">
+                  <span style={{ color: item.ok ? GREEN : "#ccc" }}>
+                    {item.ok ? "✓" : "○"}
+                  </span>
+                  <span style={{ color: item.ok ? "#444" : "#aaa" }}>{item.label}</span>
+                </li>
+              ))}
+            </ul>
           </div>
-        </section>
-
-        {/* Submit */}
-        <div className="border-t pt-8" style={{ borderColor: BRAND.border }}>
           {successMessage && (
-            <p className="mb-4 rounded-lg bg-green-50 px-4 py-3 text-sm text-green-700">
+            <p className="mt-4 rounded-xl bg-green-50 px-4 py-3 text-sm text-green-800">
               {successMessage}
-            </p>
-          )}
-          {errorMessage && (
-            <p className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
-              {errorMessage}
             </p>
           )}
           <button
             type="submit"
-            disabled={submitting || !!successMessage}
-            className="w-full rounded-xl py-4 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-            style={{ backgroundColor: BRAND.primary }}
+            disabled={submitting}
+            className="mt-6 w-full rounded-xl py-3.5 text-sm font-semibold text-white transition-opacity disabled:opacity-60"
+            style={{ backgroundColor: PRIMARY }}
           >
-            {submitting ? "Enviando..." : "Enviar perfil para revisión →"}
+            {submitting ? "Enviando…" : "Enviar para revisión"}
           </button>
-          <p className="mt-4 text-center text-xs leading-relaxed text-[#888]">
-            Revisamos tu perfil en menos de 24h. Te avisamos por email cuando
-            esté activo.
-          </p>
+        </div>
+      );
+    }
+
+    return null;
+  };
+
+  const isLastStep = pasoActual === 7;
+  const isFirstStep = pasoActual === 1;
+
+  return (
+    <div className="min-h-screen font-sans" style={{ backgroundColor: BRAND.warm, color: "#1a1a1a" }}>
+      <header className="sticky top-0 z-50 bg-white shadow-sm">
+        <div className="mx-auto max-w-5xl px-4 py-4 sm:px-6">
+          <h1 className="text-lg font-semibold" style={{ color: PRIMARY, fontFamily: SERIF }}>
+            Crea tu perfil de proveedor
+          </h1>
+        </div>
+        <StepBar steps={visibleSteps} pasoActual={pasoActual} />
+      </header>
+
+      <input ref={documentInputRef} type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={handleDocumentFile} />
+
+      <form onSubmit={handleSubmit} className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-[1fr_290px]">
+          <div>
+            {errorMessage && (
+              <p className="mb-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
+                {errorMessage}
+              </p>
+            )}
+            {renderStep()}
+            {!isLastStep && (
+              <div className="mt-10 flex items-center justify-between gap-4">
+                <button
+                  type="button"
+                  onClick={goBack}
+                  disabled={isFirstStep}
+                  className="rounded-xl border px-6 py-3 text-sm font-semibold transition-opacity disabled:opacity-30"
+                  style={{ borderColor: "#ccc", color: "#666" }}
+                >
+                  ← Volver
+                </button>
+                <button
+                  type="button"
+                  onClick={goNext}
+                  className="rounded-xl px-6 py-3 text-sm font-semibold text-white"
+                  style={{ backgroundColor: PRIMARY }}
+                >
+                  Siguiente →
+                </button>
+              </div>
+            )}
+            {isLastStep && !isFirstStep && (
+              <button
+                type="button"
+                onClick={goBack}
+                className="mt-6 rounded-xl border px-6 py-3 text-sm font-semibold"
+                style={{ borderColor: "#ccc", color: "#666" }}
+              >
+                ← Volver
+              </button>
+            )}
+          </div>
+          <PreviewPanel
+            profilePhotoPreview={profilePhotoPreview}
+            nombre={nombre}
+            apellido={apellido}
+            ciudad={ciudad}
+            verticales={verticalesSeleccionados}
+            serviceDetails={serviceDetails}
+            idiomas={idiomas}
+          />
         </div>
       </form>
     </div>
   );
 }
+
