@@ -812,7 +812,9 @@ function ServiceCard({
             <p className="mt-0.5 truncate text-[10px] text-[#aaa]">{service.titulo}</p>
           )}
 
-          {tags.length > 0 && (
+          {(tags.length > 0 ||
+            profile.badge_respuesta === "rapido" ||
+            profile.badge_respuesta === "pocas_horas") && (
             <div className="mt-1.5 flex flex-wrap gap-1">
               {tags.map((tag) => (
                 <span
@@ -823,6 +825,22 @@ function ServiceCard({
                   {tag.text}
                 </span>
               ))}
+              {profile.badge_respuesta === "rapido" && (
+                <span
+                  className="rct rounded-full px-2 py-0.5 text-[9px] font-semibold"
+                  style={{ background: "#e6f4f0", color: "#085041" }}
+                >
+                  ⚡ Responde rápido
+                </span>
+              )}
+              {profile.badge_respuesta === "pocas_horas" && (
+                <span
+                  className="rct n rounded-full px-2 py-0.5 text-[9px] font-semibold"
+                  style={{ background: "#fdf3e3", color: "#92400e" }}
+                >
+                  🕐 Responde en pocas horas
+                </span>
+              )}
             </div>
           )}
 
@@ -1046,6 +1064,7 @@ function BuscarContent() {
             nombre,
             apellido,
             verificado,
+            badge_respuesta,
             idiomas,
             id,
             location_zone,

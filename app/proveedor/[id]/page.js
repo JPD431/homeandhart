@@ -444,6 +444,16 @@ export default async function ProveedorPage({ params }) {
                     {avalesCount} aval{avalesCount !== 1 ? "es" : ""}
                   </Tag>
                 )}
+                {profile.badge_respuesta === "rapido" && (
+                  <Tag light="#e6f4f0" color="#085041">
+                    ⚡ Responde rápido
+                  </Tag>
+                )}
+                {profile.badge_respuesta === "pocas_horas" && (
+                  <Tag light="#fdf3e3" color="#92400e">
+                    🕐 Responde en pocas horas
+                  </Tag>
+                )}
                 {hasAlojamiento && (
                   <Tag light="#e8f0fb" color="#163a6b">
                     NRU ✓
