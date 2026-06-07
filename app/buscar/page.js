@@ -137,6 +137,67 @@ function getDefaultFilters() {
   };
 }
 
+function filtersFromSearchParams(searchParams) {
+  const defaults = getDefaultFilters();
+  return {
+    ...defaults,
+    precioMin: parseInt(searchParams.get("precioMin") || "0", 10) || 0,
+    precioMax: parseInt(searchParams.get("precioMax") || "500", 10) || 500,
+    valoracionMin: parseFloat(searchParams.get("valoracion") || "0") || 0,
+    soloInmediata: searchParams.get("inmediata") === "1",
+    soloVerificados: searchParams.has("verificados")
+      ? searchParams.get("verificados") === "1"
+      : true,
+    soloConDocumentos: searchParams.get("documentos") === "1",
+    idiomas: searchParams.get("idiomas")?.split(",").filter(Boolean) || [],
+    petFriendly: searchParams.get("pet") === "1",
+    tipoAlojamiento: searchParams.get("tipo") || "",
+    capacidadMin: parseInt(searchParams.get("capacidad") || "1", 10) || 1,
+    disponibleViajar: searchParams.get("viajar") === "1",
+    edadNinos: searchParams.get("edades")?.split(",").filter(Boolean) || [],
+    conJardin: searchParams.get("jardin") === "1",
+    paseosIncluidos: searchParams.get("paseos") === "1",
+  };
+}
+
+function buildBuscarQueryString({
+  vertical,
+  ciudad,
+  desde,
+  hasta,
+  filters,
+  ordenarPor,
+  bundle,
+  origen,
+}) {
+  const params = new URLSearchParams();
+  if (vertical && vertical !== "todo") params.set("vertical", vertical);
+  if (ciudad?.trim()) params.set("ciudad", ciudad.trim());
+  if (desde) params.set("desde", desde);
+  if (hasta) params.set("hasta", hasta);
+  if (filters.precioMin > 0) params.set("precioMin", String(filters.precioMin));
+  if (filters.precioMax < 500) params.set("precioMax", String(filters.precioMax));
+  if (filters.valoracionMin > 0) params.set("valoracion", String(filters.valoracionMin));
+  if (filters.soloInmediata) params.set("inmediata", "1");
+  if (filters.soloVerificados) params.set("verificados", "1");
+  else params.set("verificados", "0");
+  if (filters.soloConDocumentos) params.set("documentos", "1");
+  if (filters.idiomas.length > 0) params.set("idiomas", filters.idiomas.join(","));
+  if (filters.petFriendly) params.set("pet", "1");
+  if (filters.tipoAlojamiento) params.set("tipo", filters.tipoAlojamiento);
+  if (filters.capacidadMin > 1) params.set("capacidad", String(filters.capacidadMin));
+  if (filters.disponibleViajar) params.set("viajar", "1");
+  if (filters.edadNinos.length > 0) params.set("edades", filters.edadNinos.join(","));
+  if (filters.conJardin) params.set("jardin", "1");
+  if (filters.paseosIncluidos) params.set("paseos", "1");
+  if (ordenarPor && ordenarPor !== "relevancia") params.set("orden", ordenarPor);
+  if (bundle) {
+    params.set("bundle", "true");
+    if (origen) params.set("origen", origen);
+  }
+  return params.toString();
+}
+
 function countActiveFilters(filters, vertical) {
   let n = 0;
   if (filters.precioMin > 0) n++;
@@ -668,12 +729,17 @@ function ServiceCard({
   lang,
   bundleMode,
   onBundleAdd,
+  ratingsByProveedor,
 }) {
   const profile = service.profiles ?? {};
   const theme = VERTICAL_THEME[service.vertical] ?? VERTICAL_THEME.alojamiento;
   const zone = getServiceZone(service, profile);
   const tags = getServiceTags(service, profile, lang);
   const priceLabel = formatPrice(service.precio, theme.priceSuffix);
+  const rating = ratingsByProveedor?.[service.proveedor_id];
+  const valoracionMedia =
+    rating?.count > 0 ? (rating.sum / rating.count).toFixed(1) : null;
+  const numReviews = rating?.count || 0;
 
   return (
     <li>
@@ -731,9 +797,15 @@ function ServiceCard({
               {formatShortName(profile.nombre, profile.apellido) || "Proveedor"}
               <span className="font-normal text-[#888]"> · {zone}</span>
             </p>
-            <span className="shrink-0 text-[10px] text-[#c47d1a]">
-              ★ {extra.estrellas}
-            </span>
+            {valoracionMedia ? (
+              <span className="shrink-0 text-[10px] text-[#c47d1a]">
+                ★ {valoracionMedia} ({numReviews})
+              </span>
+            ) : (
+              <span className="shrink-0 text-[10px]" style={{ color: "#bbb" }}>
+                {lang === "en" ? "No reviews" : "Sin valoraciones"}
+              </span>
+            )}
           </div>
 
           {service.titulo && (
@@ -818,26 +890,46 @@ function BuscarContent() {
   const [selectedIndex, setSelectedIndex] = useState(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
-  const [appliedFilters, setAppliedFilters] = useState(getDefaultFilters);
   const [draftFilters, setDraftFilters] = useState(getDefaultFilters);
-  const [ordenarPor, setOrdenarPor] = useState("relevancia");
 
-  const updateParams = useCallback(
-    (vertical, ciudad, desde, hasta) => {
-      const params = new URLSearchParams();
-      if (vertical && vertical !== "todo") params.set("vertical", vertical);
-      if (ciudad?.trim()) params.set("ciudad", ciudad.trim());
-      if (desde) params.set("desde", desde);
-      if (hasta) params.set("hasta", hasta);
-      if (searchParams.get("bundle") === "true") {
-        params.set("bundle", "true");
-        const origen = searchParams.get("origen");
-        if (origen) params.set("origen", origen);
-      }
-      const query = params.toString();
-      router.push(query ? `${pathname}?${query}` : pathname);
+  const appliedFilters = useMemo(
+    () => filtersFromSearchParams(searchParams),
+    [searchParams],
+  );
+  const ordenarPor = searchParams.get("orden") || "relevancia";
+
+  const replaceSearchParams = useCallback(
+    ({
+      vertical = verticalParam,
+      ciudad = ciudadInput,
+      desde = fechaDesdeInput,
+      hasta = fechaHastaInput,
+      filters = appliedFilters,
+      ordenar = ordenarPor,
+    } = {}) => {
+      const query = buildBuscarQueryString({
+        vertical,
+        ciudad,
+        desde,
+        hasta,
+        filters,
+        ordenarPor: ordenar,
+        bundle: searchParams.get("bundle") === "true",
+        origen: searchParams.get("origen") || "",
+      });
+      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
     },
-    [pathname, router, searchParams],
+    [
+      appliedFilters,
+      ciudadInput,
+      fechaDesdeInput,
+      fechaHastaInput,
+      ordenarPor,
+      pathname,
+      router,
+      searchParams,
+      verticalParam,
+    ],
   );
 
   useEffect(() => {
@@ -895,7 +987,16 @@ function BuscarContent() {
     setCiudadInput(ciudadParam);
     setFechaDesdeInput(fechaBusquedaInicioParam);
     setFechaHastaInput(fechaBusquedaFinParam);
-  }, [ciudadParam, fechaBusquedaInicioParam, fechaBusquedaFinParam]);
+    if (!advancedOpen) {
+      setDraftFilters(filtersFromSearchParams(searchParams));
+    }
+  }, [
+    ciudadParam,
+    fechaBusquedaInicioParam,
+    fechaBusquedaFinParam,
+    searchParams,
+    advancedOpen,
+  ]);
 
   useEffect(() => {
     if (!calendarOpen) return;
@@ -1093,12 +1194,16 @@ function BuscarContent() {
   }, [rawResults, appliedFilters, ordenarPor, ratingsByProveedor, bookingsByService]);
 
   function handleVerticalChange(vertical) {
-    updateParams(vertical, ciudadInput, fechaDesdeInput, fechaHastaInput);
+    replaceSearchParams({ vertical });
   }
 
   function handleBuscarSubmit(e) {
     e.preventDefault();
-    updateParams(verticalParam, ciudadInput, fechaDesdeInput, fechaHastaInput);
+    replaceSearchParams({
+      ciudad: ciudadInput,
+      desde: fechaDesdeInput,
+      hasta: fechaHastaInput,
+    });
   }
 
   function handleRangeChange({ desde, hasta }) {
@@ -1140,14 +1245,14 @@ function BuscarContent() {
   }
 
   function handleApplyFilters() {
-    setAppliedFilters({ ...draftFilters });
+    replaceSearchParams({ filters: { ...draftFilters } });
     setAdvancedOpen(false);
   }
 
   function handleClearFilters() {
     const defaults = getDefaultFilters();
     setDraftFilters(defaults);
-    setAppliedFilters(defaults);
+    replaceSearchParams({ filters: defaults, ordenar: "relevancia" });
   }
 
   const activeFilterCount = countActiveFilters(appliedFilters, verticalParam);
@@ -1333,7 +1438,7 @@ function BuscarContent() {
             </span>
             <select
               value={ordenarPor}
-              onChange={(e) => setOrdenarPor(e.target.value)}
+              onChange={(e) => replaceSearchParams({ ordenar: e.target.value })}
               className="border px-2.5 py-1.5 text-[11px] outline-none"
               style={{
                 backgroundColor: "#fff",
@@ -1353,8 +1458,8 @@ function BuscarContent() {
           <button
             type="button"
             onClick={() => {
-              setAdvancedOpen((o) => !o);
               if (!advancedOpen) setDraftFilters({ ...appliedFilters });
+              setAdvancedOpen((o) => !o);
             }}
             className="relative flex shrink-0 items-center gap-1.5 border px-3 py-1.5 text-[11px] font-medium transition-colors"
             style={{
@@ -1707,6 +1812,7 @@ function BuscarContent() {
                   lang={lang}
                   bundleMode={bundleMode}
                   onBundleAdd={handleBundleAdd}
+                  ratingsByProveedor={ratingsByProveedor}
                 />
               ))}
             </ul>
