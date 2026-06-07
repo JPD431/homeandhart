@@ -298,33 +298,82 @@ export default function Navbar() {
           <Logo />
         </Link>
 
-        <nav
-          className="hidden items-center gap-8 text-sm font-medium text-[#444] md:flex"
-          aria-label="Principal"
-        >
-          {navLinks.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className="no-underline transition-colors hover:text-[#1d4f91]"
-              style={link.primary ? { color: BRAND.primary } : undefined}
-            >
-              {link.label}
+        {/* MÓVIL */}
+        <div className="flex items-center gap-2 md:hidden">
+          {!user && (
+            <Link href="/registro" className="no-underline">
+              <button
+                type="button"
+                style={{
+                  background: "#1d4f91",
+                  color: "#fff",
+                  border: "none",
+                  padding: "8px 14px",
+                  borderRadius: 6,
+                  fontSize: 12,
+                  fontWeight: 500,
+                  minHeight: 44,
+                }}
+              >
+                {t.navbar.registrarse}
+              </button>
             </Link>
-          ))}
-        </nav>
-
-        <div className="flex items-center gap-2 sm:gap-3">
+          )}
+          {user && (
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <div
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: "50%",
+                  background: "#1d4f91",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 11,
+                  color: "#fff",
+                  fontWeight: 500,
+                }}
+              >
+                {initials}
+              </div>
+            </div>
+          )}
           <button
             type="button"
-            className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border text-lg md:hidden"
-            style={{ borderColor: BORDER, color: "#444" }}
             onClick={() => setMobileMenuOpen(true)}
             aria-label="Abrir menú"
             aria-expanded={mobileMenuOpen}
+            style={{
+              minHeight: 44,
+              minWidth: 44,
+              background: "none",
+              border: "none",
+              fontSize: 20,
+              cursor: "pointer",
+            }}
           >
             ☰
           </button>
+        </div>
+
+        <div className="hidden items-center gap-4 md:flex">
+          <nav
+            className="flex items-center gap-8 text-sm font-medium text-[#444]"
+            aria-label="Principal"
+          >
+            {navLinks.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className="no-underline transition-colors hover:text-[#1d4f91]"
+                style={link.primary ? { color: BRAND.primary } : undefined}
+              >
+                {link.label}
+              </Link>
+            ))}
+          </nav>
+
           <LangSwitcher />
 
           {user ? (
@@ -701,7 +750,7 @@ export default function Navbar() {
               </Link>
               <Link
                 href="/login"
-                className="hidden min-h-[44px] items-center rounded-lg px-4 text-sm font-medium text-[#444] no-underline transition-colors hover:bg-[#f7f5f2] sm:inline-flex"
+                className="inline-flex min-h-[44px] items-center rounded-lg px-4 text-sm font-medium text-[#444] no-underline transition-colors hover:bg-[#f7f5f2]"
               >
                 {t.navbar.iniciarSesion}
               </Link>
