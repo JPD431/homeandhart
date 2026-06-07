@@ -1,10 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import Navbar from "@/app/components/Navbar";
-import Footer from "@/app/components/Footer";
-import { BRAND, SERIF } from "@/app/components/brand";
+import { SERIF } from "@/app/components/brand";
+
+const PRIMARY = "#1d4f91";
+const PRIMARY_DARK = "#163a6b";
+const GREEN = "#0e7a5c";
+const GREEN_DARK = "#085041";
+const BORDER = "#e8e4de";
+const WARM = "#f7f5f2";
 
 const FAQ_ITEMS = [
   {
@@ -25,423 +29,414 @@ const FAQ_ITEMS = [
   },
 ];
 
-function CalendarCancelIcon() {
-  return (
-    <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl bg-red-50">
-      <svg
-        className="h-8 w-8 text-red-500"
-        fill="none"
-        viewBox="0 0 24 24"
-        strokeWidth={1.5}
-        stroke="currentColor"
-        aria-hidden
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5"
-        />
-      </svg>
-      <span className="absolute -right-1 -top-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-600 text-xs font-bold text-white">
-        ✕
-      </span>
-    </div>
-  );
-}
+const STEPS = [
+  {
+    num: 1,
+    icon: "📅",
+    title: "Tu proveedor cancela",
+    desc: "Recibes aviso de cancelación con menos de 24 h de antelación. Activamos la garantía al instante.",
+  },
+  {
+    num: 2,
+    icon: "🔍",
+    title: "Activamos la búsqueda",
+    desc: "Nuestro sistema contacta a la red de emergencia verificada en tu zona y fechas.",
+  },
+  {
+    num: 3,
+    icon: "✅",
+    title: "3 alternativas en 30 min",
+    desc: "Te enviamos hasta 3 opciones equivalentes. Eliges y reservas sin esperar confirmación.",
+  },
+];
 
-function SearchAnimatedIcon() {
-  return (
-    <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl bg-[#e8f0fb]">
-      <span
-        className="absolute inset-0 rounded-2xl border-2 border-[#1d4f91]/30 animate-ping"
-        style={{ animationDuration: "2s" }}
-        aria-hidden
-      />
-      <svg
-        className="relative h-8 w-8 text-[#1d4f91] animate-pulse"
-        fill="none"
-        viewBox="0 0 24 24"
-        strokeWidth={2}
-        stroke="currentColor"
-        aria-hidden
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"
-        />
-      </svg>
-    </div>
-  );
-}
+const CLIENT_CARDS = [
+  {
+    icon: "💰",
+    title: "Precio garantizado",
+    desc: "Intentamos ofrecerte alternativas con precio similar al de tu reserva original.",
+  },
+  {
+    icon: "✅",
+    title: "Mismo nivel de verificación",
+    desc: "Todos los alternativos están verificados con el mismo proceso que el resto de la red.",
+  },
+  {
+    icon: "⚡",
+    title: "Reserva inmediata",
+    desc: "Sin esperar confirmación del proveedor. Activa en minutos.",
+  },
+  {
+    icon: "🤝",
+    title: "Sin gestiones extra",
+    desc: "Nosotros lo gestionamos todo. Tú solo eliges la alternativa.",
+  },
+];
 
-function CheckIcon() {
-  return (
-    <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-50">
-      <svg
-        className="h-8 w-8 text-emerald-600"
-        fill="none"
-        viewBox="0 0 24 24"
-        strokeWidth={2}
-        stroke="currentColor"
-        aria-hidden
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
-        />
-      </svg>
-    </div>
-  );
-}
+const PROVIDER_BENEFITS = [
+  { icon: "💶", text: "+5% sobre tu precio en reservas de emergencia" },
+  { icon: "🛡️", text: "Badge especial en tu perfil" },
+  { icon: "📈", text: "Más visibilidad en búsquedas prioritarias" },
+  { icon: "⭐", text: "Puntos de confianza extra en tu reputación" },
+];
 
-function MadridMap() {
+const CITIES = [
+  { name: "Madrid", active: true },
+  { name: "Barcelona", active: false },
+  { name: "Valencia", active: false },
+  { name: "Sevilla", active: false },
+  { name: "Bilbao", active: false },
+];
+
+function GarantiaNavbar() {
   return (
-    <div className="relative mx-auto w-full max-w-md overflow-hidden rounded-2xl border bg-[#f7f5f2] p-6"
-      style={{ borderColor: BRAND.border }}
+    <nav
+      className="flex flex-wrap items-center justify-between gap-4 border-b bg-white px-6 py-3"
+      style={{ borderColor: BORDER }}
     >
-      <svg viewBox="0 0 320 280" className="h-auto w-full" aria-label="Mapa de cobertura en Madrid">
-        <rect width="320" height="280" fill="#e8f0fb" rx="12" />
-        <path
-          d="M40 200 Q80 120 140 100 Q200 80 260 110 Q290 130 280 180 Q250 230 180 240 Q100 250 50 220 Z"
-          fill="#d4e4f7"
-          stroke="#1d4f91"
-          strokeWidth="1.5"
-          strokeOpacity="0.3"
-        />
-        <circle cx="155" cy="155" r="28" fill="#1d4f91" fillOpacity="0.15" />
-        <circle cx="155" cy="155" r="8" fill="#1d4f91" />
-        <circle cx="155" cy="155" r="14" fill="none" stroke="#1d4f91" strokeWidth="2" strokeOpacity="0.5">
-          <animate attributeName="r" values="14;22;14" dur="2s" repeatCount="indefinite" />
-          <animate attributeName="stroke-opacity" values="0.5;0;0.5" dur="2s" repeatCount="indefinite" />
-        </circle>
-        <text x="155" y="195" textAnchor="middle" className="fill-[#1d4f91] text-[13px] font-semibold" style={{ fontFamily: "system-ui" }}>
-          Madrid
-        </text>
-        <circle cx="95" cy="115" r="4" fill="#cbd5e1" />
-        <circle cx="210" cy="125" r="4" fill="#cbd5e1" />
-        <circle cx="230" cy="195" r="4" fill="#cbd5e1" />
-        <text x="95" y="105" textAnchor="middle" className="fill-[#94a3b8] text-[9px]" style={{ fontFamily: "system-ui" }}>
-          BCN
-        </text>
-        <text x="210" y="115" textAnchor="middle" className="fill-[#94a3b8] text-[9px]" style={{ fontFamily: "system-ui" }}>
-          VLC
-        </text>
-        <text x="230" y="215" textAnchor="middle" className="fill-[#94a3b8] text-[9px]" style={{ fontFamily: "system-ui" }}>
-          SEV
-        </text>
-      </svg>
+      <Link
+        href="/"
+        className="no-underline"
+        style={{ fontFamily: SERIF, fontSize: 18, fontWeight: 600, color: "#1a1a1a" }}
+      >
+        Home<span style={{ fontStyle: "italic", color: PRIMARY }}>&</span>Heart
+      </Link>
+      <div className="flex flex-wrap items-center gap-5">
+        <Link href="/" className="text-sm no-underline" style={{ color: "#666" }}>
+          Inicio
+        </Link>
+        <Link href="/buscar" className="text-sm no-underline" style={{ color: "#666" }}>
+          Servicios
+        </Link>
+        <Link
+          href="/buscar"
+          className="rounded-lg px-4 py-2 text-sm font-semibold text-white no-underline"
+          style={{ backgroundColor: PRIMARY }}
+        >
+          Buscar proveedores
+        </Link>
+      </div>
+    </nav>
+  );
+}
+
+function SectionLabel({ children }) {
+  return (
+    <div className="mb-6 flex items-center gap-3">
+      <span
+        className="shrink-0 text-[10px] font-semibold uppercase tracking-widest"
+        style={{ color: PRIMARY }}
+      >
+        {children}
+      </span>
+      <div className="h-px flex-1" style={{ backgroundColor: BORDER }} />
     </div>
   );
 }
 
-function FaqItem({ question, answer, isOpen, onToggle }) {
+function FaqCard({ question, answer }) {
   return (
     <div
-      className="overflow-hidden rounded-xl border bg-white transition-shadow hover:shadow-sm"
-      style={{ borderColor: BRAND.border }}
+      className="rounded-xl border bg-white p-5"
+      style={{ borderColor: BORDER }}
     >
-      <button
-        type="button"
-        onClick={onToggle}
-        className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left"
-        aria-expanded={isOpen}
-      >
-        <span className="text-sm font-semibold text-[#111] sm:text-base">{question}</span>
-        <span
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-lg font-light transition-transform duration-200"
-          style={{
-            backgroundColor: BRAND.light,
-            color: BRAND.primary,
-            transform: isOpen ? "rotate(45deg)" : "rotate(0deg)",
-          }}
-          aria-hidden
-        >
-          +
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-sm font-semibold text-[#1a1a1a]">{question}</p>
+        <span className="shrink-0 text-[#888]" aria-hidden>
+          ↓
         </span>
-      </button>
-      {isOpen && (
-        <div className="border-t px-5 pb-4 pt-3" style={{ borderColor: BRAND.border }}>
-          <p className="text-sm leading-relaxed text-[#5c5c5c]">{answer}</p>
-        </div>
-      )}
+      </div>
+      <p className="mt-3 text-sm leading-relaxed text-[#666]">{answer}</p>
     </div>
   );
 }
 
 export default function GarantiaPage() {
-  const [openFaq, setOpenFaq] = useState(0);
-
   return (
-    <div className="flex min-h-screen flex-col bg-white">
-      <Navbar />
+    <div className="min-h-screen font-sans" style={{ backgroundColor: "#fff", color: "#1a1a1a" }}>
+      <GarantiaNavbar />
 
-      {/* Header */}
+      {/* Hero */}
       <section
-        className="relative overflow-hidden px-4 py-16 text-center text-white sm:px-6 sm:py-20 lg:py-24"
-        style={{ backgroundColor: "#1d4f91" }}
+        className="relative overflow-hidden text-center text-white"
+        style={{
+          padding: "64px 28px",
+          background: `linear-gradient(135deg, ${PRIMARY} 0%, ${PRIMARY_DARK} 100%)`,
+        }}
       >
         <div
-          className="pointer-events-none absolute inset-0 opacity-10"
-          style={{
-            backgroundImage:
-              "radial-gradient(circle at 20% 50%, white 1px, transparent 1px), radial-gradient(circle at 80% 30%, white 1px, transparent 1px)",
-            backgroundSize: "48px 48px",
-          }}
-          aria-hidden
+          className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full"
+          style={{ backgroundColor: "rgba(255,255,255,0.05)" }}
         />
-        <div className="relative mx-auto max-w-3xl">
-          <span className="text-6xl sm:text-7xl" role="img" aria-label="Escudo">
-            🛡️
-          </span>
-          <h1
-            className="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl lg:text-5xl"
-            style={{ fontFamily: SERIF }}
+        <div
+          className="pointer-events-none absolute -bottom-20 -left-12 h-56 w-56 rounded-full"
+          style={{ backgroundColor: "rgba(255,255,255,0.05)" }}
+        />
+
+        <div className="relative mx-auto max-w-[640px]">
+          <span
+            className="inline-block text-[9px] font-semibold uppercase tracking-[0.2em]"
+            style={{ color: "rgba(255,255,255,0.45)" }}
           >
-            Garantía Home&Heart
+            Solo en Home&Heart
+          </span>
+
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/logoo1.png"
+            alt="Home&Heart"
+            style={{
+              width: 120,
+              height: 120,
+              objectFit: "contain",
+              marginBottom: 16,
+              marginLeft: "auto",
+              marginRight: "auto",
+              marginTop: 16,
+              display: "block",
+            }}
+          />
+
+          <h1
+            className="text-[36px] leading-tight text-white"
+            style={{ fontFamily: SERIF, fontWeight: 300 }}
+          >
+            Garantía{" "}
+            <em style={{ fontStyle: "italic", color: "rgba(255,255,255,0.65)" }}>
+              Home&Heart
+            </em>
           </h1>
-          <p className="mx-auto mt-4 max-w-xl text-base text-white/90 sm:text-lg">
-            Si algo falla, lo resolvemos en menos de 30 minutos
+
+          <p
+            className="mx-auto mt-4 text-[15px] leading-relaxed"
+            style={{ color: "rgba(255,255,255,0.55)", maxWidth: 520 }}
+          >
+            Si tu proveedor cancela con menos de 24 horas, activamos la red de
+            emergencia y te proponemos alternativas verificadas en 30 minutos.
           </p>
+
+          <div className="mt-8 flex flex-wrap justify-center gap-2">
+            {[
+              "✓ Solo en Home&Heart",
+              "✓ Proveedores verificados",
+              "✓ En 30 minutos",
+              "✓ Precio protegido",
+            ].map((pill) => (
+              <span
+                key={pill}
+                className="rounded-full px-3 py-1.5 text-xs font-medium"
+                style={{
+                  backgroundColor: "rgba(255,255,255,0.12)",
+                  color: "rgba(255,255,255,0.9)",
+                  border: "1px solid rgba(255,255,255,0.2)",
+                }}
+              >
+                {pill}
+              </span>
+            ))}
+          </div>
         </div>
       </section>
 
-      <main className="flex-1">
-        {/* Sección 1 — ¿Qué es? */}
-        <section className="px-4 py-14 sm:px-6 lg:py-20" style={{ backgroundColor: BRAND.warm }}>
-          <div className="mx-auto max-w-3xl text-center">
-            <h2
-              className="text-2xl font-semibold text-[#111] sm:text-3xl"
-              style={{ fontFamily: SERIF }}
-            >
-              ¿Qué es la Garantía?
-            </h2>
-            <p className="mt-5 text-base leading-relaxed text-[#444] sm:text-lg">
-              Somos el primer marketplace en España que garantiza una alternativa
-              verificada si tu proveedor cancela con menos de 24 horas de
-              antelación.
-            </p>
-            <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-              {["Solo en Home&Heart", "Verificados", "En 30 minutos"].map((pill) => (
-                <span
-                  key={pill}
-                  className="rounded-full px-4 py-2 text-sm font-semibold text-white shadow-sm"
-                  style={{ backgroundColor: BRAND.primary }}
-                >
-                  {pill}
-                </span>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Sección 2 — Cómo funciona */}
-        <section className="px-4 py-14 sm:px-6 lg:py-20">
-          <div className="mx-auto max-w-5xl">
-            <h2
-              className="text-center text-2xl font-semibold text-[#111] sm:text-3xl"
-              style={{ fontFamily: SERIF }}
-            >
-              Cómo funciona
-            </h2>
-            <div className="mt-12 grid gap-8 md:grid-cols-3 md:gap-6">
-              {[
-                {
-                  num: "01",
-                  icon: <CalendarCancelIcon />,
-                  title: "Tu proveedor cancela",
-                  desc: "Recibes aviso de cancelación con menos de 24 h de antelación. Activamos la garantía al instante.",
-                },
-                {
-                  num: "02",
-                  icon: <SearchAnimatedIcon />,
-                  title: "Activamos la búsqueda",
-                  desc: "Nuestro sistema contacta a la red de emergencia verificada en tu zona y fechas.",
-                },
-                {
-                  num: "03",
-                  icon: <CheckIcon />,
-                  title: "Recibes 3 alternativas en 30 minutos",
-                  desc: "Te enviamos hasta 3 opciones equivalentes. Eliges y reservas sin esperar confirmación.",
-                },
-              ].map((step, i) => (
-                <div key={step.num} className="relative flex flex-col items-center text-center">
-                  {i < 2 && (
-                    <div
-                      className="absolute left-[calc(50%+4rem)] top-8 hidden h-0.5 w-[calc(100%-8rem)] md:block"
-                      style={{ backgroundColor: BRAND.border }}
-                      aria-hidden
-                    />
-                  )}
-                  <span
-                    className="text-4xl font-bold tracking-tight"
-                    style={{ color: BRAND.light, WebkitTextStroke: `1px ${BRAND.primary}` }}
-                  >
-                    {step.num}
-                  </span>
-                  <div className="mt-4">{step.icon}</div>
-                  <h3 className="mt-5 text-lg font-semibold text-[#111]">{step.title}</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-[#666]">{step.desc}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Sección 3 — Para clientes */}
-        <section className="px-4 py-14 sm:px-6 lg:py-20" style={{ backgroundColor: BRAND.warm }}>
-          <div className="mx-auto max-w-5xl">
-            <h2
-              className="text-center text-2xl font-semibold text-[#111] sm:text-3xl"
-              style={{ fontFamily: SERIF }}
-            >
-              Tu tranquilidad está protegida
-            </h2>
-            <div className="mt-10 grid gap-5 sm:grid-cols-2">
-              {[
-                {
-                  emoji: "💰",
-                  title: "Precio garantizado",
-                  desc: "Intentamos ofrecerte alternativas con precio similar al de tu reserva original. El precio final puede variar según disponibilidad.",
-                },
-                {
-                  emoji: "✅",
-                  title: "Mismo nivel de verificación",
-                  desc: "Todos los alternativos están verificados.",
-                },
-                {
-                  emoji: "⚡",
-                  title: "Reserva inmediata",
-                  desc: "Sin esperar confirmación del proveedor.",
-                },
-                {
-                  emoji: "🤝",
-                  title: "Sin gestiones extra",
-                  desc: "Nosotros lo gestionamos todo.",
-                },
-              ].map((card) => (
+      {/* Body */}
+      <main className="mx-auto" style={{ maxWidth: 900, padding: "40px 24px" }}>
+        {/* Cómo funciona */}
+        <section className="mb-12">
+          <SectionLabel>Cómo funciona</SectionLabel>
+          <div className="grid gap-4 md:grid-cols-[1fr_auto_1fr_auto_1fr] md:items-stretch">
+            {STEPS.map((step, i) => (
+              <div key={step.num} className="contents">
                 <div
-                  key={card.title}
-                  className="rounded-2xl border bg-white p-6 shadow-sm transition-shadow hover:shadow-md"
-                  style={{ borderColor: BRAND.border }}
+                  className="rounded-xl border bg-white p-5"
+                  style={{ borderColor: BORDER }}
                 >
-                  <span className="text-3xl" role="img" aria-hidden>
-                    {card.emoji}
-                  </span>
-                  <h3 className="mt-3 text-base font-semibold text-[#111]">{card.title}</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-[#666]">{card.desc}</p>
+                  <div className="flex items-center gap-3">
+                    <span
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white"
+                      style={{ backgroundColor: PRIMARY }}
+                    >
+                      {step.num}
+                    </span>
+                    <span className="text-2xl" aria-hidden>
+                      {step.icon}
+                    </span>
+                  </div>
+                  <h3 className="mt-4 text-sm font-semibold text-[#1a1a1a]">
+                    {step.title}
+                  </h3>
+                  <p className="mt-2 text-xs leading-relaxed text-[#666]">
+                    {step.desc}
+                  </p>
                 </div>
-              ))}
-            </div>
+                {i < STEPS.length - 1 && (
+                  <div
+                    className="hidden items-center justify-center text-[#ccc] md:flex"
+                    aria-hidden
+                  >
+                    →
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         </section>
 
-        {/* Sección 4 — Para proveedores */}
-        <section className="px-4 py-14 sm:px-6 lg:py-20">
-          <div className="mx-auto max-w-3xl text-center">
+        {/* Para clientes */}
+        <section className="mb-12">
+          <SectionLabel>Para clientes</SectionLabel>
+          <h2
+            className="mb-5 text-xl text-[#1a1a1a]"
+            style={{ fontFamily: SERIF, fontWeight: 300 }}
+          >
+            Tu tranquilidad está protegida
+          </h2>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {CLIENT_CARDS.map((card) => (
+              <div
+                key={card.title}
+                className="rounded-xl border bg-white p-5"
+                style={{ borderColor: BORDER }}
+              >
+                <span className="text-2xl" aria-hidden>
+                  {card.icon}
+                </span>
+                <h3 className="mt-3 text-sm font-semibold text-[#1a1a1a]">
+                  {card.title}
+                </h3>
+                <p className="mt-2 text-xs leading-relaxed text-[#666]">
+                  {card.desc}
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* Para proveedores */}
+        <section className="mb-12">
+          <SectionLabel>Para proveedores</SectionLabel>
+          <div
+            className="rounded-xl p-6 text-white sm:p-8"
+            style={{
+              borderRadius: 12,
+              background: `linear-gradient(135deg, ${GREEN} 0%, ${GREEN_DARK} 100%)`,
+            }}
+          >
             <h2
-              className="text-2xl font-semibold text-[#111] sm:text-3xl"
-              style={{ fontFamily: SERIF }}
+              className="text-xl"
+              style={{ fontFamily: SERIF, fontWeight: 300 }}
             >
               Únete a la red de emergencia
             </h2>
-            <ul className="mt-8 space-y-4 text-left sm:mx-auto sm:max-w-md">
-              {[
-                "+5% sobre tu precio en reservas de emergencia",
-                "Badge especial 🛡️ en tu perfil",
-                "Más visibilidad en búsquedas prioritarias",
-                "Puntos de confianza extra en tu reputación",
-              ].map((benefit) => (
-                <li key={benefit} className="flex items-start gap-3 text-sm text-[#444] sm:text-base">
-                  <span
-                    className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
-                    style={{ backgroundColor: BRAND.primary }}
-                    aria-hidden
-                  >
-                    ✓
-                  </span>
-                  {benefit}
-                </li>
-              ))}
-            </ul>
+            <p className="mt-2 text-sm text-white/70">
+              Activa tu badge y recibe reservas prioritarias cuando un proveedor
+              cancela en tu zona.
+            </p>
             <Link
               href="/editar-perfil"
-              className="mt-8 inline-block rounded-xl px-8 py-3.5 text-sm font-semibold text-white no-underline transition-opacity hover:opacity-90"
-              style={{ backgroundColor: BRAND.primary }}
+              className="mt-5 inline-block rounded-lg bg-white px-5 py-2.5 text-sm font-semibold no-underline"
+              style={{ color: GREEN }}
             >
-              Activar mi badge de emergencia
+              Activar mi badge →
             </Link>
-          </div>
-        </section>
-
-        {/* Sección 5 — Cobertura */}
-        <section className="px-4 py-14 sm:px-6 lg:py-20" style={{ backgroundColor: BRAND.warm }}>
-          <div className="mx-auto max-w-3xl text-center">
-            <h2
-              className="text-2xl font-semibold text-[#111] sm:text-3xl"
-              style={{ fontFamily: SERIF }}
-            >
-              Cobertura actual
-            </h2>
-            <p className="mt-4 text-base text-[#444] sm:text-lg">
-              Actualmente disponible en{" "}
-              <strong className="text-[#1d4f91]">Madrid</strong>
-            </p>
-            <div className="mt-8">
-              <MadridMap />
-            </div>
-            <p className="mt-6 text-sm text-[#888]">
-              Próximamente:{" "}
-              <span className="font-medium text-[#444]">Barcelona, Valencia, Sevilla</span>
-            </p>
-          </div>
-        </section>
-
-        {/* Sección 6 — FAQ */}
-        <section className="px-4 py-14 sm:px-6 lg:py-20">
-          <div className="mx-auto max-w-2xl">
-            <h2
-              className="text-center text-2xl font-semibold text-[#111] sm:text-3xl"
-              style={{ fontFamily: SERIF }}
-            >
-              Preguntas frecuentes
-            </h2>
-            <div className="mt-10 space-y-3">
-              {FAQ_ITEMS.map((item, i) => (
-                <FaqItem
-                  key={item.q}
-                  question={item.q}
-                  answer={item.a}
-                  isOpen={openFaq === i}
-                  onToggle={() => setOpenFaq(openFaq === i ? -1 : i)}
-                />
+            <div className="mt-6 grid gap-4 sm:grid-cols-2">
+              {PROVIDER_BENEFITS.map((b) => (
+                <div key={b.text} className="flex items-start gap-3">
+                  <span className="text-lg" aria-hidden>
+                    {b.icon}
+                  </span>
+                  <p className="text-sm text-white/90">{b.text}</p>
+                </div>
               ))}
             </div>
           </div>
         </section>
 
-        {/* Footer CTA */}
+        {/* Cobertura */}
+        <section className="mb-12">
+          <SectionLabel>Cobertura</SectionLabel>
+          <h2
+            className="mb-4 text-xl text-[#1a1a1a]"
+            style={{ fontFamily: SERIF, fontWeight: 300 }}
+          >
+            Ciudades disponibles
+          </h2>
+          <div className="flex flex-wrap gap-2">
+            {CITIES.map((city) => (
+              <span
+                key={city.name}
+                className="rounded-full border px-4 py-2 text-sm font-medium"
+                style={
+                  city.active
+                    ? {
+                        backgroundColor: "#e8f0fb",
+                        borderColor: PRIMARY,
+                        color: PRIMARY,
+                      }
+                    : {
+                        backgroundColor: "#f3f4f6",
+                        borderColor: BORDER,
+                        color: "#999",
+                      }
+                }
+              >
+                {city.name}
+                {!city.active && (
+                  <span className="ml-1.5 text-[10px] font-normal">· Próximamente</span>
+                )}
+              </span>
+            ))}
+          </div>
+          <p className="mt-4 text-sm leading-relaxed text-[#666]">
+            La Garantía Home&Heart está operativa en Madrid. Estamos ampliando
+            cobertura a más ciudades. Las reservas fuera de zona activa no
+            incluyen sustitución automática, pero sí el resto de protecciones de
+            la plataforma.
+          </p>
+        </section>
+
+        {/* FAQ */}
+        <section className="mb-12">
+          <SectionLabel>Preguntas frecuentes</SectionLabel>
+          <div className="flex flex-col gap-3">
+            {FAQ_ITEMS.map((item) => (
+              <FaqCard key={item.q} question={item.q} answer={item.a} />
+            ))}
+          </div>
+        </section>
+
+        {/* CTA final */}
         <section
-          className="px-4 py-14 text-center sm:px-6"
-          style={{ backgroundColor: BRAND.primary }}
+          className="rounded-xl px-6 py-10 text-center"
+          style={{ backgroundColor: WARM }}
         >
-          <div className="mx-auto max-w-xl">
-            <p className="text-lg font-medium text-white/90 sm:text-xl">
-              ¿Listo para reservar con tranquilidad?
-            </p>
+          <h2
+            className="text-2xl text-[#1a1a1a]"
+            style={{ fontFamily: SERIF, fontWeight: 300 }}
+          >
+            ¿Listo para reservar con tranquilidad?
+          </h2>
+          <p className="mx-auto mt-2 max-w-md text-sm text-[#666]">
+            Encuentra proveedores verificados con la Garantía Home&Heart activa
+            en cada reserva.
+          </p>
+          <div className="mt-6 flex flex-wrap justify-center gap-3">
             <Link
               href="/buscar"
-              className="mt-6 inline-block rounded-xl bg-white px-8 py-3.5 text-sm font-semibold no-underline transition-opacity hover:opacity-90"
-              style={{ color: BRAND.primary }}
+              className="rounded-lg px-6 py-3 text-sm font-semibold text-white no-underline"
+              style={{ backgroundColor: PRIMARY }}
             >
-              Buscar proveedores con Garantía
+              Buscar proveedores verificados →
+            </Link>
+            <Link
+              href="/editar-perfil"
+              className="rounded-lg border px-6 py-3 text-sm font-semibold no-underline"
+              style={{ borderColor: PRIMARY, color: PRIMARY, backgroundColor: "#fff" }}
+            >
+              Ser proveedor de emergencia
             </Link>
           </div>
         </section>
       </main>
-
-      <Footer />
     </div>
   );
 }
