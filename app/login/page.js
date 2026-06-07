@@ -84,10 +84,10 @@ function AuthShell({ children }) {
             position: "relative",
             overflow: "hidden",
             background: `linear-gradient(160deg, ${PRIMARY} 0%, ${DARK} 100%)`,
-            padding: "48px 40px",
+            padding: "0",
             display: "flex",
             flexDirection: "column",
-            justifyContent: "center",
+            justifyContent: "flex-start",
           }}
         >
           <div
@@ -115,19 +115,28 @@ function AuthShell({ children }) {
             }}
           />
 
-          <div style={{ position: "relative", zIndex: 1, maxWidth: 380 }}>
-            <img
-              src="/logo.png"
-              alt="Home&Heart"
-              style={{ height: 36, marginBottom: 24, opacity: 0.9 }}
-            />
+          <img
+            src="/logoo1.png"
+            alt="Home&Heart"
+            style={{
+              position: "absolute",
+              top: -20,
+              left: -20,
+              width: 240,
+              height: 240,
+              objectFit: "contain",
+              zIndex: 2,
+            }}
+          />
+
+          <div style={{ position: "relative", zIndex: 3, padding: "220px 40px 40px", maxWidth: 380 }}>
             <p
               style={{
                 fontSize: 9,
                 textTransform: "uppercase",
                 letterSpacing: "0.14em",
                 color: "rgba(255,255,255,0.45)",
-                marginBottom: 16,
+                marginBottom: 10,
                 fontWeight: 600,
               }}
             >
