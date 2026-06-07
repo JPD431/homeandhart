@@ -1016,53 +1016,67 @@ export default function SerProveedorPage() {
             {VERTICALES_CARDS.map((v) => {
               const selected = verticalesSeleccionados.includes(v.id);
               return (
-                <button
+                <div
                   key={v.id}
-                  type="button"
-                  onClick={() => toggleVertical(v.id)}
-                  className="relative border-2 text-left transition-all"
                   style={{
-                    borderColor: selected ? v.color : BRAND.border,
                     borderRadius: "10px",
                     overflow: "hidden",
-                    padding: 0,
-                    boxShadow: selected ? `0 0 0 1px ${v.color}` : "none",
+                    border: `2px solid ${selected ? v.color : BRAND.border}`,
+                    backgroundColor: "#fff",
                   }}
                 >
-                  <div
-                    className="relative text-white"
+                  <button
+                    type="button"
+                    onClick={() => toggleVertical(v.id)}
+                    className="relative w-full text-left transition-all"
                     style={{
-                      backgroundColor: v.color,
-                      borderRadius: 0,
-                      padding: "16px",
+                      padding: 0,
+                      background: "none",
+                      border: "none",
+                      display: "block",
+                      width: "100%",
                     }}
                   >
-                    <span
-                      className="absolute right-3 top-3 flex h-6 w-6 items-center justify-center rounded-full border-2 bg-white text-xs"
+                    <div
+                      className="relative text-white"
                       style={{
-                        borderColor: v.color,
-                        color: selected ? v.color : "transparent",
+                        backgroundColor: v.color,
+                        borderRadius: 0,
+                        padding: "16px",
+                        paddingTop: 0,
+                        marginTop: -1,
+                        marginLeft: 0,
+                        marginRight: 0,
+                        width: "100%",
                       }}
                     >
-                      {selected ? "✓" : ""}
-                    </span>
-                    <span className="text-3xl">{v.icono}</span>
-                    <p className="mt-2 text-lg font-bold">{v.nombre}</p>
-                    <p className="text-xs opacity-80">{v.subtitulo}</p>
-                  </div>
-                  <div className="p-4">
-                    <p className="text-sm font-semibold" style={{ color: v.color }}>
-                      {v.precioRef}
-                    </p>
-                    <ul className="mt-3 space-y-1.5">
-                      {v.beneficios.map((b) => (
-                        <li key={b} className="text-xs text-[#555]">
-                          <span style={{ color: v.color }}>✓</span> {b}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </button>
+                      <span
+                        className="absolute right-3 top-3 flex h-6 w-6 items-center justify-center rounded-full border-2 bg-white text-xs"
+                        style={{
+                          borderColor: v.color,
+                          color: selected ? v.color : "transparent",
+                        }}
+                      >
+                        {selected ? "✓" : ""}
+                      </span>
+                      <span className="text-3xl">{v.icono}</span>
+                      <p className="mt-2 text-lg font-bold">{v.nombre}</p>
+                      <p className="text-xs opacity-80">{v.subtitulo}</p>
+                    </div>
+                    <div className="p-4">
+                      <p className="text-sm font-semibold" style={{ color: v.color }}>
+                        {v.precioRef}
+                      </p>
+                      <ul className="mt-3 space-y-1.5">
+                        {v.beneficios.map((b) => (
+                          <li key={b} className="text-xs text-[#555]">
+                            <span style={{ color: v.color }}>✓</span> {b}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </button>
+                </div>
               );
             })}
           </div>
