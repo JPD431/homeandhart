@@ -25,6 +25,19 @@ const BLOG_CATEGORIAS_ADMIN = [
   "consejos",
 ];
 
+function getUnsplashImage(categoria, slug, width = 800, height = 400) {
+  const queries = {
+    familias: "family+travel+children",
+    mascotas: "dog+pet+care+happy",
+    alojamiento: "apartment+interior+modern",
+    nineras: "childcare+babysitter+children",
+    viajes: "travel+vacation+holiday",
+    consejos: "planning+notebook+lifestyle",
+  };
+  const query = queries[categoria] || "travel+family";
+  return `https://source.unsplash.com/${width}x${height}/?${query}&sig=${slug}`;
+}
+
 const EMPTY_BLOG_FORM = {
   id: null,
   titulo: "",
@@ -33,6 +46,7 @@ const EMPTY_BLOG_FORM = {
   categoria: "consejos",
   tags: [],
   contenido: "",
+  imagen_url: "",
   publicado: false,
   featured: false,
 };
@@ -678,6 +692,7 @@ export default function AdminPage() {
       categoria: post.categoria || "consejos",
       tags: Array.isArray(post.tags) ? [...post.tags] : [],
       contenido: post.contenido || "",
+      imagen_url: post.imagen_url || "",
       publicado: !!post.publicado,
       featured: !!post.featured,
     });
@@ -731,6 +746,7 @@ export default function AdminPage() {
       categoria: blogForm.categoria,
       tags: blogForm.tags,
       contenido: blogForm.contenido,
+      imagen_url: blogForm.imagen_url.trim() || null,
       publicado: blogForm.publicado,
       featured: blogForm.featured,
       autor: "Home&Heart",
@@ -1010,6 +1026,35 @@ export default function AdminPage() {
                       >
                         Añadir
                       </button>
+                    </div>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="text-xs font-medium text-[#444]">
+                      URL de imagen personalizada
+                    </label>
+                    <input
+                      type="url"
+                      value={blogForm.imagen_url}
+                      onChange={(e) => updateBlogForm("imagen_url", e.target.value)}
+                      placeholder="Dejar vacío para usar imagen automática"
+                      className="mt-1 w-full rounded-xl border px-4 py-2.5 text-sm outline-none"
+                      style={{ borderColor: BRAND.border }}
+                    />
+                    <div className="mt-3 overflow-hidden rounded-xl border" style={{ borderColor: BRAND.border }}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={
+                          blogForm.imagen_url.trim() ||
+                          getUnsplashImage(
+                            blogForm.categoria,
+                            blogForm.slug || "preview",
+                            400,
+                            200,
+                          )
+                        }
+                        alt="Vista previa"
+                        style={{ width: "100%", height: 200, objectFit: "cover" }}
+                      />
                     </div>
                   </div>
                   <div className="sm:col-span-2">

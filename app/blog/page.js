@@ -5,7 +5,6 @@ import { SERIF } from "@/app/components/brand";
 import {
   BLOG_CATEGORIAS,
   CATEGORIA_COLORS,
-  CATEGORIA_GRADIENTS,
   CATEGORIA_LABELS,
   estimateReadingTime,
   formatBlogDate,
@@ -15,10 +14,22 @@ const PAGE_SIZE = 9;
 const BORDER = "#e8e4de";
 const WARM = "#f7f5f2";
 
+function getImageUrl(categoria, slug, width = 800, height = 400) {
+  const seed = slug.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  const imageId = (seed % 1000) + 1;
+  void categoria;
+  void imageId;
+  return `https://picsum.photos/seed/${slug}/${width}/${height}`;
+}
+
+function getPostImageUrl(post, width = 400, height = 200) {
+  return post.imagen_url || getImageUrl(post.categoria, post.slug, width, height);
+}
+
 function BlogCard({ post, large = false }) {
   const color = CATEGORIA_COLORS[post.categoria] || "#1d4f91";
-  const gradient = CATEGORIA_GRADIENTS[post.categoria] || CATEGORIA_GRADIENTS.consejos;
   const readMin = estimateReadingTime(post.contenido);
+  const imageUrl = getPostImageUrl(post, 400, 200);
 
   return (
     <article
@@ -28,12 +39,12 @@ function BlogCard({ post, large = false }) {
       <div
         className={`relative shrink-0 overflow-hidden ${large ? "h-48 w-full md:h-auto md:w-2/5" : "h-40 w-full"}`}
       >
-        {post.imagen_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={post.imagen_url} alt="" className="h-full w-full object-cover" />
-        ) : (
-          <div className="h-full w-full min-h-[160px]" style={{ background: gradient }} />
-        )}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={imageUrl}
+          alt={post.titulo}
+          style={{ width: "100%", height: 200, objectFit: "cover" }}
+        />
         <span
           className="absolute left-3 top-3 rounded-full px-2.5 py-0.5 text-[10px] font-semibold text-white"
           style={{ backgroundColor: color }}

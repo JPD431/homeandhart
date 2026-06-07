@@ -8,7 +8,6 @@ import {
   applyInternalLinks,
   CATEGORIA_BUSCAR,
   CATEGORIA_COLORS,
-  CATEGORIA_GRADIENTS,
   CATEGORIA_LABELS,
   estimateReadingTime,
   formatBlogDate,
@@ -19,6 +18,18 @@ const WARM = "#f7f5f2";
 const PRIMARY = "#1d4f91";
 
 marked.setOptions({ gfm: true, breaks: true });
+
+function getImageUrl(categoria, slug, width = 800, height = 400) {
+  const seed = slug.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  const imageId = (seed % 1000) + 1;
+  void categoria;
+  void imageId;
+  return `https://picsum.photos/seed/${slug}/${width}/${height}`;
+}
+
+function getPostImageUrl(post, width = 900, height = 400) {
+  return post.imagen_url || getImageUrl(post.categoria, post.slug, width, height);
+}
 
 export async function generateMetadata({ params }) {
   const { slug } = await params;
@@ -37,6 +48,7 @@ export async function generateMetadata({ params }) {
   if (!post) return { title: "Artículo no encontrado · Home&Heart" };
 
   const description = post.subtitulo || post.titulo;
+  const ogImage = getPostImageUrl(post, 900, 400);
 
   return {
     title: `${post.titulo} · Home&Heart`,
@@ -44,7 +56,7 @@ export async function generateMetadata({ params }) {
     openGraph: {
       title: post.titulo,
       description,
-      images: post.imagen_url ? [{ url: post.imagen_url }] : undefined,
+      images: [{ url: ogImage }],
     },
   };
 }
@@ -81,7 +93,7 @@ export default async function BlogArticlePage({ params }) {
     .limit(3);
 
   const color = CATEGORIA_COLORS[post.categoria] || PRIMARY;
-  const gradient = CATEGORIA_GRADIENTS[post.categoria] || CATEGORIA_GRADIENTS.consejos;
+  const heroImage = getPostImageUrl(post, 900, 400);
   const readMin = estimateReadingTime(post.contenido);
   const htmlContent = renderMarkdown(post.contenido);
   const buscarHref = CATEGORIA_BUSCAR[post.categoria] || "/buscar";
@@ -95,7 +107,7 @@ export default async function BlogArticlePage({ params }) {
     author: { "@type": "Organization", name: post.autor || "Home&Heart" },
     datePublished: post.created_at,
     dateModified: post.updated_at || post.created_at,
-    image: post.imagen_url || undefined,
+    image: heroImage,
     publisher: {
       "@type": "Organization",
       name: "Home&Heart",
@@ -116,12 +128,12 @@ export default async function BlogArticlePage({ params }) {
         <header className="border-b" style={{ borderColor: BORDER, backgroundColor: WARM }}>
           <div className="relative mx-auto max-w-5xl">
             <div className="relative h-48 w-full overflow-hidden sm:h-64">
-              {post.imagen_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={post.imagen_url} alt="" className="h-full w-full object-cover" />
-              ) : (
-                <div className="h-full w-full" style={{ background: gradient }} />
-              )}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={heroImage}
+                alt={post.titulo}
+                className="h-full w-full object-cover"
+              />
               <div
                 className="absolute inset-0"
                 style={{ background: "linear-gradient(to top, rgba(0,0,0,.45), transparent)" }}
