@@ -65,18 +65,19 @@ async function createUniqueCodigoReferido(seed) {
 
 function AuthShell({ children }) {
   return (
-    <div className="font-sans" style={{ minHeight: "100vh", background: WARM }}>
+    <div style={{ minHeight: "100vh", background: WARM, fontFamily: "sans-serif" }}>
+      {/* MINI NAV */}
       <div
         style={{
           height: 57,
           display: "flex",
           alignItems: "center",
-          padding: "0 32px",
+          padding: "0 24px",
           borderBottom: `1px solid ${BORDER}`,
           background: WARM,
         }}
       >
-        <Link href="/" className="no-underline" style={{ lineHeight: 1.2 }}>
+        <Link href="/" style={{ lineHeight: 1.2, textDecoration: "none" }}>
           <span
             style={{
               fontFamily: "Georgia, serif",
@@ -85,38 +86,26 @@ function AuthShell({ children }) {
               fontWeight: 600,
             }}
           >
-            Home<span style={{ fontStyle: "italic", color: PRIMARY }}>&</span>
-            Heart
+            Home<span style={{ fontStyle: "italic", color: PRIMARY }}>&</span>Heart
           </span>
-          <span
-            style={{
-              display: "block",
-              fontSize: 10,
-              color: "#bbb",
-              marginTop: 2,
-            }}
-          >
+          <span style={{ display: "block", fontSize: 10, color: "#bbb", marginTop: 2 }}>
             Donde estés, estamos.
           </span>
         </Link>
       </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          minHeight: "calc(100vh - 57px)",
-        }}
-      >
+      {/* LAYOUT */}
+      <div style={{ display: "flex", minHeight: "calc(100vh - 57px)" }}>
+        {/* LADO AZUL — solo desktop */}
         <div
+          className="hidden md:flex"
           style={{
-            position: "relative",
-            overflow: "hidden",
+            flex: 1,
             background: `linear-gradient(160deg, ${PRIMARY} 0%, ${DARK} 100%)`,
-            padding: "0",
-            display: "flex",
             flexDirection: "column",
             justifyContent: "flex-start",
+            overflow: "hidden",
+            position: "relative",
           }}
         >
           <div
@@ -149,16 +138,16 @@ function AuthShell({ children }) {
             alt="Home&Heart"
             style={{
               position: "absolute",
-              top: -20,
-              left: -20,
-              width: 240,
-              height: 240,
+              top: 0,
+              left: 0,
+              width: 160,
+              height: 160,
               objectFit: "contain",
               zIndex: 2,
             }}
           />
 
-          <div style={{ position: "relative", zIndex: 3, padding: "220px 40px 40px", maxWidth: 380 }}>
+          <div style={{ position: "relative", zIndex: 3, padding: "160px 32px 40px", maxWidth: 380 }}>
             <p
               style={{
                 fontSize: 9,
@@ -260,17 +249,9 @@ function AuthShell({ children }) {
           </div>
         </div>
 
-        <div
-          style={{
-            background: "#fff",
-            padding: 32,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            overflowY: "auto",
-          }}
-        >
-          <div style={{ width: "100%", maxWidth: 420 }}>{children}</div>
+        {/* FORMULARIO — ocupa todo en móvil, mitad en desktop */}
+        <div style={{ flex: 1, padding: "32px 24px", background: "#fff", overflowY: "auto" }}>
+          <div style={{ maxWidth: 420, margin: "0 auto", paddingBottom: 60 }}>{children}</div>
         </div>
       </div>
     </div>
@@ -475,6 +456,7 @@ function RegistroForm() {
             type="button"
             onClick={handleResendEmail}
             disabled={resendLoading}
+            className="min-h-[44px]"
             style={{
               marginTop: 24,
               width: "100%",
@@ -526,14 +508,7 @@ function RegistroForm() {
       </p>
 
       <form onSubmit={handleSubmit} style={{ marginTop: 24 }}>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: 10,
-            marginBottom: 16,
-          }}
-        >
+        <div className="mb-4 grid grid-cols-1 gap-2.5 md:grid-cols-2">
           {ROLES.map((option) => {
             const isSelected = role === option.id;
             return (
@@ -541,8 +516,8 @@ function RegistroForm() {
                 key={option.id}
                 type="button"
                 onClick={() => setRole(option.id)}
+                className="min-h-[44px] text-left"
                 style={{
-                  textAlign: "left",
                   padding: "12px 14px",
                   borderRadius: 8,
                   border: `2px solid ${isSelected ? PRIMARY : BORDER}`,
@@ -577,14 +552,7 @@ function RegistroForm() {
           })}
         </div>
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: 12,
-            marginBottom: 16,
-          }}
-        >
+        <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-2">
           <div>
             <label htmlFor="nombre" style={labelStyle}>
               Nombre
@@ -595,6 +563,7 @@ function RegistroForm() {
               autoComplete="given-name"
               value={nombre}
               onChange={(e) => setNombre(e.target.value)}
+              className="min-h-[44px]"
               style={inputStyle}
             />
           </div>
@@ -608,6 +577,7 @@ function RegistroForm() {
               autoComplete="family-name"
               value={apellido}
               onChange={(e) => setApellido(e.target.value)}
+              className="min-h-[44px]"
               style={inputStyle}
             />
           </div>
@@ -624,6 +594,7 @@ function RegistroForm() {
             autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            className="min-h-[44px]"
             style={inputStyle}
           />
         </div>
@@ -639,6 +610,7 @@ function RegistroForm() {
             autoComplete="new-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            className="min-h-[44px]"
             style={inputStyle}
           />
           <p style={{ fontSize: 10, color: "#bbb", marginTop: 6 }}>
@@ -657,6 +629,7 @@ function RegistroForm() {
             autoComplete="new-password"
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
+            className="min-h-[44px]"
             style={inputStyle}
           />
         </div>
@@ -666,10 +639,11 @@ function RegistroForm() {
             <button
               type="button"
               onClick={() => setMostrarCodigoInvitacion(true)}
+              className="min-h-[44px]"
               style={{
                 background: "none",
                 border: "none",
-                padding: 0,
+                padding: "0 4px",
                 fontSize: 10,
                 color: PRIMARY,
                 cursor: "pointer",
@@ -700,6 +674,7 @@ function RegistroForm() {
                   value={codigoInvitacion}
                   onChange={(e) => setCodigoInvitacion(e.target.value)}
                   placeholder="Ej: HH-MARIA3"
+                  className="min-h-[44px]"
                   style={{ ...inputStyle, paddingLeft: 36 }}
                 />
               </div>
@@ -722,15 +697,18 @@ function RegistroForm() {
           )}
         </div>
 
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 20 }}>
+        <label
+          htmlFor="terminos"
+          className="mb-5 flex min-h-[44px] cursor-pointer items-start gap-3"
+        >
           <input
             type="checkbox"
             id="terminos"
             checked={aceptaTerminos}
             onChange={(e) => setAceptaTerminos(e.target.checked)}
-            style={{ marginTop: 3, cursor: "pointer" }}
+            className="mt-1 h-5 w-5 shrink-0 cursor-pointer"
           />
-          <label htmlFor="terminos" style={{ fontSize: 11, color: "#666", lineHeight: 1.6 }}>
+          <span style={{ fontSize: 11, color: "#666", lineHeight: 1.6 }}>
             He leído y acepto los{" "}
             <Link href="/legal/terminos" target="_blank" style={{ color: PRIMARY }}>
               Términos de uso
@@ -740,8 +718,8 @@ function RegistroForm() {
               Política de privacidad
             </Link>{" "}
             de Home&Heart
-          </label>
-        </div>
+          </span>
+        </label>
 
         {error && (
           <p
@@ -761,6 +739,7 @@ function RegistroForm() {
         <button
           type="submit"
           disabled={loading || !aceptaTerminos}
+          className="min-h-[44px]"
           style={{
             width: "100%",
             background: loading || !aceptaTerminos ? "#9ca3af" : PRIMARY,

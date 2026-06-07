@@ -37,10 +37,17 @@ export default function CookieBanner() {
       role="dialog"
       aria-labelledby="cookie-banner-title"
       aria-describedby="cookie-banner-desc"
-      className="fixed inset-x-0 bottom-0 z-50 border-t bg-white px-4 py-5 shadow-[0_-8px_30px_rgba(0,0,0,0.08)] sm:px-6"
-      style={{ borderColor: BRAND.border }}
+      className="fixed bottom-0 z-50 border-t bg-white px-4 py-5 shadow-[0_-8px_30px_rgba(0,0,0,0.08)]"
+      style={{
+        borderColor: BRAND.border,
+        left: 0,
+        right: 0,
+        width: "100%",
+        maxWidth: "100vw",
+        boxSizing: "border-box",
+      }}
     >
-      <div className="mx-auto flex max-w-5xl flex-col gap-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+      <div className="mx-auto flex max-w-5xl flex-col flex-wrap gap-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
         <div className="min-w-0 flex-1">
           <p
             id="cookie-banner-title"
@@ -55,11 +62,11 @@ export default function CookieBanner() {
             Usamos cookies propias y de terceros para mejorar tu experiencia.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2 sm:shrink-0 sm:justify-end">
+        <div className="flex flex-col gap-3 sm:flex-row">
           <button
             type="button"
             onClick={() => choose("necessary")}
-            className="rounded-full border px-4 py-2 text-sm font-medium text-[#333] transition-colors hover:bg-[#f7f7f7]"
+            className="w-full rounded-full border px-4 py-2 text-sm font-medium text-[#333] transition-colors hover:bg-[#f7f7f7] sm:w-auto"
             style={{ borderColor: BRAND.border }}
           >
             Solo necesarias
@@ -67,7 +74,7 @@ export default function CookieBanner() {
           <button
             type="button"
             onClick={() => choose("custom")}
-            className="rounded-full border px-4 py-2 text-sm font-medium transition-colors hover:bg-[#f7f7f7]"
+            className="w-full rounded-full border px-4 py-2 text-sm font-medium transition-colors hover:bg-[#f7f7f7] sm:w-auto"
             style={{ borderColor: BRAND.primary, color: BRAND.primary }}
           >
             Configurar
@@ -75,7 +82,7 @@ export default function CookieBanner() {
           <button
             type="button"
             onClick={() => choose("all")}
-            className="rounded-full px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+            className="w-full rounded-full px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 sm:w-auto"
             style={{ backgroundColor: BRAND.primary }}
           >
             Aceptar todas
