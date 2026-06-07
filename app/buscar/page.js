@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CalendarioRangoFechas from "@/app/components/CalendarioRangoFechas";
 import { formatShortDate } from "@/app/components/calendario-shared";
 import { useLang } from "@/app/lib/LangContext";
@@ -80,6 +80,210 @@ const NEIGHBORHOOD_LABELS = [
   { left: 22, top: 52, text: "Este" },
   { left: 68, top: 48, text: "Oeste" },
 ];
+
+const PRIMARY = "#1d4f91";
+const BORDER = "#e8e4de";
+
+const IDIOMAS_OPTIONS = [
+  "Español",
+  "English",
+  "Français",
+  "Deutsch",
+  "Italiano",
+  "Português",
+  "中文",
+];
+
+const ORDEN_OPTIONS = [
+  { value: "relevancia", label: "Relevancia" },
+  { value: "precio_asc", label: "Precio ↑" },
+  { value: "precio_desc", label: "Precio ↓" },
+  { value: "valoracion", label: "Mejor valorado" },
+  { value: "mas_reservado", label: "Más reservado" },
+];
+
+const VALORACION_PILLS = [
+  { value: 0, label: "Todas" },
+  { value: 4, label: "4+" },
+  { value: 4.5, label: "4.5+" },
+  { value: 5, label: "5" },
+];
+
+const TIPO_ALOJAMIENTO_FILTER = [
+  { value: "", label: "Todos" },
+  { value: "completo", label: "Entero" },
+  { value: "habitacion_privada", label: "Hab. privada" },
+  { value: "habitacion_compartida", label: "Compartida" },
+];
+
+const EDAD_NINOS_OPTIONS = ["0-1", "1-3", "3-6", "6-12"];
+
+function getDefaultFilters() {
+  return {
+    precioMin: 0,
+    precioMax: 500,
+    valoracionMin: 0,
+    soloInmediata: false,
+    soloVerificados: true,
+    soloConDocumentos: false,
+    idiomas: [],
+    petFriendly: false,
+    tipoAlojamiento: "",
+    capacidadMin: 1,
+    disponibleViajar: false,
+    edadNinos: [],
+    conJardin: false,
+    paseosIncluidos: false,
+  };
+}
+
+function countActiveFilters(filters, vertical) {
+  let n = 0;
+  if (filters.precioMin > 0) n++;
+  if (filters.precioMax < 500) n++;
+  if (filters.valoracionMin > 0) n++;
+  if (filters.soloInmediata) n++;
+  if (!filters.soloVerificados) n++;
+  if (filters.soloConDocumentos) n++;
+  if (filters.idiomas.length > 0) n++;
+  if (vertical === "alojamiento" || vertical === "todo") {
+    if (filters.petFriendly) n++;
+    if (filters.tipoAlojamiento) n++;
+    if (filters.capacidadMin > 1) n++;
+  }
+  if (vertical === "ninos" || vertical === "todo") {
+    if (filters.disponibleViajar) n++;
+    if (filters.edadNinos.length > 0) n++;
+  }
+  if (vertical === "mascotas" || vertical === "todo") {
+    if (filters.conJardin) n++;
+    if (filters.paseosIncluidos) n++;
+  }
+  return n;
+}
+
+function hasDocuments(profile) {
+  return !!(profile?.doc_dni_url && profile?.doc_antecedentes_url);
+}
+
+function matchesEdadNinos(descripcion, ranges) {
+  if (!ranges.length) return true;
+  const desc = (descripcion || "").toLowerCase();
+  const keywords = {
+    "0-1": ["bebé", "bebe", "0-1", "lactante"],
+    "1-3": ["1-3", "pequeño", "pequeno", "infantil"],
+    "3-6": ["3-6", "preescolar", "infancia"],
+    "6-12": ["6-12", "escolar", "niños mayores", "ninos mayores"],
+  };
+  return ranges.some((range) =>
+    (keywords[range] || []).some((kw) => desc.includes(kw)),
+  );
+}
+
+function matchesClientFilters(service, filters, avgRating) {
+  const profile = service.profiles ?? {};
+
+  if (filters.soloVerificados && profile.verificado !== true) return false;
+
+  if (filters.valoracionMin > 0) {
+    if (!avgRating || avgRating < filters.valoracionMin) return false;
+  }
+
+  if (filters.soloConDocumentos && !hasDocuments(profile)) return false;
+
+  if (filters.idiomas.length > 0) {
+    const langs = Array.isArray(profile.idiomas) ? profile.idiomas : [];
+    if (!filters.idiomas.some((l) => langs.includes(l))) return false;
+  }
+
+  if (filters.petFriendly && service.vertical === "alojamiento") {
+    if (!hasPetFriendlyInDescription(service)) return false;
+  }
+
+  if (filters.capacidadMin > 1 && service.vertical === "alojamiento") {
+    const cap = service.capacidad?.personas ?? service.capacidad_personas;
+    if (cap != null && Number(cap) < filters.capacidadMin) return false;
+  }
+
+  if (filters.disponibleViajar && service.vertical === "ninos") {
+    if (service.disponible_para_viajar !== true) return false;
+  }
+
+  if (filters.edadNinos.length > 0 && service.vertical === "ninos") {
+    if (!matchesEdadNinos(service.descripcion, filters.edadNinos)) return false;
+  }
+
+  if (filters.conJardin && service.vertical === "mascotas") {
+    const desc = (service.descripcion || "").toLowerCase();
+    if (service.jardin !== true && !desc.includes("jardín") && !desc.includes("jardin")) {
+      return false;
+    }
+  }
+
+  if (filters.paseosIncluidos && service.vertical === "mascotas") {
+    const desc = (service.descripcion || "").toLowerCase();
+    if (
+      service.paseos_incluidos !== true &&
+      !desc.includes("paseo") &&
+      !desc.includes("paseos")
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function sortServices(services, ordenarPor, ratingsByProveedor, bookingsByService) {
+  const list = [...services];
+
+  if (ordenarPor === "precio_asc") {
+    return list.sort((a, b) => (Number(a.precio) || 0) - (Number(b.precio) || 0));
+  }
+  if (ordenarPor === "precio_desc") {
+    return list.sort((a, b) => (Number(b.precio) || 0) - (Number(a.precio) || 0));
+  }
+  if (ordenarPor === "valoracion") {
+    return list.sort(
+      (a, b) =>
+        (ratingsByProveedor[b.proveedor_id]?.avg || 0) -
+        (ratingsByProveedor[a.proveedor_id]?.avg || 0),
+    );
+  }
+  if (ordenarPor === "mas_reservado") {
+    return list.sort(
+      (a, b) => (bookingsByService[b.id] || 0) - (bookingsByService[a.id] || 0),
+    );
+  }
+
+  return list.sort((a, b) => {
+    const avA = ratingsByProveedor[a.proveedor_id]?.avg || 0;
+    const avB = ratingsByProveedor[b.proveedor_id]?.avg || 0;
+    if (avB !== avA) return avB - avA;
+    return (b.avales_count || 0) - (a.avales_count || 0);
+  });
+}
+
+function ToggleRow({ label, checked, onChange }) {
+  return (
+    <label className="flex cursor-pointer items-center justify-between gap-3 py-1">
+      <span className="text-[12px] text-[#444]">{label}</span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        onClick={() => onChange(!checked)}
+        className="relative h-6 w-11 shrink-0 rounded-full transition-colors"
+        style={{ backgroundColor: checked ? PRIMARY : "#d1d5db" }}
+      >
+        <span
+          className="absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform"
+          style={{ left: checked ? "calc(100% - 1.375rem)" : "0.125rem" }}
+        />
+      </button>
+    </label>
+  );
+}
 
 const BUSCAR_EXTRA = {
   es: {
@@ -605,12 +809,18 @@ function BuscarContent() {
   const [ciudadInput, setCiudadInput] = useState(ciudadParam);
   const [fechaDesdeInput, setFechaDesdeInput] = useState(fechaBusquedaInicioParam);
   const [fechaHastaInput, setFechaHastaInput] = useState(fechaBusquedaFinParam);
-  const [results, setResults] = useState([]);
+  const [rawResults, setRawResults] = useState([]);
+  const [ratingsByProveedor, setRatingsByProveedor] = useState({});
+  const [bookingsByService, setBookingsByService] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [hoveredIndex, setHoveredIndex] = useState(null);
   const [selectedIndex, setSelectedIndex] = useState(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [appliedFilters, setAppliedFilters] = useState(getDefaultFilters);
+  const [draftFilters, setDraftFilters] = useState(getDefaultFilters);
+  const [ordenarPor, setOrdenarPor] = useState("relevancia");
 
   const updateParams = useCallback(
     (vertical, ciudad, desde, hasta) => {
@@ -679,7 +889,7 @@ function BuscarContent() {
     measureHeaders();
     window.addEventListener("resize", measureHeaders);
     return () => window.removeEventListener("resize", measureHeaders);
-  }, []);
+  }, [advancedOpen]);
 
   useEffect(() => {
     setCiudadInput(ciudadParam);
@@ -706,6 +916,8 @@ function BuscarContent() {
       setError("");
       setHoveredIndex(null);
       setSelectedIndex(null);
+
+      const f = appliedFilters;
 
       let query = supabase
         .from("services")
@@ -736,7 +948,9 @@ function BuscarContent() {
             idiomas,
             id,
             location_zone,
-            ciudad
+            ciudad,
+            doc_dni_url,
+            doc_antecedentes_url
           )
         `,
         )
@@ -751,6 +965,25 @@ function BuscarContent() {
         query = query.or(
           `ciudad.ilike.%${ciudad}%,location_zone.ilike.%${ciudad}%`,
         );
+      }
+
+      if (f.precioMin > 0) {
+        query = query.gte("precio", f.precioMin);
+      }
+      if (f.precioMax < 500) {
+        query = query.lte("precio", f.precioMax);
+      }
+      if (f.soloInmediata) {
+        query = query.eq("reserva_inmediata", true);
+      }
+      if (f.soloVerificados) {
+        query = query.eq("profiles.verificado", true);
+      }
+      if (f.tipoAlojamiento) {
+        query = query.eq("tipo_alojamiento", f.tipoAlojamiento);
+      }
+      if (f.disponibleViajar && (verticalParam === "ninos" || verticalParam === "todo")) {
+        query = query.eq("disponible_para_viajar", true);
       }
 
       if (fechaBusquedaInicioParam && fechaBusquedaFinParam) {
@@ -772,12 +1005,15 @@ function BuscarContent() {
 
       if (fetchError) {
         setError(fetchError.message);
-        setResults([]);
+        setRawResults([]);
+        setRatingsByProveedor({});
+        setBookingsByService({});
       } else {
         const services = data ?? [];
         const proveedorIds = [
           ...new Set(services.map((s) => s.proveedor_id).filter(Boolean)),
         ];
+        const serviceIds = services.map((s) => s.id).filter(Boolean);
 
         let avalesByProveedor = {};
         if (proveedorIds.length > 0) {
@@ -793,7 +1029,42 @@ function BuscarContent() {
           }
         }
 
-        setResults(
+        const ratingsMap = {};
+        if (proveedorIds.length > 0) {
+          const { data: reviews } = await supabase
+            .from("reviews")
+            .select("proveedor_id, valoracion")
+            .in("proveedor_id", proveedorIds);
+
+          for (const rev of reviews ?? []) {
+            if (!ratingsMap[rev.proveedor_id]) {
+              ratingsMap[rev.proveedor_id] = { sum: 0, count: 0 };
+            }
+            ratingsMap[rev.proveedor_id].sum += Number(rev.valoracion) || 0;
+            ratingsMap[rev.proveedor_id].count += 1;
+          }
+          for (const pid of Object.keys(ratingsMap)) {
+            const { sum, count } = ratingsMap[pid];
+            ratingsMap[pid].avg = count > 0 ? sum / count : 0;
+          }
+        }
+
+        const bookingsMap = {};
+        if (serviceIds.length > 0) {
+          const { data: bookings } = await supabase
+            .from("bookings")
+            .select("service_id")
+            .in("service_id", serviceIds)
+            .eq("estado", "completada");
+
+          for (const b of bookings ?? []) {
+            bookingsMap[b.service_id] = (bookingsMap[b.service_id] ?? 0) + 1;
+          }
+        }
+
+        setRatingsByProveedor(ratingsMap);
+        setBookingsByService(bookingsMap);
+        setRawResults(
           services.map((service) => ({
             ...service,
             avales_count: avalesByProveedor[service.proveedor_id] ?? 0,
@@ -805,7 +1076,21 @@ function BuscarContent() {
     }
 
     fetchResults();
-  }, [verticalParam, ciudadParam, fechaBusquedaInicioParam, fechaBusquedaFinParam]);
+  }, [
+    verticalParam,
+    ciudadParam,
+    fechaBusquedaInicioParam,
+    fechaBusquedaFinParam,
+    appliedFilters,
+  ]);
+
+  const results = useMemo(() => {
+    const filtered = rawResults.filter((service) => {
+      const avg = ratingsByProveedor[service.proveedor_id]?.avg;
+      return matchesClientFilters(service, appliedFilters, avg);
+    });
+    return sortServices(filtered, ordenarPor, ratingsByProveedor, bookingsByService);
+  }, [rawResults, appliedFilters, ordenarPor, ratingsByProveedor, bookingsByService]);
 
   function handleVerticalChange(vertical) {
     updateParams(vertical, ciudadInput, fechaDesdeInput, fechaHastaInput);
@@ -825,6 +1110,47 @@ function BuscarContent() {
     setSelectedIndex(index);
     setHoveredIndex(index);
   }
+
+  function updateDraft(key, value) {
+    setDraftFilters((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function toggleDraftIdioma(idioma) {
+    setDraftFilters((prev) => {
+      const has = prev.idiomas.includes(idioma);
+      return {
+        ...prev,
+        idiomas: has
+          ? prev.idiomas.filter((l) => l !== idioma)
+          : [...prev.idiomas, idioma],
+      };
+    });
+  }
+
+  function toggleDraftEdad(edad) {
+    setDraftFilters((prev) => {
+      const has = prev.edadNinos.includes(edad);
+      return {
+        ...prev,
+        edadNinos: has
+          ? prev.edadNinos.filter((e) => e !== edad)
+          : [...prev.edadNinos, edad],
+      };
+    });
+  }
+
+  function handleApplyFilters() {
+    setAppliedFilters({ ...draftFilters });
+    setAdvancedOpen(false);
+  }
+
+  function handleClearFilters() {
+    const defaults = getDefaultFilters();
+    setDraftFilters(defaults);
+    setAppliedFilters(defaults);
+  }
+
+  const activeFilterCount = countActiveFilters(appliedFilters, verticalParam);
 
   const resultCount = results.length;
 
@@ -995,10 +1321,338 @@ function BuscarContent() {
             {t.hero.buscar}
           </button>
 
+          <div
+            className="hidden h-6 w-px shrink-0 md:block"
+            style={{ backgroundColor: BORDER }}
+            aria-hidden
+          />
+
+          <label className="flex shrink-0 items-center gap-2">
+            <span className="text-[10px] text-[#888]">
+              {lang === "en" ? "Sort" : "Ordenar"}
+            </span>
+            <select
+              value={ordenarPor}
+              onChange={(e) => setOrdenarPor(e.target.value)}
+              className="border px-2.5 py-1.5 text-[11px] outline-none"
+              style={{
+                backgroundColor: "#fff",
+                borderColor: BORDER,
+                borderRadius: 6,
+                color: "#2a3a4a",
+              }}
+            >
+              {ORDEN_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <button
+            type="button"
+            onClick={() => {
+              setAdvancedOpen((o) => !o);
+              if (!advancedOpen) setDraftFilters({ ...appliedFilters });
+            }}
+            className="relative flex shrink-0 items-center gap-1.5 border px-3 py-1.5 text-[11px] font-medium transition-colors"
+            style={{
+              backgroundColor: advancedOpen ? "#e8f0fb" : "#fff",
+              borderColor: advancedOpen ? PRIMARY : BORDER,
+              borderRadius: 6,
+              color: advancedOpen ? PRIMARY : "#666",
+            }}
+          >
+            {lang === "en" ? "More filters" : "Más filtros"}
+            <span aria-hidden>{advancedOpen ? "▴" : "▾"}</span>
+            {activeFilterCount > 0 && (
+              <span
+                className="absolute -right-1.5 -top-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[9px] font-bold text-white"
+                style={{ backgroundColor: PRIMARY }}
+              >
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
+
           <p className="ml-auto shrink-0 text-[11px]" style={{ color: "#bbb" }}>
             {loading ? (lang === "en" ? "Searching…" : "Buscando…") : resultadosLabel}
           </p>
         </form>
+
+        {advancedOpen && (
+          <div
+            className="mx-auto mt-3 max-w-[1600px] border"
+            style={{
+              backgroundColor: "#fff",
+              borderRadius: 10,
+              borderColor: BORDER,
+              padding: 16,
+            }}
+          >
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {/* Precio */}
+              <section>
+                <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#888]">
+                  Precio (€)
+                </h3>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={0}
+                    max={draftFilters.precioMax}
+                    value={draftFilters.precioMin}
+                    onChange={(e) =>
+                      updateDraft("precioMin", Math.max(0, Number(e.target.value) || 0))
+                    }
+                    className="w-full border px-2 py-1.5 text-[12px] outline-none"
+                    style={{ borderColor: BORDER, borderRadius: 6 }}
+                    placeholder="Mín"
+                  />
+                  <span className="text-[#bbb]">—</span>
+                  <input
+                    type="number"
+                    min={draftFilters.precioMin}
+                    max={500}
+                    value={draftFilters.precioMax}
+                    onChange={(e) =>
+                      updateDraft(
+                        "precioMax",
+                        Math.min(500, Math.max(0, Number(e.target.value) || 0)),
+                      )
+                    }
+                    className="w-full border px-2 py-1.5 text-[12px] outline-none"
+                    style={{ borderColor: BORDER, borderRadius: 6 }}
+                    placeholder="Máx"
+                  />
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={500}
+                  value={draftFilters.precioMax}
+                  onChange={(e) => updateDraft("precioMax", Number(e.target.value))}
+                  className="mt-2 w-full accent-[#1d4f91]"
+                />
+              </section>
+
+              {/* Valoración */}
+              <section>
+                <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#888]">
+                  Valoración
+                </h3>
+                <div className="flex flex-wrap gap-2">
+                  {VALORACION_PILLS.map((pill) => {
+                    const active = draftFilters.valoracionMin === pill.value;
+                    return (
+                      <button
+                        key={pill.label}
+                        type="button"
+                        onClick={() => updateDraft("valoracionMin", pill.value)}
+                        className="border px-3 py-1 text-[11px] font-medium transition-colors"
+                        style={{
+                          borderRadius: 9999,
+                          borderColor: active ? PRIMARY : BORDER,
+                          backgroundColor: active ? "#e8f0fb" : "#fff",
+                          color: active ? PRIMARY : "#666",
+                        }}
+                      >
+                        {pill.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+
+              {/* Disponibilidad y verificación */}
+              <section>
+                <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#888]">
+                  Disponibilidad
+                </h3>
+                <div className="space-y-0.5">
+                  <ToggleRow
+                    label="Solo reserva inmediata ⚡"
+                    checked={draftFilters.soloInmediata}
+                    onChange={(v) => updateDraft("soloInmediata", v)}
+                  />
+                  <ToggleRow
+                    label="Solo verificados"
+                    checked={draftFilters.soloVerificados}
+                    onChange={(v) => updateDraft("soloVerificados", v)}
+                  />
+                  <ToggleRow
+                    label="Con documentos"
+                    checked={draftFilters.soloConDocumentos}
+                    onChange={(v) => updateDraft("soloConDocumentos", v)}
+                  />
+                </div>
+              </section>
+
+              {/* Idiomas */}
+              <section className="sm:col-span-2 lg:col-span-3">
+                <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#888]">
+                  Idiomas
+                </h3>
+                <div className="flex flex-wrap gap-2">
+                  {IDIOMAS_OPTIONS.map((idioma) => {
+                    const active = draftFilters.idiomas.includes(idioma);
+                    return (
+                      <button
+                        key={idioma}
+                        type="button"
+                        onClick={() => toggleDraftIdioma(idioma)}
+                        className="border px-3 py-1 text-[11px] font-medium transition-colors"
+                        style={{
+                          borderRadius: 9999,
+                          borderColor: active ? PRIMARY : BORDER,
+                          backgroundColor: active ? "#e8f0fb" : "#fff",
+                          color: active ? PRIMARY : "#666",
+                        }}
+                      >
+                        {idioma}
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+
+              {/* Específicos alojamiento */}
+              {(verticalParam === "alojamiento" || verticalParam === "todo") && (
+                <section className="sm:col-span-2 lg:col-span-3">
+                  <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#888]">
+                    Alojamiento
+                  </h3>
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    <ToggleRow
+                      label="Pet-friendly"
+                      checked={draftFilters.petFriendly}
+                      onChange={(v) => updateDraft("petFriendly", v)}
+                    />
+                    <div>
+                      <p className="mb-1.5 text-[11px] text-[#666]">Tipo</p>
+                      <div className="flex flex-wrap gap-2">
+                        {TIPO_ALOJAMIENTO_FILTER.map((tipo) => {
+                          const active = draftFilters.tipoAlojamiento === tipo.value;
+                          return (
+                            <button
+                              key={tipo.label}
+                              type="button"
+                              onClick={() => updateDraft("tipoAlojamiento", tipo.value)}
+                              className="border px-3 py-1 text-[11px] font-medium transition-colors"
+                              style={{
+                                borderRadius: 9999,
+                                borderColor: active ? PRIMARY : BORDER,
+                                backgroundColor: active ? "#e8f0fb" : "#fff",
+                                color: active ? PRIMARY : "#666",
+                              }}
+                            >
+                              {tipo.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <div>
+                      <p className="mb-1.5 text-[11px] text-[#666]">Capacidad mín. (personas)</p>
+                      <input
+                        type="number"
+                        min={1}
+                        max={20}
+                        value={draftFilters.capacidadMin}
+                        onChange={(e) =>
+                          updateDraft("capacidadMin", Math.max(1, Number(e.target.value) || 1))
+                        }
+                        className="w-full border px-2 py-1.5 text-[12px] outline-none"
+                        style={{ borderColor: BORDER, borderRadius: 6 }}
+                      />
+                    </div>
+                  </div>
+                </section>
+              )}
+
+              {/* Específicos niñera */}
+              {(verticalParam === "ninos" || verticalParam === "todo") && (
+                <section className="sm:col-span-2 lg:col-span-3">
+                  <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#888]">
+                    Niñera
+                  </h3>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <ToggleRow
+                      label="Disponible para viajar"
+                      checked={draftFilters.disponibleViajar}
+                      onChange={(v) => updateDraft("disponibleViajar", v)}
+                    />
+                    <div>
+                      <p className="mb-1.5 text-[11px] text-[#666]">Edad de los niños</p>
+                      <div className="flex flex-wrap gap-2">
+                        {EDAD_NINOS_OPTIONS.map((edad) => {
+                          const active = draftFilters.edadNinos.includes(edad);
+                          return (
+                            <button
+                              key={edad}
+                              type="button"
+                              onClick={() => toggleDraftEdad(edad)}
+                              className="border px-3 py-1 text-[11px] font-medium transition-colors"
+                              style={{
+                                borderRadius: 9999,
+                                borderColor: active ? "#0e7a5c" : BORDER,
+                                backgroundColor: active ? "#e6f5ef" : "#fff",
+                                color: active ? "#0e7a5c" : "#666",
+                              }}
+                            >
+                              {edad} años
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              )}
+
+              {/* Específicos mascotas */}
+              {(verticalParam === "mascotas" || verticalParam === "todo") && (
+                <section className="sm:col-span-2 lg:col-span-3">
+                  <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#888]">
+                    Mascotas
+                  </h3>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <ToggleRow
+                      label="Con jardín"
+                      checked={draftFilters.conJardin}
+                      onChange={(v) => updateDraft("conJardin", v)}
+                    />
+                    <ToggleRow
+                      label="Paseos incluidos"
+                      checked={draftFilters.paseosIncluidos}
+                      onChange={(v) => updateDraft("paseosIncluidos", v)}
+                    />
+                  </div>
+                </section>
+              )}
+            </div>
+
+            <div className="mt-5 flex flex-wrap items-center justify-end gap-2 border-t pt-4" style={{ borderColor: BORDER }}>
+              <button
+                type="button"
+                onClick={handleClearFilters}
+                className="border px-4 py-2 text-[12px] font-medium transition-colors hover:bg-[#f7f5f2]"
+                style={{ borderColor: BORDER, borderRadius: 6, color: "#666" }}
+              >
+                Limpiar filtros
+              </button>
+              <button
+                type="button"
+                onClick={handleApplyFilters}
+                className="px-4 py-2 text-[12px] font-semibold text-white transition-opacity hover:opacity-90"
+                style={{ backgroundColor: PRIMARY, borderRadius: 6 }}
+              >
+                Aplicar filtros
+              </button>
+            </div>
+          </div>
+        )}
       </header>
 
       {error && (
