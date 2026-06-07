@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Navbar from "@/app/components/Navbar";
 import { BRAND, SERIF } from "@/app/components/brand";
+import { articulosIniciales, slugify } from "@/app/lib/blog-seed";
 import { supabase } from "@/lib/supabase";
 
 const TABS = [
@@ -12,7 +13,29 @@ const TABS = [
   { id: "rechazados", label: "Rechazados" },
   { id: "reportes", label: "Reportes" },
   { id: "ingresos", label: "Ingresos" },
+  { id: "blog", label: "Blog" },
 ];
+
+const BLOG_CATEGORIAS_ADMIN = [
+  "familias",
+  "mascotas",
+  "alojamiento",
+  "nineras",
+  "viajes",
+  "consejos",
+];
+
+const EMPTY_BLOG_FORM = {
+  id: null,
+  titulo: "",
+  slug: "",
+  subtitulo: "",
+  categoria: "consejos",
+  tags: [],
+  contenido: "",
+  publicado: false,
+  featured: false,
+};
 
 const VERTICALS = {
   alojamiento: { label: "Alojamiento", priceSuffix: "/ noche" },
@@ -222,6 +245,12 @@ export default function AdminPage() {
   const [completedBookings, setCompletedBookings] = useState([]);
   const [reports, setReports] = useState([]);
   const [lateCancellations, setLateCancellations] = useState([]);
+  const [blogPosts, setBlogPosts] = useState([]);
+  const [blogFormOpen, setBlogFormOpen] = useState(false);
+  const [blogForm, setBlogForm] = useState(EMPTY_BLOG_FORM);
+  const [blogTagInput, setBlogTagInput] = useState("");
+  const [blogSaving, setBlogSaving] = useState(false);
+  const [blogSeeding, setBlogSeeding] = useState(false);
 
   const loadData = useCallback(async () => {
     setErrorMessage("");
@@ -243,6 +272,24 @@ export default function AdminPage() {
     // -- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS doc_dni_url text;
     // -- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS doc_antecedentes_url text;
     // -- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS doc_antecedentes_sexuales_url text;
+    // -- CREATE TABLE blog_posts (
+    // --   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    // --   slug text UNIQUE NOT NULL,
+    // --   titulo text NOT NULL,
+    // --   subtitulo text,
+    // --   contenido text NOT NULL,
+    // --   imagen_url text,
+    // --   categoria text CHECK (categoria IN ('familias', 'mascotas', 'alojamiento', 'nineras', 'viajes', 'consejos')),
+    // --   tags text[],
+    // --   autor text DEFAULT 'Home&Heart',
+    // --   publicado boolean DEFAULT false,
+    // --   featured boolean DEFAULT false,
+    // --   created_at timestamp with time zone DEFAULT now(),
+    // --   updated_at timestamp with time zone DEFAULT now()
+    // -- );
+    // -- ALTER TABLE blog_posts ENABLE ROW LEVEL SECURITY;
+    // -- CREATE POLICY "Lectura publica posts publicados" ON blog_posts FOR SELECT USING (publicado = true);
+    // -- CREATE POLICY "Admin gestiona posts" ON blog_posts FOR ALL USING (true);
     const { data: profiles, error: profilesError } = await supabase
       .from("profiles")
       .select("*")
@@ -374,6 +421,20 @@ export default function AdminPage() {
       );
     }
 
+    const { data: blogData, error: blogError } = await supabase
+      .from("blog_posts")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (blogError) {
+      if (!blogError.message.includes("does not exist")) {
+        setErrorMessage(blogError.message);
+      }
+      setBlogPosts([]);
+    } else {
+      setBlogPosts(blogData ?? []);
+    }
+
     setLoading(false);
   }, [router]);
 
@@ -388,14 +449,16 @@ export default function AdminPage() {
       rechazados: 0,
       reportes: 0,
       ingresos: 0,
+      blog: 0,
     };
     for (const p of providers) {
       result[getProviderStatus(p)] += 1;
     }
     result.reportes = reports.filter((r) => r.estado === "pendiente").length;
     result.ingresos = completedBookings.length;
+    result.blog = blogPosts.length;
     return result;
-  }, [providers, completedBookings, reports]);
+  }, [providers, completedBookings, reports, blogPosts]);
 
   const pendingReports = useMemo(
     () => reports.filter((r) => r.estado === "pendiente"),
@@ -598,6 +661,159 @@ export default function AdminPage() {
     }
   }
 
+  function openNewBlogPost() {
+    setBlogForm(EMPTY_BLOG_FORM);
+    setBlogTagInput("");
+    setBlogFormOpen(true);
+    setErrorMessage("");
+    setSuccessMessage("");
+  }
+
+  function openEditBlogPost(post) {
+    setBlogForm({
+      id: post.id,
+      titulo: post.titulo || "",
+      slug: post.slug || "",
+      subtitulo: post.subtitulo || "",
+      categoria: post.categoria || "consejos",
+      tags: Array.isArray(post.tags) ? [...post.tags] : [],
+      contenido: post.contenido || "",
+      publicado: !!post.publicado,
+      featured: !!post.featured,
+    });
+    setBlogTagInput("");
+    setBlogFormOpen(true);
+    setErrorMessage("");
+    setSuccessMessage("");
+  }
+
+  function updateBlogForm(field, value) {
+    setBlogForm((prev) => {
+      const next = { ...prev, [field]: value };
+      if (field === "titulo" && !prev.id) {
+        next.slug = slugify(value);
+      }
+      return next;
+    });
+  }
+
+  function addBlogTag() {
+    const tag = blogTagInput.trim();
+    if (!tag) return;
+    setBlogForm((prev) => ({
+      ...prev,
+      tags: prev.tags.includes(tag) ? prev.tags : [...prev.tags, tag],
+    }));
+    setBlogTagInput("");
+  }
+
+  function removeBlogTag(tag) {
+    setBlogForm((prev) => ({
+      ...prev,
+      tags: prev.tags.filter((t) => t !== tag),
+    }));
+  }
+
+  async function handleSaveBlogPost() {
+    if (!blogForm.titulo.trim() || !blogForm.slug.trim() || !blogForm.contenido.trim()) {
+      setErrorMessage("Título, slug y contenido son obligatorios.");
+      return;
+    }
+
+    setBlogSaving(true);
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    const payload = {
+      titulo: blogForm.titulo.trim(),
+      slug: blogForm.slug.trim(),
+      subtitulo: blogForm.subtitulo.trim() || null,
+      categoria: blogForm.categoria,
+      tags: blogForm.tags,
+      contenido: blogForm.contenido,
+      publicado: blogForm.publicado,
+      featured: blogForm.featured,
+      autor: "Home&Heart",
+      updated_at: new Date().toISOString(),
+    };
+
+    let error;
+    if (blogForm.id) {
+      ({ error } = await supabase.from("blog_posts").update(payload).eq("id", blogForm.id));
+    } else {
+      ({ error } = await supabase.from("blog_posts").insert(payload));
+    }
+
+    setBlogSaving(false);
+
+    if (error) {
+      setErrorMessage(error.message);
+      return;
+    }
+
+    setSuccessMessage(blogForm.id ? "Artículo actualizado." : "Artículo creado.");
+    setBlogFormOpen(false);
+    setBlogForm(EMPTY_BLOG_FORM);
+    await loadData();
+  }
+
+  async function handleToggleBlogPublish(post) {
+    setActionLoading(post.id);
+    setErrorMessage("");
+
+    const { error } = await supabase
+      .from("blog_posts")
+      .update({
+        publicado: !post.publicado,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", post.id);
+
+    setActionLoading(null);
+
+    if (error) {
+      setErrorMessage(error.message);
+      return;
+    }
+
+    setSuccessMessage(post.publicado ? "Artículo despublicado." : "Artículo publicado.");
+    await loadData();
+  }
+
+  async function handleSeedBlogPosts() {
+    setBlogSeeding(true);
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    const { data: existing } = await supabase.from("blog_posts").select("slug");
+    const existingSlugs = new Set((existing ?? []).map((p) => p.slug));
+    const toInsert = articulosIniciales
+      .filter((a) => !existingSlugs.has(a.slug))
+      .map((a) => ({
+        ...a,
+        autor: "Home&Heart",
+        updated_at: new Date().toISOString(),
+      }));
+
+    if (toInsert.length === 0) {
+      setBlogSeeding(false);
+      setSuccessMessage("Los artículos de ejemplo ya están importados.");
+      return;
+    }
+
+    const { error } = await supabase.from("blog_posts").insert(toInsert);
+
+    setBlogSeeding(false);
+
+    if (error) {
+      setErrorMessage(error.message);
+      return;
+    }
+
+    setSuccessMessage(`${toInsert.length} artículo(s) de ejemplo importados.`);
+    await loadData();
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen font-sans" style={{ backgroundColor: BRAND.warm }}>
@@ -674,7 +890,259 @@ export default function AdminPage() {
           </p>
         )}
 
-        {activeTab === "reportes" ? (
+        {activeTab === "blog" ? (
+          <div className="mt-6">
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={openNewBlogPost}
+                className="rounded-xl px-4 py-2 text-sm font-semibold text-white"
+                style={{ backgroundColor: BRAND.primary }}
+              >
+                Nuevo post
+              </button>
+              <button
+                type="button"
+                disabled={blogSeeding}
+                onClick={handleSeedBlogPosts}
+                className="rounded-xl border px-4 py-2 text-sm font-medium disabled:opacity-60"
+                style={{ borderColor: BRAND.border, backgroundColor: "#fff" }}
+              >
+                {blogSeeding ? "Importando…" : "Importar artículos de ejemplo"}
+              </button>
+            </div>
+
+            {blogFormOpen && (
+              <div
+                className="mt-6 rounded-2xl border bg-white p-6"
+                style={{ borderColor: BRAND.border }}
+              >
+                <h2 className="text-lg font-semibold text-[#1a1a1a]">
+                  {blogForm.id ? "Editar artículo" : "Nuevo artículo"}
+                </h2>
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                  <div className="sm:col-span-2">
+                    <label className="text-xs font-medium text-[#444]">Título</label>
+                    <input
+                      type="text"
+                      value={blogForm.titulo}
+                      onChange={(e) => updateBlogForm("titulo", e.target.value)}
+                      className="mt-1 w-full rounded-xl border px-4 py-2.5 text-sm outline-none"
+                      style={{ borderColor: BRAND.border }}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-[#444]">Slug</label>
+                    <input
+                      type="text"
+                      value={blogForm.slug}
+                      onChange={(e) => updateBlogForm("slug", e.target.value)}
+                      className="mt-1 w-full rounded-xl border px-4 py-2.5 text-sm outline-none"
+                      style={{ borderColor: BRAND.border }}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-[#444]">Categoría</label>
+                    <select
+                      value={blogForm.categoria}
+                      onChange={(e) => updateBlogForm("categoria", e.target.value)}
+                      className="mt-1 w-full rounded-xl border px-4 py-2.5 text-sm outline-none"
+                      style={{ borderColor: BRAND.border }}
+                    >
+                      {BLOG_CATEGORIAS_ADMIN.map((cat) => (
+                        <option key={cat} value={cat}>
+                          {cat}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="text-xs font-medium text-[#444]">Subtítulo</label>
+                    <input
+                      type="text"
+                      value={blogForm.subtitulo}
+                      onChange={(e) => updateBlogForm("subtitulo", e.target.value)}
+                      className="mt-1 w-full rounded-xl border px-4 py-2.5 text-sm outline-none"
+                      style={{ borderColor: BRAND.border }}
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="text-xs font-medium text-[#444]">Tags</label>
+                    <div className="mt-1 flex flex-wrap gap-2">
+                      {blogForm.tags.map((tag) => (
+                        <span
+                          key={tag}
+                          className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium"
+                          style={{ backgroundColor: BRAND.warm, color: "#444" }}
+                        >
+                          {tag}
+                          <button
+                            type="button"
+                            onClick={() => removeBlogTag(tag)}
+                            className="text-[#888] hover:text-red-600"
+                            aria-label={`Quitar ${tag}`}
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                    <div className="mt-2 flex gap-2">
+                      <input
+                        type="text"
+                        value={blogTagInput}
+                        onChange={(e) => setBlogTagInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            addBlogTag();
+                          }
+                        }}
+                        placeholder="Añadir tag…"
+                        className="flex-1 rounded-xl border px-4 py-2 text-sm outline-none"
+                        style={{ borderColor: BRAND.border }}
+                      />
+                      <button
+                        type="button"
+                        onClick={addBlogTag}
+                        className="rounded-xl border px-4 py-2 text-sm font-medium"
+                        style={{ borderColor: BRAND.border }}
+                      >
+                        Añadir
+                      </button>
+                    </div>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="text-xs font-medium text-[#444]">Contenido (markdown)</label>
+                    <textarea
+                      rows={14}
+                      value={blogForm.contenido}
+                      onChange={(e) => updateBlogForm("contenido", e.target.value)}
+                      className="mt-1 w-full rounded-xl border px-4 py-3 font-mono text-sm outline-none"
+                      style={{ borderColor: BRAND.border }}
+                    />
+                  </div>
+                  <label className="flex cursor-pointer items-center gap-2 text-sm text-[#444]">
+                    <input
+                      type="checkbox"
+                      checked={blogForm.publicado}
+                      onChange={(e) => updateBlogForm("publicado", e.target.checked)}
+                      className="accent-[#1d4f91]"
+                    />
+                    Publicado
+                  </label>
+                  <label className="flex cursor-pointer items-center gap-2 text-sm text-[#444]">
+                    <input
+                      type="checkbox"
+                      checked={blogForm.featured}
+                      onChange={(e) => updateBlogForm("featured", e.target.checked)}
+                      className="accent-[#1d4f91]"
+                    />
+                    Destacado
+                  </label>
+                </div>
+                <div className="mt-5 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={blogSaving}
+                    onClick={handleSaveBlogPost}
+                    className="rounded-xl px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                    style={{ backgroundColor: BRAND.primary }}
+                  >
+                    {blogSaving ? "Guardando…" : "Guardar"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBlogFormOpen(false);
+                      setBlogForm(EMPTY_BLOG_FORM);
+                    }}
+                    className="rounded-xl border px-4 py-2 text-sm font-medium text-[#666]"
+                    style={{ borderColor: BRAND.border }}
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {blogPosts.length === 0 ? (
+              <p
+                className="mt-6 rounded-2xl border bg-white px-6 py-10 text-center text-sm text-[#666]"
+                style={{ borderColor: BRAND.border }}
+              >
+                No hay artículos. Crea uno nuevo o importa los de ejemplo.
+              </p>
+            ) : (
+              <ul className="mt-6 flex flex-col gap-3">
+                {blogPosts.map((post) => {
+                  const isBusy = actionLoading === post.id;
+                  return (
+                    <li
+                      key={post.id}
+                      className="rounded-2xl border bg-white p-4 sm:p-5"
+                      style={{ borderColor: BRAND.border }}
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="font-semibold text-[#1a1a1a]">{post.titulo}</p>
+                          <p className="mt-1 text-[12px] text-[#888]">
+                            /blog/{post.slug} · {post.categoria} ·{" "}
+                            {new Date(post.created_at).toLocaleDateString("es-ES")}
+                          </p>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <span
+                              className="rounded-full px-2.5 py-0.5 text-[10px] font-semibold"
+                              style={{
+                                backgroundColor: post.publicado ? "#e6f5ef" : "#f3f3f3",
+                                color: post.publicado ? "#0e7a5c" : "#888",
+                              }}
+                            >
+                              {post.publicado ? "Publicado" : "Borrador"}
+                            </span>
+                            {post.featured && (
+                              <span
+                                className="rounded-full px-2.5 py-0.5 text-[10px] font-semibold"
+                                style={{ backgroundColor: "#fdf3e3", color: AMBER }}
+                              >
+                                Destacado
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => openEditBlogPost(post)}
+                            className="rounded-xl border px-3 py-1.5 text-[12px] font-medium"
+                            style={{ borderColor: BRAND.border }}
+                          >
+                            Editar
+                          </button>
+                          <button
+                            type="button"
+                            disabled={isBusy}
+                            onClick={() => handleToggleBlogPublish(post)}
+                            className="rounded-xl px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-60"
+                            style={{
+                              backgroundColor: post.publicado ? "#888" : BRAND.primary,
+                            }}
+                          >
+                            {isBusy
+                              ? "…"
+                              : post.publicado
+                                ? "Despublicar"
+                                : "Publicar"}
+                          </button>
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        ) : activeTab === "reportes" ? (
           <div className="mt-6">
             {pendingReports.length === 0 ? (
               <p

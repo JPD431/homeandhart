@@ -305,6 +305,12 @@ export default function Navbar() {
             {t.navbar.servicios}
           </Link>
           <Link
+            href="/blog"
+            className="no-underline transition-colors hover:text-[#1d4f91]"
+          >
+            Blog
+          </Link>
+          <Link
             href="/garantia"
             className="no-underline transition-colors hover:text-[#1d4f91]"
           >
