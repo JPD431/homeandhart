@@ -112,7 +112,7 @@ function SearchField({ label, children, onClick }) {
             }
           : undefined
       }
-      className={`flex min-w-0 flex-1 flex-col justify-center px-5 ${onClick ? "cursor-pointer" : ""}`}
+      className={`flex min-h-[44px] min-w-0 flex-1 flex-col justify-center px-5 py-2 md:py-0 ${onClick ? "cursor-pointer" : ""}`}
     >
       <span
         className="text-[8px] font-medium uppercase tracking-wide"
@@ -358,7 +358,7 @@ export default function Hero() {
           style={{
             fontFamily: SERIF,
             fontWeight: 300,
-            fontSize: 42,
+            fontSize: "clamp(28px, 5vw, 42px)",
           }}
         >
           {extra.headlineMain}
@@ -398,9 +398,9 @@ export default function Hero() {
         <form
           onSubmit={handleSearch}
           className="border-y bg-white"
-          style={{ borderColor: "#e8e4de", height: 64 }}
+          style={{ borderColor: "#e8e4de" }}
         >
-          <div className="mx-auto flex h-full max-w-6xl flex-col md:flex-row md:items-stretch">
+          <div className="mx-auto flex max-w-6xl flex-col md:flex-row md:items-stretch">
             <SearchField label={extra.ciudad}>
               <input
                 id="hero-ciudad"
@@ -462,10 +462,9 @@ export default function Hero() {
 
             <button
               type="submit"
-              className="shrink-0 text-[13px] font-semibold text-white transition-opacity hover:opacity-90 md:h-full"
+              className="w-full min-h-[44px] shrink-0 px-7 text-[13px] font-semibold text-white transition-opacity hover:opacity-90 md:w-auto md:min-h-0 md:h-full"
               style={{
                 backgroundColor: "#1d4f91",
-                padding: "0 28px",
                 borderRadius: 0,
               }}
             >

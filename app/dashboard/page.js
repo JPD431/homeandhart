@@ -71,23 +71,46 @@ export default function DashboardPage() {
       <Navbar />
       
       {/* TABS */}
-      <div style={{background: '#fff', borderBottom: `0.5px solid ${BRAND.border}`, display: 'flex', padding: '0 24px'}}>
+      <div
+        className="flex overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+        style={{ background: '#fff', borderBottom: `0.5px solid ${BRAND.border}`, padding: '0 16px' }}
+      >
         {tabs.map(t => (
-          <button key={t} onClick={() => setTabActiva(t)} style={{padding: '14px 20px', fontSize: 12, color: tabActiva === t ? BRAND.blue : '#888', borderBottom: tabActiva === t ? `2px solid ${BRAND.blue}` : '2px solid transparent', fontWeight: tabActiva === t ? 500 : 400, background: 'none', border: 'none', borderBottom: tabActiva === t ? `2px solid ${BRAND.blue}` : '2px solid transparent', cursor: 'pointer', textTransform: 'capitalize', whiteSpace: 'nowrap'}}>
+          <button
+            key={t}
+            onClick={() => setTabActiva(t)}
+            className="shrink-0"
+            style={{
+              minHeight: 44,
+              padding: '12px 20px',
+              fontSize: 12,
+              color: tabActiva === t ? BRAND.blue : '#888',
+              borderBottom: tabActiva === t ? `2px solid ${BRAND.blue}` : '2px solid transparent',
+              fontWeight: tabActiva === t ? 500 : 400,
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              textTransform: 'capitalize',
+              whiteSpace: 'nowrap',
+            }}
+          >
             {t.charAt(0).toUpperCase() + t.slice(1)}
           </button>
         ))}
       </div>
 
       {/* HEADER */}
-      <div style={{background: '#fff', borderBottom: `0.5px solid ${BRAND.border}`, padding: '28px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start'}}>
+      <div
+        className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"
+        style={{ background: '#fff', borderBottom: `0.5px solid ${BRAND.border}`, padding: '20px 16px' }}
+      >
         <div>
-          <div style={{fontSize: 26, fontWeight: 300, color: BRAND.dark, fontFamily: 'Georgia, serif'}}>Hola, <em style={{color: BRAND.blue}}>{perfil?.nombre || 'usuario'}.</em></div>
+          <div style={{ fontSize: 'clamp(22px, 4vw, 26px)', fontWeight: 300, color: BRAND.dark, fontFamily: 'Georgia, serif' }}>Hola, <em style={{color: BRAND.blue}}>{perfil?.nombre || 'usuario'}.</em></div>
           <div style={{fontSize: 12, color: '#aaa', marginTop: 4}}>Bienvenida a tu panel · Home&Heart</div>
         </div>
-        <div style={{display: 'flex', gap: 8}}>
-          <button onClick={() => router.push('/editar-perfil')} style={{background: '#fff', color: BRAND.blue, border: `1px solid ${BRAND.blue}`, padding: '9px 18px', borderRadius: 4, fontSize: 12, cursor: 'pointer'}}>Editar perfil</button>
-          <button onClick={() => router.push('/buscar')} style={{background: BRAND.blue, color: '#fff', border: 'none', padding: '9px 18px', borderRadius: 4, fontSize: 12, cursor: 'pointer', fontWeight: 500}}>Buscar proveedores</button>
+        <div className="flex flex-wrap gap-2">
+          <button onClick={() => router.push('/editar-perfil')} style={{ minHeight: 44, background: '#fff', color: BRAND.blue, border: `1px solid ${BRAND.blue}`, padding: '10px 18px', borderRadius: 4, fontSize: 12, cursor: 'pointer' }}>Editar perfil</button>
+          <button onClick={() => router.push('/buscar')} style={{ minHeight: 44, background: BRAND.blue, color: '#fff', border: 'none', padding: '10px 18px', borderRadius: 4, fontSize: 12, cursor: 'pointer', fontWeight: 500 }}>Buscar proveedores</button>
         </div>
       </div>
 
@@ -105,9 +128,9 @@ export default function DashboardPage() {
 
 function TabCliente({ perfil, reservas, favoritos, router, BRAND, copiarLink }) {
   return (
-    <div style={{display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: 14}}>
+    <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
       {/* RESERVAS */}
-      <div style={{gridColumn: '1/3', background: '#fff', borderRadius: 10, border: `0.5px solid ${BRAND.border}`, overflow: 'hidden'}}>
+      <div className="sm:col-span-2" style={{background: '#fff', borderRadius: 10, border: `0.5px solid ${BRAND.border}`, overflow: 'hidden'}}>
         <div style={{padding: '13px 16px', borderBottom: `0.5px solid #f0ede8`, display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
           <span style={{fontSize: 11, fontWeight: 500, color: BRAND.dark}}>📅 Mis reservas</span>
           <span style={{fontSize: 9, padding: '2px 7px', borderRadius: 8, background: '#e8f0fb', color: '#163a6b'}}>{reservas.filter(r => ['confirmada','pendiente','en_curso'].includes(r.estado)).length} activas</span>
@@ -123,7 +146,7 @@ function TabCliente({ perfil, reservas, favoritos, router, BRAND, copiarLink }) 
               <span style={{fontSize: 9, padding: '2px 7px', borderRadius: 8, background: r.estado === 'confirmada' ? '#e8f0fb' : r.estado === 'completada' ? '#e6f4f0' : r.estado === 'en_curso' ? '#f0e8fb' : '#fef3c7', color: r.estado === 'confirmada' ? '#163a6b' : r.estado === 'completada' ? '#085041' : r.estado === 'en_curso' ? '#5b21b6' : '#92400e', whiteSpace: 'nowrap'}}>{r.estado}</span>
             </div>
           ))}
-          <button onClick={() => router.push('/historial')} style={{fontSize: 11, color: BRAND.blue, background: 'none', border: 'none', cursor: 'pointer', display: 'block', marginLeft: 'auto', marginTop: 8}}>Ver historial completo →</button>
+          <button onClick={() => router.push('/historial')} style={{ minHeight: 44, fontSize: 11, color: BRAND.blue, background: 'none', border: 'none', cursor: 'pointer', display: 'block', marginLeft: 'auto', marginTop: 8, padding: '8px 4px' }}>Ver historial completo →</button>
         </div>
       </div>
 
@@ -139,7 +162,7 @@ function TabCliente({ perfil, reservas, favoritos, router, BRAND, copiarLink }) 
             {perfil?.codigo_referido && <span style={{fontSize: 8, padding: '2px 7px', borderRadius: 8, background: '#e8f0fb', color: '#163a6b'}}>{perfil.codigo_referido}</span>}
             {perfil?.reservas_sin_comision > 0 && <span style={{fontSize: 8, padding: '2px 7px', borderRadius: 8, background: '#e6f4f0', color: '#085041'}}>{perfil.reservas_sin_comision} sin comisión 🎁</span>}
           </div>
-          <button onClick={() => router.push('/editar-perfil')} style={{width: '100%', background: '#f7f5f2', color: BRAND.blue, border: `0.5px solid ${BRAND.blue}`, padding: 8, borderRadius: 5, fontSize: 10, cursor: 'pointer', fontWeight: 500}}>Editar perfil</button>
+          <button onClick={() => router.push('/editar-perfil')} style={{ width: '100%', minHeight: 44, background: '#f7f5f2', color: BRAND.blue, border: `0.5px solid ${BRAND.blue}`, padding: '10px 8px', borderRadius: 5, fontSize: 10, cursor: 'pointer', fontWeight: 500 }}>Editar perfil</button>
         </div>
       </div>
 
@@ -184,7 +207,7 @@ function TabCliente({ perfil, reservas, favoritos, router, BRAND, copiarLink }) 
         </div>
         <div style={{padding: '13px 16px'}}>
           <p style={{fontSize: 12, color: '#bbb', textAlign: 'center', padding: '8px 0', marginBottom: 8}}>Organiza todos tus servicios en un viaje</p>
-          <button onClick={() => router.push('/viaje/nuevo')} style={{width: '100%', background: BRAND.blue, color: '#fff', border: 'none', padding: 8, borderRadius: 5, fontSize: 10, cursor: 'pointer', fontWeight: 500}}>+ Nuevo viaje</button>
+          <button onClick={() => router.push('/viaje/nuevo')} style={{ width: '100%', minHeight: 44, background: BRAND.blue, color: '#fff', border: 'none', padding: '10px 8px', borderRadius: 5, fontSize: 10, cursor: 'pointer', fontWeight: 500 }}>+ Nuevo viaje</button>
         </div>
       </div>
 
@@ -194,7 +217,7 @@ function TabCliente({ perfil, reservas, favoritos, router, BRAND, copiarLink }) 
         <div style={{padding: '13px 16px'}}>
           <div style={{background: '#f7f5f2', border: `0.5px solid ${BRAND.border}`, borderRadius: 6, padding: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8}}>
             <div><div style={{fontSize: 9, color: '#bbb', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 2}}>Tu código</div><div style={{fontSize: 13, fontWeight: 500, color: BRAND.blue}}>{perfil?.codigo_referido || '—'}</div></div>
-            <button onClick={() => copiarLink(perfil?.codigo_referido)} style={{fontSize: 10, color: BRAND.blue, border: `0.5px solid ${BRAND.blue}`, padding: '4px 10px', borderRadius: 4, background: '#fff', cursor: 'pointer', whiteSpace: 'nowrap'}}>Copiar link</button>
+            <button onClick={() => copiarLink(perfil?.codigo_referido)} style={{ minHeight: 44, fontSize: 10, color: BRAND.blue, border: `0.5px solid ${BRAND.blue}`, padding: '8px 12px', borderRadius: 4, background: '#fff', cursor: 'pointer', whiteSpace: 'nowrap' }}>Copiar link</button>
           </div>
           <p style={{fontSize: 10, color: '#888', lineHeight: 1.5}}>Por cada amigo que reserve recibirás 1 reserva extra sin comisión.</p>
           <div style={{marginTop: 8, fontSize: 11, color: '#666', display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '0.5px solid #f5f3f0'}}><span>Reservas sin comisión</span><span style={{fontWeight: 500, color: '#0e7a5c'}}>{perfil?.reservas_sin_comision || 0} 🎁</span></div>
@@ -208,8 +231,8 @@ function TabProveedor({ perfil, router, BRAND }) {
   return (
     <div style={{textAlign: 'center', padding: '40px 0'}}>
       <p style={{fontSize: 14, color: '#aaa', marginBottom: 16}}>Panel de proveedor</p>
-      <button onClick={() => router.push('/estadisticas')} style={{background: BRAND.blue, color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 4, fontSize: 12, cursor: 'pointer', marginRight: 8}}>Ver estadísticas</button>
-      <button onClick={() => router.push('/editar-perfil')} style={{background: '#fff', color: BRAND.blue, border: `1px solid ${BRAND.blue}`, padding: '10px 20px', borderRadius: 4, fontSize: 12, cursor: 'pointer'}}>Editar servicios</button>
+      <button onClick={() => router.push('/estadisticas')} style={{ minHeight: 44, background: BRAND.blue, color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 4, fontSize: 12, cursor: 'pointer', marginRight: 8 }}>Ver estadísticas</button>
+      <button onClick={() => router.push('/editar-perfil')} style={{ minHeight: 44, background: '#fff', color: BRAND.blue, border: `1px solid ${BRAND.blue}`, padding: '10px 20px', borderRadius: 4, fontSize: 12, cursor: 'pointer' }}>Editar servicios</button>
     </div>
   );
 }
@@ -218,7 +241,7 @@ function TabFamilia({ perfil, router, BRAND }) {
   return (
     <div style={{textAlign: 'center', padding: '40px 0'}}>
       <p style={{fontSize: 14, color: '#aaa', marginBottom: 16}}>Gestiona tu grupo familiar</p>
-      <button onClick={() => router.push('/familia')} style={{background: BRAND.blue, color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 4, fontSize: 12, cursor: 'pointer'}}>Ir a mi familia</button>
+      <button onClick={() => router.push('/familia')} style={{ minHeight: 44, background: BRAND.blue, color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 4, fontSize: 12, cursor: 'pointer' }}>Ir a mi familia</button>
     </div>
   );
 }
@@ -237,7 +260,7 @@ function TabReferidos({ perfil, BRAND, copiarLink }) {
           <div style={{fontSize: 11, color: '#085041', fontWeight: 500, marginBottom: 4}}>Tus reservas sin comisión</div>
           <div style={{fontSize: 28, fontWeight: 200, color: '#0e7a5c'}}>{perfil?.reservas_sin_comision || 0}</div>
         </div>
-        <button onClick={() => copiarLink(perfil?.codigo_referido)} style={{width: '100%', background: BRAND.blue, color: '#fff', border: 'none', padding: 10, borderRadius: 5, fontSize: 12, cursor: 'pointer', fontWeight: 500}}>Copiar link de invitación</button>
+        <button onClick={() => copiarLink(perfil?.codigo_referido)} style={{ width: '100%', minHeight: 44, background: BRAND.blue, color: '#fff', border: 'none', padding: 12, borderRadius: 5, fontSize: 12, cursor: 'pointer', fontWeight: 500 }}>Copiar link de invitación</button>
       </div>
     </div>
   );

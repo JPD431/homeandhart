@@ -593,15 +593,15 @@ function ProgressBar({ datesReady, aceptaPolitica, precioListo }) {
       className="border-b bg-white"
       style={{ borderColor: "#e8e4de", padding: "16px 24px" }}
     >
-      <div className="mx-auto flex max-w-[1100px] items-center justify-center">
+      <div className="mx-auto flex max-w-[1100px] items-center justify-center overflow-x-auto px-2 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
         {steps.map((step, index) => {
           const status = getStepStatus(step.id);
           const isLast = index === steps.length - 1;
           return (
-            <div key={step.id} className="flex items-center">
+            <div key={step.id} className="flex shrink-0 items-center">
               <div className="flex flex-col items-center gap-1.5">
                 <div
-                  className="flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-semibold"
+                  className="flex h-9 w-9 min-h-[44px] min-w-[44px] items-center justify-center rounded-full text-[11px] font-semibold sm:h-7 sm:w-7 sm:min-h-0 sm:min-w-0"
                   style={
                     status === "completed"
                       ? { backgroundColor: "#1d4f91", color: "#fff" }
@@ -621,7 +621,7 @@ function ProgressBar({ datesReady, aceptaPolitica, precioListo }) {
                   {status === "completed" ? "✓" : step.id}
                 </div>
                 <span
-                  className="text-[10px] font-medium"
+                  className="hidden text-[10px] font-medium sm:block"
                   style={{ color: status === "pending" ? "#bbb" : "#1d4f91" }}
                 >
                   {step.label}
@@ -629,7 +629,7 @@ function ProgressBar({ datesReady, aceptaPolitica, precioListo }) {
               </div>
               {!isLast && (
                 <div
-                  className="mx-3 h-px w-16 sm:w-24"
+                  className="mx-2 h-px w-8 sm:mx-3 sm:w-16 md:w-24"
                   style={{
                     backgroundColor: status === "completed" ? "#1d4f91" : "#e8e4de",
                   }}
@@ -884,7 +884,7 @@ function SavedCardCheckout({
         type="button"
         disabled={paying || disabled}
         onClick={handlePayWithSaved}
-        className="mt-4 w-full py-[13px] text-[13px] font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+        className="mt-4 min-h-[44px] w-full py-3 text-[13px] font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
         style={{ backgroundColor: "#1d4f91", borderRadius: 6 }}
       >
         {paying ? "Procesando pago…" : `Pagar ${precioTotal.toFixed(2)}€ →`}
@@ -1086,7 +1086,7 @@ function CheckoutForm({
       <button
         type="submit"
         disabled={!stripe || paying || disabled}
-        className="mt-4 w-full py-[13px] text-[13px] font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+        className="mt-4 min-h-[44px] w-full py-3 text-[13px] font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
         style={{ backgroundColor: "#1d4f91", borderRadius: 6 }}
       >
         {paying ? "Procesando pago…" : `Pagar ${precioTotal.toFixed(2)}€ →`}
@@ -2142,7 +2142,7 @@ export default function ReservarPage() {
         <div className="mx-auto flex max-w-[1100px] items-center justify-between">
           <Link
             href={`/proveedor/${service.proveedor_id}`}
-            className="text-[12px] no-underline transition-opacity hover:opacity-80"
+            className="inline-flex min-h-[44px] items-center text-[12px] no-underline transition-opacity hover:opacity-80"
             style={{ color: "#888" }}
           >
             ← Volver al perfil
@@ -2205,11 +2205,11 @@ export default function ReservarPage() {
               </div>
 
               <div className="relative mt-4">
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <button
                     type="button"
                     onClick={() => setCalendarOpen(true)}
-                    className="w-full border text-left transition-opacity hover:opacity-80"
+                    className="min-h-[44px] w-full border text-left transition-opacity hover:opacity-80"
                     style={{
                       backgroundColor: "#f7f5f2",
                       borderColor: "#e8e4de",
@@ -2227,7 +2227,7 @@ export default function ReservarPage() {
                   <button
                     type="button"
                     onClick={() => setCalendarOpen(true)}
-                    className="w-full border text-left transition-opacity hover:opacity-80"
+                    className="min-h-[44px] w-full border text-left transition-opacity hover:opacity-80"
                     style={{
                       backgroundColor: "#f7f5f2",
                       borderColor: "#e8e4de",
@@ -2265,7 +2265,7 @@ export default function ReservarPage() {
                 <button
                   type="button"
                   onClick={() => setCalendarOpen(true)}
-                  className="mt-2 border-0 bg-transparent p-0 text-[11px] font-medium hover:underline"
+                  className="mt-2 min-h-[44px] border-0 bg-transparent px-1 text-[11px] font-medium hover:underline"
                   style={{ color: "#1d4f91" }}
                 >
                   Cambiar fechas →
@@ -2273,7 +2273,7 @@ export default function ReservarPage() {
               </div>
 
               {vertical === "ninos" && (
-                <div className="mt-3 grid grid-cols-2 gap-3">
+                <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div>
                     <label htmlFor="hora" className="mb-1 block text-[8px] font-medium uppercase tracking-wide text-[#bbb]">
                       Hora
@@ -2378,12 +2378,12 @@ export default function ReservarPage() {
                   )}
                 </div>
                 {precioListo && priceSummary.total > 0 && (
-                  <label className="mt-4 flex cursor-pointer items-start gap-3">
+                  <label className="mt-4 flex min-h-[44px] cursor-pointer items-start gap-3 py-1">
                     <input
                       type="checkbox"
                       checked={aceptaPolitica}
                       onChange={(e) => setAceptaPolitica(e.target.checked)}
-                      className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded border-[#1d4f91] accent-[#1d4f91]"
+                      className="mt-1 h-5 w-5 shrink-0 cursor-pointer rounded border-[#1d4f91] accent-[#1d4f91] sm:mt-0.5 sm:h-4 sm:w-4"
                       style={{ backgroundColor: aceptaPolitica ? "#e8f0fb" : "#fff" }}
                     />
                     <span className="text-[11px] leading-relaxed text-[#444]">
@@ -2552,7 +2552,7 @@ export default function ReservarPage() {
                               <button
                                 type="button"
                                 onClick={() => toggleBundleService(comp.id)}
-                                className="shrink-0 rounded px-2.5 py-1 text-[10px] font-semibold transition-colors"
+                                className="min-h-[44px] shrink-0 rounded px-3 py-2 text-[10px] font-semibold transition-colors"
                                 style={
                                   isAdded
                                     ? { backgroundColor: "#1d4f91", color: "#fff", border: "1px solid #1d4f91" }
@@ -2588,7 +2588,7 @@ export default function ReservarPage() {
                         key={tab.id}
                         type="button"
                         onClick={() => setBundleTab(tab.id)}
-                        className="rounded-full px-3 py-1.5 text-[10px] font-semibold transition-colors"
+                        className="min-h-[44px] rounded-full px-3 py-2 text-[10px] font-semibold transition-colors"
                         style={
                           bundleTab === tab.id
                             ? { backgroundColor: "#1d4f91", color: "#fff" }
@@ -2655,7 +2655,7 @@ export default function ReservarPage() {
                                 <button
                                   type="button"
                                   onClick={() => toggleBundleService(comp.id)}
-                                  className="mt-2 rounded px-3 py-1 text-[10px] font-semibold transition-colors"
+                                  className="mt-2 min-h-[44px] rounded px-3 py-2 text-[10px] font-semibold transition-colors"
                                   style={
                                     isAdded
                                       ? { backgroundColor: "#1d4f91", color: "#fff" }
@@ -2778,7 +2778,7 @@ export default function ReservarPage() {
                           <button
                             type="button"
                             onClick={() => toggleBundleService(line.id)}
-                            className="flex h-4 w-4 items-center justify-center border-0 bg-transparent p-0 text-[14px] leading-none text-red-500 hover:text-red-700"
+                            className="flex min-h-[44px] min-w-[44px] items-center justify-center border-0 bg-transparent p-2 text-[14px] leading-none text-red-500 hover:text-red-700"
                             aria-label="Eliminar servicio"
                           >
                             ×
@@ -2898,7 +2898,7 @@ export default function ReservarPage() {
                   <button
                     type="button"
                     disabled
-                    className="mt-4 w-full py-[13px] text-[13px] font-semibold text-white opacity-60"
+                    className="mt-4 min-h-[44px] w-full py-3 text-[13px] font-semibold text-white opacity-60"
                     style={{ backgroundColor: "#1d4f91", borderRadius: 6 }}
                   >
                     Pagar {priceSummary.total > 0 ? formatEuro(priceSummary.total) : ""} →
@@ -2908,7 +2908,7 @@ export default function ReservarPage() {
                 <button
                   type="button"
                   disabled
-                  className="mt-4 w-full py-[13px] text-[13px] font-semibold text-white opacity-60"
+                  className="mt-4 min-h-[44px] w-full py-3 text-[13px] font-semibold text-white opacity-60"
                   style={{ backgroundColor: "#1d4f91", borderRadius: 6 }}
                 >
                   Pagar →

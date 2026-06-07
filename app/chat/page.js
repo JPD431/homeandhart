@@ -222,7 +222,7 @@ function OfertaMessageCard({ message, offer, isMine, onReject, rejecting }) {
           <div className="mt-3 flex flex-wrap gap-2">
             <Link
               href={acceptHref}
-              className="rounded px-3 py-1.5 text-[11px] font-medium text-white no-underline transition-opacity hover:opacity-90"
+              className="inline-flex min-h-[44px] items-center rounded px-3 text-[11px] font-medium text-white no-underline transition-opacity hover:opacity-90"
               style={{ backgroundColor: BLUE }}
             >
               Aceptar oferta →
@@ -231,7 +231,7 @@ function OfertaMessageCard({ message, offer, isMine, onReject, rejecting }) {
               type="button"
               onClick={() => onReject(message)}
               disabled={rejecting}
-              className="rounded bg-[#e5e5e5] px-3 py-1.5 text-[11px] font-medium text-[#666] transition-opacity hover:opacity-90 disabled:opacity-60"
+              className="min-h-[44px] rounded bg-[#e5e5e5] px-3 text-[11px] font-medium text-[#666] transition-opacity hover:opacity-90 disabled:opacity-60"
             >
               {rejecting ? "…" : "Rechazar"}
             </button>
@@ -297,7 +297,7 @@ function SolicitudPrecioMessageCard({
             <button
               type="button"
               onClick={() => onAcceptAndOffer(solicitud)}
-              className="rounded px-3 py-1.5 text-[11px] font-medium text-white transition-opacity hover:opacity-90"
+              className="min-h-[44px] rounded px-3 text-[11px] font-medium text-white transition-opacity hover:opacity-90"
               style={{ backgroundColor: "#0e7a5c" }}
             >
               Aceptar y enviar oferta
@@ -306,7 +306,7 @@ function SolicitudPrecioMessageCard({
               type="button"
               onClick={() => onReject(message)}
               disabled={rejecting}
-              className="rounded bg-[#e5e5e5] px-3 py-1.5 text-[11px] font-medium text-[#666] transition-opacity hover:opacity-90 disabled:opacity-60"
+              className="min-h-[44px] rounded bg-[#e5e5e5] px-3 text-[11px] font-medium text-[#666] transition-opacity hover:opacity-90 disabled:opacity-60"
             >
               {rejecting ? "…" : "Rechazar"}
             </button>
@@ -379,6 +379,9 @@ export default function ChatPage() {
   const [requestMensaje, setRequestMensaje] = useState("");
   const [sendingRequest, setSendingRequest] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [vistaMovil, setVistaMovil] = useState(
+    conversationParam ? "chat" : "lista",
+  );
 
   const messagesEndRef = useRef(null);
   const isProvider = providerServices.length > 0;
@@ -980,7 +983,12 @@ export default function ChatPage() {
 
   function selectConversation(id) {
     setSelectedId(id);
+    setVistaMovil("chat");
     router.replace(`/chat?conversation=${id}`, { scroll: false });
+  }
+
+  function volverALista() {
+    setVistaMovil("lista");
   }
 
   if (loading) {
@@ -1021,16 +1029,15 @@ export default function ChatPage() {
       )}
 
       <div
-        className="grid"
+        className="grid md:grid-cols-[280px_1fr]"
         style={{
-          gridTemplateColumns: "280px 1fr",
           height: "calc(100vh - 57px)",
           backgroundColor: "#fff",
         }}
       >
         {/* Columna izquierda — lista */}
         <aside
-          className="flex flex-col border-r"
+          className={`flex flex-col border-r ${vistaMovil === "chat" ? "hidden md:flex" : "flex"}`}
           style={{ borderColor: BORDER }}
         >
           <div
@@ -1056,7 +1063,7 @@ export default function ChatPage() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Buscar conversación..."
-              className="w-full border-0 px-4 py-2 text-xs outline-none"
+              className="min-h-[44px] w-full border-0 px-4 py-2 text-xs outline-none"
               style={{
                 borderRadius: 20,
                 backgroundColor: WARM,
@@ -1096,7 +1103,7 @@ export default function ChatPage() {
                     <button
                       type="button"
                       onClick={() => selectConversation(conversation.id)}
-                      className="flex w-full items-center gap-3 px-3 py-3 text-left transition-colors"
+                      className="flex min-h-[44px] w-full items-center gap-3 px-3 py-3 text-left transition-colors"
                       style={{
                         borderLeft: isActive
                           ? `2px solid ${BLUE}`
@@ -1159,7 +1166,9 @@ export default function ChatPage() {
         </aside>
 
         {/* Columna derecha — chat */}
-        <section className="flex min-w-0 flex-col">
+        <section
+          className={`min-w-0 flex-col ${vistaMovil === "lista" ? "hidden md:flex" : "flex"}`}
+        >
           {selectedConversation ? (
             <>
               {/* Header chat */}
@@ -1170,7 +1179,15 @@ export default function ChatPage() {
                   borderBottom: "0.5px solid #f0ede8",
                 }}
               >
-                <div className="flex min-w-0 items-center gap-3">
+                <div className="flex min-w-0 flex-1 items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={volverALista}
+                    className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center text-sm font-medium text-[#1d4f91] md:hidden"
+                    aria-label="Volver a conversaciones"
+                  >
+                    ← Volver
+                  </button>
                   <Avatar
                     nombre={otherParticipant?.nombre}
                     apellido={otherParticipant?.apellido}
@@ -1198,7 +1215,7 @@ export default function ChatPage() {
                   {otherParticipantId && (
                     <Link
                       href={`/proveedor/${otherParticipantId}`}
-                      className="rounded border px-3 py-1.5 text-[11px] font-medium no-underline transition-colors hover:bg-[#f7f5f2]"
+                      className="inline-flex min-h-[44px] items-center rounded border px-3 text-[11px] font-medium no-underline transition-colors hover:bg-[#f7f5f2]"
                       style={{ borderColor: BLUE, color: BLUE }}
                     >
                       Ver perfil →
@@ -1206,7 +1223,7 @@ export default function ChatPage() {
                   )}
                   <Link
                     href={reservarHref}
-                    className="rounded border px-3 py-1.5 text-[11px] font-medium no-underline transition-colors hover:bg-[#f7f5f2]"
+                    className="inline-flex min-h-[44px] items-center rounded border px-3 text-[11px] font-medium no-underline transition-colors hover:bg-[#f7f5f2]"
                     style={{ borderColor: BLUE, color: BLUE }}
                   >
                     Reservar
@@ -1367,7 +1384,7 @@ export default function ChatPage() {
                     <button
                       type="submit"
                       disabled={sendingRequest}
-                      className="self-start rounded px-4 py-2 text-xs font-medium text-white disabled:opacity-60"
+                      className="min-h-[44px] self-start rounded px-4 text-xs font-medium text-white disabled:opacity-60"
                       style={{ backgroundColor: BLUE }}
                     >
                       {sendingRequest ? "Enviando…" : "Enviar solicitud"}
@@ -1432,7 +1449,7 @@ export default function ChatPage() {
                     <button
                       type="submit"
                       disabled={sendingOffer}
-                      className="self-start rounded px-4 py-2 text-xs font-medium text-white disabled:opacity-60"
+                      className="min-h-[44px] self-start rounded px-4 text-xs font-medium text-white disabled:opacity-60"
                       style={{ backgroundColor: BLUE }}
                     >
                       {sendingOffer ? "Enviando…" : "Enviar oferta"}
@@ -1456,7 +1473,7 @@ export default function ChatPage() {
                           setShowOfferForm((v) => !v);
                           setShowRequestForm(false);
                         }}
-                        className="border px-3 py-1 text-[11px] font-medium transition-colors hover:bg-[#f7f5f2]"
+                        className="min-h-[44px] border px-3 text-[11px] font-medium transition-colors hover:bg-[#f7f5f2]"
                         style={{
                           borderRadius: 16,
                           borderColor: BLUE,
@@ -1474,7 +1491,7 @@ export default function ChatPage() {
                           setShowRequestForm((v) => !v);
                           setShowOfferForm(false);
                         }}
-                        className="border px-3 py-1 text-[11px] font-medium transition-colors hover:bg-[#f7f5f2]"
+                        className="min-h-[44px] border px-3 text-[11px] font-medium transition-colors hover:bg-[#f7f5f2]"
                         style={{
                           borderRadius: 16,
                           borderColor: AMBER,
@@ -1494,7 +1511,7 @@ export default function ChatPage() {
                     value={draft}
                     onChange={(e) => setDraft(e.target.value)}
                     placeholder="Escribe un mensaje…"
-                    className="flex-1 border-0 px-4 py-2.5 text-xs outline-none"
+                    className="min-h-[44px] flex-1 border-0 px-4 py-2.5 text-xs outline-none"
                     style={{
                       borderRadius: 20,
                       backgroundColor: WARM,
@@ -1504,7 +1521,7 @@ export default function ChatPage() {
                   <button
                     type="submit"
                     disabled={sending || !draft.trim()}
-                    className="shrink-0 border-0 px-4 py-2.5 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                    className="min-h-[44px] min-w-[44px] shrink-0 border-0 px-4 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
                     style={{
                       borderRadius: 20,
                       backgroundColor: BLUE,

@@ -64,7 +64,7 @@ function LangSwitcher() {
           key={code}
           type="button"
           onClick={() => setLang(code)}
-          className="rounded-md px-2 py-1 text-xs font-semibold uppercase transition-colors"
+          className="min-h-[44px] min-w-[44px] rounded-md px-3 text-xs font-semibold uppercase transition-colors"
           style={{
             color: lang === code ? BRAND.primary : "#888",
           }}
@@ -96,7 +96,7 @@ function DropdownItem({ href, icon, label, badge, badgeStyle, onNavigate }) {
     <Link
       href={href}
       onClick={onNavigate}
-      className="flex items-center justify-between gap-2 px-4 py-2.5 text-sm text-[#2a3a4a] no-underline transition-colors hover:bg-[#f7f5f2]"
+      className="flex min-h-[44px] items-center justify-between gap-2 px-4 py-3 text-sm text-[#2a3a4a] no-underline transition-colors hover:bg-[#f7f5f2]"
     >
       <span className="flex items-center gap-2.5">
         <span aria-hidden>{icon}</span>
@@ -140,12 +140,23 @@ export default function Navbar() {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [vistaModo, setVistaModo] = useState("cliente");
   const [signingOut, setSigningOut] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const isProveedor = perfil?.role === "proveedor";
   const porcentajePerfil = calcPorcentajePerfil(perfil, servicesCount);
   const sinComision = Number(perfil?.reservas_sin_comision) || 0;
 
   const closeDropdown = useCallback(() => setDropdownOpen(false), []);
+  const closeMobileMenu = useCallback(() => setMobileMenuOpen(false), []);
+
+  const navLinks = [
+    { href: "/", label: t.navbar.inicio, primary: true },
+    { href: "/buscar", label: t.navbar.servicios },
+    { href: "/blog", label: "Blog" },
+    { href: "/garantia", label: t.navbar.garantia },
+    { href: "/#como-funciona", label: t.navbar.comoFunciona },
+    { href: "/ser-proveedor", label: t.navbar.serProveedor },
+  ];
 
   const loadMensajesSinLeer = useCallback(async (userId) => {
     const { data: conversations } = await supabase
@@ -291,46 +302,29 @@ export default function Navbar() {
           className="hidden items-center gap-8 text-sm font-medium text-[#444] md:flex"
           aria-label="Principal"
         >
-          <Link
-            href="/"
-            className="no-underline transition-colors hover:text-[#1d4f91]"
-            style={{ color: BRAND.primary }}
-          >
-            {t.navbar.inicio}
-          </Link>
-          <Link
-            href="/buscar"
-            className="no-underline transition-colors hover:text-[#1d4f91]"
-          >
-            {t.navbar.servicios}
-          </Link>
-          <Link
-            href="/blog"
-            className="no-underline transition-colors hover:text-[#1d4f91]"
-          >
-            Blog
-          </Link>
-          <Link
-            href="/garantia"
-            className="no-underline transition-colors hover:text-[#1d4f91]"
-          >
-            {t.navbar.garantia}
-          </Link>
-          <Link
-            href="/#como-funciona"
-            className="no-underline transition-colors hover:text-[#1d4f91]"
-          >
-            {t.navbar.comoFunciona}
-          </Link>
-          <Link
-            href="/ser-proveedor"
-            className="no-underline transition-colors hover:text-[#1d4f91]"
-          >
-            {t.navbar.serProveedor}
-          </Link>
+          {navLinks.map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              className="no-underline transition-colors hover:text-[#1d4f91]"
+              style={link.primary ? { color: BRAND.primary } : undefined}
+            >
+              {link.label}
+            </Link>
+          ))}
         </nav>
 
         <div className="flex items-center gap-2 sm:gap-3">
+          <button
+            type="button"
+            className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border text-lg md:hidden"
+            style={{ borderColor: BORDER, color: "#444" }}
+            onClick={() => setMobileMenuOpen(true)}
+            aria-label="Abrir menú"
+            aria-expanded={mobileMenuOpen}
+          >
+            ☰
+          </button>
           <LangSwitcher />
 
           {user ? (
@@ -338,17 +332,10 @@ export default function Navbar() {
               <Link
                 href="/chat"
                 onClick={closeDropdown}
+                className="relative flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full no-underline"
                 style={{
-                  position: "relative",
-                  cursor: "pointer",
-                  padding: 6,
-                  borderRadius: "50%",
                   background: "#fff",
                   border: `0.5px solid ${BORDER}`,
-                  textDecoration: "none",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
                 }}
                 aria-label="Notificaciones"
               >
@@ -387,16 +374,10 @@ export default function Navbar() {
                       setDropdownOpen((o) => !o);
                     }
                   }}
+                  className="relative flex min-h-[44px] cursor-pointer items-center gap-2 rounded-full border px-3"
                   style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    cursor: "pointer",
-                    padding: "5px 10px",
-                    borderRadius: 20,
-                    border: `0.5px solid ${BORDER}`,
+                    borderColor: BORDER,
                     background: "#fff",
-                    position: "relative",
                   }}
                   aria-expanded={dropdownOpen}
                   aria-haspopup="true"
@@ -431,7 +412,7 @@ export default function Navbar() {
                       }}
                     />
                   </div>
-                  <span style={{ fontSize: 12, fontWeight: 500, color: "#2a3a4a" }}>
+                  <span className="hidden max-w-[100px] truncate text-xs font-medium text-[#2a3a4a] sm:inline">
                     {perfil?.nombre || "Mi cuenta"}
                   </span>
                   <span style={{ fontSize: 10, color: "#bbb" }}>▾</span>
@@ -545,7 +526,7 @@ export default function Navbar() {
                             key={modo}
                             type="button"
                             onClick={() => setVistaModo(modo)}
-                            className="flex-1 rounded-lg py-1.5 text-xs font-semibold capitalize transition-colors"
+                            className="min-h-[44px] flex-1 rounded-lg py-2 text-xs font-semibold capitalize transition-colors"
                             style={{
                               background:
                                 vistaModo === modo ? "#fff" : "transparent",
@@ -686,7 +667,7 @@ export default function Navbar() {
                         type="button"
                         onClick={handleSignOut}
                         disabled={signingOut}
-                        className="w-full rounded-lg border py-2.5 text-sm font-medium transition-colors disabled:opacity-60"
+                        className="min-h-[44px] w-full rounded-lg border py-3 text-sm font-medium transition-colors disabled:opacity-60"
                         style={{
                           borderColor: BORDER,
                           background: "#fff",
@@ -713,20 +694,20 @@ export default function Navbar() {
             <>
               <Link
                 href="/chat"
-                className="relative flex h-10 w-10 items-center justify-center rounded-lg text-[#444] no-underline transition-colors hover:bg-[#f7f5f2]"
+                className="relative flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-[#444] no-underline transition-colors hover:bg-[#f7f5f2]"
                 aria-label="Mensajes"
               >
                 <ChatIcon className="h-5 w-5" />
               </Link>
               <Link
                 href="/login"
-                className="hidden rounded-lg px-4 py-2 text-sm font-medium text-[#444] no-underline transition-colors hover:bg-[#f7f5f2] sm:inline-block"
+                className="hidden min-h-[44px] items-center rounded-lg px-4 text-sm font-medium text-[#444] no-underline transition-colors hover:bg-[#f7f5f2] sm:inline-flex"
               >
                 {t.navbar.iniciarSesion}
               </Link>
               <Link
                 href="/registro"
-                className="rounded-lg px-4 py-2 text-sm font-medium text-white no-underline transition-opacity hover:opacity-90"
+                className="inline-flex min-h-[44px] items-center rounded-lg px-4 text-sm font-medium text-white no-underline transition-opacity hover:opacity-90"
                 style={{ backgroundColor: BRAND.primary }}
               >
                 {t.navbar.registrarse}
@@ -735,6 +716,112 @@ export default function Navbar() {
           )}
         </div>
       </div>
+
+      {mobileMenuOpen && (
+        <>
+          <button
+            type="button"
+            className="fixed inset-0 z-[60] bg-black/30 md:hidden"
+            aria-label="Cerrar menú"
+            onClick={closeMobileMenu}
+          />
+          <div
+            className="fixed inset-x-0 top-0 z-[70] max-h-[90vh] overflow-y-auto border-b bg-white shadow-lg md:hidden"
+            style={{ borderColor: BORDER }}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Menú de navegación"
+          >
+            <div
+              className="flex min-h-[44px] items-center justify-between border-b px-4"
+              style={{ borderColor: BORDER }}
+            >
+              <span className="text-sm font-semibold text-[#2a3a4a]">Menú</span>
+              <button
+                type="button"
+                onClick={closeMobileMenu}
+                className="flex min-h-[44px] min-w-[44px] items-center justify-center text-xl text-[#666]"
+                aria-label="Cerrar"
+              >
+                ×
+              </button>
+            </div>
+            <nav className="flex flex-col py-2" aria-label="Principal móvil">
+              {navLinks.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  onClick={closeMobileMenu}
+                  className="flex min-h-[44px] items-center border-b px-5 text-[15px] font-medium text-[#2a3a4a] no-underline transition-colors hover:bg-[#f7f5f2]"
+                  style={{
+                    borderColor: "#f0ede8",
+                    color: link.primary ? BRAND.primary : "#2a3a4a",
+                  }}
+                >
+                  {link.label}
+                </Link>
+              ))}
+            </nav>
+            <div
+              className="flex flex-col gap-2 border-t p-4"
+              style={{ borderColor: BORDER }}
+            >
+              {user ? (
+                <>
+                  <Link
+                    href="/dashboard"
+                    onClick={closeMobileMenu}
+                    className="flex min-h-[44px] items-center justify-center rounded-lg border text-sm font-medium text-[#444] no-underline"
+                    style={{ borderColor: BORDER }}
+                  >
+                    Mi cuenta
+                  </Link>
+                  <Link
+                    href="/chat"
+                    onClick={closeMobileMenu}
+                    className="flex min-h-[44px] items-center justify-center rounded-lg border text-sm font-medium text-[#444] no-underline"
+                    style={{ borderColor: BORDER }}
+                  >
+                    Mensajes
+                    {mensajesSinLeer > 0 ? ` (${mensajesSinLeer})` : ""}
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      closeMobileMenu();
+                      handleSignOut();
+                    }}
+                    disabled={signingOut}
+                    className="min-h-[44px] rounded-lg border text-sm font-medium text-[#666] disabled:opacity-60"
+                    style={{ borderColor: BORDER }}
+                  >
+                    {signingOut ? "Cerrando sesión…" : "Cerrar sesión"}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <Link
+                    href="/login"
+                    onClick={closeMobileMenu}
+                    className="flex min-h-[44px] items-center justify-center rounded-lg border text-sm font-medium text-[#444] no-underline"
+                    style={{ borderColor: BORDER }}
+                  >
+                    {t.navbar.iniciarSesion}
+                  </Link>
+                  <Link
+                    href="/registro"
+                    onClick={closeMobileMenu}
+                    className="flex min-h-[44px] items-center justify-center rounded-lg text-sm font-medium text-white no-underline"
+                    style={{ backgroundColor: BRAND.primary }}
+                  >
+                    {t.navbar.registrarse}
+                  </Link>
+                </>
+              )}
+            </div>
+          </div>
+        </>
+      )}
     </header>
   );
 }
