@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import CalendarioRangoFechas from "@/app/components/CalendarioRangoFechas";
+import Navbar from "@/app/components/Navbar";
 import { formatShortDate } from "@/app/components/calendario-shared";
 import { useLang } from "@/app/lib/LangContext";
 import { useTranslation } from "@/app/lib/i18n";
@@ -58,7 +58,6 @@ const HERO_EXTRA = {
     headlineMain: "Todo lo que necesita tu familia, ",
     headlineEm: "aquí.",
     ciudad: "Ciudad",
-    miCuenta: "Mi cuenta",
     buscarBtn: "Buscar →",
     garantia: "Garantía",
     disponibles: (n) => `${n} disponibles`,
@@ -74,7 +73,6 @@ const HERO_EXTRA = {
     headlineMain: "Everything your family needs, ",
     headlineEm: "here.",
     ciudad: "City",
-    miCuenta: "My account",
     buscarBtn: "Search →",
     garantia: "Guarantee",
     disponibles: (n) => `${n} available`,
@@ -329,82 +327,7 @@ export default function Hero() {
 
   return (
     <div style={{ backgroundColor: "#f7f5f2" }}>
-      {/* Navbar */}
-      <header
-        className="border-b"
-        style={{ backgroundColor: "#f7f5f2", borderColor: "#e8e4de" }}
-      >
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
-          <Link href="/" className="shrink-0 no-underline">
-            <p
-              className="text-[18px] leading-none text-[#111]"
-              style={{ fontFamily: SERIF }}
-            >
-              Home<span className="italic" style={{ color: "#1d4f91" }}>&</span>
-              Heart
-            </p>
-            <p className="mt-1 text-[9px]" style={{ color: "#bbb" }}>
-              {t.footer.slogan}
-            </p>
-          </Link>
-
-          <nav
-            className="hidden items-center gap-6 md:flex"
-            aria-label="Principal"
-          >
-            <Link
-              href="/buscar"
-              className="no-underline transition-colors hover:text-[#1d4f91]"
-              style={{ color: "#888", fontSize: 12 }}
-            >
-              {t.navbar.servicios}
-            </Link>
-            <Link
-              href="/garantia"
-              className="no-underline transition-colors hover:text-[#1d4f91]"
-              style={{ color: "#888", fontSize: 12 }}
-            >
-              {t.navbar.garantia}
-            </Link>
-            <Link
-              href="/ser-proveedor"
-              className="no-underline transition-colors hover:text-[#1d4f91]"
-              style={{ color: "#888", fontSize: 12 }}
-            >
-              {t.navbar.serProveedor}
-            </Link>
-          </nav>
-
-          <div className="flex items-center gap-3">
-            {user ? (
-              <Link
-                href="/dashboard"
-                className="px-3.5 py-1.5 text-[12px] font-semibold text-white no-underline transition-opacity hover:opacity-90"
-                style={{ backgroundColor: "#1d4f91", borderRadius: 4 }}
-              >
-                {extra.miCuenta}
-              </Link>
-            ) : (
-              <>
-                <Link
-                  href="/login"
-                  className="hidden text-[12px] font-medium no-underline transition-opacity hover:opacity-80 sm:inline-block"
-                  style={{ color: "#1d4f91" }}
-                >
-                  {t.navbar.iniciarSesion}
-                </Link>
-                <Link
-                  href="/registro"
-                  className="px-3.5 py-1.5 text-[12px] font-semibold text-white no-underline transition-opacity hover:opacity-90"
-                  style={{ backgroundColor: "#1d4f91", borderRadius: 4 }}
-                >
-                  {t.navbar.registrarse}
-                </Link>
-              </>
-            )}
-          </div>
-        </div>
-      </header>
+      <Navbar />
 
       {/* Headline */}
       <section
