@@ -3,30 +3,39 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import Navbar from "@/app/components/Navbar";
 import { BRAND, SERIF } from "@/app/components/brand";
 import { supabase } from "@/lib/supabase";
 
-const STATUS_STYLES = {
-  pendiente: { bg: "#fef3c7", color: "#92400e", label: "Pendientes" },
-  confirmada: { bg: BRAND.light, color: BRAND.primary, label: "Confirmadas" },
-  en_curso: { bg: "#e0e7ff", color: "#3730a3", label: "En curso" },
-  completada: { bg: "#dcfce7", color: "#166534", label: "Completadas" },
-  cancelada: { bg: "#f3f4f6", color: "#6b7280", label: "Canceladas" },
-  incidencia: { bg: "#fee2e2", color: "#b91c1c", label: "Incidencias" },
+const PRIMARY = "#1d4f91";
+const BORDER = "#e8e4de";
+
+const VERTICAL_COLORS = {
+  alojamiento: PRIMARY,
+  ninos: "#0e7a5c",
+  mascotas: "#c47d1a",
 };
 
-const STATUS_ORDER = [
-  "pendiente",
-  "confirmada",
-  "en_curso",
-  "completada",
-  "cancelada",
-  "incidencia",
+const STATUS_META = {
+  completada: { label: "Completadas", color: "#0e7a5c" },
+  confirmada: { label: "Confirmadas", color: PRIMARY },
+  pendiente: { label: "Pendientes", color: "#c47d1a" },
+  en_curso: { label: "En curso", color: "#7c3aed" },
+  cancelada: { label: "Canceladas", color: "#dc2626" },
+};
+
+const STATUS_ORDER = ["completada", "confirmada", "pendiente", "en_curso", "cancelada"];
+
+const PERIOD_TABS = [
+  { id: "7d", label: "7 días", days: 7 },
+  { id: "30d", label: "30 días", days: 30 },
+  { id: "3m", label: "3 meses", days: 90 },
+  { id: "todo", label: "Todo", days: null },
 ];
 
 function getBookingEstado(booking) {
-  return booking.estado ?? booking.status ?? "pendiente";
+  const estado = booking.estado ?? booking.status ?? "pendiente";
+  if (estado === "cancelada_garantia") return "cancelada";
+  return estado;
 }
 
 function getNetIncome(precioTotal) {
@@ -41,13 +50,50 @@ function formatEuroRounded(value) {
   return `${Math.round(Number(value)).toLocaleString("es-ES")}€`;
 }
 
-function isCurrentMonth(dateStr) {
+function getPeriodDays(period) {
+  const tab = PERIOD_TABS.find((t) => t.id === period);
+  return tab?.days ?? null;
+}
+
+function isInRange(dateStr, start, end) {
   if (!dateStr) return false;
   const d = new Date(dateStr);
-  const now = new Date();
-  return (
-    d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()
-  );
+  return d >= start && d < end;
+}
+
+function filterByPeriod(items, period, dateField = "created_at") {
+  const days = getPeriodDays(period);
+  if (!days) return items;
+  const end = new Date();
+  const start = new Date();
+  start.setDate(end.getDate() - days);
+  return items.filter((item) => isInRange(item[dateField], start, end));
+}
+
+function filterPreviousPeriod(items, period, dateField = "created_at") {
+  const days = getPeriodDays(period);
+  if (!days) return [];
+  const currentEnd = new Date();
+  const currentStart = new Date();
+  currentStart.setDate(currentEnd.getDate() - days);
+  const prevEnd = currentStart;
+  const prevStart = new Date();
+  prevStart.setDate(prevEnd.getDate() - days);
+  return items.filter((item) => isInRange(item[dateField], prevStart, prevEnd));
+}
+
+function calcTrend(current, previous) {
+  if (previous === 0) {
+    if (current === 0) return { label: "Sin cambio", up: null };
+    return { label: "Nuevo", up: true };
+  }
+  const diff = ((current - previous) / previous) * 100;
+  const rounded = Math.round(Math.abs(diff));
+  if (Math.abs(diff) < 0.5) return { label: "Sin cambio", up: null };
+  return {
+    label: `${diff >= 0 ? "↑" : "↓"} ${rounded}% vs período anterior`,
+    up: diff >= 0,
+  };
 }
 
 function getLast6Months() {
@@ -63,36 +109,62 @@ function getLast6Months() {
   return months;
 }
 
-function MetricCard({ label, value, sublabel, valueColor = BRAND.primary }) {
+function MiniNavbar() {
+  return (
+    <nav
+      className="flex items-center justify-between border-b bg-white px-6 py-3"
+      style={{ borderColor: BORDER }}
+    >
+      <Link
+        href="/"
+        className="no-underline"
+        style={{ fontFamily: SERIF, fontSize: 18, fontWeight: 600, color: "#1a1a1a" }}
+      >
+        Home<span style={{ fontStyle: "italic", color: PRIMARY }}>&</span>Heart
+      </Link>
+      <Link href="/dashboard" className="text-sm no-underline" style={{ color: "#666" }}>
+        ← Dashboard
+      </Link>
+    </nav>
+  );
+}
+
+function StatCard({ label, value, sublabel, trend }) {
   return (
     <div
-      className="rounded-2xl border bg-white p-6"
-      style={{ borderColor: BRAND.border }}
+      className="rounded-xl border bg-white p-5"
+      style={{ borderColor: BORDER }}
     >
-      <p className="text-xs font-semibold uppercase tracking-wide text-[#888]">
+      <p className="text-[9px] font-semibold uppercase tracking-widest text-[#bbb]">
         {label}
       </p>
       <p
-        className="mt-3 text-3xl font-bold sm:text-4xl"
-        style={{ color: valueColor }}
+        className="mt-2 text-[26px]"
+        style={{ color: PRIMARY, fontWeight: 200 }}
       >
         {value}
       </p>
-      {sublabel && (
-        <p className="mt-1 text-xs text-[#888]">{sublabel}</p>
+      {sublabel && <p className="mt-1 text-[11px] text-[#888]">{sublabel}</p>}
+      {trend && (
+        <p
+          className="mt-2 text-[10px] font-medium"
+          style={{
+            color: trend.up === null ? "#888" : trend.up ? "#0e7a5c" : "#dc2626",
+          }}
+        >
+          {trend.label}
+        </p>
       )}
     </div>
   );
 }
 
-function StatusBadge({ status }) {
-  const style = STATUS_STYLES[status] ?? STATUS_STYLES.pendiente;
+function Stars({ value, size = 14 }) {
+  const rounded = Math.round(Number(value) || 0);
   return (
-    <span
-      className="inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold"
-      style={{ backgroundColor: style.bg, color: style.color }}
-    >
-      {style.label}
+    <span className="tracking-wide" style={{ color: "#c8922a", fontSize: size }}>
+      {"★".repeat(rounded)}
+      {"☆".repeat(Math.max(0, 5 - rounded))}
     </span>
   );
 }
@@ -100,6 +172,7 @@ function StatusBadge({ status }) {
 export default function EstadisticasPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
+  const [period, setPeriod] = useState("30d");
   const [bookings, setBookings] = useState([]);
   const [services, setServices] = useState([]);
   const [reviews, setReviews] = useState([]);
@@ -129,7 +202,7 @@ export default function EstadisticasPage() {
 
       const { data: servicesData } = await supabase
         .from("services")
-        .select("id, titulo")
+        .select("id, titulo, vertical")
         .eq("proveedor_id", user.id);
 
       const providerServices = servicesData ?? [];
@@ -149,7 +222,7 @@ export default function EstadisticasPage() {
 
       const { data: reviewsData } = await supabase
         .from("reviews")
-        .select("valoracion, service_id")
+        .select("valoracion, service_id, created_at")
         .eq("proveedor_id", user.id);
 
       setReviews(reviewsData ?? []);
@@ -159,70 +232,131 @@ export default function EstadisticasPage() {
     loadStats();
   }, [router]);
 
+  const periodBookings = useMemo(
+    () => filterByPeriod(bookings, period),
+    [bookings, period],
+  );
+
+  const prevPeriodBookings = useMemo(
+    () => filterPreviousPeriod(bookings, period),
+    [bookings, period],
+  );
+
+  const periodReviews = useMemo(
+    () => filterByPeriod(reviews, period),
+    [reviews, period],
+  );
+
+  const prevPeriodReviews = useMemo(
+    () => filterPreviousPeriod(reviews, period),
+    [reviews, period],
+  );
+
   const metrics = useMemo(() => {
-    const completadas = bookings.filter(
+    const completadas = periodBookings.filter(
       (b) => getBookingEstado(b) === "completada",
     );
+    const prevCompletadas = prevPeriodBookings.filter(
+      (b) => getBookingEstado(b) === "completada",
+    );
+
     const ingresosNetos = completadas.reduce(
       (sum, b) => sum + getNetIncome(b.precio_total),
       0,
     );
-    const pendienteDeCobrar = bookings
+    const prevIngresosNetos = prevCompletadas.reduce(
+      (sum, b) => sum + getNetIncome(b.precio_total),
+      0,
+    );
+
+    const pendienteDeCobrar = periodBookings
       .filter((b) => {
         const estado = getBookingEstado(b);
         return estado === "confirmada" || estado === "en_curso";
       })
       .reduce((sum, b) => sum + getNetIncome(b.precio_total), 0);
-    const facturadoEsteMes = completadas
-      .filter((b) => isCurrentMonth(b.created_at))
-      .reduce((sum, b) => sum + getNetIncome(b.precio_total), 0);
-    const totalEstimadoMes = facturadoEsteMes + pendienteDeCobrar;
+
+    const cobrado = ingresosNetos;
+    const totalEstimado = cobrado + pendienteDeCobrar;
     const porcentajeCobrado =
-      totalEstimadoMes > 0
-        ? Math.round((facturadoEsteMes / totalEstimadoMes) * 100)
-        : 0;
+      totalEstimado > 0 ? Math.round((cobrado / totalEstimado) * 100) : 0;
+
     const valoracionMedia =
-      reviews.length > 0
-        ? (
-            reviews.reduce((sum, r) => sum + Number(r.valoracion), 0) /
-            reviews.length
-          ).toFixed(1)
-        : "—";
+      periodReviews.length > 0
+        ? periodReviews.reduce((sum, r) => sum + Number(r.valoracion), 0) /
+          periodReviews.length
+        : null;
+
+    const prevValoracionMedia =
+      prevPeriodReviews.length > 0
+        ? prevPeriodReviews.reduce((sum, r) => sum + Number(r.valoracion), 0) /
+          prevPeriodReviews.length
+        : null;
+
+    const tasaConversion =
+      periodBookings.length > 0
+        ? (completadas.length / periodBookings.length) * 100
+        : 0;
+
+    const prevTasaConversion =
+      prevPeriodBookings.length > 0
+        ? (prevCompletadas.length / prevPeriodBookings.length) * 100
+        : 0;
 
     return {
-      totalReservas: bookings.length,
-      completadas: completadas.length,
       ingresosNetos,
-      pendienteDeCobrar,
-      facturadoEsteMes,
-      totalEstimadoMes,
-      porcentajeCobrado,
+      prevIngresosNetos,
+      totalReservas: periodBookings.length,
+      prevTotalReservas: prevPeriodBookings.length,
       valoracionMedia,
+      prevValoracionMedia,
+      tasaConversion,
+      prevTasaConversion,
+      cobrado,
+      pendienteDeCobrar,
+      totalEstimado,
+      porcentajeCobrado,
+      reviewCount: periodReviews.length,
     };
-  }, [bookings, reviews]);
+  }, [periodBookings, prevPeriodBookings, periodReviews, prevPeriodReviews]);
+
+  const trends = useMemo(() => {
+    const showTrend = period !== "todo";
+    return {
+      ingresos: showTrend
+        ? calcTrend(metrics.ingresosNetos, metrics.prevIngresosNetos)
+        : null,
+      reservas: showTrend
+        ? calcTrend(metrics.totalReservas, metrics.prevTotalReservas)
+        : null,
+      valoracion:
+        showTrend && metrics.valoracionMedia != null && metrics.prevValoracionMedia != null
+          ? calcTrend(metrics.valoracionMedia, metrics.prevValoracionMedia)
+          : showTrend && metrics.valoracionMedia != null && metrics.prevValoracionMedia == null
+            ? { label: "Nuevo", up: true }
+            : null,
+      conversion: showTrend
+        ? calcTrend(metrics.tasaConversion, metrics.prevTasaConversion)
+        : null,
+    };
+  }, [metrics, period]);
 
   const monthlyData = useMemo(() => {
     const months = getLast6Months();
-    const counts = {};
+    const counts = Object.fromEntries(months.map((m) => [m.key, 0]));
 
-    for (const month of months) {
-      counts[month.key] = 0;
-    }
-
-    for (const booking of bookings) {
+    for (const booking of periodBookings) {
       if (!booking.created_at) continue;
       const d = new Date(booking.created_at);
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      if (key in counts) {
-        counts[key] += 1;
-      }
+      if (key in counts) counts[key] += 1;
     }
 
     return months.map((month) => ({
       ...month,
       count: counts[month.key],
     }));
-  }, [bookings]);
+  }, [periodBookings]);
 
   const maxMonthlyCount = useMemo(
     () => Math.max(...monthlyData.map((m) => m.count), 1),
@@ -236,14 +370,14 @@ export default function EstadisticasPage() {
         {
           id: s.id,
           titulo: s.titulo || "Servicio",
+          vertical: s.vertical,
           reservas: 0,
           ingresos: 0,
-          ratings: [],
         },
       ]),
     );
 
-    for (const booking of bookings) {
+    for (const booking of periodBookings) {
       const entry = serviceMap[booking.service_id];
       if (!entry) continue;
       entry.reservas += 1;
@@ -252,236 +386,225 @@ export default function EstadisticasPage() {
       }
     }
 
-    for (const review of reviews) {
-      const entry = serviceMap[review.service_id];
-      if (!entry) continue;
-      entry.ratings.push(Number(review.valoracion));
-    }
-
     return Object.values(serviceMap)
-      .map((entry) => ({
-        ...entry,
-        valoracionMedia:
-          entry.ratings.length > 0
-            ? (
-                entry.ratings.reduce((a, b) => a + b, 0) / entry.ratings.length
-              ).toFixed(1)
-            : "—",
-      }))
+      .filter((s) => s.reservas > 0)
       .sort((a, b) => b.reservas - a.reservas);
-  }, [services, bookings, reviews]);
+  }, [services, periodBookings]);
 
   const statusCounts = useMemo(() => {
     const counts = Object.fromEntries(STATUS_ORDER.map((s) => [s, 0]));
-    for (const booking of bookings) {
+    for (const booking of periodBookings) {
       const estado = getBookingEstado(booking);
-      if (estado in counts) {
-        counts[estado] += 1;
-      }
+      if (estado in counts) counts[estado] += 1;
     }
     return counts;
-  }, [bookings]);
+  }, [periodBookings]);
+
+  const ratingDistribution = useMemo(() => {
+    const dist = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+    for (const review of periodReviews) {
+      const star = Math.round(Number(review.valoracion));
+      if (star >= 1 && star <= 5) dist[star] += 1;
+    }
+    const max = Math.max(...Object.values(dist), 1);
+    return { dist, max };
+  }, [periodReviews]);
 
   if (loading) {
     return (
-      <div
-        className="min-h-screen font-sans"
-        style={{ backgroundColor: BRAND.warm }}
-      >
-        <Navbar />
-        <main className="mx-auto max-w-5xl px-4 py-16 text-center text-sm text-[#666]">
+      <div className="min-h-screen font-sans" style={{ backgroundColor: BRAND.warm }}>
+        <MiniNavbar />
+        <main className="px-6 py-16 text-center text-sm text-[#666]">
           Cargando estadísticas…
         </main>
       </div>
     );
   }
 
+  const valoracionDisplay =
+    metrics.valoracionMedia != null
+      ? metrics.valoracionMedia.toFixed(1)
+      : "—";
+
   return (
     <div
       className="min-h-screen font-sans"
       style={{ backgroundColor: BRAND.warm, color: "#1a1a1a" }}
     >
-      <Navbar />
+      <MiniNavbar />
 
-      <header
-        className="px-4 py-6 text-white sm:px-6"
-        style={{ backgroundColor: BRAND.primary }}
-      >
+      <header className="border-b bg-white px-6 py-6" style={{ borderColor: BORDER }}>
         <div className="mx-auto max-w-5xl">
-          <Link
-            href="/dashboard"
-            className="text-sm text-white/80 no-underline transition-opacity hover:opacity-100"
-          >
-            ← Volver al dashboard
-          </Link>
           <h1
-            className="mt-2 text-xl font-semibold sm:text-2xl"
-            style={{ fontFamily: SERIF }}
+            className="text-[22px] text-[#1a1a1a]"
+            style={{ fontFamily: SERIF, fontWeight: 300 }}
           >
-            Estadísticas
+            Mis estadísticas
           </h1>
-          <p className="mt-1 text-sm text-white/80">
-            Resumen de tu actividad como proveedor
+          <p className="mt-1 text-sm text-[#888]">
+            Panel de rendimiento · Proveedor verificado
           </p>
         </div>
       </header>
 
-      <main className="mx-auto max-w-5xl space-y-6 px-4 py-8 sm:px-6">
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <MetricCard
-            label="Total reservas recibidas"
-            value={metrics.totalReservas}
-          />
-          <MetricCard
-            label="Reservas completadas"
-            value={metrics.completadas}
-          />
-          <MetricCard
-            label="Ingresos netos totales"
+      <div
+        className="border-b bg-white px-6 py-4"
+        style={{ borderColor: BORDER }}
+      >
+        <div className="mx-auto flex flex-wrap gap-2 max-w-5xl">
+          {PERIOD_TABS.map((tab) => {
+            const isActive = period === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setPeriod(tab.id)}
+                className="rounded-full px-4 py-1.5 text-xs font-medium transition-colors"
+                style={{
+                  backgroundColor: isActive ? PRIMARY : "#fff",
+                  color: isActive ? "#fff" : "#666",
+                  border: isActive ? `1px solid ${PRIMARY}` : `1px solid ${BORDER}`,
+                }}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <main className="mx-auto max-w-5xl space-y-5 px-6 py-6">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard
+            label="Ingresos netos"
             value={formatEuro(metrics.ingresosNetos)}
-            sublabel="Tras comisiones"
+            sublabel="Tras comisiones (IVA incl.)"
+            trend={trends.ingresos}
           />
-          <MetricCard
+          <StatCard
+            label="Reservas recibidas"
+            value={metrics.totalReservas}
+            sublabel="En el período seleccionado"
+            trend={trends.reservas}
+          />
+          <StatCard
             label="Valoración media"
-            value={
-              metrics.valoracionMedia === "—"
-                ? "—"
-                : `${metrics.valoracionMedia} ★`
-            }
+            value={valoracionDisplay === "—" ? "—" : `${valoracionDisplay} ★`}
             sublabel={
-              reviews.length > 0
-                ? `${reviews.length} valoración${reviews.length > 1 ? "es" : ""}`
+              metrics.reviewCount > 0
+                ? `${metrics.reviewCount} valoración${metrics.reviewCount > 1 ? "es" : ""}`
                 : "Sin valoraciones"
             }
+            trend={trends.valoracion}
           />
-          <MetricCard
-            label="Pendiente de cobrar"
-            value={formatEuro(metrics.pendienteDeCobrar)}
-            sublabel="Reservas activas en curso"
-            valueColor="#c47d1a"
-          />
-          <MetricCard
-            label="Total facturado este mes"
-            value={formatEuro(metrics.facturadoEsteMes)}
-            sublabel="Mes en curso"
-            valueColor="#0e7a5c"
+          <StatCard
+            label="Tasa de conversión"
+            value={`${metrics.tasaConversion.toFixed(0)}%`}
+            sublabel="Completadas / total reservas"
+            trend={trends.conversion}
           />
         </div>
 
-        <section
-          className="rounded-2xl border bg-white p-6"
-          style={{ borderColor: BRAND.border }}
+        <div
+          className="rounded-xl px-6 py-5 text-white"
+          style={{ backgroundColor: PRIMARY }}
         >
-          <h2
-            className="text-lg font-semibold text-[#1a1a1a]"
-            style={{ fontFamily: SERIF }}
-          >
-            Reservas por mes
-          </h2>
-          <p className="mt-1 text-xs text-[#888]">Últimos 6 meses</p>
+          <div className="flex flex-wrap items-center gap-4 text-sm">
+            <div>
+              <p className="text-[10px] uppercase tracking-widest text-white/60">Cobrado</p>
+              <p className="mt-0.5 text-lg font-medium">{formatEuroRounded(metrics.cobrado)}</p>
+            </div>
+            <div className="hidden h-8 w-px bg-white/20 sm:block" />
+            <div>
+              <p className="text-[10px] uppercase tracking-widest text-white/60">Pendiente de cobrar</p>
+              <p className="mt-0.5 text-lg font-medium">{formatEuroRounded(metrics.pendienteDeCobrar)}</p>
+            </div>
+          </div>
 
-          <div className="mt-6 grid grid-cols-6 gap-2 sm:gap-4">
+          <div className="mt-4">
+            <div
+              className="h-2 overflow-hidden rounded-full"
+              style={{ backgroundColor: "rgba(255,255,255,0.15)" }}
+            >
+              <div
+                className="h-full rounded-full transition-all duration-500"
+                style={{
+                  width: `${metrics.porcentajeCobrado}%`,
+                  backgroundColor: "#fff",
+                }}
+              />
+            </div>
+            <p className="mt-2 text-xs text-white/70">
+              Total estimado:{" "}
+              <span className="font-semibold text-white">
+                {formatEuroRounded(metrics.totalEstimado)}
+              </span>
+              {" · "}
+              {metrics.porcentajeCobrado}% cobrado
+            </p>
+          </div>
+        </div>
+
+        <section
+          className="rounded-xl border bg-white p-5"
+          style={{ borderColor: BORDER }}
+        >
+          <h2 className="text-sm font-semibold text-[#1a1a1a]">Reservas por mes</h2>
+          <p className="mt-0.5 text-[10px] text-[#888]">Últimos 6 meses</p>
+
+          <div className="mt-5 grid grid-cols-6 gap-2 sm:gap-3">
             {monthlyData.map((month) => {
               const heightPct = (month.count / maxMonthlyCount) * 100;
               return (
                 <div key={month.key} className="flex flex-col items-center">
                   <span
-                    className="text-sm font-bold"
-                    style={{ color: BRAND.primary }}
+                    className="text-xs font-medium"
+                    style={{ color: PRIMARY }}
                   >
                     {month.count}
                   </span>
-                  <div className="mt-2 flex h-36 w-full items-end justify-center sm:h-40">
+                  <div className="mt-1 flex h-28 w-full items-end justify-center sm:h-32">
                     <div
-                      className="w-full max-w-12 rounded-t-lg transition-all"
+                      className="w-full max-w-10 rounded-t"
                       style={{
-                        height: `${Math.max(heightPct, month.count > 0 ? 12 : 4)}%`,
-                        minHeight: month.count > 0 ? "12px" : "4px",
-                        backgroundColor: "#1d4f91",
+                        height: `${Math.max(heightPct, month.count > 0 ? 10 : 3)}%`,
+                        minHeight: month.count > 0 ? 10 : 3,
+                        backgroundColor: PRIMARY,
                       }}
                     />
                   </div>
-                  <span className="mt-2 text-center text-[10px] capitalize text-[#888] sm:text-xs">
+                  <span className="mt-1.5 text-center text-[10px] capitalize text-[#888]">
                     {month.label}
                   </span>
                 </div>
               );
             })}
           </div>
-
-          <div
-            className="mt-8 rounded-xl border p-5"
-            style={{ borderColor: BRAND.border, backgroundColor: BRAND.warm }}
-          >
-            <h3
-              className="text-base font-semibold text-[#1a1a1a]"
-              style={{ fontFamily: SERIF }}
-            >
-              Proyección de ingresos
-            </h3>
-            <p className="mt-2 text-sm leading-relaxed text-[#444]">
-              <span className="font-semibold" style={{ color: "#0e7a5c" }}>
-                {formatEuroRounded(metrics.facturadoEsteMes)} cobrados
-              </span>
-              {" + "}
-              <span className="font-semibold" style={{ color: "#c47d1a" }}>
-                {formatEuroRounded(metrics.pendienteDeCobrar)} pendientes
-              </span>
-              {" = "}
-              <span className="font-semibold" style={{ color: BRAND.primary }}>
-                {formatEuroRounded(metrics.totalEstimadoMes)} estimados este mes
-              </span>
-            </p>
-            <div className="mt-4">
-              <div className="flex items-center justify-between text-xs text-[#888]">
-                <span>Progreso de cobro</span>
-                <span className="font-semibold" style={{ color: BRAND.primary }}>
-                  {metrics.porcentajeCobrado}%
-                </span>
-              </div>
-              <div
-                className="mt-2 h-3 overflow-hidden rounded-full"
-                style={{ backgroundColor: "#e8e4de" }}
-              >
-                <div
-                  className="h-full rounded-full transition-all duration-500"
-                  style={{
-                    width: `${metrics.porcentajeCobrado}%`,
-                    backgroundColor: "#0e7a5c",
-                  }}
-                />
-              </div>
-            </div>
-          </div>
         </section>
 
         <section
-          className="rounded-2xl border bg-white p-6"
-          style={{ borderColor: BRAND.border }}
+          className="rounded-xl border bg-white p-5"
+          style={{ borderColor: BORDER }}
         >
-          <h2
-            className="text-lg font-semibold text-[#1a1a1a]"
-            style={{ fontFamily: SERIF }}
-          >
+          <h2 className="text-sm font-semibold text-[#1a1a1a]">
             Servicios más reservados
           </h2>
 
           {servicesStats.length === 0 ? (
             <p className="mt-4 text-sm text-[#666]">
-              Aún no tienes servicios publicados.
+              Aún no tienes reservas en este período.
             </p>
           ) : (
             <div className="mt-4 overflow-x-auto">
-              <table className="w-full min-w-[560px] text-left text-sm">
+              <table className="w-full min-w-[400px] text-left text-sm">
                 <thead>
                   <tr
-                    className="border-b text-xs font-semibold uppercase tracking-wide text-[#888]"
-                    style={{ borderColor: BRAND.border }}
+                    className="border-b text-[10px] font-semibold uppercase tracking-wide text-[#bbb]"
+                    style={{ borderColor: BORDER }}
                   >
-                    <th className="px-3 py-3">Servicio</th>
-                    <th className="px-3 py-3 text-right">Reservas</th>
-                    <th className="px-3 py-3 text-right">Ingresos</th>
-                    <th className="px-3 py-3 text-right">Valoración</th>
+                    <th className="px-2 py-2">Servicio</th>
+                    <th className="px-2 py-2 text-right">Reservas</th>
+                    <th className="px-2 py-2 text-right">Ingresos</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -489,24 +612,30 @@ export default function EstadisticasPage() {
                     <tr
                       key={service.id}
                       className="border-b last:border-b-0"
-                      style={{ borderColor: BRAND.border }}
+                      style={{ borderColor: BORDER }}
                     >
-                      <td className="px-3 py-3 font-medium text-[#1a1a1a]">
-                        {service.titulo}
+                      <td className="px-2 py-3">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className="h-2 w-2 shrink-0 rounded-full"
+                            style={{
+                              backgroundColor:
+                                VERTICAL_COLORS[service.vertical] || PRIMARY,
+                            }}
+                          />
+                          <span className="font-medium text-[#1a1a1a]">
+                            {service.titulo}
+                          </span>
+                        </div>
                       </td>
                       <td
-                        className="px-3 py-3 text-right font-semibold"
-                        style={{ color: BRAND.primary }}
+                        className="px-2 py-3 text-right font-medium"
+                        style={{ color: PRIMARY }}
                       >
                         {service.reservas}
                       </td>
-                      <td className="px-3 py-3 text-right text-[#444]">
+                      <td className="px-2 py-3 text-right text-[#444]">
                         {formatEuro(service.ingresos)}
-                      </td>
-                      <td className="px-3 py-3 text-right text-[#444]">
-                        {service.valoracionMedia === "—"
-                          ? "—"
-                          : `${service.valoracionMedia} ★`}
                       </td>
                     </tr>
                   ))}
@@ -516,48 +645,94 @@ export default function EstadisticasPage() {
           )}
         </section>
 
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="grid gap-4 lg:grid-cols-3">
           <section
-            className="rounded-2xl border bg-white p-6"
-            style={{ borderColor: BRAND.border }}
+            className="rounded-xl border bg-white p-5"
+            style={{ borderColor: BORDER }}
           >
-            <h2
-              className="text-lg font-semibold text-[#1a1a1a]"
-              style={{ fontFamily: SERIF }}
-            >
-              Resumen por estado
-            </h2>
-            <ul className="mt-4 flex flex-col gap-3">
-              {STATUS_ORDER.map((status) => (
-                <li
-                  key={status}
-                  className="flex items-center justify-between rounded-xl border px-4 py-3"
-                  style={{ borderColor: BRAND.border }}
-                >
-                  <StatusBadge status={status} />
-                  <span
-                    className="text-xl font-bold"
-                    style={{ color: BRAND.primary }}
+            <h2 className="text-sm font-semibold text-[#1a1a1a]">Por estado</h2>
+            <ul className="mt-4 flex flex-col gap-2.5">
+              {STATUS_ORDER.map((status) => {
+                const meta = STATUS_META[status];
+                return (
+                  <li
+                    key={status}
+                    className="flex items-center justify-between"
                   >
-                    {statusCounts[status]}
-                  </span>
-                </li>
-              ))}
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="h-2 w-2 rounded-full"
+                        style={{ backgroundColor: meta.color }}
+                      />
+                      <span className="text-sm text-[#444]">{meta.label}</span>
+                    </div>
+                    <span
+                      className="text-lg font-medium"
+                      style={{ color: PRIMARY, fontWeight: 200 }}
+                    >
+                      {statusCounts[status]}
+                    </span>
+                  </li>
+                );
+              })}
             </ul>
           </section>
 
           <section
-            className="rounded-2xl border bg-white p-6"
-            style={{ borderColor: BRAND.border }}
+            className="rounded-xl border bg-white p-5"
+            style={{ borderColor: BORDER }}
           >
-            <h2
-              className="text-lg font-semibold text-[#1a1a1a]"
-              style={{ fontFamily: SERIF }}
-            >
-              Visitas al perfil
-            </h2>
-            <p className="mt-4 rounded-xl bg-[#f7f5f2] px-4 py-6 text-center text-sm leading-relaxed text-[#666]">
-              Las estadísticas de visitas estarán disponibles próximamente.
+            <h2 className="text-sm font-semibold text-[#1a1a1a]">Valoraciones</h2>
+            {periodReviews.length === 0 ? (
+              <p className="mt-4 text-sm text-[#666]">Sin valoraciones aún.</p>
+            ) : (
+              <div className="mt-4">
+                <p
+                  className="text-[32px]"
+                  style={{ color: PRIMARY, fontWeight: 200 }}
+                >
+                  {valoracionDisplay}
+                </p>
+                <Stars value={metrics.valoracionMedia} size={16} />
+                <ul className="mt-4 flex flex-col gap-2">
+                  {[5, 4, 3, 2, 1].map((star) => {
+                    const count = ratingDistribution.dist[star];
+                    const widthPct = (count / ratingDistribution.max) * 100;
+                    return (
+                      <li key={star} className="flex items-center gap-2">
+                        <span className="w-3 text-[10px] text-[#888]">{star}</span>
+                        <span className="text-[10px] text-[#c8922a]">★</span>
+                        <div
+                          className="h-1.5 flex-1 overflow-hidden rounded-full"
+                          style={{ backgroundColor: "#f0ede8" }}
+                        >
+                          <div
+                            className="h-full rounded-full"
+                            style={{
+                              width: `${widthPct}%`,
+                              backgroundColor: PRIMARY,
+                              minWidth: count > 0 ? 4 : 0,
+                            }}
+                          />
+                        </div>
+                        <span className="w-4 text-right text-[10px] text-[#888]">
+                          {count}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
+          </section>
+
+          <section
+            className="rounded-xl border bg-white p-5"
+            style={{ borderColor: BORDER }}
+          >
+            <h2 className="text-sm font-semibold text-[#1a1a1a]">Visitas</h2>
+            <p className="mt-6 rounded-lg bg-[#f7f5f2] px-4 py-8 text-center text-sm text-[#888]">
+              Próximamente
             </p>
           </section>
         </div>
