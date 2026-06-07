@@ -304,6 +304,12 @@ export default function AdminPage() {
     // -- ALTER TABLE blog_posts ENABLE ROW LEVEL SECURITY;
     // -- CREATE POLICY "Lectura publica posts publicados" ON blog_posts FOR SELECT USING (publicado = true);
     // -- CREATE POLICY "Admin gestiona posts" ON blog_posts FOR ALL USING (true);
+    // -- CREATE TABLE email_logs (
+    // --   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    // --   user_id uuid REFERENCES profiles(id),
+    // --   tipo text NOT NULL,
+    // --   enviado_at timestamp with time zone DEFAULT now()
+    // -- );
     const { data: profiles, error: profilesError } = await supabase
       .from("profiles")
       .select("*")
@@ -510,6 +516,8 @@ export default function AdminPage() {
     setActionLoading(providerId);
     setErrorMessage("");
 
+    const proveedor = providers.find((p) => p.id === providerId);
+
     const { error } = await supabase
       .from("profiles")
       .update({ verificado: true, rechazado: false })
@@ -520,6 +528,19 @@ export default function AdminPage() {
     if (error) {
       setErrorMessage(error.message);
       return;
+    }
+
+    if (proveedor?.email_contacto) {
+      await fetch("/api/emails", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tipo: "proveedor_verificado",
+          email: proveedor.email_contacto,
+          nombre: proveedor.nombre,
+          user_id: providerId,
+        }),
+      });
     }
 
     setRejectingId(null);

@@ -1,11 +1,359 @@
 import { createClient } from "@supabase/supabase-js";
 import { Resend } from "resend";
+import { sequences } from "@/app/lib/email-sequences";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 const FROM = "soporte@homeandheart.es";
 const BRAND_PRIMARY = "#1d4f91";
 const BRAND_LIGHT = "#e8f0fb";
+const BRAND_DARK = "#163a6b";
+const BRAND_GREEN = "#0e7a5c";
+const BRAND_WARM = "#f7f5f2";
+const BRAND_BORDER = "#e8e4de";
+const BASE_URL = process.env.NEXT_PUBLIC_URL || "https://homeandheart.es";
+
+function marketingFooter() {
+  return `<div style="margin-top:32px;padding-top:20px;border-top:1px solid ${BRAND_BORDER};text-align:center;">
+    <p style="margin:0;font-size:11px;color:#999;line-height:1.6;">
+      <a href="${BASE_URL}/legal/privacidad" style="color:#999;text-decoration:none;">Privacidad</a> ·
+      <a href="${BASE_URL}/legal/terminos" style="color:#999;text-decoration:none;">Términos</a> ·
+      <a href="${BASE_URL}/legal/cookies" style="color:#999;text-decoration:none;">Cookies</a>
+    </p>
+    <p style="margin:8px 0 0;font-size:11px;color:#bbb;">
+      <a href="${BASE_URL}/editar-perfil" style="color:#bbb;text-decoration:none;">Darse de baja</a>
+    </p>
+    <p style="margin:12px 0 0;font-size:11px;color:#bbb;">Home&amp;Heart · Donde estés, estamos.</p>
+  </div>`;
+}
+
+function ctaButton(href, label) {
+  return `<p style="margin:28px 0 0;text-align:center;">
+    <a href="${href}" style="display:inline-block;background:${BRAND_PRIMARY};color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:12px 24px;border-radius:6px;">${label}</a>
+  </p>`;
+}
+
+function marketingEmailLayout({ title, headerHtml, bodyHtml, headerBg }) {
+  const headerStyle =
+    headerBg ||
+    `background:linear-gradient(160deg, ${BRAND_PRIMARY} 0%, ${BRAND_DARK} 100%);`;
+
+  return `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${title}</title>
+</head>
+<body style="margin:0;padding:0;background-color:${BRAND_WARM};font-family:Georgia,'Times New Roman',Times,serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:${BRAND_WARM};padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;background-color:#ffffff;border-radius:12px;border:1px solid ${BRAND_BORDER};overflow:hidden;">
+          <tr>
+            <td style="${headerStyle}padding:28px 32px;text-align:center;">
+              <p style="margin:0 0 8px;font-size:22px;font-weight:600;color:#ffffff;letter-spacing:-0.02em;">
+                Home<span style="font-style:italic;">&amp;</span>Heart
+              </p>
+              ${headerHtml || ""}
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:32px;">
+              ${bodyHtml}
+              ${marketingFooter()}
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
+function cardBlock({ emoji, title, text, href }) {
+  const linkStart = href ? `<a href="${href}" style="text-decoration:none;color:inherit;">` : "";
+  const linkEnd = href ? "</a>" : "";
+  return `<div style="margin:12px 0;padding:16px 18px;background:${BRAND_WARM};border:1px solid ${BRAND_BORDER};border-radius:8px;">
+    ${linkStart}
+    <p style="margin:0;font-size:20px;">${emoji}</p>
+    <p style="margin:8px 0 0;font-size:15px;font-weight:600;color:#1a1a1a;font-family:Georgia,serif;">${title}</p>
+    <p style="margin:6px 0 0;font-size:14px;color:#444;line-height:1.7;">${text}</p>
+    ${linkEnd}
+  </div>`;
+}
+
+function clienteBienvenidaHtml(data) {
+  const nombre = data.nombre || "familia";
+  return marketingEmailLayout({
+    title: sequences.cliente_bienvenida.asunto,
+    bodyHtml: `
+      <h1 style="margin:0;font-size:24px;font-weight:400;color:#1a1a1a;font-family:Georgia,serif;">Bienvenida, ${nombre}</h1>
+      <p style="margin:16px 0 0;font-size:14px;color:#444;line-height:1.7;">
+        Gracias por unirte a Home&amp;Heart. Aquí encontrarás proveedores verificados para lo que necesites, con garantía y confianza humana.
+      </p>
+      ${cardBlock({
+        emoji: "🔍",
+        title: "Buscar proveedores",
+        text: "Explora niñeras, alojamiento y cuidadores de mascotas cerca de ti.",
+        href: `${BASE_URL}/buscar`,
+      })}
+      ${cardBlock({
+        emoji: "👨‍👩‍👧",
+        title: "Crear grupo familiar",
+        text: "Invita a tu familia y gestionad reservas juntos.",
+        href: `${BASE_URL}/familia`,
+      })}
+      ${cardBlock({
+        emoji: "🛡️",
+        title: "Ver garantía",
+        text: "Conoce la Garantía Home&Heart: pago retenido y alternativas si algo falla.",
+        href: `${BASE_URL}/garantia`,
+      })}
+      ${ctaButton(`${BASE_URL}/buscar`, "Empezar a explorar")}`,
+  });
+}
+
+function clienteActivacionHtml() {
+  return marketingEmailLayout({
+    title: sequences.cliente_activacion.asunto,
+    headerHtml: `<p style="margin:0;font-size:14px;color:rgba(255,255,255,0.85);">¿Qué necesitas?</p>`,
+    bodyHtml: `
+      <h1 style="margin:0;font-size:22px;font-weight:400;color:#1a1a1a;font-family:Georgia,serif;text-align:center;">¿Qué necesitas hoy?</h1>
+      <p style="margin:16px 0 0;font-size:14px;color:#444;line-height:1.7;text-align:center;">
+        Miles de familias ya confían en proveedores verificados de Home&amp;Heart.
+      </p>
+      <div style="margin:20px 0 0;">
+        <div style="margin:12px 0;padding:18px;background:${BRAND_WARM};border:1px solid ${BRAND_BORDER};border-radius:8px;">
+          <p style="margin:0;font-size:18px;">🏠</p>
+          <p style="margin:8px 0 0;font-size:16px;font-weight:600;color:#1a1a1a;font-family:Georgia,serif;">Alojamiento</p>
+          <p style="margin:6px 0 0;font-size:14px;color:#444;line-height:1.7;">Desde <strong style="color:${BRAND_PRIMARY};">35€/noche</strong> · Casas y apartamentos verificados</p>
+        </div>
+        <div style="margin:12px 0;padding:18px;background:${BRAND_WARM};border:1px solid ${BRAND_BORDER};border-radius:8px;">
+          <p style="margin:0;font-size:18px;">👶</p>
+          <p style="margin:8px 0 0;font-size:16px;font-weight:600;color:#1a1a1a;font-family:Georgia,serif;">Niñera</p>
+          <p style="margin:6px 0 0;font-size:14px;color:#444;line-height:1.7;">Desde <strong style="color:${BRAND_PRIMARY};">12€/hora</strong> · Cuidado infantil de confianza</p>
+        </div>
+        <div style="margin:12px 0;padding:18px;background:${BRAND_WARM};border:1px solid ${BRAND_BORDER};border-radius:8px;">
+          <p style="margin:0;font-size:18px;">🐾</p>
+          <p style="margin:8px 0 0;font-size:16px;font-weight:600;color:#1a1a1a;font-family:Georgia,serif;">Mascotas</p>
+          <p style="margin:6px 0 0;font-size:14px;color:#444;line-height:1.7;">Desde <strong style="color:${BRAND_PRIMARY};">15€/día</strong> · Paseos, cuidado y hospedaje</p>
+        </div>
+      </div>
+      ${ctaButton(`${BASE_URL}/buscar`, "Ver proveedores disponibles")}`,
+  });
+}
+
+function clientePrimeraReservaHtml(data) {
+  const nombre = data.nombre || "familia";
+  return marketingEmailLayout({
+    title: sequences.cliente_primera_reserva.asunto,
+    bodyHtml: `
+      <h1 style="margin:0;font-size:22px;font-weight:400;color:#1a1a1a;font-family:Georgia,serif;text-align:center;">Tu primera reserva está protegida</h1>
+      <p style="margin:16px 0 0;font-size:14px;color:#444;line-height:1.7;">
+        Hola <strong>${nombre}</strong>, aún no has hecho tu primera reserva. En Home&amp;Heart tu pago queda <strong>retenido de forma segura</strong> hasta que el servicio se complete.
+      </p>
+      <div style="margin:20px 0 0;padding:18px;background:${BRAND_LIGHT};border-radius:8px;">
+        <p style="margin:0;font-size:14px;color:#444;line-height:1.7;">
+          <strong>🛡️ Garantía 30 min:</strong> si el proveedor cancela con menos de 24h, te buscamos alternativas al mismo precio.
+        </p>
+        <p style="margin:12px 0 0;font-size:14px;color:#444;line-height:1.7;">
+          <strong>💳 Pago retenido:</strong> el dinero solo se libera cuando confirmas que todo fue bien.
+        </p>
+      </div>
+      ${ctaButton(`${BASE_URL}/buscar`, "Hacer mi primera reserva")}`,
+  });
+}
+
+function proveedorCardHtml(prov) {
+  const fotoBlock = prov.foto_url
+    ? `<img src="${prov.foto_url}" alt="" width="56" height="56" style="border-radius:50%;object-fit:cover;display:block;" />`
+    : `<div style="width:56px;height:56px;border-radius:50%;background:linear-gradient(160deg,${BRAND_PRIMARY},${BRAND_DARK});display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;font-weight:600;">${(prov.nombre || "P")[0]}</div>`;
+
+  return `<div style="margin:12px 0;padding:14px;border:1px solid ${BRAND_BORDER};border-radius:8px;background:#fff;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+      <tr>
+        <td width="64" valign="top">${fotoBlock}</td>
+        <td valign="top" style="padding-left:12px;">
+          <p style="margin:0;font-size:15px;font-weight:600;color:#1a1a1a;">${prov.nombre || "Proveedor"}</p>
+          <p style="margin:4px 0 0;font-size:13px;color:#666;">${prov.titulo || prov.vertical || "Servicio verificado"}</p>
+          <p style="margin:6px 0 0;font-size:14px;font-weight:700;color:${BRAND_PRIMARY};">${prov.precio_label || (prov.precio != null ? `${prov.precio}€` : "Consultar")}</p>
+        </td>
+      </tr>
+    </table>
+  </div>`;
+}
+
+function clienteReactivacionHtml(data) {
+  const nombre = data.nombre || "familia";
+  const nuevos = data.nuevos_proveedores ?? 12;
+  const proveedores = Array.isArray(data.proveedores) ? data.proveedores.slice(0, 3) : [];
+  const cardsHtml =
+    proveedores.length > 0
+      ? proveedores.map(proveedorCardHtml).join("")
+      : `<p style="margin:16px 0 0;font-size:14px;color:#666;">Nuevos proveedores verificados te esperan en Home&amp;Heart.</p>`;
+
+  return marketingEmailLayout({
+    title: sequences.cliente_reactivacion.asunto,
+    bodyHtml: `
+      <h1 style="margin:0;font-size:22px;font-weight:400;color:#1a1a1a;font-family:Georgia,serif;">Te echamos de menos, ${nombre} 👋</h1>
+      <p style="margin:16px 0 0;font-size:14px;color:#444;line-height:1.7;">
+        Hay <strong>${nuevos} nuevos proveedores verificados</strong> desde tu última visita. Estos son algunos destacados:
+      </p>
+      ${cardsHtml}
+      ${ctaButton(`${BASE_URL}/buscar`, "Volver a explorar")}`,
+  });
+}
+
+function proveedorBienvenidaHtml(data) {
+  const nombre = data.nombre || "proveedor";
+  const docs = Array.isArray(data.documentos_pendientes)
+    ? data.documentos_pendientes
+    : [
+        "DNI o NIE vigente",
+        "Certificado de antecedentes penales",
+        "Certificado de delitos de naturaleza sexual",
+        "Foto de perfil real y reciente",
+      ];
+  const checklistHtml = docs
+    .map(
+      (doc) =>
+        `<li style="margin:8px 0;font-size:14px;color:#444;line-height:1.6;">☐ ${doc}</li>`,
+    )
+    .join("");
+
+  return marketingEmailLayout({
+    title: sequences.proveedor_bienvenida.asunto,
+    bodyHtml: `
+      <h1 style="margin:0;font-size:22px;font-weight:400;color:#1a1a1a;font-family:Georgia,serif;">Tu perfil está en revisión</h1>
+      <p style="margin:16px 0 0;font-size:14px;color:#444;line-height:1.7;">
+        Hola <strong>${nombre}</strong>, hemos recibido tu solicitud. Nuestro equipo revisará tu documentación antes de activar tu perfil.
+      </p>
+      <div style="margin:24px 0 0;padding:18px;background:${BRAND_WARM};border-radius:8px;">
+        <p style="margin:0 0 12px;font-size:13px;font-weight:600;color:${BRAND_PRIMARY};text-transform:uppercase;letter-spacing:0.06em;">Tu timeline</p>
+        <p style="margin:6px 0;font-size:14px;color:#444;"><strong style="color:${BRAND_PRIMARY};">●</strong> En revisión <span style="color:#888;">← Estás aquí</span></p>
+        <p style="margin:6px 0;font-size:14px;color:#888;">○ Verificado</p>
+        <p style="margin:6px 0;font-size:14px;color:#888;">○ ¡Activo!</p>
+      </div>
+      <p style="margin:24px 0 0;font-size:14px;color:#444;line-height:1.7;">
+        <strong>Mientras tanto:</strong> completa tu perfil al 100% para acelerar la revisión.
+      </p>
+      <ul style="margin:12px 0 0;padding-left:20px;">${checklistHtml}</ul>
+      ${ctaButton(`${BASE_URL}/editar-perfil`, "Completar mi perfil")}`,
+  });
+}
+
+function proveedorVerificadoHtml(data) {
+  const nombre = data.nombre || "proveedor";
+  return marketingEmailLayout({
+    title: sequences.proveedor_verificado.asunto,
+    headerHtml: `<p style="margin:0;font-size:28px;">🎉</p>`,
+    headerBg: `background:linear-gradient(160deg, ${BRAND_GREEN} 0%, #0a5c45 100%);`,
+    bodyHtml: `
+      <h1 style="margin:0;font-size:22px;font-weight:400;color:#1a1a1a;font-family:Georgia,serif;text-align:center;">¡Bienvenido a la comunidad!</h1>
+      <p style="margin:16px 0 0;font-size:14px;color:#444;line-height:1.7;text-align:center;">
+        Hola <strong>${nombre}</strong>, tu perfil ya está <strong>activo</strong> y visible para las familias.
+      </p>
+      <p style="margin:20px 0 0;text-align:center;">
+        <span style="display:inline-block;background:#e6f4f0;color:${BRAND_GREEN};font-size:13px;font-weight:700;padding:10px 18px;border-radius:20px;">
+          Tus primeras 3 reservas son SIN comisión
+        </span>
+      </p>
+      <div style="margin:24px 0 0;padding:18px;background:${BRAND_WARM};border-radius:8px;">
+        <p style="margin:0 0 10px;font-size:14px;font-weight:600;color:#1a1a1a;">Consejos para tu primera reserva</p>
+        <p style="margin:6px 0;font-size:14px;color:#444;line-height:1.7;">✓ Responde rápido a los mensajes</p>
+        <p style="margin:6px 0;font-size:14px;color:#444;line-height:1.7;">✓ Mantén tu calendario actualizado</p>
+        <p style="margin:6px 0;font-size:14px;color:#444;line-height:1.7;">✓ Pide referencias a clientes satisfechos</p>
+      </div>
+      ${ctaButton(`${BASE_URL}/proveedor/${data.user_id || data.proveedor_id || ""}`, "Ver mi perfil público")}`,
+  });
+}
+
+function proveedorSinActividadHtml(data) {
+  const nombre = data.nombre || "proveedor";
+  const consejos = [
+    "Sube una foto de perfil clara y cercana",
+    "Escribe una descripción personal y detallada",
+    "Revisa que tu precio sea competitivo en tu zona",
+    "Pide referencias a familias que ya te conocen",
+    "Activa la garantía de emergencia en tu perfil",
+  ];
+  const consejosHtml = consejos
+    .map(
+      (c, i) =>
+        `<p style="margin:10px 0;font-size:14px;color:#444;line-height:1.7;"><strong style="color:${BRAND_PRIMARY};">${i + 1}.</strong> ${c}</p>`,
+    )
+    .join("");
+
+  return marketingEmailLayout({
+    title: sequences.proveedor_sin_actividad.asunto,
+    bodyHtml: `
+      <h1 style="margin:0;font-size:22px;font-weight:400;color:#1a1a1a;font-family:Georgia,serif;">Llevas 7 días sin reservas</h1>
+      <p style="margin:16px 0 0;font-size:14px;color:#444;line-height:1.7;">
+        Hola <strong>${nombre}</strong>, tu perfil está activo pero aún no has recibido reservas. Estos consejos pueden ayudarte:
+      </p>
+      <div style="margin:20px 0 0;padding:18px;background:${BRAND_WARM};border-radius:8px;">
+        ${consejosHtml}
+      </div>
+      ${ctaButton(`${BASE_URL}/editar-perfil`, "Mejorar mi perfil")}`,
+  });
+}
+
+const MARKETING_HTML_BUILDERS = {
+  cliente_bienvenida: clienteBienvenidaHtml,
+  cliente_activacion: clienteActivacionHtml,
+  cliente_primera_reserva: clientePrimeraReservaHtml,
+  cliente_reactivacion: clienteReactivacionHtml,
+  proveedor_bienvenida: proveedorBienvenidaHtml,
+  proveedor_verificado: proveedorVerificadoHtml,
+  proveedor_sin_actividad: proveedorSinActividadHtml,
+};
+
+async function logMarketingEmail(userId, tipo) {
+  if (!userId || !process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return;
+  }
+
+  const supabaseAdmin = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+  );
+
+  await supabaseAdmin.from("email_logs").insert({ user_id: userId, tipo });
+}
+
+async function sendMarketingSequenceEmail(data) {
+  const { tipo, email, user_id: userId } = data;
+
+  if (!email) {
+    return { error: "Falta el campo requerido: email" };
+  }
+
+  const sequence = sequences[tipo];
+  const buildHtml = MARKETING_HTML_BUILDERS[tipo];
+
+  if (!sequence || !buildHtml) {
+    return { error: `Tipo de email de secuencia no soportado: ${tipo}` };
+  }
+
+  const result = await resend.emails.send({
+    from: FROM,
+    to: email,
+    subject: sequence.asunto,
+    html: buildHtml(data),
+  });
+
+  if (result.error) {
+    return { error: result.error.message };
+  }
+
+  if (userId) {
+    await logMarketingEmail(userId, tipo);
+  }
+
+  return { success: true };
+}
 
 function emailLayout({ title, bodyHtml }) {
   return `<!DOCTYPE html>
@@ -807,6 +1155,16 @@ export async function POST(request) {
 
       if (result.error) {
         return Response.json({ error: result.error.message }, { status: 400 });
+      }
+
+      return Response.json({ success: true });
+    }
+
+    if (MARKETING_HTML_BUILDERS[tipo]) {
+      const result = await sendMarketingSequenceEmail({ tipo, ...data });
+
+      if (result.error) {
+        return Response.json({ error: result.error }, { status: 400 });
       }
 
       return Response.json({ success: true });
