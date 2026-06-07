@@ -1,3 +1,4 @@
+import { createClient } from "@supabase/supabase-js";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import CalendarioDisponibilidad from "@/app/components/CalendarioDisponibilidad";
@@ -189,6 +190,54 @@ function getServiceTags(service) {
   }
 
   return tags;
+}
+
+export async function generateMetadata({ params }) {
+  const { id } = await params;
+
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+  );
+
+  const { data: perfil } = await supabase
+    .from("profiles")
+    .select("nombre, apellido, descripcion, ciudad")
+    .eq("id", id)
+    .single();
+
+  const { data: servicios } = await supabase
+    .from("services")
+    .select("vertical, precio")
+    .eq("proveedor_id", id)
+    .eq("disponible", true);
+
+  const verticales = servicios
+    ?.map((s) =>
+      s.vertical === "alojamiento"
+        ? "Alojamiento"
+        : s.vertical === "ninos"
+          ? "Niñera"
+          : "Mascotas",
+    )
+    .join(", ");
+
+  const title = perfil
+    ? `${perfil.nombre} ${perfil.apellido} · ${verticales || "Servicios"} en ${perfil.ciudad || "España"}`
+    : "Proveedor verificado";
+
+  const description =
+    perfil?.descripcion?.slice(0, 150) ||
+    `Proveedor verificado en ${perfil?.ciudad || "España"}`;
+
+  return {
+    title,
+    description,
+    openGraph: {
+      title: `${perfil?.nombre || "Proveedor"} · ${verticales || "Servicios"} verificado`,
+      description: perfil?.descripcion?.slice(0, 150) || description,
+    },
+  };
 }
 
 export default async function ProveedorPage({ params }) {

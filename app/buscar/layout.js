@@ -1,17 +1,9 @@
-import { Suspense } from "react";
-import { BRAND } from "@/app/components/brand";
-
-function BuscarFallback() {
-  return (
-    <div
-      className="flex min-h-[50vh] items-center justify-center font-sans text-sm text-[#666]"
-      style={{ backgroundColor: BRAND.warm }}
-    >
-      Cargando búsqueda…
-    </div>
-  );
-}
+export const metadata = {
+  title: "Buscar proveedores verificados",
+  description:
+    "Encuentra niñeras certificadas, alojamiento pet-friendly y cuidadores de mascotas verificados cerca de ti.",
+};
 
 export default function BuscarLayout({ children }) {
-  return <Suspense fallback={<BuscarFallback />}>{children}</Suspense>;
+  return children;
 }
