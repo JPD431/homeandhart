@@ -1,11 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useLang } from "@/app/lib/LangContext";
 import { useTranslation } from "@/app/lib/i18n";
+import { getBookingEstado } from "@/app/lib/viajes";
 import { BRAND } from "./brand";
 import { supabase } from "@/lib/supabase";
+
+const PRIMARY = "#1d4f91";
+const BORDER = "#e8e4de";
 
 function Logo() {
   const { lang } = useLang();
@@ -15,7 +20,7 @@ function Logo() {
     <div className="flex flex-col">
       <span className="text-xl font-semibold tracking-tight sm:text-2xl">
         <span style={{ color: "#111111" }}>Home</span>
-        <span style={{ color: "#1d4f91", fontStyle: "italic" }}>&#38;</span>
+        <span style={{ color: PRIMARY, fontStyle: "italic" }}>&#38;</span>
         <span style={{ color: "#111111" }}>Heart</span>
       </span>
       <span className="mt-0.5 text-xs text-[#5c5c5c] sm:text-sm">
@@ -72,62 +77,205 @@ function LangSwitcher() {
   );
 }
 
+function calcPorcentajePerfil(perfil, servicesCount) {
+  let pct = 0;
+  if (perfil?.nombre?.trim()) pct += 20;
+  if (perfil?.foto_perfil || perfil?.avatar_url) pct += 20;
+  if (perfil?.descripcion?.trim()) pct += 20;
+  if (Array.isArray(perfil?.idiomas) && perfil.idiomas.length > 0) pct += 20;
+  if (servicesCount >= 1) pct += 20;
+  return pct;
+}
+
+function getRolLabel(isProveedor) {
+  return isProveedor ? "Ambos" : "Cliente";
+}
+
+function DropdownItem({ href, icon, label, badge, badgeStyle, onNavigate }) {
+  return (
+    <Link
+      href={href}
+      onClick={onNavigate}
+      className="flex items-center justify-between gap-2 px-4 py-2.5 text-sm text-[#2a3a4a] no-underline transition-colors hover:bg-[#f7f5f2]"
+    >
+      <span className="flex items-center gap-2.5">
+        <span aria-hidden>{icon}</span>
+        <span>{label}</span>
+      </span>
+      {badge != null && badge !== "" && (
+        <span
+          className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold"
+          style={badgeStyle}
+        >
+          {badge}
+        </span>
+      )}
+    </Link>
+  );
+}
+
+function SectionLabel({ children }) {
+  return (
+    <p
+      className="px-4 pb-1 pt-3 text-[8px] font-semibold uppercase tracking-widest"
+      style={{ color: "#bbb" }}
+    >
+      {children}
+    </p>
+  );
+}
+
 export default function Navbar() {
+  const router = useRouter();
   const { lang } = useLang();
   const t = useTranslation(lang);
-  const [unreadCount, setUnreadCount] = useState(0);
 
-  useEffect(() => {
-    async function loadUnread() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+  const dropdownRef = useRef(null);
 
-      if (!user) {
-        setUnreadCount(0);
-        return;
-      }
+  const [user, setUser] = useState(null);
+  const [perfil, setPerfil] = useState(null);
+  const [servicesCount, setServicesCount] = useState(0);
+  const [reservasActivas, setReservasActivas] = useState(0);
+  const [mensajesSinLeer, setMensajesSinLeer] = useState(0);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [vistaModo, setVistaModo] = useState("cliente");
+  const [signingOut, setSigningOut] = useState(false);
 
-      const { data: conversations } = await supabase
-        .from("conversations")
-        .select("id")
-        .or(
-          `participant_a_id.eq.${user.id},participant_b_id.eq.${user.id}`,
-        );
+  const isProveedor = perfil?.role === "proveedor";
+  const porcentajePerfil = calcPorcentajePerfil(perfil, servicesCount);
+  const sinComision = Number(perfil?.reservas_sin_comision) || 0;
 
-      const conversationIds = (conversations ?? []).map((c) => c.id);
-      if (conversationIds.length === 0) {
-        setUnreadCount(0);
-        return;
-      }
+  const closeDropdown = useCallback(() => setDropdownOpen(false), []);
 
-      const { count } = await supabase
-        .from("messages")
-        .select("id", { count: "exact", head: true })
-        .in("conversation_id", conversationIds)
-        .eq("read", false)
-        .neq("sender_id", user.id);
+  const loadMensajesSinLeer = useCallback(async (userId) => {
+    const { data: conversations } = await supabase
+      .from("conversations")
+      .select("id")
+      .or(`participant_a_id.eq.${userId},participant_b_id.eq.${userId}`);
 
-      setUnreadCount(count ?? 0);
+    const conversationIds = (conversations ?? []).map((c) => c.id);
+    if (conversationIds.length === 0) {
+      setMensajesSinLeer(0);
+      return;
     }
 
-    loadUnread();
+    const { count } = await supabase
+      .from("messages")
+      .select("id", { count: "exact", head: true })
+      .in("conversation_id", conversationIds)
+      .eq("read", false)
+      .neq("sender_id", userId);
+
+    setMensajesSinLeer(count ?? 0);
+  }, []);
+
+  const loadUserData = useCallback(
+    async (authUser) => {
+      const { data: profileData } = await supabase
+        .from("profiles")
+        .select(
+          "nombre, apellido, role, descripcion, idiomas, foto_perfil, avatar_url, reservas_sin_comision",
+        )
+        .eq("id", authUser.id)
+        .single();
+
+      setPerfil(profileData);
+
+      const { count: svcCount } = await supabase
+        .from("services")
+        .select("id", { count: "exact", head: true })
+        .eq("proveedor_id", authUser.id);
+
+      setServicesCount(svcCount ?? 0);
+
+      const { data: bookings } = await supabase
+        .from("bookings")
+        .select("estado, status")
+        .eq("cliente_id", authUser.id);
+
+      const activas = (bookings ?? []).filter((b) =>
+        ["confirmada", "pendiente", "en_curso"].includes(getBookingEstado(b)),
+      ).length;
+      setReservasActivas(activas);
+
+      await loadMensajesSinLeer(authUser.id);
+    },
+    [loadMensajesSinLeer],
+  );
+
+  useEffect(() => {
+    async function init() {
+      const {
+        data: { user: authUser },
+      } = await supabase.auth.getUser();
+      setUser(authUser);
+      if (authUser) await loadUserData(authUser);
+    }
+
+    init();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      const authUser = session?.user ?? null;
+      setUser(authUser);
+      if (authUser) {
+        loadUserData(authUser);
+      } else {
+        setPerfil(null);
+        setServicesCount(0);
+        setReservasActivas(0);
+        setMensajesSinLeer(0);
+        setDropdownOpen(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [loadUserData]);
+
+  useEffect(() => {
+    if (!user) return;
 
     const channel = supabase
       .channel("navbar-unread")
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "messages" },
-        () => {
-          loadUnread();
-        },
+        () => loadMensajesSinLeer(user.id),
       )
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [user, loadMensajesSinLeer]);
+
+  useEffect(() => {
+    if (!dropdownOpen) return;
+
+    function handleClickOutside(e) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setDropdownOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [dropdownOpen]);
+
+  async function handleSignOut() {
+    setSigningOut(true);
+    await supabase.auth.signOut();
+    setSigningOut(false);
+    setDropdownOpen(false);
+    router.push("/");
+  }
+
+  const displayName =
+    [perfil?.nombre, perfil?.apellido].filter(Boolean).join(" ") ||
+    perfil?.nombre ||
+    "Mi cuenta";
+  const initials = perfil?.nombre?.[0]?.toUpperCase() || "U";
 
   return (
     <header
@@ -138,69 +286,447 @@ export default function Navbar() {
         <Link href="/" className="shrink-0 no-underline">
           <Logo />
         </Link>
+
         <nav
           className="hidden items-center gap-8 text-sm font-medium text-[#444] md:flex"
           aria-label="Principal"
         >
           <Link
             href="/"
-            className="transition-colors hover:text-[#1d4f91] no-underline"
+            className="no-underline transition-colors hover:text-[#1d4f91]"
             style={{ color: BRAND.primary }}
           >
             {t.navbar.inicio}
           </Link>
           <Link
             href="/buscar"
-            className="transition-colors hover:text-[#1d4f91] no-underline"
+            className="no-underline transition-colors hover:text-[#1d4f91]"
           >
             {t.navbar.servicios}
           </Link>
           <Link
             href="/garantia"
-            className="transition-colors hover:text-[#1d4f91] no-underline"
+            className="no-underline transition-colors hover:text-[#1d4f91]"
           >
             {t.navbar.garantia}
           </Link>
           <Link
             href="/#como-funciona"
-            className="transition-colors hover:text-[#1d4f91] no-underline"
+            className="no-underline transition-colors hover:text-[#1d4f91]"
           >
             {t.navbar.comoFunciona}
           </Link>
           <Link
             href="/ser-proveedor"
-            className="transition-colors hover:text-[#1d4f91] no-underline"
+            className="no-underline transition-colors hover:text-[#1d4f91]"
           >
             {t.navbar.serProveedor}
           </Link>
         </nav>
+
         <div className="flex items-center gap-2 sm:gap-3">
           <LangSwitcher />
-          <Link
-            href="/chat"
-            className="relative flex h-10 w-10 items-center justify-center rounded-lg text-[#444] no-underline transition-colors hover:bg-[#f7f5f2]"
-            aria-label="Mensajes"
-          >
-            <ChatIcon className="h-5 w-5" />
-            {unreadCount > 0 && (
-              <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white">
-                {unreadCount > 9 ? "9+" : unreadCount}
-              </span>
-            )}
-          </Link>
-          <Link
-            href="/login"
-            className="hidden rounded-lg px-4 py-2 text-sm font-medium text-[#444] no-underline transition-colors hover:bg-[#f7f5f2] sm:inline-block"
-          >
-            {t.navbar.iniciarSesion}
-          </Link>
-          <Link
-            href="/registro"
-            className="rounded-lg px-4 py-2 text-sm font-medium text-white no-underline transition-opacity hover:opacity-90"
-            style={{ backgroundColor: BRAND.primary }}
-          >
-            {t.navbar.registrarse}
-          </Link>
+
+          {user ? (
+            <>
+              <Link
+                href="/chat"
+                onClick={closeDropdown}
+                style={{
+                  position: "relative",
+                  cursor: "pointer",
+                  padding: 6,
+                  borderRadius: "50%",
+                  background: "#fff",
+                  border: `0.5px solid ${BORDER}`,
+                  textDecoration: "none",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+                aria-label="Notificaciones"
+              >
+                🔔
+                {mensajesSinLeer > 0 && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: -2,
+                      right: -2,
+                      width: 14,
+                      height: 14,
+                      borderRadius: "50%",
+                      background: "#dc2626",
+                      color: "#fff",
+                      fontSize: 8,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontWeight: 500,
+                    }}
+                  >
+                    {mensajesSinLeer > 9 ? "9+" : mensajesSinLeer}
+                  </div>
+                )}
+              </Link>
+
+              <div ref={dropdownRef} style={{ position: "relative" }}>
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setDropdownOpen((o) => !o)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setDropdownOpen((o) => !o);
+                    }
+                  }}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    cursor: "pointer",
+                    padding: "5px 10px",
+                    borderRadius: 20,
+                    border: `0.5px solid ${BORDER}`,
+                    background: "#fff",
+                    position: "relative",
+                  }}
+                  aria-expanded={dropdownOpen}
+                  aria-haspopup="true"
+                >
+                  <div style={{ position: "relative" }}>
+                    <div
+                      style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: "50%",
+                        background: PRIMARY,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: 10,
+                        fontWeight: 500,
+                        color: "#fff",
+                      }}
+                    >
+                      {initials}
+                    </div>
+                    <div
+                      style={{
+                        position: "absolute",
+                        bottom: 0,
+                        right: 0,
+                        width: 8,
+                        height: 8,
+                        borderRadius: "50%",
+                        background: "#0e7a5c",
+                        border: "1.5px solid #fff",
+                      }}
+                    />
+                  </div>
+                  <span style={{ fontSize: 12, fontWeight: 500, color: "#2a3a4a" }}>
+                    {perfil?.nombre || "Mi cuenta"}
+                  </span>
+                  <span style={{ fontSize: 10, color: "#bbb" }}>▾</span>
+                </div>
+
+                {dropdownOpen && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: "calc(100% + 8px)",
+                      right: 0,
+                      width: 260,
+                      background: "#fff",
+                      borderRadius: 12,
+                      border: `0.5px solid ${BORDER}`,
+                      boxShadow: "0 8px 32px rgba(0,0,0,0.1)",
+                      overflow: "hidden",
+                      zIndex: 100,
+                    }}
+                  >
+                    {/* Header */}
+                    <div
+                      className="flex items-center gap-3 px-4 py-4"
+                      style={{ borderBottom: `0.5px solid #f0ede8` }}
+                    >
+                      <div
+                        style={{
+                          width: 40,
+                          height: 40,
+                          borderRadius: "50%",
+                          background: PRIMARY,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: 14,
+                          fontWeight: 500,
+                          color: "#fff",
+                          flexShrink: 0,
+                        }}
+                      >
+                        {initials}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-[#1a1a1a]">
+                          {displayName}
+                        </p>
+                        <p className="truncate text-[11px] text-[#888]">
+                          {user.email}
+                        </p>
+                        <span
+                          className="mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                          style={{
+                            backgroundColor: isProveedor ? "#e6f4f0" : "#e8f0fb",
+                            color: isProveedor ? "#0e7a5c" : PRIMARY,
+                          }}
+                        >
+                          {getRolLabel(isProveedor)}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Progreso perfil */}
+                    <div
+                      style={{
+                        padding: "10px 16px",
+                        borderBottom: "0.5px solid #f0ede8",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          fontSize: 9,
+                          color: "#bbb",
+                          marginBottom: 4,
+                        }}
+                      >
+                        <span>Perfil completado</span>
+                        <span>{porcentajePerfil}%</span>
+                      </div>
+                      <div
+                        style={{
+                          height: 4,
+                          background: "#f7f5f2",
+                          borderRadius: 2,
+                          overflow: "hidden",
+                        }}
+                      >
+                        <div
+                          style={{
+                            height: "100%",
+                            background: PRIMARY,
+                            borderRadius: 2,
+                            width: `${porcentajePerfil}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Toggle cliente/proveedor */}
+                    {isProveedor && (
+                      <div
+                        className="flex gap-1 p-2"
+                        style={{
+                          borderBottom: "0.5px solid #f0ede8",
+                          background: "#f7f5f2",
+                        }}
+                      >
+                        {["cliente", "proveedor"].map((modo) => (
+                          <button
+                            key={modo}
+                            type="button"
+                            onClick={() => setVistaModo(modo)}
+                            className="flex-1 rounded-lg py-1.5 text-xs font-semibold capitalize transition-colors"
+                            style={{
+                              background:
+                                vistaModo === modo ? "#fff" : "transparent",
+                              color: vistaModo === modo ? PRIMARY : "#888",
+                              boxShadow:
+                                vistaModo === modo
+                                  ? "0 1px 4px rgba(0,0,0,0.08)"
+                                  : "none",
+                              border: "none",
+                              cursor: "pointer",
+                            }}
+                          >
+                            {modo}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Como cliente */}
+                    {(!isProveedor || vistaModo === "cliente") && (
+                      <div style={{ borderBottom: "0.5px solid #f0ede8" }}>
+                        <SectionLabel>Como cliente</SectionLabel>
+                        <DropdownItem
+                          href="/dashboard"
+                          icon="📅"
+                          label="Mis reservas"
+                          badge={
+                            reservasActivas > 0
+                              ? `${reservasActivas} activas`
+                              : null
+                          }
+                          badgeStyle={{
+                            backgroundColor: "#e8f0fb",
+                            color: PRIMARY,
+                          }}
+                          onNavigate={closeDropdown}
+                        />
+                        <DropdownItem
+                          href="/dashboard"
+                          icon="❤️"
+                          label="Mis favoritos"
+                          onNavigate={closeDropdown}
+                        />
+                        <DropdownItem
+                          href="/historial"
+                          icon="🧾"
+                          label="Historial y facturas"
+                          onNavigate={closeDropdown}
+                        />
+                        <DropdownItem
+                          href="/dashboard"
+                          icon="✈️"
+                          label="Mis viajes"
+                          onNavigate={closeDropdown}
+                        />
+                        <DropdownItem
+                          href="/familia"
+                          icon="👨‍👩‍👧"
+                          label="Mi familia"
+                          onNavigate={closeDropdown}
+                        />
+                        <DropdownItem
+                          href="/pasaporte"
+                          icon="🛂"
+                          label="Mi pasaporte"
+                          onNavigate={closeDropdown}
+                        />
+                        <DropdownItem
+                          href="/dashboard"
+                          icon="🎁"
+                          label="Referidos"
+                          badge={
+                            sinComision > 0 ? `${sinComision} sin comisión` : null
+                          }
+                          badgeStyle={{
+                            backgroundColor: "#e6f4f0",
+                            color: "#0e7a5c",
+                          }}
+                          onNavigate={closeDropdown}
+                        />
+                      </div>
+                    )}
+
+                    {/* Como proveedor */}
+                    {isProveedor && vistaModo === "proveedor" && (
+                      <div style={{ borderBottom: "0.5px solid #f0ede8" }}>
+                        <SectionLabel>Como proveedor</SectionLabel>
+                        <DropdownItem
+                          href="/estadisticas"
+                          icon="📊"
+                          label="Estadísticas"
+                          onNavigate={closeDropdown}
+                        />
+                        <DropdownItem
+                          href="/editar-perfil"
+                          icon="✏️"
+                          label="Editar mis servicios"
+                          onNavigate={closeDropdown}
+                        />
+                        <DropdownItem
+                          href="/chat"
+                          icon="💬"
+                          label="Mis mensajes"
+                          badge={
+                            mensajesSinLeer > 0
+                              ? String(mensajesSinLeer)
+                              : null
+                          }
+                          badgeStyle={{
+                            backgroundColor: "#fdf3e3",
+                            color: "#c47d1a",
+                          }}
+                          onNavigate={closeDropdown}
+                        />
+                      </div>
+                    )}
+
+                    {/* Cuenta */}
+                    <div style={{ borderBottom: "0.5px solid #f0ede8" }}>
+                      <SectionLabel>Cuenta</SectionLabel>
+                      <DropdownItem
+                        href="/editar-perfil"
+                        icon="👤"
+                        label="Mi perfil"
+                        onNavigate={closeDropdown}
+                      />
+                      <DropdownItem
+                        href="/recuperar-contrasena"
+                        icon="🔒"
+                        label="Cambiar contraseña"
+                        onNavigate={closeDropdown}
+                      />
+                    </div>
+
+                    {/* Cerrar sesión */}
+                    <div className="p-3">
+                      <button
+                        type="button"
+                        onClick={handleSignOut}
+                        disabled={signingOut}
+                        className="w-full rounded-lg border py-2.5 text-sm font-medium transition-colors disabled:opacity-60"
+                        style={{
+                          borderColor: BORDER,
+                          background: "#fff",
+                          color: "#666",
+                          cursor: "pointer",
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.borderColor = "#dc2626";
+                          e.currentTarget.style.color = "#dc2626";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.borderColor = BORDER;
+                          e.currentTarget.style.color = "#666";
+                        }}
+                      >
+                        {signingOut ? "Cerrando sesión…" : "Cerrar sesión"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            <>
+              <Link
+                href="/chat"
+                className="relative flex h-10 w-10 items-center justify-center rounded-lg text-[#444] no-underline transition-colors hover:bg-[#f7f5f2]"
+                aria-label="Mensajes"
+              >
+                <ChatIcon className="h-5 w-5" />
+              </Link>
+              <Link
+                href="/login"
+                className="hidden rounded-lg px-4 py-2 text-sm font-medium text-[#444] no-underline transition-colors hover:bg-[#f7f5f2] sm:inline-block"
+              >
+                {t.navbar.iniciarSesion}
+              </Link>
+              <Link
+                href="/registro"
+                className="rounded-lg px-4 py-2 text-sm font-medium text-white no-underline transition-opacity hover:opacity-90"
+                style={{ backgroundColor: BRAND.primary }}
+              >
+                {t.navbar.registrarse}
+              </Link>
+            </>
+          )}
         </div>
       </div>
     </header>
