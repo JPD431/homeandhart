@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import CalendarioRangoFechas from "@/app/components/CalendarioRangoFechas";
 import { formatShortDate } from "@/app/components/calendario-shared";
 import { useLang } from "@/app/lib/LangContext";
@@ -581,7 +581,7 @@ function ServiceCard({
   );
 }
 
-export default function BuscarPage() {
+function BuscarContent() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -1099,5 +1099,13 @@ export default function BuscarPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function BuscarPage() {
+  return (
+    <Suspense fallback={<div style={{ padding: 24, color: "#aaa" }}>Cargando...</div>}>
+      <BuscarContent />
+    </Suspense>
   );
 }
