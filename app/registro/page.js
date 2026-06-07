@@ -145,6 +145,11 @@ function AuthShell({ children }) {
           />
 
           <div style={{ position: "relative", zIndex: 1, maxWidth: 380 }}>
+            <img
+              src="/logo.png"
+              alt="Home&Heart"
+              style={{ height: 36, marginBottom: 24, opacity: 0.9 }}
+            />
             <p
               style={{
                 fontSize: 9,
