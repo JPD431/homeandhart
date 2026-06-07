@@ -57,25 +57,18 @@ export default async function sitemap() {
       changeFrequency: "monthly",
       priority: 0.3,
     },
-    {
-      url: `${baseUrl}/madrid/nineras`,
-      lastModified: new Date(),
-      changeFrequency: "weekly",
-      priority: 0.85,
-    },
-    {
-      url: `${baseUrl}/madrid/alojamiento-pet-friendly`,
-      lastModified: new Date(),
-      changeFrequency: "weekly",
-      priority: 0.85,
-    },
-    {
-      url: `${baseUrl}/madrid/cuidador-mascotas`,
-      lastModified: new Date(),
-      changeFrequency: "weekly",
-      priority: 0.85,
-    },
   ];
+
+  const ciudades = ["madrid", "barcelona", "valencia", "sevilla", "bilbao"];
+  const verticales = ["nineras", "alojamiento", "mascotas"];
+  const landingPages = ciudades.flatMap((ciudad) =>
+    verticales.map((vertical) => ({
+      url: `${baseUrl}/${ciudad}/${vertical}`,
+      lastModified: new Date(),
+      changeFrequency: "weekly",
+      priority: 0.85,
+    })),
+  );
 
   const { data: proveedores } = await supabase
     .from("profiles")
@@ -90,5 +83,5 @@ export default async function sitemap() {
     priority: 0.8,
   }));
 
-  return [...staticPages, ...proveedorPages];
+  return [...staticPages, ...landingPages, ...proveedorPages];
 }
