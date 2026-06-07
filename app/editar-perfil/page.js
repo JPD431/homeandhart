@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import Navbar from "@/app/components/Navbar";
 import ProveedorEmergenciaToggle from "@/app/components/ProveedorEmergenciaToggle";
 import { BRAND, SERIF } from "@/app/components/brand";
 import {
@@ -16,10 +15,32 @@ import { supabase } from "@/lib/supabase";
 const DARK_BLUE = "#163a6b";
 const STORAGE_BUCKET = "Documentos";
 
+const PRIMARY = "#1d4f91";
+
 const VERTICALS = [
-  { id: "alojamiento", label: "Alojamiento" },
-  { id: "ninos", label: "Cuidado de niños" },
-  { id: "mascotas", label: "Cuidado de mascotas" },
+  { id: "alojamiento", label: "Alojamiento", color: PRIMARY, emoji: "🏠" },
+  { id: "ninos", label: "Niñera", color: "#0e7a5c", emoji: "🧒" },
+  { id: "mascotas", label: "Mascotas", color: "#c47d1a", emoji: "🐾" },
+];
+
+const IDIOMAS_DEFAULT = [
+  "Español",
+  "English",
+  "Français",
+  "Deutsch",
+  "Italiano",
+  "Português",
+  "中文",
+];
+
+const DOC_FIELDS = [
+  { key: "doc_dni_url", label: "DNI / NIE / Pasaporte", required: true },
+  { key: "doc_antecedentes_url", label: "Antecedentes penales", required: true },
+  {
+    key: "doc_antecedentes_sexuales_url",
+    label: "Antecedentes sexuales",
+    required: false,
+  },
 ];
 
 const CANCEL_POLICIES = [
@@ -189,6 +210,17 @@ function buildServicePayload(details, vertical, ciudad, proveedorId, disponible)
 async function uploadProfilePhoto(userId, file) {
   const ext = file.name.includes(".") ? file.name.split(".").pop() : "jpg";
   const filePath = `${userId}/foto-perfil-${Date.now()}.${ext}`;
+  const { error } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .upload(filePath, file, { upsert: true, contentType: file.type });
+  if (error) throw error;
+  const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(filePath);
+  return data.publicUrl;
+}
+
+async function uploadDocumentToStorage(userId, docKey, file) {
+  const ext = file.name.includes(".") ? file.name.split(".").pop() : "pdf";
+  const filePath = `${userId}/${docKey}-${Date.now()}.${ext}`;
   const { error } = await supabase.storage
     .from(STORAGE_BUCKET)
     .upload(filePath, file, { upsert: true, contentType: file.type });
@@ -685,17 +717,130 @@ function ServiceEditForm({ vertical, details, onChange }) {
   );
 }
 
+function Card({ title, children }) {
+  return (
+    <div
+      className="rounded-xl border bg-white p-5"
+      style={{ borderColor: BRAND.border, marginBottom: 16 }}
+    >
+      {title && (
+        <p className="mb-4 text-sm font-semibold text-[#1a1a1a]">{title}</p>
+      )}
+      {children}
+    </div>
+  );
+}
+
+function TagPill({ label, selected, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors"
+      style={{
+        borderColor: selected ? PRIMARY : BRAND.border,
+        backgroundColor: selected ? "#e8f0fb" : "#fff",
+        color: selected ? PRIMARY : "#666",
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
+function PreviewPanel({ fotoPreview, nombre, apellido, ciudad, services }) {
+  const displayName = [nombre, apellido].filter(Boolean).join(" ") || "Tu nombre";
+  const initials = [nombre?.[0], apellido?.[0]].filter(Boolean).join("").toUpperCase() || "?";
+  const firstService = services.find((s) => s.disponible) || services[0];
+  const verticalMeta = firstService
+    ? VERTICALS.find((v) => v.id === firstService.vertical)
+    : null;
+  const priceUnit =
+    firstService?.vertical === "alojamiento"
+      ? "/noche"
+      : firstService?.vertical === "ninos"
+        ? "/hora"
+        : "/día";
+
+  return (
+    <div
+      className="sticky top-4 rounded-2xl border bg-white p-4 shadow-sm"
+      style={{ borderColor: BRAND.border }}
+    >
+      <p className="mb-3 text-[10px] font-semibold uppercase tracking-widest text-[#888]">
+        Vista previa
+      </p>
+      <div className="overflow-hidden rounded-xl border" style={{ borderColor: BRAND.border }}>
+        <div className="flex h-32 items-center justify-center bg-[#f5f3ef]">
+          {fotoPreview ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={fotoPreview} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <span
+              className="flex h-16 w-16 items-center justify-center rounded-full text-lg font-semibold text-white"
+              style={{ backgroundColor: PRIMARY }}
+            >
+              {initials}
+            </span>
+          )}
+        </div>
+        <div className="p-3">
+          <h3 className="font-semibold text-[#1a1a1a]" style={{ fontFamily: SERIF }}>
+            {displayName}
+          </h3>
+          {ciudad && <p className="text-xs text-[#666]">{ciudad}</p>}
+          <div className="mt-2 flex flex-wrap gap-1">
+            {services.map((s) => {
+              const v = VERTICALS.find((x) => x.id === s.vertical);
+              return (
+                <span
+                  key={s.id}
+                  className="rounded-full px-2 py-0.5 text-[10px] font-semibold text-white"
+                  style={{ backgroundColor: v?.color || PRIMARY }}
+                >
+                  {v?.label || s.vertical}
+                </span>
+              );
+            })}
+          </div>
+          {firstService?.details.precio && (
+            <p className="mt-2 text-lg font-bold" style={{ color: PRIMARY }}>
+              {firstService.details.precio}€
+              <span className="text-sm font-normal text-[#666]">{priceUnit}</span>
+            </p>
+          )}
+          <button
+            type="button"
+            className="mt-3 w-full rounded-xl py-2.5 text-sm font-semibold text-white"
+            style={{ backgroundColor: PRIMARY }}
+          >
+            Reservar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function EditarPerfilPage() {
   const router = useRouter();
   const profilePhotoRef = useRef(null);
+  const documentInputRef = useRef(null);
 
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState("perfil");
+  const [dirty, setDirty] = useState(false);
   const [userId, setUserId] = useState(null);
+  const [userEmail, setUserEmail] = useState("");
   const [perfil, setPerfil] = useState(null);
   const [nombre, setNombre] = useState("");
   const [apellido, setApellido] = useState("");
   const [ciudad, setCiudad] = useState("");
+  const [anosExperiencia, setAnosExperiencia] = useState("");
   const [descripcion, setDescripcion] = useState("");
+  const [personalidad, setPersonalidad] = useState("");
+  const [idiomas, setIdiomas] = useState([]);
+  const [nuevaPassword, setNuevaPassword] = useState("");
   const [fotoPerfil, setFotoPerfil] = useState(null);
   const [fotoPreview, setFotoPreview] = useState(null);
   const [profilePhotoFile, setProfilePhotoFile] = useState(null);
@@ -714,6 +859,8 @@ export default function EditarPerfilPage() {
   const [refSending, setRefSending] = useState(false);
   const [refMessage, setRefMessage] = useState("");
   const [refError, setRefError] = useState("");
+  const [activeDocumentKey, setActiveDocumentKey] = useState(null);
+  const [uploadingDoc, setUploadingDoc] = useState(null);
 
   useEffect(() => {
     async function load() {
@@ -728,6 +875,7 @@ export default function EditarPerfilPage() {
       }
 
       setUserId(user.id);
+      setUserEmail(user.email || "");
 
       const { data: perfilData, error: profileError } = await supabase
         .from("profiles")
@@ -745,7 +893,17 @@ export default function EditarPerfilPage() {
         setNombre(perfilData.nombre || "");
         setApellido(perfilData.apellido || "");
         setCiudad(perfilData.ciudad || "");
-        setDescripcion(perfilData.descripcion || "");
+        const desc = perfilData.descripcion || "";
+        const personalidadMatch = desc.match(/Personalidad:\s*(.+?)(?:\n\n|$)/s);
+        const motivacionParts = desc.split(/\n\nPersonalidad:/);
+        setDescripcion(motivacionParts[0] || desc);
+        setPersonalidad(personalidadMatch?.[1]?.trim() || "");
+        setIdiomas(Array.isArray(perfilData.idiomas) ? perfilData.idiomas : []);
+        setAnosExperiencia(
+          perfilData.anos_experiencia != null
+            ? String(perfilData.anos_experiencia)
+            : "",
+        );
         setPerfil(perfilData);
         setFotoPerfil(perfilData.foto_perfil || perfilData.avatar_url || null);
         setFotoPreview(perfilData.foto_perfil || perfilData.avatar_url || null);
@@ -779,13 +937,19 @@ export default function EditarPerfilPage() {
     load();
   }, [router]);
 
+  function markDirty() {
+    setDirty(true);
+  }
+
   function updateServiceDetails(serviceId, details) {
+    markDirty();
     setServices((prev) =>
       prev.map((s) => (s.id === serviceId ? { ...s, details } : s)),
     );
   }
 
   function toggleServiceDisponible(serviceId) {
+    markDirty();
     setServices((prev) =>
       prev.map((s) =>
         s.id === serviceId ? { ...s, disponible: !s.disponible } : s,
@@ -793,11 +957,67 @@ export default function EditarPerfilPage() {
     );
   }
 
+  function toggleIdioma(lang) {
+    markDirty();
+    setIdiomas((prev) =>
+      prev.includes(lang) ? prev.filter((l) => l !== lang) : [...prev, lang],
+    );
+  }
+
+  const verticalsActivos = [...new Set(services.map((s) => s.vertical))];
+  const tabs = [
+    { id: "perfil", label: "Perfil personal" },
+    ...verticalsActivos.includes("alojamiento")
+      ? [{ id: "alojamiento", label: "🏠 Alojamiento" }]
+      : [],
+    ...verticalsActivos.includes("ninos")
+      ? [{ id: "ninos", label: "🧒 Niñera" }]
+      : [],
+    ...verticalsActivos.includes("mascotas")
+      ? [{ id: "mascotas", label: "🐾 Mascotas" }]
+      : [],
+    { id: "documentos", label: "Documentos" },
+    { id: "cuenta", label: "Cuenta" },
+  ];
+
+  function getServiceByVertical(vertical) {
+    return services.find((s) => s.vertical === vertical);
+  }
+
   function handleProfilePhotoChange(e) {
     const file = e.target.files?.[0];
     if (!file) return;
+    markDirty();
     setProfilePhotoFile(file);
     setFotoPreview(URL.createObjectURL(file));
+  }
+
+  function openDocumentUpload(docKey) {
+    setActiveDocumentKey(docKey);
+    documentInputRef.current?.click();
+  }
+
+  async function handleDocumentFile(e) {
+    const file = e.target.files?.[0];
+    if (!file || !activeDocumentKey || !userId) return;
+    e.target.value = "";
+    setUploadingDoc(activeDocumentKey);
+    setErrorMessage("");
+    try {
+      const url = await uploadDocumentToStorage(userId, activeDocumentKey, file);
+      const { error } = await supabase
+        .from("profiles")
+        .update({ [activeDocumentKey]: url })
+        .eq("id", userId);
+      if (error) throw error;
+      setPerfil((prev) => ({ ...prev, [activeDocumentKey]: url }));
+      setSuccessMessage("Documento subido correctamente ✓");
+    } catch (err) {
+      setErrorMessage(err.message || "Error al subir el documento.");
+    } finally {
+      setUploadingDoc(null);
+      setActiveDocumentKey(null);
+    }
   }
 
   async function handleSolicitarReferencia(e) {
@@ -872,14 +1092,21 @@ export default function EditarPerfilPage() {
         fotoUrl = await uploadProfilePhoto(userId, profilePhotoFile);
       }
 
+      const descripcionParts = [descripcion.trim()];
+      if (personalidad.trim()) {
+        descripcionParts.push(`Personalidad: ${personalidad.trim()}`);
+      }
+
       const { error: profileError } = await supabase.from("profiles").upsert({
         id: userId,
         nombre: nombre.trim(),
         apellido: apellido.trim(),
         ciudad: ciudad.trim(),
-        descripcion: descripcion.trim(),
+        descripcion: descripcionParts.join("\n\n"),
         location_zone: ciudad.trim(),
         foto_perfil: fotoUrl,
+        idiomas,
+        anos_experiencia: anosExperiencia ? Number(anosExperiencia) : null,
       });
 
       if (profileError) throw profileError;
@@ -926,8 +1153,17 @@ export default function EditarPerfilPage() {
 
       setFotoPerfil(fotoUrl);
       setProfilePhotoFile(null);
-      setSuccessMessage("Perfil actualizado correctamente");
+      if (nuevaPassword.trim().length >= 6) {
+        const { error: pwError } = await supabase.auth.updateUser({
+          password: nuevaPassword,
+        });
+        if (pwError) throw pwError;
+        setNuevaPassword("");
+      }
+
+      setSuccessMessage("Cambios guardados correctamente ✓");
       setEditingId(null);
+      setDirty(false);
     } catch (err) {
       setErrorMessage(err.message || "Error al guardar los cambios.");
     } finally {
@@ -937,425 +1173,278 @@ export default function EditarPerfilPage() {
 
   if (loading) {
     return (
-      <div
-        className="min-h-screen font-sans"
-        style={{ backgroundColor: BRAND.warm }}
-      >
-        <Navbar />
-        <main className="mx-auto max-w-2xl px-4 py-16 text-center text-sm text-[#666]">
-          Cargando perfil…
-        </main>
+      <div className="min-h-screen font-sans" style={{ backgroundColor: BRAND.warm }}>
+        <main className="px-6 py-16 text-center text-sm text-[#666]">Cargando perfil…</main>
       </div>
     );
   }
 
-  return (
-    <div
-      className="min-h-screen font-sans"
-      style={{ backgroundColor: BRAND.warm, color: "#1a1a1a" }}
-    >
-      <header
-        className="sticky top-0 z-50 px-4 py-5 text-white sm:px-6"
-        style={{ backgroundColor: BRAND.primary }}
-      >
-        <div className="mx-auto flex max-w-2xl items-center justify-between gap-4">
-          <div>
-            <h1 className="text-xl font-semibold sm:text-2xl">Editar perfil</h1>
-            <p
-              className="mt-1 text-sm"
-              style={{ color: "rgba(255, 255, 255, 0.75)" }}
-            >
-              Actualiza tus datos y servicios
-            </p>
-          </div>
-          <Link
-            href="/dashboard"
-            className="shrink-0 text-sm text-white/90 no-underline hover:text-white"
-          >
-            ← Dashboard
-          </Link>
-        </div>
-      </header>
+  const initials = [nombre?.[0], apellido?.[0]].filter(Boolean).join("").toUpperCase() || "?";
+  const fotoFecha = perfil?.updated_at
+    ? new Date(perfil.updated_at).toLocaleDateString("es-ES")
+    : "—";
 
-      <form
-        onSubmit={handleSubmit}
-        className="mx-auto max-w-2xl px-4 py-8 sm:px-6 sm:py-10"
-      >
-        <section
-          className="border-b pb-10"
-          style={{ borderColor: BRAND.border }}
-        >
-          <SectionLabel number="01" title="Datos personales" />
-          <h2
-            className="mt-3 text-xl text-[#1a1a1a]"
-            style={{ fontFamily: SERIF }}
-          >
-            Tu información pública
-          </h2>
-
-          <input
-            ref={profilePhotoRef}
-            type="file"
-            accept="image/jpeg,image/png"
-            className="hidden"
-            onChange={handleProfilePhotoChange}
-          />
-          <div className="mt-5 flex items-center gap-4">
-            {fotoPreview ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={fotoPreview}
-                alt="Foto de perfil"
-                className="h-20 w-20 rounded-full object-cover"
-              />
-            ) : (
-              <div
-                className="flex h-20 w-20 items-center justify-center rounded-full text-2xl text-white"
-                style={{ backgroundColor: BRAND.primary }}
-              >
-                ?
+  function renderTabContent() {
+    if (activeTab === "perfil") {
+      return (
+        <div>
+          <Card title="Foto de perfil">
+            <input ref={profilePhotoRef} type="file" accept="image/jpeg,image/png" className="hidden" onChange={handleProfilePhotoChange} />
+            <div className="flex items-center gap-4">
+              {fotoPreview ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={fotoPreview} alt="" className="h-14 w-14 rounded-full object-cover" />
+              ) : (
+                <div className="flex h-14 w-14 items-center justify-center rounded-full text-sm font-semibold text-white" style={{ backgroundColor: PRIMARY }}>
+                  {initials}
+                </div>
+              )}
+              <div>
+                <p className="text-sm font-semibold text-[#1a1a1a]">{[nombre, apellido].filter(Boolean).join(" ") || "Tu nombre"}</p>
+                <p className="text-xs text-[#888]">Subida: {fotoFecha}</p>
+                <button type="button" onClick={() => profilePhotoRef.current?.click()} className="mt-2 text-xs font-semibold" style={{ color: PRIMARY }}>
+                  Cambiar foto
+                </button>
               </div>
+            </div>
+          </Card>
+
+          <Card title="Información personal">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-[#444]">Nombre</label>
+                <input type="text" required value={nombre} onChange={(e) => { markDirty(); setNombre(e.target.value); }} className={inputClass} style={{ borderColor: BRAND.border }} />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-[#444]">Apellidos</label>
+                <input type="text" required value={apellido} onChange={(e) => { markDirty(); setApellido(e.target.value); }} className={inputClass} style={{ borderColor: BRAND.border }} />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-[#444]">Ciudad</label>
+                <input type="text" required value={ciudad} onChange={(e) => { markDirty(); setCiudad(e.target.value); }} className={inputClass} style={{ borderColor: BRAND.border }} />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-[#444]">Años de experiencia</label>
+                <input type="number" min="0" value={anosExperiencia} onChange={(e) => { markDirty(); setAnosExperiencia(e.target.value); }} className={inputClass} style={{ borderColor: BRAND.border }} />
+              </div>
+            </div>
+            <div className="mt-4">
+              <label className="mb-1.5 block text-xs font-medium text-[#444]">¿Por qué deberían elegirte?</label>
+              <textarea rows={4} value={descripcion} onChange={(e) => { markDirty(); setDescripcion(e.target.value); }} className={`${inputClass} resize-y`} style={{ borderColor: BRAND.border }} />
+            </div>
+            <div className="mt-4">
+              <label className="mb-1.5 block text-xs font-medium text-[#444]">Tu personalidad</label>
+              <textarea rows={3} value={personalidad} onChange={(e) => { markDirty(); setPersonalidad(e.target.value); }} className={`${inputClass} resize-y`} style={{ borderColor: BRAND.border }} />
+            </div>
+          </Card>
+
+          <Card title="Idiomas">
+            <div className="flex flex-wrap gap-2">
+              {IDIOMAS_DEFAULT.map((lang) => (
+                <TagPill key={lang} label={lang} selected={idiomas.includes(lang)} onClick={() => toggleIdioma(lang)} />
+              ))}
+            </div>
+          </Card>
+
+          <Card title="Mis servicios">
+            <ul className="flex flex-col gap-3">
+              {services.map((service) => {
+                const v = VERTICALS.find((x) => x.id === service.vertical);
+                const isEditing = editingId === service.id;
+                return (
+                  <li key={service.id} className="rounded-xl border p-4" style={{ borderColor: BRAND.border }}>
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: v?.color || PRIMARY }} />
+                        <div>
+                          <p className="text-sm font-semibold text-[#1a1a1a]">{service.details.titulo || "Sin título"}</p>
+                          <p className="text-xs text-[#888]">{v?.label} · {service.details.precio ? `${service.details.precio}€` : "—"}</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button type="button" onClick={() => setEditingId(isEditing ? null : service.id)} className="rounded-lg border px-3 py-1.5 text-xs font-semibold" style={{ borderColor: BRAND.border, color: PRIMARY }}>
+                          {isEditing ? "Cerrar" : "Editar"}
+                        </button>
+                        <button type="button" onClick={() => toggleServiceDisponible(service.id)} className="rounded-lg border px-3 py-1.5 text-xs font-semibold" style={{ borderColor: BRAND.border, color: service.disponible ? "#166534" : "#666" }}>
+                          {service.disponible ? "Activo" : "Inactivo"}
+                        </button>
+                      </div>
+                    </div>
+                    {isEditing && (
+                      <ServiceEditForm vertical={service.vertical} details={service.details} onChange={(details) => updateServiceDetails(service.id, details)} />
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+            {addingService ? (
+              <div className="mt-4 rounded-xl border p-4" style={{ borderColor: BRAND.border }}>
+                <p className="text-sm font-semibold">Nuevo servicio</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {VERTICALS.map((v) => (
+                    <button key={v.id} type="button" onClick={() => { markDirty(); setNewVertical(v.id); setNewServiceDetails(emptyServiceDetails()); }} className="rounded-full border px-4 py-2 text-sm font-medium" style={{ borderColor: newVertical === v.id ? PRIMARY : BRAND.border, backgroundColor: newVertical === v.id ? "#e8f0fb" : "#fff", color: newVertical === v.id ? PRIMARY : "#444" }}>
+                      {v.label}
+                    </button>
+                  ))}
+                </div>
+                <ServiceEditForm vertical={newVertical} details={newServiceDetails} onChange={(d) => { markDirty(); setNewServiceDetails(d); }} />
+                <button type="button" onClick={() => { setAddingService(false); setNewServiceDetails(emptyServiceDetails()); }} className="mt-4 text-sm text-[#666]">Cancelar</button>
+              </div>
+            ) : (
+              <button type="button" onClick={() => { markDirty(); setAddingService(true); }} className="mt-4 text-sm font-semibold" style={{ color: PRIMARY }}>+ Añadir nuevo servicio</button>
             )}
-            <button
-              type="button"
-              onClick={() => profilePhotoRef.current?.click()}
-              className="rounded-xl border px-4 py-2 text-sm font-medium transition-colors hover:bg-white"
-              style={{ borderColor: BRAND.border }}
-            >
-              Cambiar foto
-            </button>
-          </div>
+          </Card>
 
-          <div className="mt-5 grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className="mb-1.5 block text-xs font-medium text-[#444]">
-                Nombre
-              </label>
-              <input
-                type="text"
-                required
-                value={nombre}
-                onChange={(e) => setNombre(e.target.value)}
-                className={inputClass}
-                style={{ borderColor: BRAND.border }}
-              />
-            </div>
-            <div>
-              <label className="mb-1.5 block text-xs font-medium text-[#444]">
-                Apellido
-              </label>
-              <input
-                type="text"
-                required
-                value={apellido}
-                onChange={(e) => setApellido(e.target.value)}
-                className={inputClass}
-                style={{ borderColor: BRAND.border }}
-              />
-            </div>
-          </div>
-          <div className="mt-4">
-            <label className="mb-1.5 block text-xs font-medium text-[#444]">
-              Ciudad
-            </label>
-            <input
-              type="text"
-              required
-              value={ciudad}
-              onChange={(e) => setCiudad(e.target.value)}
-              className={inputClass}
-              style={{ borderColor: BRAND.border }}
-            />
-          </div>
-          <div className="mt-4">
-            <label className="mb-1.5 block text-xs font-medium text-[#444]">
-              Descripción
-            </label>
-            <textarea
-              rows={5}
-              value={descripcion}
-              onChange={(e) => setDescripcion(e.target.value)}
-              placeholder="Cuéntanos quién eres, tu experiencia y por qué las familias pueden confiar en ti..."
-              className={`${inputClass} resize-y`}
-              style={{ borderColor: BRAND.border }}
-            />
-          </div>
-        </section>
+          {perfil?.role === "proveedor" && (
+            <Card title="Referencias externas">
+              {referencias.length > 0 && (
+                <ul className="mb-4 flex flex-col gap-2">
+                  {referencias.map((ref) => (
+                    <li key={ref.id} className="flex items-center justify-between rounded-lg border px-3 py-2 text-sm" style={{ borderColor: BRAND.border }}>
+                      <span>{ref.nombre_referente}</span>
+                      <span className="text-xs text-[#888]">{ref.estado}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <div>
+                {refError && <p className="mb-2 text-xs text-red-600">{refError}</p>}
+                {refMessage && <p className="mb-2 text-xs text-green-700">{refMessage}</p>}
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <input type="text" placeholder="Nombre referente" value={refNombre} onChange={(e) => setRefNombre(e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
+                  <input type="email" placeholder="Email referente" value={refEmail} onChange={(e) => setRefEmail(e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
+                </div>
+                <select value={refRelacion} onChange={(e) => setRefRelacion(e.target.value)} className={`${inputClass} mt-3`} style={{ borderColor: BRAND.border }}>
+                  {RELACION_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                </select>
+                <button type="button" onClick={handleSolicitarReferencia} disabled={refSending} className="mt-3 rounded-lg px-4 py-2 text-sm font-semibold text-white" style={{ backgroundColor: PRIMARY }}>
+                  {refSending ? "Enviando…" : "Solicitar referencia"}
+                </button>
+              </div>
+            </Card>
+          )}
+        </div>
+      );
+    }
 
-        <section className="py-10">
-          <SectionLabel number="02" title="Mis servicios" />
-          <h2
-            className="mt-3 text-xl text-[#1a1a1a]"
-            style={{ fontFamily: SERIF }}
-          >
-            Gestiona tus servicios
-          </h2>
+    if (["alojamiento", "ninos", "mascotas"].includes(activeTab)) {
+      const service = getServiceByVertical(activeTab);
+      const v = VERTICALS.find((x) => x.id === activeTab);
+      if (!service) {
+        return <p className="text-sm text-[#666]">No tienes un servicio de {v?.label}.</p>;
+      }
+      return (
+        <Card title={`${v?.emoji} ${v?.label}`}>
+          <ServiceEditForm vertical={service.vertical} details={service.details} onChange={(details) => updateServiceDetails(service.id, details)} />
+        </Card>
+      );
+    }
 
-          <ul className="mt-5 flex flex-col gap-4">
-            {services.map((service) => {
-              const verticalLabel =
-                VERTICALS.find((v) => v.id === service.vertical)?.label ||
-                service.vertical;
-              const isEditing = editingId === service.id;
-
+    if (activeTab === "documentos") {
+      return (
+        <Card title="Documentos">
+          <input ref={documentInputRef} type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={handleDocumentFile} />
+          <ul className="flex flex-col gap-3">
+            {DOC_FIELDS.map((doc) => {
+              const url = perfil?.[doc.key];
+              const ok = !!url;
+              const isUploading = uploadingDoc === doc.key;
               return (
-                <li
-                  key={service.id}
-                  className="rounded-2xl border bg-white p-5"
-                  style={{ borderColor: BRAND.border }}
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <p
-                        className="text-sm font-semibold"
-                        style={{ color: BRAND.primary }}
-                      >
-                        {verticalLabel}
-                      </p>
-                      <p className="mt-1 font-medium text-[#1a1a1a]">
-                        {service.details.titulo || "Sin título"}
-                      </p>
-                      <span
-                        className="mt-2 inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-semibold"
-                        style={{
-                          backgroundColor: service.disponible
-                            ? "#dcfce7"
-                            : "#f3f4f6",
-                          color: service.disponible ? "#166534" : "#6b7280",
-                        }}
-                      >
-                        {service.disponible ? "Activo" : "Inactivo"}
-                      </span>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setEditingId(isEditing ? null : service.id)
-                        }
-                        className="rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors hover:bg-[#f7f7f7]"
-                        style={{ borderColor: BRAND.border, color: BRAND.primary }}
-                      >
-                        {isEditing ? "Cerrar" : "Editar"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => toggleServiceDisponible(service.id)}
-                        className="rounded-lg border px-3 py-1.5 text-xs font-semibold text-[#444] transition-colors hover:bg-[#f7f7f7]"
-                        style={{ borderColor: BRAND.border }}
-                      >
-                        {service.disponible ? "Desactivar" : "Activar"}
-                      </button>
-                    </div>
+                <li key={doc.key} className="flex items-center justify-between rounded-xl border p-3" style={{ borderColor: BRAND.border }}>
+                  <div>
+                    <p className="text-sm font-medium">{doc.label}</p>
+                    <p className="text-xs" style={{ color: ok ? "#0e7a5c" : "#c47d1a" }}>{ok ? "✓ Subido" : "⚠️ Pendiente"}</p>
                   </div>
-
-                  {isEditing && (
-                    <ServiceEditForm
-                      vertical={service.vertical}
-                      details={service.details}
-                      onChange={(details) =>
-                        updateServiceDetails(service.id, details)
-                      }
-                    />
+                  {!ok && (
+                    <button type="button" onClick={() => openDocumentUpload(doc.key)} disabled={isUploading} className="text-xs font-semibold disabled:opacity-60" style={{ color: PRIMARY }}>
+                      {isUploading ? "Subiendo…" : "Subir"}
+                    </button>
                   )}
                 </li>
               );
             })}
           </ul>
+        </Card>
+      );
+    }
 
-          {addingService ? (
-            <div
-              className="mt-4 rounded-2xl border bg-white p-5"
-              style={{ borderColor: BRAND.border }}
-            >
-              <p className="text-sm font-semibold text-[#1a1a1a]">
-                Nuevo servicio
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {VERTICALS.map((v) => (
-                  <button
-                    key={v.id}
-                    type="button"
-                    onClick={() => {
-                      setNewVertical(v.id);
-                      setNewServiceDetails(emptyServiceDetails());
-                    }}
-                    className="rounded-full border px-4 py-2 text-sm font-medium transition-colors"
-                    style={{
-                      borderColor:
-                        newVertical === v.id ? BRAND.primary : BRAND.border,
-                      backgroundColor:
-                        newVertical === v.id ? BRAND.light : "#fff",
-                      color: newVertical === v.id ? DARK_BLUE : "#444",
-                    }}
-                  >
-                    {v.label}
-                  </button>
-                ))}
-              </div>
-              <ServiceEditForm
-                vertical={newVertical}
-                details={newServiceDetails}
-                onChange={setNewServiceDetails}
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  setAddingService(false);
-                  setNewServiceDetails(emptyServiceDetails());
-                }}
-                className="mt-4 text-sm text-[#666] hover:underline"
-              >
-                Cancelar
-              </button>
+    if (activeTab === "cuenta") {
+      return (
+        <div>
+          <Card title="Cuenta">
+            <label className="mb-1.5 block text-xs font-medium text-[#444]">Email</label>
+            <input type="email" readOnly value={userEmail} className={inputClass} style={{ borderColor: BRAND.border, backgroundColor: "#f7f5f2" }} />
+            <div className="mt-4">
+              <label className="mb-1.5 block text-xs font-medium text-[#444]">Nueva contraseña</label>
+              <input type="password" value={nuevaPassword} onChange={(e) => { markDirty(); setNuevaPassword(e.target.value); }} placeholder="Mínimo 6 caracteres" className={inputClass} style={{ borderColor: BRAND.border }} />
             </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setAddingService(true)}
-              className="mt-4 text-sm font-semibold transition-opacity hover:opacity-80"
-              style={{ color: BRAND.primary }}
-            >
-              + Añadir nuevo servicio
+          </Card>
+          <Card title="Zona de peligro">
+            <button type="button" className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-600">
+              Eliminar mi cuenta
             </button>
-          )}
-        </section>
+          </Card>
+        </div>
+      );
+    }
 
-        {perfil?.role === "proveedor" && (
-          <section className="border-t py-10" style={{ borderColor: BRAND.border }}>
-            <SectionLabel number="03" title="Referencias externas" />
-            <h2
-              className="mt-3 text-xl text-[#1a1a1a]"
-              style={{ fontFamily: SERIF }}
+    return null;
+  }
+
+  return (
+    <div className="min-h-screen font-sans pb-24" style={{ backgroundColor: BRAND.warm, color: "#1a1a1a" }}>
+      <div className="sticky top-0 z-50 border-b bg-white" style={{ borderColor: BRAND.border }}>
+        <div className="flex items-center justify-between gap-4 px-6 py-3">
+          <div className="flex items-center gap-6">
+            <Link href="/" className="no-underline" style={{ fontFamily: SERIF, fontSize: 18, fontWeight: 600, color: "#1a1a1a" }}>
+              Home<span style={{ fontStyle: "italic", color: PRIMARY }}>&</span>Heart
+            </Link>
+            <Link href="/dashboard" className="text-sm no-underline" style={{ color: "#666" }}>← Dashboard</Link>
+          </div>
+          <button type="submit" form="editar-perfil-form" disabled={submitting} className="rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" style={{ backgroundColor: PRIMARY }}>
+            {submitting ? "Guardando…" : "Guardar cambios"}
+          </button>
+        </div>
+        <div className="flex gap-0 overflow-x-auto border-t px-4" style={{ borderColor: BRAND.border }}>
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className="shrink-0 px-4 py-3 text-xs font-semibold whitespace-nowrap"
+              style={{
+                borderBottom: activeTab === tab.id ? `2px solid ${PRIMARY}` : "2px solid transparent",
+                color: activeTab === tab.id ? PRIMARY : "#888",
+              }}
             >
-              Avales de personas que te conocen
-            </h2>
-            <p className="mt-2 text-sm text-[#666]">
-              Pide a familias, vecinos o compañeros que avalen tu perfil.
-            </p>
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
 
-            {referencias.length > 0 && (
-              <ul className="mt-5 flex flex-col gap-2">
-                {referencias.map((ref) => (
-                  <li
-                    key={ref.id}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded-xl border px-4 py-3"
-                    style={{ borderColor: BRAND.border }}
-                  >
-                    <div>
-                      <p className="text-sm font-medium text-[#1a1a1a]">
-                        {ref.nombre_referente}
-                      </p>
-                      <p className="text-xs text-[#888]">
-                        {ref.relacion} · {ref.email_referente}
-                      </p>
-                    </div>
-                    <span
-                      className="rounded-full px-2.5 py-0.5 text-[11px] font-semibold"
-                      style={{
-                        backgroundColor:
-                          ref.estado === "completada" ? "#dcfce7" : "#fef3c7",
-                        color:
-                          ref.estado === "completada" ? "#166534" : "#92400e",
-                      }}
-                    >
-                      {ref.estado === "completada" ? "Completada" : "Pendiente"}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
+      {successMessage && (
+        <div className="mx-6 mt-4 rounded-lg bg-green-50 px-4 py-3 text-sm text-green-700">{successMessage}</div>
+      )}
+      {errorMessage && (
+        <div className="mx-6 mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{errorMessage}</div>
+      )}
 
-            <form
-              onSubmit={handleSolicitarReferencia}
-              className="mt-6 rounded-2xl border bg-white p-5"
-              style={{ borderColor: BRAND.border }}
-            >
-              {refError && (
-                <p className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-                  {refError}
-                </p>
-              )}
-              {refMessage && (
-                <p className="mb-3 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">
-                  {refMessage}
-                </p>
-              )}
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label className="mb-1.5 block text-xs font-medium text-[#444]">
-                    Nombre del referente
-                  </label>
-                  <input
-                    type="text"
-                    value={refNombre}
-                    onChange={(e) => setRefNombre(e.target.value)}
-                    className={inputClass}
-                    style={{ borderColor: BRAND.border }}
-                  />
-                </div>
-                <div>
-                  <label className="mb-1.5 block text-xs font-medium text-[#444]">
-                    Email del referente
-                  </label>
-                  <input
-                    type="email"
-                    value={refEmail}
-                    onChange={(e) => setRefEmail(e.target.value)}
-                    className={inputClass}
-                    style={{ borderColor: BRAND.border }}
-                  />
-                </div>
-              </div>
-              <div className="mt-4">
-                <label className="mb-1.5 block text-xs font-medium text-[#444]">
-                  Relación
-                </label>
-                <select
-                  value={refRelacion}
-                  onChange={(e) => setRefRelacion(e.target.value)}
-                  className={inputClass}
-                  style={{ borderColor: BRAND.border }}
-                >
-                  {RELACION_OPTIONS.map((opt) => (
-                    <option key={opt} value={opt}>
-                      {opt}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <button
-                type="submit"
-                disabled={refSending}
-                className="mt-4 rounded-xl px-5 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
-                style={{ backgroundColor: BRAND.primary }}
-              >
-                {refSending ? "Enviando…" : "Solicitar referencia"}
-              </button>
-            </form>
-          </section>
-        )}
-
-        {successMessage && (
-          <p className="mb-4 rounded-lg bg-green-50 px-4 py-3 text-sm text-green-700">
-            {successMessage}
-          </p>
-        )}
-        {errorMessage && (
-          <p className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
-            {errorMessage}
-          </p>
-        )}
-
-        <button
-          type="submit"
-          disabled={submitting}
-          className="w-full rounded-xl py-3.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
-          style={{ backgroundColor: BRAND.primary }}
-        >
-          {submitting ? "Guardando…" : "Guardar cambios"}
-        </button>
+      <form id="editar-perfil-form" onSubmit={handleSubmit}>
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_280px]" style={{ padding: "20px 24px" }}>
+          <div>{renderTabContent()}</div>
+          <PreviewPanel fotoPreview={fotoPreview} nombre={nombre} apellido={apellido} ciudad={ciudad} services={services} />
+        </div>
       </form>
+
+      {dirty && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 flex items-center justify-between border-t bg-white px-6 py-3 shadow-lg" style={{ borderColor: BRAND.border }}>
+          <span className="text-sm text-[#888]">Cambios sin guardar</span>
+          <button type="submit" form="editar-perfil-form" disabled={submitting} className="rounded-lg px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60" style={{ backgroundColor: PRIMARY }}>
+            {submitting ? "Guardando…" : "Guardar cambios →"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
