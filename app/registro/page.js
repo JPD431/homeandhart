@@ -2,21 +2,49 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { generateCodigoReferido } from "@/app/lib/referidos";
-import { BRAND } from "@/app/components/brand";
 import { supabase } from "@/lib/supabase";
+
+const PRIMARY = "#1d4f91";
+const DARK = "#163a6b";
+const WARM = "#f7f5f2";
+const BORDER = "#e8e4de";
+const LIGHT = "#e8f0fb";
+
+const inputStyle = {
+  width: "100%",
+  background: WARM,
+  border: `1px solid ${BORDER}`,
+  borderRadius: 6,
+  padding: "10px 12px",
+  fontSize: 13,
+  color: "#1a1a1a",
+  outline: "none",
+};
+
+const labelStyle = {
+  display: "block",
+  fontSize: 8,
+  textTransform: "uppercase",
+  letterSpacing: "0.08em",
+  color: "#bbb",
+  marginBottom: 6,
+  fontWeight: 600,
+};
 
 const ROLES = [
   {
     id: "cliente",
-    title: "Soy cliente",
-    subtitle: "busco servicios",
+    emoji: "👨‍👩‍👧",
+    title: "Soy familia",
+    subtitle: "Busco servicios",
   },
   {
     id: "proveedor",
+    emoji: "⭐",
     title: "Soy proveedor",
-    subtitle: "ofrezco servicios",
+    subtitle: "Ofrezco servicios",
   },
 ];
 
@@ -35,10 +63,214 @@ async function createUniqueCodigoReferido(seed) {
   return generateCodigoReferido(`${seed}${Date.now()}`);
 }
 
+function AuthShell({ children }) {
+  return (
+    <div className="font-sans" style={{ minHeight: "100vh", background: WARM }}>
+      <div
+        style={{
+          height: 57,
+          display: "flex",
+          alignItems: "center",
+          padding: "0 32px",
+          borderBottom: `1px solid ${BORDER}`,
+          background: WARM,
+        }}
+      >
+        <Link href="/" className="no-underline" style={{ lineHeight: 1.2 }}>
+          <span
+            style={{
+              fontFamily: "Georgia, serif",
+              fontSize: 18,
+              color: "#1a1a1a",
+              fontWeight: 600,
+            }}
+          >
+            Home<span style={{ fontStyle: "italic", color: PRIMARY }}>&</span>
+            Heart
+          </span>
+          <span
+            style={{
+              display: "block",
+              fontSize: 10,
+              color: "#bbb",
+              marginTop: 2,
+            }}
+          >
+            Donde estés, estamos.
+          </span>
+        </Link>
+      </div>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          minHeight: "calc(100vh - 57px)",
+        }}
+      >
+        <div
+          style={{
+            position: "relative",
+            overflow: "hidden",
+            background: `linear-gradient(160deg, ${PRIMARY} 0%, ${DARK} 100%)`,
+            padding: "48px 40px",
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "center",
+          }}
+        >
+          <div
+            aria-hidden
+            style={{
+              position: "absolute",
+              top: -80,
+              right: -80,
+              width: 280,
+              height: 280,
+              borderRadius: "50%",
+              background: "rgba(255,255,255,0.05)",
+            }}
+          />
+          <div
+            aria-hidden
+            style={{
+              position: "absolute",
+              bottom: 40,
+              left: -40,
+              width: 140,
+              height: 140,
+              borderRadius: "50%",
+              background: "rgba(255,255,255,0.05)",
+            }}
+          />
+
+          <div style={{ position: "relative", zIndex: 1, maxWidth: 380 }}>
+            <p
+              style={{
+                fontSize: 9,
+                textTransform: "uppercase",
+                letterSpacing: "0.14em",
+                color: "rgba(255,255,255,0.45)",
+                marginBottom: 16,
+                fontWeight: 600,
+              }}
+            >
+              Únete gratis
+            </p>
+            <h2
+              style={{
+                fontFamily: "Georgia, serif",
+                fontSize: 22,
+                fontWeight: 300,
+                color: "#fff",
+                lineHeight: 1.45,
+                margin: 0,
+              }}
+            >
+              La forma más humana de encontrar{" "}
+              <em style={{ color: "rgba(255,255,255,0.65)", fontStyle: "italic" }}>
+                ayuda cerca de ti
+              </em>
+            </h2>
+            <p
+              style={{
+                fontSize: 11,
+                color: "rgba(255,255,255,0.45)",
+                lineHeight: 1.7,
+                marginTop: 14,
+              }}
+            >
+              Crea tu cuenta en un minuto y empieza a reservar o a ofrecer tus
+              servicios con total confianza.
+            </p>
+
+            <div style={{ display: "flex", gap: 28, marginTop: 32 }}>
+              {[
+                { num: "340+", label: "Proveedores" },
+                { num: "1.200+", label: "Reservas" },
+                { num: "3", label: "Sin comisión" },
+              ].map((stat) => (
+                <div key={stat.label}>
+                  <div style={{ fontSize: 18, fontWeight: 200, color: "#fff" }}>
+                    {stat.num}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 8,
+                      color: "rgba(255,255,255,0.35)",
+                      marginTop: 4,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.06em",
+                    }}
+                  >
+                    {stat.label}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div
+              style={{
+                marginTop: 36,
+                background: "rgba(255,255,255,0.08)",
+                border: "1px solid rgba(255,255,255,0.1)",
+                borderRadius: 8,
+                padding: "16px 18px",
+              }}
+            >
+              <div style={{ color: "#f5c542", fontSize: 12, letterSpacing: 2 }}>
+                ★★★★★
+              </div>
+              <p
+                style={{
+                  marginTop: 10,
+                  fontSize: 12,
+                  color: "rgba(255,255,255,0.75)",
+                  fontStyle: "italic",
+                  lineHeight: 1.6,
+                }}
+              >
+                &ldquo;Registrarse fue rapidísimo. En una semana ya teníamos
+                cuidador de mascotas fijo.&rdquo;
+              </p>
+              <p
+                style={{
+                  marginTop: 10,
+                  fontSize: 10,
+                  color: "rgba(255,255,255,0.4)",
+                }}
+              >
+                — Carlos R., Barcelona
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div
+          style={{
+            background: "#fff",
+            padding: 32,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            overflowY: "auto",
+          }}
+        >
+          <div style={{ width: "100%", maxWidth: 420 }}>{children}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function RegistroForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const refCode = searchParams.get("ref")?.trim() || null;
+  const roleParam = searchParams.get("role");
+
+  const [nombre, setNombre] = useState("");
+  const [apellido, setApellido] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -51,6 +283,10 @@ function RegistroForm() {
   const [resendMessage, setResendMessage] = useState("");
   const [codigoInvitacion, setCodigoInvitacion] = useState(refCode || "");
   const [mostrarCodigoInvitacion, setMostrarCodigoInvitacion] = useState(!!refCode);
+
+  useEffect(() => {
+    if (roleParam === "proveedor") setRole("proveedor");
+  }, [roleParam]);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -115,9 +351,7 @@ function RegistroForm() {
 
       const nuevoUsuarioId = data.user.id;
 
-      // Si viene referido — darle 1 reserva extra sin comisión (total 4)
       if (codigoTrim) {
-        // Verificar que el código existe
         const { data: referidor } = await supabase
           .from("profiles")
           .select("id, reservas_sin_comision, referidos_count")
@@ -125,13 +359,11 @@ function RegistroForm() {
           .single();
 
         if (referidor) {
-          // Dar 1 reserva extra al nuevo usuario (total 4 en lugar de 3)
           await supabase
             .from("profiles")
             .update({ reservas_sin_comision: 4 })
             .eq("id", nuevoUsuarioId);
 
-          // Sumar +1 al que invitó
           await supabase
             .from("profiles")
             .update({
@@ -173,262 +405,378 @@ function RegistroForm() {
     setResendMessage("Email de verificación reenviado.");
   }
 
-  return (
-    <div
-      className="flex min-h-screen items-center justify-center px-4 py-12 font-sans"
-      style={{ backgroundColor: BRAND.warm }}
-    >
-      <div
-        className="w-full max-w-md rounded-2xl border bg-white p-8 shadow-sm sm:p-10"
-        style={{ borderColor: BRAND.border }}
-      >
-        <Link
-          href="/"
-          className="mb-6 inline-block text-xl font-semibold tracking-tight text-[#1a1a1a] no-underline"
-        >
-          Home<span className="italic text-[#1d4f91]">&</span>Heart
-        </Link>
-
-        {mensajeVerificacion ? (
-          <div className="text-center">
-            <div
-              className="mx-auto flex h-16 w-16 items-center justify-center rounded-full text-3xl"
-              style={{ backgroundColor: BRAND.light }}
-            >
-              ✉️
-            </div>
-            <h1 className="mt-6 text-2xl font-bold text-[#1a1a1a]">
-              Revisa tu email
-            </h1>
-            <p className="mt-3 text-sm leading-relaxed text-[#444]">
-              Te hemos enviado un enlace de verificación a{" "}
-              <strong className="text-[#1a1a1a]">{email}</strong>. Haz clic en el
-              enlace para activar tu cuenta.
-            </p>
-            <p className="mt-4 text-xs text-[#888]">
-              ¿No lo ves? Revisa la carpeta de spam.
-            </p>
-            {error && (
-              <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-                {error}
-              </p>
-            )}
-            {resendMessage && (
-              <p className="mt-4 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">
-                {resendMessage}
-              </p>
-            )}
-            <button
-              type="button"
-              onClick={handleResendEmail}
-              disabled={resendLoading}
-              className="mt-6 w-full rounded-xl py-3.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
-              style={{ backgroundColor: BRAND.primary }}
-            >
-              {resendLoading ? "Reenviando…" : "Reenviar email"}
-            </button>
-            <Link
-              href="/"
-              className="mt-4 inline-block text-sm font-medium no-underline hover:underline"
-              style={{ color: BRAND.primary }}
-            >
-              Volver al inicio
-            </Link>
-          </div>
-        ) : (
-          <>
-        <h1 className="text-2xl font-bold text-[#1a1a1a]">Crear cuenta</h1>
-
-        <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4">
-          <div>
-            <label
-              htmlFor="email"
-              className="mb-1.5 block text-sm font-medium text-[#444]"
-            >
-              Email
-            </label>
-            <input
-              id="email"
-              type="email"
-              required
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-xl border px-4 py-3 text-sm text-[#1a1a1a] outline-none focus:ring-2 focus:ring-[#1d4f91]/30"
-              style={{ borderColor: BRAND.border }}
-            />
-          </div>
-
-          <div>
-            <label
-              htmlFor="password"
-              className="mb-1.5 block text-sm font-medium text-[#444]"
-            >
-              Contraseña
-            </label>
-            <input
-              id="password"
-              type="password"
-              required
-              autoComplete="new-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-xl border px-4 py-3 text-sm text-[#1a1a1a] outline-none focus:ring-2 focus:ring-[#1d4f91]/30"
-              style={{ borderColor: BRAND.border }}
-            />
-          </div>
-
-          <div>
-            <label
-              htmlFor="confirmPassword"
-              className="mb-1.5 block text-sm font-medium text-[#444]"
-            >
-              Confirmar contraseña
-            </label>
-            <input
-              id="confirmPassword"
-              type="password"
-              required
-              autoComplete="new-password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              className="w-full rounded-xl border px-4 py-3 text-sm text-[#1a1a1a] outline-none focus:ring-2 focus:ring-[#1d4f91]/30"
-              style={{ borderColor: BRAND.border }}
-            />
-          </div>
-
-          <fieldset>
-            <legend className="mb-2 text-sm font-medium text-[#444]">
-              ¿Cómo usarás Home&Heart?
-            </legend>
-            <div className="flex flex-col gap-3">
-              {ROLES.map((option) => {
-                const isSelected = role === option.id;
-                return (
-                  <button
-                    key={option.id}
-                    type="button"
-                    onClick={() => setRole(option.id)}
-                    className="rounded-xl border p-4 text-left transition-colors"
-                    style={{
-                      borderColor: isSelected ? BRAND.primary : BRAND.border,
-                      backgroundColor: isSelected ? BRAND.light : "#fff",
-                    }}
-                  >
-                    <span
-                      className="block text-sm font-semibold"
-                      style={{ color: isSelected ? BRAND.primary : "#1a1a1a" }}
-                    >
-                      {option.title} — {option.subtitle}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </fieldset>
-
+  if (mensajeVerificacion) {
+    return (
+      <AuthShell>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>✉️</div>
+          <h1
+            style={{
+              fontFamily: "Georgia, serif",
+              fontSize: 20,
+              fontWeight: 300,
+              color: "#1a1a1a",
+              margin: 0,
+            }}
+          >
+            Revisa tu email
+          </h1>
+          <p style={{ fontSize: 12, color: "#888", marginTop: 12, lineHeight: 1.7 }}>
+            Te hemos enviado un enlace de verificación a{" "}
+            <strong style={{ color: "#1a1a1a" }}>{email}</strong>. Haz clic en el
+            enlace para activar tu cuenta.
+          </p>
+          <p style={{ fontSize: 11, color: "#bbb", marginTop: 12 }}>
+            ¿No lo ves? Revisa la carpeta de spam.
+          </p>
           {error && (
-            <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+            <p
+              style={{
+                marginTop: 16,
+                padding: "10px 12px",
+                borderRadius: 6,
+                background: "#fef2f2",
+                fontSize: 12,
+                color: "#b91c1c",
+              }}
+            >
               {error}
             </p>
           )}
+          {resendMessage && (
+            <p
+              style={{
+                marginTop: 16,
+                padding: "10px 12px",
+                borderRadius: 6,
+                background: "#ecfdf5",
+                fontSize: 12,
+                color: "#047857",
+              }}
+            >
+              {resendMessage}
+            </p>
+          )}
+          <button
+            type="button"
+            onClick={handleResendEmail}
+            disabled={resendLoading}
+            style={{
+              marginTop: 24,
+              width: "100%",
+              background: PRIMARY,
+              color: "#fff",
+              border: "none",
+              borderRadius: 6,
+              padding: "12px 16px",
+              fontSize: 13,
+              fontWeight: 500,
+              cursor: resendLoading ? "wait" : "pointer",
+              opacity: resendLoading ? 0.7 : 1,
+            }}
+          >
+            {resendLoading ? "Reenviando…" : "Reenviar email"}
+          </button>
+          <Link
+            href="/"
+            style={{
+              display: "inline-block",
+              marginTop: 16,
+              fontSize: 12,
+              color: PRIMARY,
+              textDecoration: "none",
+            }}
+          >
+            Volver al inicio
+          </Link>
+        </div>
+      </AuthShell>
+    );
+  }
 
-          <div className="flex items-start gap-3">
-            <input
-              type="checkbox"
-              id="terminos"
-              required
-              checked={aceptaTerminos}
-              onChange={(e) => setAceptaTerminos(e.target.checked)}
-              className="mt-1 cursor-pointer"
-            />
-            <label htmlFor="terminos" className="text-sm text-[#444]">
-              He leído y acepto los{" "}
-              <a
-                href="/legal/terminos"
-                target="_blank"
-                className="text-[#1d4f91] underline"
-              >
-                Términos de uso
-              </a>{" "}
-              y la{" "}
-              <a
-                href="/legal/privacidad"
-                target="_blank"
-                className="text-[#1d4f91] underline"
-              >
-                Política de privacidad
-              </a>{" "}
-              de Home&Heart
-            </label>
-          </div>
+  return (
+    <AuthShell>
+      <h1
+        style={{
+          fontFamily: "Georgia, serif",
+          fontSize: 20,
+          fontWeight: 300,
+          color: "#1a1a1a",
+          margin: 0,
+        }}
+      >
+        Crear cuenta
+      </h1>
+      <p style={{ fontSize: 12, color: "#aaa", marginTop: 6 }}>
+        Es gratis y solo tarda un minuto
+      </p>
 
+      <form onSubmit={handleSubmit} style={{ marginTop: 24 }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: 10,
+            marginBottom: 16,
+          }}
+        >
+          {ROLES.map((option) => {
+            const isSelected = role === option.id;
+            return (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => setRole(option.id)}
+                style={{
+                  textAlign: "left",
+                  padding: "12px 14px",
+                  borderRadius: 8,
+                  border: `2px solid ${isSelected ? PRIMARY : BORDER}`,
+                  background: isSelected ? LIGHT : "#fff",
+                  cursor: "pointer",
+                }}
+              >
+                <span style={{ fontSize: 16 }}>{option.emoji}</span>
+                <span
+                  style={{
+                    display: "block",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: isSelected ? PRIMARY : "#1a1a1a",
+                    marginTop: 6,
+                  }}
+                >
+                  {option.title}
+                </span>
+                <span
+                  style={{
+                    display: "block",
+                    fontSize: 10,
+                    color: "#888",
+                    marginTop: 2,
+                  }}
+                >
+                  · {option.subtitle}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: 12,
+            marginBottom: 16,
+          }}
+        >
           <div>
-            {!mostrarCodigoInvitacion ? (
-              <p className="text-xs text-[#888]">
-                ¿Tienes un código de invitación?{" "}
-                <button
-                  type="button"
-                  onClick={() => setMostrarCodigoInvitacion(true)}
-                  className="border-0 bg-transparent p-0 text-xs font-medium underline"
-                  style={{ color: BRAND.primary }}
+            <label htmlFor="nombre" style={labelStyle}>
+              Nombre
+            </label>
+            <input
+              id="nombre"
+              type="text"
+              autoComplete="given-name"
+              value={nombre}
+              onChange={(e) => setNombre(e.target.value)}
+              style={inputStyle}
+            />
+          </div>
+          <div>
+            <label htmlFor="apellido" style={labelStyle}>
+              Apellido
+            </label>
+            <input
+              id="apellido"
+              type="text"
+              autoComplete="family-name"
+              value={apellido}
+              onChange={(e) => setApellido(e.target.value)}
+              style={inputStyle}
+            />
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 16 }}>
+          <label htmlFor="email" style={labelStyle}>
+            Email
+          </label>
+          <input
+            id="email"
+            type="email"
+            required
+            autoComplete="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            style={inputStyle}
+          />
+        </div>
+
+        <div style={{ marginBottom: 16 }}>
+          <label htmlFor="password" style={labelStyle}>
+            Contraseña
+          </label>
+          <input
+            id="password"
+            type="password"
+            required
+            autoComplete="new-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            style={inputStyle}
+          />
+          <p style={{ fontSize: 10, color: "#bbb", marginTop: 6 }}>
+            Mínimo 8 caracteres
+          </p>
+        </div>
+
+        <div style={{ marginBottom: 16 }}>
+          <label htmlFor="confirmPassword" style={labelStyle}>
+            Confirmar contraseña
+          </label>
+          <input
+            id="confirmPassword"
+            type="password"
+            required
+            autoComplete="new-password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            style={inputStyle}
+          />
+        </div>
+
+        <div style={{ marginBottom: 16 }}>
+          {!mostrarCodigoInvitacion ? (
+            <button
+              type="button"
+              onClick={() => setMostrarCodigoInvitacion(true)}
+              style={{
+                background: "none",
+                border: "none",
+                padding: 0,
+                fontSize: 10,
+                color: PRIMARY,
+                cursor: "pointer",
+              }}
+            >
+              🎁 ¿Tienes código de invitación? Añadir
+            </button>
+          ) : (
+            <div>
+              <label htmlFor="codigoInvitacion" style={labelStyle}>
+                Código de invitación
+              </label>
+              <div style={{ position: "relative" }}>
+                <span
+                  style={{
+                    position: "absolute",
+                    left: 12,
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    fontSize: 14,
+                  }}
                 >
-                  Añadir código
-                </button>
-              </p>
-            ) : (
-              <div>
-                <label
-                  htmlFor="codigoInvitacion"
-                  className="mb-1.5 block text-sm font-medium text-[#444]"
-                >
-                  Código de invitación (opcional)
-                </label>
+                  🎁
+                </span>
                 <input
                   id="codigoInvitacion"
                   type="text"
                   value={codigoInvitacion}
                   onChange={(e) => setCodigoInvitacion(e.target.value)}
                   placeholder="Ej: HH-MARIA3"
-                  className="w-full rounded-xl border px-4 py-3 text-sm text-[#1a1a1a] outline-none focus:ring-2 focus:ring-[#1d4f91]/30"
-                  style={{ borderColor: BRAND.border }}
+                  style={{ ...inputStyle, paddingLeft: 36 }}
                 />
-                {refCode && codigoInvitacion.trim() === refCode && (
-                  <p className="mt-2 rounded-lg bg-green-50 px-3 py-2 text-xs text-green-700">
-                    ✓ Código aplicado — recibirás 1 reserva extra sin comisión
-                  </p>
-                )}
               </div>
-            )}
-          </div>
+              {refCode && codigoInvitacion.trim() === refCode && (
+                <p
+                  style={{
+                    marginTop: 8,
+                    padding: "8px 12px",
+                    borderRadius: 6,
+                    background: "#e6f4f0",
+                    fontSize: 10,
+                    color: "#0e7a5c",
+                    fontWeight: 500,
+                  }}
+                >
+                  ✓ Aplicado · 1 reserva extra sin comisión
+                </p>
+              )}
+            </div>
+          )}
+        </div>
 
-          <button
-            type="submit"
-            disabled={loading || !aceptaTerminos}
-            className="mt-2 w-full rounded-xl py-3.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-100"
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 20 }}>
+          <input
+            type="checkbox"
+            id="terminos"
+            checked={aceptaTerminos}
+            onChange={(e) => setAceptaTerminos(e.target.checked)}
+            style={{ marginTop: 3, cursor: "pointer" }}
+          />
+          <label htmlFor="terminos" style={{ fontSize: 11, color: "#666", lineHeight: 1.6 }}>
+            He leído y acepto los{" "}
+            <Link href="/legal/terminos" target="_blank" style={{ color: PRIMARY }}>
+              Términos de uso
+            </Link>{" "}
+            y la{" "}
+            <Link href="/legal/privacidad" target="_blank" style={{ color: PRIMARY }}>
+              Política de privacidad
+            </Link>{" "}
+            de Home&Heart
+          </label>
+        </div>
+
+        {error && (
+          <p
             style={{
-              backgroundColor:
-                loading || !aceptaTerminos ? "#9ca3af" : BRAND.primary,
+              marginBottom: 16,
+              padding: "10px 12px",
+              borderRadius: 6,
+              background: "#fef2f2",
+              fontSize: 12,
+              color: "#b91c1c",
             }}
           >
-            {loading ? "Creando cuenta…" : "Crear cuenta"}
-          </button>
-        </form>
+            {error}
+          </p>
+        )}
 
-        <p className="mt-6 text-center text-sm text-[#666]">
+        <button
+          type="submit"
+          disabled={loading || !aceptaTerminos}
+          style={{
+            width: "100%",
+            background: loading || !aceptaTerminos ? "#9ca3af" : PRIMARY,
+            color: "#fff",
+            border: "none",
+            borderRadius: 6,
+            padding: "12px 16px",
+            fontSize: 13,
+            fontWeight: 500,
+            cursor: loading || !aceptaTerminos ? "not-allowed" : "pointer",
+          }}
+        >
+          {loading ? "Creando cuenta…" : "Crear cuenta gratis →"}
+        </button>
+
+        <p
+          style={{
+            fontSize: 12,
+            color: "#888",
+            textAlign: "center",
+            marginTop: 20,
+          }}
+        >
           ¿Ya tienes cuenta?{" "}
-          <Link
-            href="/login"
-            className="font-medium no-underline hover:underline"
-            style={{ color: BRAND.primary }}
-          >
-            Inicia sesión
+          <Link href="/login" style={{ color: PRIMARY, textDecoration: "none" }}>
+            Iniciar sesión
           </Link>
         </p>
-          </>
-        )}
-      </div>
-    </div>
+      </form>
+    </AuthShell>
   );
 }
 
@@ -437,10 +785,10 @@ export default function RegistroPage() {
     <Suspense
       fallback={
         <div
-          className="flex min-h-screen items-center justify-center px-4 py-12 font-sans"
-          style={{ backgroundColor: BRAND.warm }}
+          className="flex min-h-screen items-center justify-center font-sans"
+          style={{ background: WARM }}
         >
-          <p className="text-sm text-[#666]">Cargando…</p>
+          <p style={{ fontSize: 12, color: "#888" }}>Cargando…</p>
         </div>
       }
     >
