@@ -17,6 +17,12 @@ const FILTER_TABS = [
   { id: "mascotas", color: "#c47d1a", light: "#fdf3e3" },
 ];
 
+const getColor = (vertical) =>
+  vertical === "alojamiento" ? "#1d4f91" : vertical === "ninos" ? "#0e7a5c" : "#c47d1a";
+
+const getLightColor = (vertical) =>
+  vertical === "alojamiento" ? "#e8f0fb" : vertical === "ninos" ? "#e6f4f0" : "#fdf3e3";
+
 const VERTICAL_THEME = {
   alojamiento: {
     label: "Alojamiento",
@@ -730,6 +736,8 @@ function ServiceCard({
   bundleMode,
   onBundleAdd,
   ratingsByProveedor,
+  comparando,
+  onToggleComparar,
 }) {
   const profile = service.profiles ?? {};
   const theme = VERTICAL_THEME[service.vertical] ?? VERTICAL_THEME.alojamiento;
@@ -740,6 +748,8 @@ function ServiceCard({
   const valoracionMedia =
     rating?.count > 0 ? (rating.sum / rating.count).toFixed(1) : null;
   const numReviews = rating?.count || 0;
+  const isComparing = comparando.some((s) => s.id === service.id);
+  const compareFull = comparando.length >= 3 && !isComparing;
 
   return (
     <li>
@@ -789,6 +799,23 @@ function ServiceCard({
           >
             {getInitials(profile.nombre, profile.apellido)}
           </span>
+          {!bundleMode && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (!compareFull) onToggleComparar(service);
+              }}
+              className="absolute bottom-2 right-2 rounded px-2 py-1 text-[9px] font-semibold text-white transition-opacity hover:opacity-90"
+              style={{
+                backgroundColor: isComparing ? theme.color : "rgba(0,0,0,.55)",
+                opacity: compareFull ? 0.5 : 1,
+                cursor: compareFull ? "default" : "pointer",
+              }}
+            >
+              {isComparing ? "✓ Añadido" : "＋ Comparar"}
+            </button>
+          )}
         </div>
 
         <div className="px-3 py-2.5">
@@ -909,6 +936,7 @@ function BuscarContent() {
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [draftFilters, setDraftFilters] = useState(getDefaultFilters);
+  const [comparando, setComparando] = useState([]);
 
   const appliedFilters = useMemo(
     () => filtersFromSearchParams(searchParams),
@@ -1235,6 +1263,30 @@ function BuscarContent() {
     setHoveredIndex(index);
   }
 
+  function toggleComparar(service) {
+    setComparando((prev) => {
+      const exists = prev.find((s) => s.id === service.id);
+      if (exists) return prev.filter((s) => s.id !== service.id);
+      if (prev.length >= 3) return prev;
+      const profile = service.profiles ?? {};
+      return [
+        ...prev,
+        {
+          id: service.id,
+          titulo:
+            service.titulo ||
+            formatShortName(profile.nombre, profile.apellido) ||
+            "Servicio",
+          vertical: service.vertical,
+        },
+      ];
+    });
+  }
+
+  function quitarComparar(id) {
+    setComparando((prev) => prev.filter((s) => s.id !== id));
+  }
+
   function updateDraft(key, value) {
     setDraftFilters((prev) => ({ ...prev, [key]: value }));
   }
@@ -1327,6 +1379,7 @@ function BuscarContent() {
         display: "flex",
         flexDirection: "column",
         minHeight: "100vh",
+        paddingBottom: comparando.length > 0 ? 80 : 0,
       }}
     >
       <div ref={navbarRef} className="shrink-0">
@@ -1832,6 +1885,8 @@ function BuscarContent() {
                   bundleMode={bundleMode}
                   onBundleAdd={handleBundleAdd}
                   ratingsByProveedor={ratingsByProveedor}
+                  comparando={comparando}
+                  onToggleComparar={toggleComparar}
                 />
               ))}
             </ul>
@@ -1877,6 +1932,130 @@ function BuscarContent() {
           )}
         </div>
       </div>
+
+      {comparando.length > 0 && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: 0,
+            left: 0,
+            right: 0,
+            background: "#fff",
+            borderTop: "1.5px solid #1d4f91",
+            padding: "12px 24px",
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            zIndex: 100,
+            boxShadow: "0 -4px 20px rgba(0,0,0,.1)",
+          }}
+        >
+          <span
+            style={{
+              fontSize: 11,
+              fontWeight: 500,
+              color: "#2a3a4a",
+              whiteSpace: "nowrap",
+            }}
+          >
+            Comparar
+          </span>
+          <div style={{ display: "flex", gap: 8, flex: 1 }}>
+            {[0, 1, 2].map((i) => (
+              <div
+                key={i}
+                style={{
+                  width: 140,
+                  height: 44,
+                  borderRadius: 8,
+                  border: comparando[i]
+                    ? `1.5px solid ${getColor(comparando[i].vertical)}`
+                    : "1.5px dashed #e8e4de",
+                  background: comparando[i]
+                    ? getLightColor(comparando[i].vertical)
+                    : "#f7f5f2",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "0 8px",
+                  fontSize: 10,
+                }}
+              >
+                {comparando[i] ? (
+                  <>
+                    <div
+                      style={{
+                        width: 7,
+                        height: 7,
+                        borderRadius: "50%",
+                        background: getColor(comparando[i].vertical),
+                      }}
+                    />
+                    <span
+                      style={{
+                        flex: 1,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                        fontWeight: 500,
+                        color: "#2a3a4a",
+                      }}
+                    >
+                      {comparando[i].titulo}
+                    </span>
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      style={{ cursor: "pointer", color: "#bbb" }}
+                      onClick={() => quitarComparar(comparando[i].id)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          quitarComparar(comparando[i].id);
+                        }
+                      }}
+                    >
+                      ×
+                    </span>
+                  </>
+                ) : (
+                  <span style={{ color: "#bbb", margin: "0 auto" }}>+ Añadir</span>
+                )}
+              </div>
+            ))}
+          </div>
+          <span
+            role="button"
+            tabIndex={0}
+            style={{ fontSize: 11, color: "#888", cursor: "pointer" }}
+            onClick={() => setComparando([])}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") setComparando([]);
+            }}
+          >
+            Limpiar
+          </span>
+          <button
+            type="button"
+            disabled={comparando.length < 2}
+            onClick={() =>
+              router.push(`/comparar?ids=${comparando.map((s) => s.id).join(",")}`)
+            }
+            style={{
+              background: comparando.length >= 2 ? "#1d4f91" : "#bbb",
+              color: "#fff",
+              border: "none",
+              padding: "10px 20px",
+              borderRadius: 6,
+              fontSize: 12,
+              cursor: comparando.length >= 2 ? "pointer" : "default",
+              fontWeight: 500,
+              whiteSpace: "nowrap",
+            }}
+          >
+            Comparar {comparando.length} →
+          </button>
+        </div>
+      )}
     </div>
   );
 }
