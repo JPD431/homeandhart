@@ -56,6 +56,11 @@ export const metadata = {
       "Encuentra alojamiento verificado, niñeras certificadas y cuidadores de mascotas.",
     images: ["/og-image.png"],
   },
+  icons: {
+    icon: "/logoo1.png",
+    shortcut: "/logoo1.png",
+    apple: "/logoo1.png",
+  },
   robots: { index: true, follow: true },
 };
 
