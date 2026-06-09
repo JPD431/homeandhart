@@ -65,6 +65,16 @@ export const metadata = {
       url: "/favicon.png",
     },
   },
+  manifest: "/manifest.json",
+  themeColor: "#1d4f91",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Home&Heart",
+  },
+  formatDetection: {
+    telephone: false,
+  },
   robots: { index: true, follow: true },
 };
 
@@ -78,6 +88,11 @@ export default function RootLayout({ children }) {
         <link rel="icon" href="/favicon.png" type="image/png" />
         <link rel="shortcut icon" href="/favicon.png" type="image/png" />
         <link rel="apple-touch-icon" href="/favicon.png" />
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="theme-color" content="#1d4f91" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-title" content="Home&Heart" />
       </head>
       <body className="min-h-full flex flex-col">
         <LangProvider>
