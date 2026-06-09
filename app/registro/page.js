@@ -344,17 +344,6 @@ function RegistroForm() {
 
       await supabase.from("profiles").upsert(profilePayload);
 
-      await fetch("/api/emails", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tipo: role === "proveedor" ? "proveedor_bienvenida" : "cliente_bienvenida",
-          email,
-          nombre,
-          user_id: data.user.id,
-        }),
-      });
-
       const nuevoUsuarioId = data.user.id;
 
       if (codigoTrim) {
