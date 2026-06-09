@@ -42,9 +42,16 @@ async function sendWelcomeEmail(user) {
 
 export async function GET(request) {
   const { searchParams, origin } = new URL(request.url);
+  console.log("CALLBACK URL:", request.url);
+  console.log("searchParams:", Object.fromEntries(searchParams));
+
   const code = searchParams.get("code");
   const tokenHash = searchParams.get("token_hash");
   const type = searchParams.get("type");
+
+  console.log("code:", code);
+  console.log("tokenHash:", tokenHash);
+  console.log("type:", type);
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
