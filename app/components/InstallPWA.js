@@ -23,8 +23,8 @@ export default function InstallPWA() {
       setShowBanner(true);
     });
 
-    if (ios && !localStorage.getItem("pwa_dismissed")) {
-      setTimeout(() => setShowBanner(true), 3000);
+    if (ios) {
+      setShowBanner(true);
     }
   }, []);
 
