@@ -80,5 +80,5 @@ export async function GET(request) {
     }
   }
 
-  return NextResponse.redirect(`${origin}/completar-perfil`);
+  return NextResponse.redirect(new URL("/verificado", request.url));
 }
