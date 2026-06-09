@@ -260,9 +260,9 @@ export const translations = {
       titulo: "Planning a family trip is a nightmare",
       subtitulo:
         "You search for a flat, then a babysitter, then someone for the dog. Three apps, three payments, three headaches.",
-      card1titulo: "Too many apps",
+      card1titulo: "Too many platforms",
       card1desc:
-        "Airbnb for the flat, Care.com for the babysitter, Rover for the dog. Seriously?",
+        "One app for accommodation, another for the babysitter, another for the pets. Too much time, too much stress.",
       card2titulo: "No real verification",
       card2desc:
         "Anyone can post a profile. You never know who is looking after your children.",
