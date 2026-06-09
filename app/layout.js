@@ -1,5 +1,6 @@
 import { Geist, Geist_Mono } from "next/font/google";
 import CookieBanner from "@/app/components/CookieBanner";
+import InstallPWA from "@/app/components/InstallPWA";
 import { LangProvider } from "@/app/lib/LangContext";
 import "./globals.css";
 
@@ -98,6 +99,7 @@ export default function RootLayout({ children }) {
         <LangProvider>
           {children}
           <CookieBanner />
+          <InstallPWA />
         </LangProvider>
       </body>
     </html>
