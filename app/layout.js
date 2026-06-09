@@ -57,12 +57,13 @@ export const metadata = {
     images: ["/og-image.png"],
   },
   icons: {
-    icon: [
-      { url: "/favicon.png", sizes: "32x32", type: "image/png" },
-      { url: "/favicon.png", sizes: "192x192", type: "image/png" },
-    ],
+    icon: "/favicon.png",
     shortcut: "/favicon.png",
     apple: "/favicon.png",
+    other: {
+      rel: "icon",
+      url: "/favicon.png",
+    },
   },
   robots: { index: true, follow: true },
 };
@@ -73,6 +74,11 @@ export default function RootLayout({ children }) {
       lang="es"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
+      <head>
+        <link rel="icon" href="/favicon.png" type="image/png" />
+        <link rel="shortcut icon" href="/favicon.png" type="image/png" />
+        <link rel="apple-touch-icon" href="/favicon.png" />
+      </head>
       <body className="min-h-full flex flex-col">
         <LangProvider>
           {children}
