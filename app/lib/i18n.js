@@ -45,9 +45,9 @@ export const translations = {
       titulo: "Organizar un viaje con familia es un caos",
       subtitulo:
         "Buscas piso, luego niñera, luego alguien para el perro. Tres apps, tres pagos, tres dolores de cabeza.",
-      card1titulo: "Demasiadas apps",
+      card1titulo: "Demasiadas plataformas",
       card1desc:
-        "Airbnb para el piso, Care.com para la niñera, Rover para el perro. ¿En serio?",
+        "Una app para el alojamiento, otra para la niñera, otra para las mascotas. Demasiado tiempo, demasiado estrés.",
       card2titulo: "Sin verificación real",
       card2desc:
         "Cualquiera puede publicar un perfil. No sabes quién cuida a tus hijos.",
