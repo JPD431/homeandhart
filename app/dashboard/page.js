@@ -64,6 +64,7 @@ export default function DashboardPage() {
 
   if (loading) return <div style={{background: BRAND.warm, minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center'}}><p style={{color: '#aaa'}}>Cargando...</p></div>;
 
+  const nombreMostrar = perfil?.nombre || user?.email?.split('@')[0] || 'usuario';
   const tabs = ['cliente', 'proveedor', 'familia', 'pasaporte', 'referidos'];
 
   return (
@@ -105,7 +106,7 @@ export default function DashboardPage() {
         style={{ background: '#fff', borderBottom: `0.5px solid ${BRAND.border}`, padding: '20px 16px' }}
       >
         <div>
-          <div style={{ fontSize: 'clamp(22px, 4vw, 26px)', fontWeight: 300, color: BRAND.dark, fontFamily: 'Georgia, serif' }}>Hola, <em style={{color: BRAND.blue}}>{perfil?.nombre || 'usuario'}.</em></div>
+          <div style={{ fontSize: 'clamp(22px, 4vw, 26px)', fontWeight: 300, color: BRAND.dark, fontFamily: 'Georgia, serif' }}>Hola, <em style={{color: BRAND.blue}}>{nombreMostrar}.</em></div>
           <div style={{fontSize: 12, color: '#aaa', marginTop: 4}}>Bienvenida a tu panel · Home&Heart</div>
         </div>
         <div className="flex flex-wrap gap-2">

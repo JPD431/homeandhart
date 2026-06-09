@@ -80,6 +80,46 @@ export async function GET(request) {
   }
 
   if (user?.email_confirmed_at && user.email) {
+    const { data: existingProfile } = await supabaseAdmin
+      .from("profiles")
+      .select("id")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (!existingProfile) {
+      const nombre = user.user_metadata?.nombre || user.email.split("@")[0];
+      const apellido = user.user_metadata?.apellido || "";
+      const role = user.user_metadata?.role || "cliente";
+      const codigoReferido =
+        "HH-" +
+        nombre
+          .toUpperCase()
+          .replace(/[^A-Z]/g, "")
+          .slice(0, 4)
+          .padEnd(4, "X") +
+        Math.floor(Math.random() * 9000 + 1000);
+
+      const { error: profileError } = await supabaseAdmin
+        .from("profiles")
+        .upsert(
+          {
+            id: user.id,
+            nombre,
+            apellido,
+            role,
+            codigo_referido: codigoReferido,
+            reservas_sin_comision: 3,
+          },
+          { onConflict: "id" },
+        );
+
+      if (profileError) {
+        console.error("Error creando perfil:", profileError);
+      } else {
+        console.log("Perfil creado correctamente para:", user.email);
+      }
+    }
+
     try {
       await sendWelcomeEmail(user);
     } catch {

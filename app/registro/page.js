@@ -313,11 +313,17 @@ function RegistroForm() {
 
     setLoading(true);
 
+    console.log("Datos registro:", { nombre, apellido, role, email });
+
     const { data, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        data: { role },
+        data: {
+          nombre,
+          apellido,
+          role,
+        },
       },
     });
 
@@ -328,25 +334,13 @@ function RegistroForm() {
     }
 
     if (data.user) {
-      const emailSeed = email.split("@")[0] || email;
-      const codigoReferido = await createUniqueCodigoReferido(emailSeed);
-
-      const profilePayload = {
-        id: data.user.id,
-        email_contacto: email,
-        role,
-        codigo_referido: codigoReferido,
-      };
-
-      if (codigoTrim) {
-        profilePayload.referido_por = codigoTrim;
-      }
-
-      await supabase.from("profiles").upsert(profilePayload);
-
       const nuevoUsuarioId = data.user.id;
 
-      if (codigoTrim) {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (session && codigoTrim) {
         const { data: referidor } = await supabase
           .from("profiles")
           .select("id, reservas_sin_comision, referidos_count")
