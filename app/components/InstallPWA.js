@@ -104,7 +104,7 @@ export default function InstallPWA() {
                 Paso 1
               </div>
               <div style={{ fontSize: 10, color: "#888", lineHeight: 1.4 }}>
-                Toca el botón compartir abajo
+                Toca <strong>⋯</strong> o el botón compartir de Safari
               </div>
             </div>
             <div style={{ display: "flex", alignItems: "center", color: "#bbb", fontSize: 16 }}>
@@ -147,6 +147,20 @@ export default function InstallPWA() {
               <div style={{ fontSize: 10, color: "#1d4f91", lineHeight: 1.4 }}>
                 Toca &quot;Añadir&quot; y listo
               </div>
+            </div>
+          </div>
+          <div
+            style={{
+              background: "#fdf3e3",
+              borderRadius: 6,
+              padding: "8px 10px",
+              marginBottom: 10,
+              marginTop: 8,
+            }}
+          >
+            <div style={{ fontSize: 10, color: "#c47d1a", lineHeight: 1.5 }}>
+              💡 En iPhone: toca los <strong>tres puntos ⋯</strong> arriba a la derecha, luego busca{" "}
+              <strong>&quot;Añadir a pantalla de inicio&quot;</strong>
             </div>
           </div>
           <div
