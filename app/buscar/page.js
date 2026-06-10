@@ -610,12 +610,18 @@ function ServiceCard({
         }}
       >
         <div className="relative h-[160px] w-full overflow-hidden">
-          {service.foto_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={service.foto_url} alt="" className="h-full w-full object-cover" />
-          ) : (
-            <div className="h-full w-full" style={{ background: theme.gradient }} />
-          )}
+          <Link
+            href={`/proveedor/${profile.id}`}
+            onClick={(e) => e.stopPropagation()}
+            className="block h-full w-full"
+          >
+            {service.foto_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={service.foto_url} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <div className="h-full w-full" style={{ background: theme.gradient }} />
+            )}
+          </Link>
           <div
             className="pointer-events-none absolute inset-0"
             style={{
@@ -665,7 +671,13 @@ function ServiceCard({
         <div className="px-3 py-2.5">
           <div className="flex items-center justify-between gap-2">
             <p className="min-w-0 truncate text-[12px] font-semibold text-[#1a1a1a]">
-              {formatShortName(profile.nombre, profile.apellido) || "Proveedor"}
+              <Link
+                href={`/proveedor/${profile.id}`}
+                onClick={(e) => e.stopPropagation()}
+                style={{ color: "#2a3a4a", textDecoration: "none", fontWeight: 500 }}
+              >
+                {formatShortName(profile.nombre, profile.apellido) || "Proveedor"}
+              </Link>
               <span className="font-normal text-[#888]"> · {zone}</span>
             </p>
             {valoracionMedia ? (
@@ -728,17 +740,27 @@ function ServiceCard({
               + Añadir a mi reserva
             </button>
           ) : (
-            <Link
-              href={`/reservar/${service.id}`}
-              onClick={(e) => e.stopPropagation()}
-              className="mt-2 block w-full rounded py-2 text-center text-[11px] font-semibold text-white no-underline transition-opacity hover:opacity-90"
-              style={{ backgroundColor: theme.color }}
-            >
-              {extra.reservar(
-                service.precio != null && service.precio !== "" ? `${Number(service.precio)}€` : "—",
-                theme.priceSuffix,
-              )}
-            </Link>
+            <>
+              <Link
+                href={`/proveedor/${profile.id}`}
+                onClick={(e) => e.stopPropagation()}
+                className="mt-2 block w-full rounded border py-2 text-center text-[11px] font-semibold no-underline transition-colors hover:bg-[#f0f5fc]"
+                style={{ borderColor: "#1d4f91", color: "#1d4f91", marginBottom: 4 }}
+              >
+                Ver perfil →
+              </Link>
+              <Link
+                href={`/reservar/${service.id}`}
+                onClick={(e) => e.stopPropagation()}
+                className="block w-full rounded py-2 text-center text-[11px] font-semibold text-white no-underline transition-opacity hover:opacity-90"
+                style={{ backgroundColor: theme.color }}
+              >
+                {extra.reservar(
+                  service.precio != null && service.precio !== "" ? `${Number(service.precio)}€` : "—",
+                  theme.priceSuffix,
+                )}
+              </Link>
+            </>
           )}
         </div>
       </button>
