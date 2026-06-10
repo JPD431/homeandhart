@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import mapboxgl from "mapbox-gl";
+import "mapbox-gl/dist/mapbox-gl.css";
 import CalendarioRangoFechas from "@/app/components/CalendarioRangoFechas";
 import { formatShortDate } from "@/app/components/calendario-shared";
 import { useLang } from "@/app/lib/LangContext";
@@ -546,7 +548,7 @@ function BuscarNavbar({ user, t, extra }) {
   );
 }
 
-function StaticMap({
+function RealMap({
   results,
   hoveredIndex,
   selectedIndex,
@@ -554,173 +556,84 @@ function StaticMap({
   onPinLeave,
   onPinSelect,
   extra,
-  t,
   bundleMode,
   origenId,
   onBundleAdd,
 }) {
-  const selected = selectedIndex != null ? results[selectedIndex] : null;
-  const selectedProfile = selected?.profiles ?? {};
-  const selectedTheme = selected
-    ? VERTICAL_THEME[selected.vertical] ?? VERTICAL_THEME.alojamiento
-    : null;
-  const SelectedIcon = selectedTheme?.Icon;
+  const mapContainer = useRef(null);
+  const map = useRef(null);
+  const markers = useRef([]);
 
-  return (
-    <div
-      className="relative w-full overflow-hidden"
-      style={{
-        height: "100%",
-        position: "relative",
-        backgroundColor: "#eef2f7",
-        backgroundImage: `
-          linear-gradient(rgba(200, 212, 228, 0.45) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(200, 212, 228, 0.45) 1px, transparent 1px)
-        `,
-        backgroundSize: "28px 28px",
-      }}
-    >
-      {/* Calles simuladas */}
-      <div className="pointer-events-none absolute inset-0" aria-hidden>
-        <div className="absolute bottom-0 left-[22%] top-0 w-[2px]" style={{ backgroundColor: "#c8d4e4" }} />
-        <div className="absolute bottom-0 left-[52%] top-0 w-[3px]" style={{ backgroundColor: "#c8d4e4" }} />
-        <div className="absolute bottom-0 left-[78%] top-0 w-[2px]" style={{ backgroundColor: "#c8d4e4" }} />
-        <div className="absolute left-0 right-0 top-[34%] h-[2px]" style={{ backgroundColor: "#c8d4e4" }} />
-        <div className="absolute left-0 right-0 top-[58%] h-[3px]" style={{ backgroundColor: "#c8d4e4" }} />
-      </div>
+  useEffect(() => {
+    if (map.current) return;
 
-      {NEIGHBORHOOD_LABELS.map((label) => (
-        <span
-          key={label.text}
-          className="pointer-events-none absolute text-[8px] font-semibold uppercase tracking-widest"
-          style={{ left: `${label.left}%`, top: `${label.top}%`, color: "#c8d4e4" }}
-        >
-          {label.text}
-        </span>
-      ))}
+    mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
 
-      {/* Leyenda */}
-      <div
-        className="absolute right-3 top-3 flex items-center gap-2 rounded-md px-2.5 py-1.5"
-        style={{ backgroundColor: "rgba(255,255,255,.75)" }}
-      >
-        {["alojamiento", "ninos", "mascotas"].map((key) => (
-          <span
-            key={key}
-            className="h-2 w-2 rounded-full"
-            style={{ backgroundColor: VERTICAL_THEME[key].color }}
-            aria-hidden
-          />
-        ))}
-      </div>
+    map.current = new mapboxgl.Map({
+      container: mapContainer.current,
+      style: "mapbox://styles/mapbox/light-v11",
+      center: [-3.7038, 40.4168],
+      zoom: 12,
+    });
 
-      {/* Pins */}
-      {results.map((service, index) => {
-        const theme = VERTICAL_THEME[service.vertical] ?? VERTICAL_THEME.alojamiento;
-        const pos = PIN_POSITIONS[index % PIN_POSITIONS.length];
-        const isHovered = hoveredIndex === index;
-        const isSelected = selectedIndex === index;
+    map.current.addControl(new mapboxgl.NavigationControl(), "top-right");
+  }, []);
 
-        return (
-          <button
-            key={service.id}
-            type="button"
-            onMouseEnter={() => onPinHover(index)}
-            onMouseLeave={onPinLeave}
-            onClick={() => onPinSelect(index)}
-            className="absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap border-0 px-2.5 py-1 text-[11px] font-bold text-white"
-            style={{
-              left: `${pos.left}%`,
-              top: `${pos.top}%`,
-              backgroundColor: theme.color,
-              borderRadius: 9999,
-              boxShadow: isSelected
-                ? `0 4px 14px ${theme.color}66`
-                : "0 2px 8px rgba(0,0,0,0.15)",
-              transform: `translate(-50%, -50%) scale(${isHovered || isSelected ? 1.06 : 1})`,
-              transition: "transform 0.15s ease, box-shadow 0.15s ease",
-              zIndex: isHovered || isSelected ? 10 : 1,
-            }}
-          >
-            {formatPinPrice(service.precio, theme.priceShort)}
-          </button>
-        );
-      })}
+  useEffect(() => {
+    if (!map.current) return;
 
-      {/* Nota inferior */}
-      <p
-        className="pointer-events-none absolute bottom-2 left-0 right-0 text-center text-[9px]"
-        style={{ color: "#aab4c4", paddingBottom: selected ? 72 : 0 }}
-      >
-        {extra.ubicacionAprox}
-      </p>
+    markers.current.forEach((m) => m.remove());
+    markers.current = [];
 
-      {/* Panel de detalle */}
-      {selected && selectedTheme && (
-        <div
-          className="absolute bottom-0 left-0 right-0 border-t bg-white px-3 py-3"
-          style={{ borderColor: "#e8e4de" }}
-        >
-          <div className="flex items-center gap-3">
-            {selected.foto_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={selected.foto_url}
-                alt=""
-                className="h-11 w-11 shrink-0 object-cover"
-                style={{ borderRadius: 6 }}
-              />
-            ) : (
-              <div
-                className="flex h-11 w-11 shrink-0 items-center justify-center"
-                style={{ borderRadius: 6, background: selectedTheme.gradient }}
-              >
-                {SelectedIcon && <SelectedIcon className="h-5 w-5 text-white" />}
-              </div>
-            )}
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-[13px] font-semibold text-[#1a1a1a]">
-                {formatShortName(selectedProfile.nombre, selectedProfile.apellido) || "Proveedor"}
-              </p>
-              <p className="truncate text-[10px] text-[#888]">
-                {selected.titulo || selectedTheme.label} · {getServiceZone(selected, selectedProfile)}
-              </p>
-              <p className="text-[12px] font-bold" style={{ color: selectedTheme.color }}>
-                {formatPrice(selected.precio, selectedTheme.priceSuffix)}
-              </p>
-            </div>
-            <div className="flex shrink-0 flex-col gap-1.5 sm:flex-row">
-              {bundleMode && origenId ? (
-                <button
-                  type="button"
-                  onClick={() => onBundleAdd(selected.id)}
-                  className="rounded px-3 py-1.5 text-center text-[11px] font-semibold text-white"
-                  style={{ backgroundColor: BRAND.primary }}
-                >
-                  + Añadir a mi reserva
-                </button>
-              ) : (
-                <Link
-                  href={`/reservar/${selected.id}`}
-                  className="rounded px-3 py-1.5 text-center text-[11px] font-semibold text-white no-underline"
-                  style={{ backgroundColor: BRAND.primary }}
-                >
-                  {extra.reservarAhora}
-                </Link>
-              )}
-              <Link
-                href={`/proveedor/${selected.proveedor_id || selectedProfile.id}`}
-                className="rounded border px-3 py-1.5 text-center text-[11px] font-semibold no-underline"
-                style={{ borderColor: BRAND.primary, color: BRAND.primary }}
-              >
-                {t.buscar.verPerfil}
-              </Link>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+    const allResults = results || [];
+
+    allResults.forEach((servicio, i) => {
+      if (!servicio.location_lng || !servicio.location_lat) return;
+
+      const color =
+        servicio.vertical === "alojamiento"
+          ? "#1d4f91"
+          : servicio.vertical === "ninos"
+            ? "#0e7a5c"
+            : "#c47d1a";
+
+      const el = document.createElement("div");
+      el.style.cssText = `
+        background: ${color};
+        color: white;
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: 500;
+        cursor: pointer;
+        border: 2px solid white;
+        box-shadow: 0 2px 8px rgba(0,0,0,.2);
+        white-space: nowrap;
+      `;
+      el.textContent = `${servicio.precio}€`;
+
+      el.addEventListener("mouseenter", () => onPinHover(i));
+      el.addEventListener("mouseleave", () => onPinLeave());
+      el.addEventListener("click", () => onPinSelect(i));
+
+      const marker = new mapboxgl.Marker({ element: el })
+        .setLngLat([servicio.location_lng, servicio.location_lat])
+        .addTo(map.current);
+
+      markers.current.push(marker);
+    });
+
+    const firstWithCoords = allResults.find((s) => s.location_lng && s.location_lat);
+    if (firstWithCoords) {
+      map.current.flyTo({
+        center: [firstWithCoords.location_lng, firstWithCoords.location_lat],
+        zoom: 13,
+        duration: 1000,
+      });
+    }
+  }, [results, extra]);
+
+  return <div ref={mapContainer} style={{ width: "100%", height: "100%" }} />;
 }
 
 function ServiceCard({
@@ -1899,7 +1812,7 @@ function BuscarContent() {
           style={{ height: "100%", position: "relative" }}
         >
           {!loading && results.length > 0 ? (
-            <StaticMap
+            <RealMap
               results={results}
               hoveredIndex={hoveredIndex}
               selectedIndex={selectedIndex}
