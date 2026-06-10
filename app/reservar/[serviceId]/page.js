@@ -2377,6 +2377,13 @@ export default function ReservarPage() {
                     </p>
                   )}
                 </div>
+                {console.log("DEBUG checkout:", {
+                  precioListo,
+                  total: priceSummary.total,
+                  ready: priceSummary.ready,
+                  calendarioError,
+                  disponibilidadChecking,
+                })}
                 {precioListo && priceSummary.total > 0 && (
                   <label className="mt-4 flex min-h-[44px] cursor-pointer items-start gap-3 py-1">
                     <input
