@@ -1754,38 +1754,20 @@ function BuscarContent() {
           className="relative min-h-0 overflow-hidden"
           style={{ height: "100%", position: "relative" }}
         >
-          {!loading && results.length > 0 ? (
-            <RealMap
-              results={results}
-              hoveredIndex={hoveredIndex}
-              selectedIndex={selectedIndex}
-              onPinHover={setHoveredIndex}
-              onPinLeave={() => setHoveredIndex(null)}
-              onPinSelect={handleSelect}
-              extra={extra}
-              t={t}
-              bundleMode={bundleMode}
-              origenId={origenParam}
-              onBundleAdd={handleBundleAdd}
-            />
-          ) : (
-            <div
-              className="flex items-center justify-center text-[12px]"
-              style={{
-                height: "100%",
-                position: "relative",
-                backgroundColor: "#eef2f7",
-                color: "#aab4c4",
-                backgroundImage: `
-                  linear-gradient(rgba(200, 212, 228, 0.45) 1px, transparent 1px),
-                  linear-gradient(90deg, rgba(200, 212, 228, 0.45) 1px, transparent 1px)
-                `,
-                backgroundSize: "28px 28px",
-              }}
-            >
-              {loading ? (lang === "en" ? "Loading map…" : "Cargando mapa…") : t.buscar.sinResultados}
-            </div>
-          )}
+          {/* Siempre mostrar el mapa */}
+          <RealMap
+            results={results}
+            hoveredIndex={hoveredIndex}
+            selectedIndex={selectedIndex}
+            onPinHover={setHoveredIndex}
+            onPinLeave={() => setHoveredIndex(null)}
+            onPinSelect={handleSelect}
+            extra={extra}
+            t={t}
+            bundleMode={bundleMode}
+            origenId={origenParam}
+            onBundleAdd={handleBundleAdd}
+          />
         </div>
       </div>
 
