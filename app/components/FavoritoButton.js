@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/app/lib/supabase";
 
 // -- CREATE TABLE favoritos (
 // --   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,

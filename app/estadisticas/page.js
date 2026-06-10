@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { BRAND, SERIF } from "@/app/components/brand";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/app/lib/supabase";
 
 const PRIMARY = "#1d4f91";
 const BORDER = "#e8e4de";
@@ -212,7 +212,7 @@ export default function EstadisticasPage() {
       if (serviceIds.length > 0) {
         const { data: bookingsData } = await supabase
           .from("bookings")
-          .select("id, service_id, precio_total, estado, status, created_at")
+          .select("id, service_id, precio_total, estado, created_at")
           .in("service_id", serviceIds);
 
         setBookings(bookingsData ?? []);

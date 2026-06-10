@@ -9,7 +9,7 @@ import {
   getUserFamiliaActiva,
 } from "@/app/lib/familia";
 import { formatDateRange, getBookingEstado } from "@/app/lib/viajes";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/app/lib/supabase";
 
 const PRIMARY = "#1d4f91";
 const GREEN = "#0e7a5c";
@@ -216,7 +216,6 @@ function FamiliaPageContent() {
           nombre,
           apellido,
           foto_perfil,
-          avatar_url,
           email_contacto
         )
       `,
@@ -237,7 +236,6 @@ function FamiliaPageContent() {
         fecha_fin,
         precio_total,
         estado,
-        status,
         cliente_id,
         services:service_id (titulo, vertical),
         profiles:cliente_id (nombre, apellido)

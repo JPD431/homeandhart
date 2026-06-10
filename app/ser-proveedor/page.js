@@ -2,7 +2,7 @@
 
 import { useRef, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/app/lib/supabase";
 import { BRAND, SERIF } from "@/app/components/brand";
 import { serializeDescuentosDuracionForDb } from "@/app/lib/descuentosDuracion";
 

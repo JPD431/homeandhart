@@ -7,7 +7,7 @@ import { useLang } from "@/app/lib/LangContext";
 import { useTranslation } from "@/app/lib/i18n";
 import { getBookingEstado } from "@/app/lib/viajes";
 import { BRAND } from "./brand";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/app/lib/supabase";
 
 const PRIMARY = "#1d4f91";
 const BORDER = "#e8e4de";
@@ -185,7 +185,7 @@ export default function Navbar() {
       const { data: profileData } = await supabase
         .from("profiles")
         .select(
-          "nombre, apellido, role, descripcion, idiomas, foto_perfil, avatar_url, reservas_sin_comision",
+          "nombre, apellido, role, descripcion, idiomas, foto_perfil, reservas_sin_comision",
         )
         .eq("id", authUser.id)
         .single();
@@ -201,7 +201,7 @@ export default function Navbar() {
 
       const { data: bookings } = await supabase
         .from("bookings")
-        .select("estado, status")
+        .select("estado")
         .eq("cliente_id", authUser.id);
 
       const activas = (bookings ?? []).filter((b) =>

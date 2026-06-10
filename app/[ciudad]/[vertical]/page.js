@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { createClient } from "@supabase/supabase-js";
+import { supabase } from "@/app/lib/supabase";
 import { SERIF } from "@/app/components/brand";
 
 const PRIMARY = "#1d4f91";
@@ -272,11 +272,6 @@ function FaqAccordion({ items }) {
 }
 
 async function fetchLandingData(ciudadCapital, verticalDB) {
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-  );
-
   const { data: servicios } = await supabase
     .from("services")
     .select(
@@ -294,7 +289,6 @@ async function fetchLandingData(ciudadCapital, verticalDB) {
         apellido,
         verificado,
         foto_perfil,
-        avatar_url,
         ciudad
       )
     `,

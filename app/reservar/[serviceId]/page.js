@@ -16,7 +16,7 @@ import { applyBestDiscountToBase } from "@/app/lib/descuentosDuracion";
 import { getUserFamiliaActiva } from "@/app/lib/familia";
 import { procesarCancelacionTardia } from "@/app/lib/garantia";
 import { getHoyDateStr, getPrecioEfectivo, isOfertaActiva } from "@/app/lib/ofertas";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/app/lib/supabase";
 
 const stripePromise = loadStripe(
   process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,

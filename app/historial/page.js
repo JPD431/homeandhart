@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { BRAND, SERIF } from "@/app/components/brand";
 import { procesarCancelacionTardia } from "@/app/lib/garantia";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/app/lib/supabase";
 
 const PRIMARY = "#1d4f91";
 const BORDER = "#e8e4de";

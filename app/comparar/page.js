@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import Navbar from "@/app/components/Navbar";
 import { SERIF } from "@/app/components/brand";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/app/lib/supabase";
 
 const VERTICAL_THEME = {
   alojamiento: {

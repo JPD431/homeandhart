@@ -9,7 +9,7 @@ import {
   formatDateRange,
   getBookingEstado,
 } from "@/app/lib/viajes";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/app/lib/supabase";
 
 const PRIMARY = "#1d4f91";
 const BORDER = "#e8e4de";
@@ -251,7 +251,6 @@ export default function PasaportePage() {
           duracion_horas,
           precio_total,
           estado,
-          status,
           services:service_id (
             vertical,
             ciudad,

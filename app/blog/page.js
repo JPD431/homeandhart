@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { createClient } from "@supabase/supabase-js";
 import Navbar from "@/app/components/Navbar";
+import { supabase } from "@/app/lib/supabase";
 import { SERIF } from "@/app/components/brand";
 import {
   BLOG_CATEGORIAS,
@@ -87,11 +87,6 @@ export default async function BlogPage({ searchParams }) {
   const sp = await searchParams;
   const categoria = sp?.categoria || "todos";
   const page = Math.max(1, parseInt(sp?.page || "1", 10));
-
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-  );
 
   let featured = null;
   let posts = [];

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { createClient } from "@supabase/supabase-js";
 import { marked } from "marked";
+import { supabase } from "@/app/lib/supabase";
 import Navbar from "@/app/components/Navbar";
 import { SERIF } from "@/app/components/brand";
 import {
@@ -33,11 +33,6 @@ function getPostImageUrl(post, width = 900, height = 400) {
 
 export async function generateMetadata({ params }) {
   const { slug } = await params;
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-  );
-
   const { data: post } = await supabase
     .from("blog_posts")
     .select("titulo, subtitulo, imagen_url, categoria")
@@ -68,11 +63,6 @@ function renderMarkdown(content) {
 
 export default async function BlogArticlePage({ params }) {
   const { slug } = await params;
-
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-  );
 
   const { data: post } = await supabase
     .from("blog_posts")

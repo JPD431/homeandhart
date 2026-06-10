@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { supabase } from "@/app/lib/supabase";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -52,11 +53,6 @@ export async function GET(request) {
   console.log("code:", code);
   console.log("tokenHash:", tokenHash);
   console.log("type:", type);
-
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-  );
 
   let user = null;
 

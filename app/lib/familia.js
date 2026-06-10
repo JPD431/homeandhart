@@ -65,7 +65,6 @@ export async function getFamiliaMiembros(supabase, familiaId) {
         nombre,
         apellido,
         foto_perfil,
-        avatar_url,
         email_contacto
       )
     `,

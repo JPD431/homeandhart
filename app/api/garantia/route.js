@@ -59,8 +59,7 @@ export async function POST(request) {
         profiles:proveedor_id (
           nombre,
           apellido,
-          foto_perfil,
-          avatar_url
+          foto_perfil
         )
       `,
       )

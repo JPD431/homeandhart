@@ -9,7 +9,7 @@ import { formatShortDate } from "@/app/components/calendario-shared";
 import { useLang } from "@/app/lib/LangContext";
 import { useTranslation } from "@/app/lib/i18n";
 import { BRAND, SERIF } from "@/app/components/brand";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/app/lib/supabase";
 
 const RealMap = dynamic(() => import("./MapComponent"), {
   ssr: false,

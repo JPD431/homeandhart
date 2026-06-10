@@ -1,4 +1,3 @@
-import { createClient } from "@supabase/supabase-js";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import CalendarioDisponibilidad from "@/app/components/CalendarioDisponibilidad";
@@ -18,7 +17,7 @@ import {
   isOfertaActiva,
 } from "@/app/lib/ofertas";
 import { getReferenteInitial } from "@/app/lib/referencias";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/app/lib/supabase";
 
 const VERTICAL_THEME = {
   alojamiento: {
@@ -194,11 +193,6 @@ function getServiceTags(service) {
 
 export async function generateMetadata({ params }) {
   const { id } = await params;
-
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-  );
 
   const { data: perfil } = await supabase
     .from("profiles")

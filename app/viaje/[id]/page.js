@@ -14,7 +14,7 @@ import {
   getBookingEstado,
   userCanAccessViaje,
 } from "@/app/lib/viajes";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/app/lib/supabase";
 
 const STATUS_STYLES = {
   pendiente: { bg: "#fef3c7", color: "#92400e", label: "Pendiente" },
@@ -151,7 +151,6 @@ export default function ViajePage() {
             hora,
             precio_total,
             estado,
-            status,
             services:service_id (
               titulo,
               vertical,

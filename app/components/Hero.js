@@ -7,7 +7,7 @@ import Navbar from "@/app/components/Navbar";
 import { formatShortDate } from "@/app/components/calendario-shared";
 import { useLang } from "@/app/lib/LangContext";
 import { useTranslation } from "@/app/lib/i18n";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/app/lib/supabase";
 import { BRAND, SERIF } from "./brand";
 
 const TAB_IDS = ["todo", "alojamiento", "ninos", "mascotas"];

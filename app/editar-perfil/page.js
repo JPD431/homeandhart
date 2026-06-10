@@ -10,7 +10,7 @@ import {
   serializeDescuentosDuracionForDb,
 } from "@/app/lib/descuentosDuracion";
 import { RELACION_OPTIONS } from "@/app/lib/referencias";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/app/lib/supabase";
 
 const DARK_BLUE = "#163a6b";
 const STORAGE_BUCKET = "Documentos";

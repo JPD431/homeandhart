@@ -3,7 +3,7 @@
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { BRAND, SERIF } from "@/app/components/brand";
-import { supabase } from "@/lib/supabase";
+import { supabase } from "@/app/lib/supabase";
 
 const INACTIVE = "#e0e0e0";
 const ICON_SIZE = 36;
