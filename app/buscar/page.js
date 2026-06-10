@@ -579,7 +579,7 @@ function RealMap({
     map.current.addControl(new mapboxgl.NavigationControl(), "top-right");
   }, []);
 
-  useEffect(() => {
+  function addMarkers() {
     if (!map.current) return;
 
     markers.current.forEach((m) => m.remove());
@@ -631,7 +631,17 @@ function RealMap({
         duration: 1000,
       });
     }
-  }, [results, extra]);
+  }
+
+  useEffect(() => {
+    if (!map.current || !map.current.loaded()) {
+      map.current?.on("load", () => {
+        addMarkers();
+      });
+      return;
+    }
+    addMarkers();
+  }, [results, extra, hoveredIndex, selectedIndex]);
 
   return <div ref={mapContainer} style={{ width: "100%", height: "100%" }} />;
 }
