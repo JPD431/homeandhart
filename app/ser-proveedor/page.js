@@ -1454,12 +1454,18 @@ export default function SerProveedorPage() {
               <input type="number" min="0" value={d.precio} onChange={(e) => upd("precio", e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
             </div>
             <div className="sm:col-span-2">
-              <p className="mb-2 text-xs font-medium text-[#444]">Modalidad</p>
-              <div className="flex flex-wrap gap-2">
-                {MODALIDAD_OPTIONS.mascotas.map((opt) => (
-                  <TagPill key={opt.value} label={opt.label} selected={d.modalidad === opt.value} onClick={() => upd("modalidad", opt.value)} color={ORANGE} />
-                ))}
-              </div>
+              <label className="mb-1.5 block text-xs font-medium text-[#444]">Modalidad</label>
+              <select
+                value={d.modalidad}
+                onChange={(e) => upd("modalidad", e.target.value)}
+                className={inputClass}
+                style={{ borderColor: BRAND.border }}
+              >
+                <option value="domicilio_proveedor">En mi domicilio</option>
+                <option value="domicilio_cliente">En domicilio del cliente</option>
+                <option value="paseos">Paseos</option>
+                <option value="todo_incluido">Todo incluido</option>
+              </select>
             </div>
           </div>
           <div className="mt-4">

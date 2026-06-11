@@ -87,6 +87,19 @@ const ESTANCIA_PLACEHOLDERS = {
   mascotas: { min: "Mínimo de días", max: "Máximo de días" },
 };
 
+const MODALIDAD_NINOS_OPTIONS = [
+  { value: "domicilio_cliente", label: "En domicilio del cliente" },
+  { value: "domicilio_proveedor", label: "En mi domicilio" },
+  { value: "ambas", label: "Ambas opciones disponibles" },
+];
+
+const MODALIDAD_MASCOTAS_OPTIONS = [
+  { value: "domicilio_proveedor", label: "En mi domicilio" },
+  { value: "domicilio_cliente", label: "En domicilio del cliente" },
+  { value: "paseos", label: "Paseos" },
+  { value: "todo_incluido", label: "Todo incluido" },
+];
+
 const inputClass =
   "w-full rounded-xl border px-4 py-3 text-sm text-[#1a1a1a] outline-none focus:ring-2 focus:ring-[#1d4f91]/30";
 
@@ -546,14 +559,10 @@ function ServiceEditForm({ vertical, details, onChange }) {
         <div className="sm:col-span-2">
           <p className="mb-2 text-xs font-medium text-[#444]">Modalidad de servicio</p>
           <div className="flex flex-col gap-2">
-            {[
-              { value: "domicilio_cliente", label: "En domicilio del cliente" },
-              {
-                value: "domicilio_proveedor",
-                label: "En mi domicilio",
-              },
-              { value: "ambas", label: "Ambas opciones disponibles" },
-            ].map((option) => {
+            {(vertical === "mascotas"
+              ? MODALIDAD_MASCOTAS_OPTIONS
+              : MODALIDAD_NINOS_OPTIONS
+            ).map((option) => {
               const selected = details.modalidad === option.value;
               return (
                 <button
@@ -648,6 +657,39 @@ function ServiceEditForm({ vertical, details, onChange }) {
           })}
         </div>
       </div>
+      {vertical === "ninos" && (
+        <div
+          className="sm:col-span-2 rounded-xl border p-4"
+          style={{ borderColor: BRAND.border }}
+        >
+          <div className="flex items-center justify-between gap-4">
+            <p className="text-sm font-semibold text-[#1a1a1a]">Disponible para viajar</p>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={details.disponible_para_viajar === true}
+              onClick={() =>
+                update("disponible_para_viajar", !details.disponible_para_viajar)
+              }
+              className="relative h-7 w-12 shrink-0 rounded-full transition-colors"
+              style={{
+                backgroundColor: details.disponible_para_viajar
+                  ? BRAND.primary
+                  : "#d1d5db",
+              }}
+            >
+              <span
+                className="absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform"
+                style={{
+                  left: details.disponible_para_viajar
+                    ? "calc(100% - 1.625rem)"
+                    : "0.125rem",
+                }}
+              />
+            </button>
+          </div>
+        </div>
+      )}
       <div className="sm:col-span-2">
         <label className="mb-1.5 block text-xs font-medium text-[#444]">
           Política de cancelación
