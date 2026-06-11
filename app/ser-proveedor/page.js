@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
 import { BRAND, SERIF } from "@/app/components/brand";
 import { serializeDescuentosDuracionForDb } from "@/app/lib/descuentosDuracion";
+import { AMENITIES_GROUPS } from "@/app/lib/amenities";
 
 const PRIMARY = "#1d4f91";
 const DARK_BLUE = "#163a6b";
@@ -81,48 +82,6 @@ const TIPO_ALOJAMIENTO_OPTIONS = [
   { value: "habitacion_compartida", label: "Compartida", desc: "Compartes habitación" },
   { value: "habitacion_hotel", label: "Hotel", desc: "Habitación de hotel" },
   { value: "otros", label: "Otro", desc: "Otro tipo de alojamiento" },
-];
-
-const AMENITIES_GROUPS = [
-  {
-    title: "Esenciales",
-    items: [
-      { id: "wifi", label: "Wifi", icon: "📶" },
-      { id: "calefaccion", label: "Calefacción", icon: "🔥" },
-      { id: "ac", label: "Aire acond.", icon: "❄️" },
-      { id: "tv", label: "TV", icon: "📺" },
-      { id: "agua_caliente", label: "Agua caliente", icon: "🚿" },
-      { id: "ascensor", label: "Ascensor", icon: "🛗" },
-      { id: "parking", label: "Parking", icon: "🅿️" },
-      { id: "accesible", label: "Accesible", icon: "♿" },
-    ],
-  },
-  {
-    title: "Baño / dormitorio",
-    items: [
-      { id: "sabanas", label: "Sábanas", icon: "🛏️" },
-      { id: "toallas", label: "Toallas", icon: "🧺" },
-      { id: "secador", label: "Secador", icon: "💨" },
-      { id: "armario", label: "Armario", icon: "🚪" },
-      { id: "escritorio", label: "Escritorio", icon: "🖥️" },
-      { id: "cuna", label: "Cuna", icon: "👶" },
-      { id: "trona", label: "Trona", icon: "🪑" },
-      { id: "chimenea", label: "Chimenea", icon: "🪵" },
-    ],
-  },
-  {
-    title: "Cocina / extras",
-    items: [
-      { id: "cocina", label: "Cocina", icon: "🍳" },
-      { id: "nevera", label: "Nevera", icon: "🧊" },
-      { id: "microondas", label: "Microondas", icon: "📻" },
-      { id: "lavadora", label: "Lavadora", icon: "🫧" },
-      { id: "secadora", label: "Secadora", icon: "👕" },
-      { id: "cafetera", label: "Cafetera", icon: "☕" },
-      { id: "jardin", label: "Jardín", icon: "🌿" },
-      { id: "terraza", label: "Terraza", icon: "🌅" },
-    ],
-  },
 ];
 
 const EDADES_TAGS = ["0-1", "1-3", "3-6", "6-12", "12+"];

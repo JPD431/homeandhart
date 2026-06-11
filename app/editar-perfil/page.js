@@ -9,6 +9,7 @@ import {
   normalizeDescuentosDuracion,
   serializeDescuentosDuracionForDb,
 } from "@/app/lib/descuentosDuracion";
+import { AMENITIES_GROUPS } from "@/app/lib/amenities";
 import { RELACION_OPTIONS } from "@/app/lib/referencias";
 import { supabase } from "@/app/lib/supabase";
 
@@ -124,6 +125,8 @@ function emptyServiceDetails() {
     descuentos_duracion_activa: false,
     descuentos_duracion: [{ minDias: "", descuento: "" }],
     proveedor_emergencia: false,
+    amenities: [],
+    foto_url: "",
   };
 }
 
@@ -164,6 +167,8 @@ function mapServiceFromDb(row) {
             }))
           : [{ minDias: "", descuento: "" }],
       proveedor_emergencia: row.proveedor_emergencia === true,
+      amenities: row.amenities || [],
+      foto_url: row.foto_url || "",
     },
   };
 }
@@ -217,6 +222,8 @@ function buildServicePayload(details, vertical, ciudad, proveedorId, disponible)
     descuentos_duracion: serializeDescuentosDuracionForDb(details),
     // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS proveedor_emergencia boolean DEFAULT false;
     proveedor_emergencia: details.proveedor_emergencia === true,
+    amenities: details.amenities || [],
+    foto_url: details.foto_url || null,
   };
 }
 
@@ -234,6 +241,17 @@ async function uploadProfilePhoto(userId, file) {
 async function uploadDocumentToStorage(userId, docKey, file) {
   const ext = file.name.includes(".") ? file.name.split(".").pop() : "pdf";
   const filePath = `${userId}/${docKey}-${Date.now()}.${ext}`;
+  const { error } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .upload(filePath, file, { upsert: true, contentType: file.type });
+  if (error) throw error;
+  const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(filePath);
+  return data.publicUrl;
+}
+
+async function uploadServicePhoto(userId, vertical, file, index) {
+  const ext = file.name.includes(".") ? file.name.split(".").pop() : "jpg";
+  const filePath = `${userId}/service-${vertical}-${index}-${Date.now()}.${ext}`;
   const { error } = await supabase.storage
     .from(STORAGE_BUCKET)
     .upload(filePath, file, { upsert: true, contentType: file.type });
@@ -486,9 +504,35 @@ function DescuentosDuracionFields({ serviceId, details, onChange }) {
   );
 }
 
-function ServiceEditForm({ vertical, details, onChange }) {
+function ServiceEditForm({ vertical, details, onChange, userId }) {
+  const servicePhotoInputRef = useRef(null);
+  const [photoUploading, setPhotoUploading] = useState(false);
+
   function update(field, val) {
     onChange({ ...details, [field]: val });
+  }
+
+  function toggleAmenity(id) {
+    const amenities = details.amenities || [];
+    const next = amenities.includes(id)
+      ? amenities.filter((item) => item !== id)
+      : [...amenities, id];
+    update("amenities", next);
+  }
+
+  async function handleServicePhotoChange(e) {
+    const file = e.target.files?.[0];
+    if (!file || !userId) return;
+    setPhotoUploading(true);
+    try {
+      const url = await uploadServicePhoto(userId, "alojamiento", file, 0);
+      update("foto_url", url);
+    } catch (err) {
+      console.error("Error subiendo foto:", err);
+    } finally {
+      setPhotoUploading(false);
+      e.target.value = "";
+    }
   }
 
   const placeholders = ESTANCIA_PLACEHOLDERS[vertical];
@@ -583,6 +627,71 @@ function ServiceEditForm({ vertical, details, onChange }) {
             })}
           </div>
         </div>
+      )}
+      {vertical === "alojamiento" && (
+        <>
+          {AMENITIES_GROUPS.map((group) => (
+            <div key={group.title} className="sm:col-span-2">
+              <p className="mb-3 text-xs font-semibold text-[#444]">{group.title}</p>
+              <div className="grid grid-cols-4 gap-2">
+                {group.items.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => toggleAmenity(item.id)}
+                    className="flex flex-col items-center rounded-xl border p-2 text-center transition-colors"
+                    style={{
+                      borderColor: (details.amenities || []).includes(item.id)
+                        ? BRAND.primary
+                        : BRAND.border,
+                      backgroundColor: (details.amenities || []).includes(item.id)
+                        ? `${BRAND.primary}10`
+                        : "#fff",
+                    }}
+                  >
+                    <span className="text-lg">{item.icon}</span>
+                    <span className="mt-1 text-[10px] text-[#555]">{item.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+          <div className="sm:col-span-2">
+            <p className="mb-2 text-xs font-medium text-[#444]">Fotos del alojamiento</p>
+            <input
+              ref={servicePhotoInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleServicePhotoChange}
+            />
+            {details.foto_url ? (
+              <div className="relative mb-3 inline-block h-32 w-48 overflow-hidden rounded-xl border" style={{ borderColor: BRAND.border }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={details.foto_url}
+                  alt=""
+                  className="h-full w-full object-cover"
+                />
+              </div>
+            ) : (
+              <p className="mb-3 text-xs text-[#888]">Sin foto subida</p>
+            )}
+            <button
+              type="button"
+              onClick={() => servicePhotoInputRef.current?.click()}
+              disabled={photoUploading || !userId}
+              className="rounded-lg border px-4 py-2 text-xs font-semibold disabled:opacity-60"
+              style={{ borderColor: BRAND.primary, color: BRAND.primary }}
+            >
+              {photoUploading
+                ? "Subiendo…"
+                : details.foto_url
+                  ? "Cambiar foto"
+                  : "Subir foto"}
+            </button>
+          </div>
+        </>
       )}
       <div>
         <label className="mb-1.5 block text-xs font-medium text-[#444]">
@@ -1443,7 +1552,7 @@ export default function EditarPerfilPage() {
                       </div>
                     </div>
                     {isEditing && (
-                      <ServiceEditForm vertical={service.vertical} details={service.details} onChange={(details) => updateServiceDetails(service.id, details)} />
+                      <ServiceEditForm vertical={service.vertical} details={service.details} userId={userId} onChange={(details) => updateServiceDetails(service.id, details)} />
                     )}
                   </li>
                 );
@@ -1459,7 +1568,7 @@ export default function EditarPerfilPage() {
                     </button>
                   ))}
                 </div>
-                <ServiceEditForm vertical={newVertical} details={newServiceDetails} onChange={(d) => { markDirty(); setNewServiceDetails(d); }} />
+                <ServiceEditForm vertical={newVertical} details={newServiceDetails} userId={userId} onChange={(d) => { markDirty(); setNewServiceDetails(d); }} />
                 <button type="button" onClick={() => { setAddingService(false); setNewServiceDetails(emptyServiceDetails()); }} className="mt-4 text-sm text-[#666]">Cancelar</button>
               </div>
             ) : (
@@ -1507,7 +1616,7 @@ export default function EditarPerfilPage() {
       }
       return (
         <Card title={`${v?.emoji} ${v?.label}`}>
-          <ServiceEditForm vertical={service.vertical} details={service.details} onChange={(details) => updateServiceDetails(service.id, details)} />
+          <ServiceEditForm vertical={service.vertical} details={service.details} userId={userId} onChange={(details) => updateServiceDetails(service.id, details)} />
         </Card>
       );
     }
