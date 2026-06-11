@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import Navbar from '@/app/components/Navbar';
 import { supabase } from '@/app/lib/supabase';
@@ -19,6 +20,7 @@ export default function DashboardPage() {
   const [perfil, setPerfil] = useState(null);
   const [reservas, setReservas] = useState([]);
   const [favoritos, setFavoritos] = useState([]);
+  const [viajes, setViajes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [tabActiva, setTabActiva] = useState('cliente');
 
@@ -38,6 +40,28 @@ export default function DashboardPage() {
       setReservas(r || []);
       const { data: f } = await supabase.from('favoritos').select('*, profiles!proveedor_id(id, nombre, apellido)').eq('cliente_id', user.id);
       setFavoritos(f || []);
+      const { data: viajesData } = await supabase
+        .from('viajes')
+        .select(`
+          id,
+          nombre,
+          fecha_inicio,
+          fecha_fin,
+          ciudad,
+          viaje_reservas (
+            bookings:booking_id (
+              id,
+              services:service_id (
+                titulo,
+                vertical
+              )
+            )
+          )
+        `)
+        .eq('creador_id', user.id)
+        .order('fecha_inicio', { ascending: false })
+        .limit(3);
+      setViajes(viajesData ?? []);
       setLoading(false);
     }
     load();
@@ -113,7 +137,7 @@ export default function DashboardPage() {
 
       {/* CONTENIDO POR TAB */}
       <div style={{padding: '20px 24px'}}>
-        {tabActiva === 'cliente' && <TabCliente perfil={perfil} reservas={reservas} favoritos={favoritos} router={router} BRAND={BRAND} copiarLink={copiarLink} />}
+        {tabActiva === 'cliente' && <TabCliente perfil={perfil} reservas={reservas} favoritos={favoritos} viajes={viajes} router={router} BRAND={BRAND} copiarLink={copiarLink} />}
         {tabActiva === 'proveedor' && <TabProveedor perfil={perfil} router={router} BRAND={BRAND} />}
         {tabActiva === 'familia' && <TabFamilia perfil={perfil} router={router} BRAND={BRAND} />}
         {tabActiva === 'pasaporte' && router.push('/pasaporte')}
@@ -123,7 +147,7 @@ export default function DashboardPage() {
   );
 }
 
-function TabCliente({ perfil, reservas, favoritos, router, BRAND, copiarLink }) {
+function TabCliente({ perfil, reservas, favoritos, viajes, router, BRAND, copiarLink }) {
   return (
     <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
       {/* RESERVAS */}
@@ -203,8 +227,17 @@ function TabCliente({ perfil, reservas, favoritos, router, BRAND, copiarLink }) 
           <span style={{fontSize: 11, fontWeight: 500, color: BRAND.dark}}>✈️ Mis viajes</span>
         </div>
         <div style={{padding: '13px 16px'}}>
-          <p style={{fontSize: 12, color: '#bbb', textAlign: 'center', padding: '8px 0', marginBottom: 8}}>Organiza todos tus servicios en un viaje</p>
-          <button onClick={() => router.push('/viaje/nuevo')} style={{ width: '100%', minHeight: 44, background: BRAND.blue, color: '#fff', border: 'none', padding: '10px 8px', borderRadius: 5, fontSize: 10, cursor: 'pointer', fontWeight: 500 }}>+ Nuevo viaje</button>
+          {viajes.length === 0 ? (
+            <p style={{fontSize: 11, color: '#aaa'}}>Organiza todos tus servicios en un viaje</p>
+          ) : (
+            viajes.map(viaje => (
+              <Link key={viaje.id} href={`/viaje/${viaje.id}`} style={{display:'block', padding:'8px 0', borderBottom:'0.5px solid #f5f3f0', textDecoration:'none'}}>
+                <div style={{fontSize:12, fontWeight:500, color:'#2a3a4a'}}>📍 {viaje.ciudad || viaje.nombre}</div>
+                <div style={{fontSize:10, color:'#aaa'}}>{viaje.fecha_inicio} — {viaje.fecha_fin} · {viaje.viaje_reservas?.length || 0} servicio(s)</div>
+              </Link>
+            ))
+          )}
+          <Link href="/viaje/nuevo" style={{fontSize:11, color:'#1d4f91', fontWeight:500, display:'block', marginTop:8}}>+ Nuevo viaje</Link>
         </div>
       </div>
 
