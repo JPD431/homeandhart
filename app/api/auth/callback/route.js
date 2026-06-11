@@ -119,26 +119,37 @@ export async function GET(request) {
     const codigoReferido = user.user_metadata?.codigo_referido;
 
     if (codigoReferido) {
-      const { data: referidor } = await supabaseAdmin
+      const { data: perfilActual } = await supabaseAdmin
         .from("profiles")
-        .select("id, reservas_sin_comision, referidos_count")
-        .eq("codigo_referido", codigoReferido)
+        .select("reservas_sin_comision, referido_aplicado")
+        .eq("id", user.id)
         .maybeSingle();
 
-      if (referidor) {
-        await supabaseAdmin
+      if (perfilActual && !perfilActual.referido_aplicado) {
+        const { data: referidor } = await supabaseAdmin
           .from("profiles")
-          .update({ reservas_sin_comision: 4 })
-          .eq("id", user.id);
+          .select("id, reservas_sin_comision, referidos_count")
+          .eq("codigo_referido", codigoReferido)
+          .maybeSingle();
 
-        await supabaseAdmin
-          .from("profiles")
-          .update({
-            reservas_sin_comision:
-              (Number(referidor.reservas_sin_comision) || 0) + 1,
-            referidos_count: (Number(referidor.referidos_count) || 0) + 1,
-          })
-          .eq("id", referidor.id);
+        if (referidor) {
+          await supabaseAdmin
+            .from("profiles")
+            .update({
+              reservas_sin_comision: 4,
+              referido_aplicado: true,
+            })
+            .eq("id", user.id);
+
+          await supabaseAdmin
+            .from("profiles")
+            .update({
+              reservas_sin_comision:
+                (Number(referidor.reservas_sin_comision) || 0) + 1,
+              referidos_count: (Number(referidor.referidos_count) || 0) + 1,
+            })
+            .eq("id", referidor.id);
+        }
       }
     }
 
