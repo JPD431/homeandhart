@@ -266,6 +266,11 @@ function TabCliente({ perfil, reservas, favoritos, viajes, router, BRAND, copiar
 function TabProveedor({ perfil, router, BRAND }) {
   return (
     <div style={{textAlign: 'center', padding: '40px 0'}}>
+      <div style={{background:'#e6f4f0', borderRadius:8, padding:'12px 16px', marginBottom:16}}>
+        <div style={{fontSize:11, color:'#888', marginBottom:4}}>Reservas sin comisión</div>
+        <div style={{fontSize:20, fontWeight:600, color:'#0e7a5c'}}>{perfil?.reservas_sin_comision || 0} 🎁</div>
+        <div style={{fontSize:10, color:'#666', marginTop:4}}>Recibirás el 100% del pago en estas reservas</div>
+      </div>
       <p style={{fontSize: 14, color: '#aaa', marginBottom: 16}}>Panel de proveedor</p>
       <button onClick={() => router.push('/estadisticas')} style={{ minHeight: 44, background: BRAND.blue, color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 4, fontSize: 12, cursor: 'pointer', marginRight: 8 }}>Ver estadísticas</button>
       <button onClick={() => router.push('/editar-perfil')} style={{ minHeight: 44, background: '#fff', color: BRAND.blue, border: `1px solid ${BRAND.blue}`, padding: '10px 20px', borderRadius: 4, fontSize: 12, cursor: 'pointer' }}>Editar servicios</button>
