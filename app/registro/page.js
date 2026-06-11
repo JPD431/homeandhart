@@ -323,6 +323,7 @@ function RegistroForm() {
           nombre,
           apellido,
           role,
+          codigo_referido: codigoTrim || null,
         },
       },
     });
@@ -331,37 +332,6 @@ function RegistroForm() {
       setLoading(false);
       setError(signUpError.message);
       return;
-    }
-
-    if (data.user) {
-      const nuevoUsuarioId = data.user.id;
-
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      if (session && codigoTrim) {
-        const { data: referidor } = await supabase
-          .from("profiles")
-          .select("id, reservas_sin_comision, referidos_count")
-          .eq("codigo_referido", codigoTrim)
-          .single();
-
-        if (referidor) {
-          await supabase
-            .from("profiles")
-            .update({ reservas_sin_comision: 4 })
-            .eq("id", nuevoUsuarioId);
-
-          await supabase
-            .from("profiles")
-            .update({
-              reservas_sin_comision: referidor.reservas_sin_comision + 1,
-              referidos_count: (referidor.referidos_count || 0) + 1,
-            })
-            .eq("id", referidor.id);
-        }
-      }
     }
 
     setLoading(false);

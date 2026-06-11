@@ -86,7 +86,7 @@ export async function GET(request) {
       const nombre = user.user_metadata?.nombre || user.email.split("@")[0];
       const apellido = user.user_metadata?.apellido || "";
       const role = user.user_metadata?.role || "cliente";
-      const codigoReferido =
+      const codigoReferidoPropio =
         "HH-" +
         nombre
           .toUpperCase()
@@ -103,7 +103,7 @@ export async function GET(request) {
             nombre,
             apellido,
             role,
-            codigo_referido: codigoReferido,
+            codigo_referido: codigoReferidoPropio,
             reservas_sin_comision: 3,
           },
           { onConflict: "id" },
@@ -113,6 +113,32 @@ export async function GET(request) {
         console.error("Error creando perfil:", profileError);
       } else {
         console.log("Perfil creado correctamente para:", user.email);
+      }
+    }
+
+    const codigoReferido = user.user_metadata?.codigo_referido;
+
+    if (codigoReferido) {
+      const { data: referidor } = await supabaseAdmin
+        .from("profiles")
+        .select("id, reservas_sin_comision, referidos_count")
+        .eq("codigo_referido", codigoReferido)
+        .maybeSingle();
+
+      if (referidor) {
+        await supabaseAdmin
+          .from("profiles")
+          .update({ reservas_sin_comision: 4 })
+          .eq("id", user.id);
+
+        await supabaseAdmin
+          .from("profiles")
+          .update({
+            reservas_sin_comision:
+              (Number(referidor.reservas_sin_comision) || 0) + 1,
+            referidos_count: (Number(referidor.referidos_count) || 0) + 1,
+          })
+          .eq("id", referidor.id);
       }
     }
 
