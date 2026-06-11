@@ -965,18 +965,24 @@ export default function EditarPerfilPage() {
   }
 
   const verticalsActivos = [...new Set(services.map((s) => s.vertical))];
+  const esClienteSinServicios = perfil?.role === "cliente" && services.length === 0;
+  const tieneServicios = services.length > 0;
   const tabs = [
     { id: "perfil", label: "Perfil personal" },
-    ...verticalsActivos.includes("alojamiento")
-      ? [{ id: "alojamiento", label: "🏠 Alojamiento" }]
-      : [],
-    ...verticalsActivos.includes("ninos")
-      ? [{ id: "ninos", label: "🧒 Niñera" }]
-      : [],
-    ...verticalsActivos.includes("mascotas")
-      ? [{ id: "mascotas", label: "🐾 Mascotas" }]
-      : [],
-    { id: "documentos", label: "Documentos" },
+    ...(tieneServicios
+      ? [
+          ...verticalsActivos.includes("alojamiento")
+            ? [{ id: "alojamiento", label: "🏠 Alojamiento" }]
+            : [],
+          ...verticalsActivos.includes("ninos")
+            ? [{ id: "ninos", label: "🧒 Niñera" }]
+            : [],
+          ...verticalsActivos.includes("mascotas")
+            ? [{ id: "mascotas", label: "🐾 Mascotas" }]
+            : [],
+          { id: "documentos", label: "Documentos" },
+        ]
+      : []),
     { id: "cuenta", label: "Cuenta" },
   ];
 
@@ -1217,6 +1223,99 @@ export default function EditarPerfilPage() {
 
   function renderTabContent() {
     if (activeTab === "perfil") {
+      if (esClienteSinServicios) {
+        return (
+          <div>
+            <Card title="Sobre ti">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-[#444]">Nombre</label>
+                  <input
+                    type="text"
+                    value={nombre}
+                    onChange={(e) => {
+                      markDirty();
+                      setNombre(e.target.value);
+                    }}
+                    className={inputClass}
+                    style={{ borderColor: BRAND.border }}
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-[#444]">Apellidos</label>
+                  <input
+                    type="text"
+                    value={apellido}
+                    onChange={(e) => {
+                      markDirty();
+                      setApellido(e.target.value);
+                    }}
+                    className={inputClass}
+                    style={{ borderColor: BRAND.border }}
+                  />
+                </div>
+              </div>
+              <div className="mt-4">
+                <label className="mb-1.5 block text-xs font-medium text-[#444]">Ciudad</label>
+                <input
+                  type="text"
+                  value={ciudad}
+                  onChange={(e) => {
+                    markDirty();
+                    setCiudad(e.target.value);
+                  }}
+                  className={inputClass}
+                  style={{ borderColor: BRAND.border }}
+                />
+              </div>
+              <div className="mt-4">
+                <label className="mb-1.5 block text-xs font-medium text-[#444]">
+                  Cuéntanos un poco sobre ti
+                </label>
+                <textarea
+                  rows={4}
+                  value={descripcion}
+                  onChange={(e) => {
+                    markDirty();
+                    setDescripcion(e.target.value);
+                  }}
+                  placeholder="Familia con dos hijos, viajamos a menudo..."
+                  className={`${inputClass} resize-y`}
+                  style={{ borderColor: BRAND.border }}
+                />
+              </div>
+              <div className="mt-4">
+                <label className="mb-1.5 block text-xs font-medium text-[#444]">Idiomas</label>
+                <div className="flex flex-wrap gap-2">
+                  {IDIOMAS_DEFAULT.map((lang) => (
+                    <TagPill
+                      key={lang}
+                      label={lang}
+                      selected={idiomas.includes(lang)}
+                      onClick={() => toggleIdioma(lang)}
+                    />
+                  ))}
+                </div>
+              </div>
+            </Card>
+
+            <Card title="¿Quieres ofrecer servicios también?">
+              <p className="text-sm leading-relaxed text-[#666]">
+                Conviértete en proveedor y empieza a ganar dinero ofreciendo alojamiento, cuidado de
+                niños o mascotas.
+              </p>
+              <Link
+                href="/ser-proveedor"
+                className="mt-4 inline-block text-sm font-semibold no-underline"
+                style={{ color: PRIMARY }}
+              >
+                Hazte proveedor →
+              </Link>
+            </Card>
+          </div>
+        );
+      }
+
       return (
         <div>
           <Card title="Foto de perfil">
