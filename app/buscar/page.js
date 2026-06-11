@@ -582,7 +582,9 @@ function ServiceCard({
   ratingsByProveedor,
   comparando,
   onToggleComparar,
+  favoritos,
 }) {
+  const router = useRouter();
   const profile = service.profiles ?? {};
   const theme = VERTICAL_THEME[service.vertical] ?? VERTICAL_THEME.alojamiento;
   const zone = getServiceZone(service, profile);
@@ -594,6 +596,38 @@ function ServiceCard({
   const numReviews = rating?.count || 0;
   const isComparing = comparando.some((s) => s.id === service.id);
   const compareFull = comparando.length >= 3 && !isComparing;
+  const [esFavorito, setEsFavorito] = useState(
+    favoritos?.includes(service.proveedor_id) || false,
+  );
+
+  useEffect(() => {
+    setEsFavorito(favoritos?.includes(service.proveedor_id) || false);
+  }, [favoritos, service.proveedor_id]);
+
+  const toggleFavorito = async (e) => {
+    e.stopPropagation();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      router.push("/login");
+      return;
+    }
+
+    if (esFavorito) {
+      await supabase
+        .from("favoritos")
+        .delete()
+        .eq("cliente_id", user.id)
+        .eq("proveedor_id", service.proveedor_id);
+    } else {
+      await supabase.from("favoritos").insert({
+        cliente_id: user.id,
+        proveedor_id: service.proveedor_id,
+      });
+    }
+    setEsFavorito(!esFavorito);
+  };
 
   return (
     <li>
@@ -609,7 +643,7 @@ function ServiceCard({
           backgroundColor: isActive ? "#fafaf9" : "#fff",
         }}
       >
-        <div className="relative h-[160px] w-full overflow-hidden">
+        <div className="relative h-[160px] w-full overflow-hidden" style={{ position: "relative" }}>
           <Link
             href={`/proveedor/${profile.id}`}
             onClick={(e) => e.stopPropagation()}
@@ -622,6 +656,28 @@ function ServiceCard({
               <div className="h-full w-full" style={{ background: theme.gradient }} />
             )}
           </Link>
+          <button
+            type="button"
+            onClick={toggleFavorito}
+            style={{
+              position: "absolute",
+              top: 8,
+              right: 8,
+              background: "rgba(255,255,255,.9)",
+              border: "none",
+              borderRadius: "50%",
+              width: 32,
+              height: 32,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              fontSize: 14,
+              zIndex: 2,
+            }}
+          >
+            {esFavorito ? "❤️" : "🤍"}
+          </button>
           <div
             className="pointer-events-none absolute inset-0"
             style={{
@@ -803,6 +859,7 @@ function BuscarContent() {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [draftFilters, setDraftFilters] = useState(getDefaultFilters);
   const [comparando, setComparando] = useState([]);
+  const [favoritos, setFavoritos] = useState([]);
 
   const appliedFilters = useMemo(
     () => filtersFromSearchParams(searchParams),
@@ -845,9 +902,22 @@ function BuscarContent() {
   );
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user: authUser } }) => {
+    async function loadUser() {
+      const {
+        data: { user: authUser },
+      } = await supabase.auth.getUser();
       setUser(authUser ?? null);
-    });
+      if (authUser) {
+        const { data } = await supabase
+          .from("favoritos")
+          .select("proveedor_id")
+          .eq("cliente_id", authUser.id);
+        setFavoritos((data ?? []).map((f) => f.proveedor_id));
+      } else {
+        setFavoritos([]);
+      }
+    }
+    loadUser();
   }, []);
 
   useEffect(() => {
@@ -1765,6 +1835,7 @@ function BuscarContent() {
                   ratingsByProveedor={ratingsByProveedor}
                   comparando={comparando}
                   onToggleComparar={toggleComparar}
+                  favoritos={favoritos}
                 />
               ))}
             </ul>
