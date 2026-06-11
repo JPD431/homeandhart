@@ -258,7 +258,7 @@ const EMPTY_SERVICE_DETAILS = {
     location_zone: "",
     location_lat: null,
     location_lng: null,
-    precio: "",
+    precio: "0",
     modalidad: "domicilio_cliente",
     animalesTags: [],
     tamanoPerro: "",
@@ -952,14 +952,19 @@ export default function SerProveedorPage() {
               ? serviceDetails.ninos
               : serviceDetails.mascotas;
 
-        const { error: serviceError } = await supabase.from("services").insert({
-          proveedor_id: user.id,
-          vertical,
-          titulo: servicioData.titulo || `Servicio de ${vertical}`,
-          precio: parseFloat(servicioData.precio) || 0,
-          ciudad: ciudad.trim(),
-          disponible: false,
-        });
+        const { data: nuevoServicio, error: serviceError } = await supabase
+          .from("services")
+          .insert({
+            proveedor_id: user.id,
+            vertical,
+            titulo: servicioData.titulo || `Servicio de ${vertical}`,
+            precio: Number(servicioData.precio) || 0,
+            ciudad: ciudad.trim(),
+            disponible: false,
+            amenities: servicioData.amenities || [],
+          })
+          .select("id")
+          .single();
 
         if (serviceError) {
           console.error("Error servicio:", serviceError);
@@ -967,6 +972,26 @@ export default function SerProveedorPage() {
           setLoading(false);
           return;
         }
+
+        if (vertical === "alojamiento" && servicePhotos.alojamiento?.length > 0) {
+          let firstPhotoUrl = null;
+          for (let i = 0; i < servicePhotos.alojamiento.length; i++) {
+            const photoUrl = await uploadServicePhoto(
+              user.id,
+              "alojamiento",
+              servicePhotos.alojamiento[i],
+              i,
+            );
+            if (i === 0) firstPhotoUrl = photoUrl;
+          }
+          if (firstPhotoUrl) {
+            await supabase
+              .from("services")
+              .update({ foto_url: firstPhotoUrl })
+              .eq("id", nuevoServicio.id);
+          }
+        }
+
         console.log("Servicio guardado:", vertical);
       }
 
