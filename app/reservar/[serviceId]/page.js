@@ -1133,6 +1133,7 @@ export default function ReservarPage() {
   const [paymentMethodsLoading, setPaymentMethodsLoading] = useState(false);
   const [disponibilidadChecking, setDisponibilidadChecking] = useState(false);
   const [calendarioError, setCalendarioError] = useState("");
+  const [fechasOcupadas, setFechasOcupadas] = useState([]);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [bundleTab, setBundleTab] = useState("alojamiento");
   const [tabServices, setTabServices] = useState([]);
@@ -1511,6 +1512,18 @@ export default function ReservarPage() {
       cancelled = true;
     };
   }, [fechaInicio, fechaFin, service, selectedServices]);
+
+  useEffect(() => {
+    async function cargarOcupadas() {
+      const { data } = await supabase
+        .from("disponibilidad")
+        .select("fecha_inicio, fecha_fin")
+        .eq("service_id", service.id);
+
+      setFechasOcupadas(data || []);
+    }
+    if (service?.id) cargarOcupadas();
+  }, [service?.id]);
 
   const priceSummary = useMemo(() => {
     if (!service) {
@@ -2258,6 +2271,7 @@ export default function ReservarPage() {
                       fechaFin={fechaFin}
                       onChange={handleRangeChange}
                       onRangeComplete={() => setCalendarOpen(false)}
+                      fechasOcupadas={fechasOcupadas}
                     />
                   </div>
                 )}

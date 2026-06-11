@@ -14,12 +14,19 @@ import {
   parseDateStr,
 } from "@/app/components/calendario-shared";
 
+function isDateOcupada(dateStr, fechasOcupadas) {
+  return (fechasOcupadas ?? []).some(
+    (rango) => dateStr >= rango.fecha_inicio && dateStr <= rango.fecha_fin,
+  );
+}
+
 function MonthCalendarRange({
   viewDate,
   fechaInicio,
   fechaFin,
   hoyStr,
   onDayClick,
+  fechasOcupadas = [],
 }) {
   const cells = buildMonthGrid(viewDate);
   const monthLabel = `${MONTH_NAMES[viewDate.getMonth()]} ${viewDate.getFullYear()}`;
@@ -43,6 +50,7 @@ function MonthCalendarRange({
           }
 
           const isPast = dateStr < hoyStr;
+          const ocupado = isDateOcupada(dateStr, fechasOcupadas);
           const isToday = dateStr === hoyStr;
           const isStart = dateStr === fechaInicio;
           const isEnd = dateStr === fechaFin;
@@ -52,21 +60,27 @@ function MonthCalendarRange({
             isInRange(dateStr, fechaInicio, fechaFin);
           const highlighted =
             inRange || isStart || (isEnd && fechaFin) || (isStart && !fechaFin);
-          const selectable = !isPast;
+          const selectable = !isPast && !ocupado;
 
-          let bg = "transparent";
-          let color = "#1a1a1a";
+          let bg = "#fff";
+          let color = "#2a3a4a";
           let boxShadow;
+          let cursor = "pointer";
 
-          if (isPast) {
-            bg = "#f3f4f6";
-            color = "#d1d5db";
+          if (ocupado) {
+            bg = "#fde8e8";
+            color = "#c0392b";
+            cursor = "not-allowed";
+          } else if (isPast) {
+            bg = "#f5f5f5";
+            color = "#ccc";
+            cursor = "not-allowed";
           } else if (highlighted) {
             bg = RANGE_HIGHLIGHT;
             color = BRAND.primary;
           }
 
-          if (isToday && !isPast) {
+          if (isToday && !isPast && !ocupado) {
             boxShadow = `inset 0 0 0 2px ${BRAND.primary}`;
           }
 
@@ -76,11 +90,12 @@ function MonthCalendarRange({
               type="button"
               disabled={!selectable}
               onClick={() => selectable && onDayClick(dateStr)}
-              className="flex aspect-square items-center justify-center rounded-lg text-xs font-medium transition-colors hover:enabled:bg-[#f7f7f7] disabled:cursor-default"
+              className="flex aspect-square items-center justify-center rounded-lg text-xs font-medium transition-colors hover:enabled:bg-[#f7f7f7] disabled:cursor-not-allowed"
               style={{
                 backgroundColor: bg,
                 color,
                 boxShadow,
+                cursor,
               }}
               aria-label={dateStr}
             >
@@ -98,6 +113,7 @@ export default function CalendarioRangoFechas({
   fechaFin,
   onChange,
   onRangeComplete,
+  fechasOcupadas = [],
 }) {
   const hoy = new Date();
   const hoyStr = getHoyStr();
@@ -165,6 +181,7 @@ export default function CalendarioRangoFechas({
           fechaFin={fechaFin}
           hoyStr={hoyStr}
           onDayClick={onDayClick}
+          fechasOcupadas={fechasOcupadas}
         />
         <div className="hidden min-w-0 flex-1 lg:block">
           <MonthCalendarRange
@@ -173,6 +190,7 @@ export default function CalendarioRangoFechas({
             fechaFin={fechaFin}
             hoyStr={hoyStr}
             onDayClick={onDayClick}
+            fechasOcupadas={fechasOcupadas}
           />
         </div>
       </div>
