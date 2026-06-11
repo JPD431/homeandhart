@@ -799,9 +799,8 @@ function mensajeNuevoEmailHtml(data) {
 }
 
 function servicioCompletadoEmailHtml(data) {
-  const dashboardUrl =
-    data.dashboard_url ||
-    `${process.env.NEXT_PUBLIC_URL || "https://homeandheart.es"}/dashboard`;
+  const baseUrl = process.env.NEXT_PUBLIC_URL || "https://homeandheart.es";
+  const confirmUrl = `${baseUrl}/confirmar-servicio/${data.booking_id}`;
 
   return emailLayout({
     title: "¿Cómo fue tu experiencia? — Home&Heart",
@@ -811,12 +810,12 @@ function servicioCompletadoEmailHtml(data) {
         Hola <strong>${data.cliente_nombre || "Cliente"}</strong>, tu servicio en Home&amp;Heart ha finalizado. Cuéntanos cómo fue.
       </p>
       <p style="margin:28px 0 0;text-align:center;">
-        <a href="${dashboardUrl}" style="display:inline-block;width:100%;max-width:280px;background-color:#16a34a;color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;padding:14px 24px;border-radius:8px;box-sizing:border-box;">
+        <a href="${confirmUrl}?resultado=ok" style="display:inline-block;width:100%;max-width:280px;background-color:#16a34a;color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;padding:14px 24px;border-radius:8px;box-sizing:border-box;">
           ✅ Todo fue bien
         </a>
       </p>
       <p style="margin:16px 0 0;text-align:center;">
-        <a href="${dashboardUrl}" style="display:inline-block;width:100%;max-width:280px;background-color:${AMBER};color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;padding:14px 24px;border-radius:8px;box-sizing:border-box;">
+        <a href="${confirmUrl}?resultado=problema" style="display:inline-block;width:100%;max-width:280px;background-color:${AMBER};color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;padding:14px 24px;border-radius:8px;box-sizing:border-box;">
           ⚠️ Hubo un problema
         </a>
       </p>
@@ -829,6 +828,10 @@ function servicioCompletadoEmailHtml(data) {
 async function sendServicioCompletadoEmail(data) {
   if (!data.cliente_id) {
     return { error: "Falta el campo requerido: cliente_id" };
+  }
+
+  if (!data.booking_id) {
+    return { error: "Falta el campo requerido: booking_id" };
   }
 
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
@@ -856,7 +859,7 @@ async function sendServicioCompletadoEmail(data) {
     subject: "¿Cómo fue tu experiencia? — Home&Heart",
     html: servicioCompletadoEmailHtml({
       cliente_nombre: profile.nombre,
-      dashboard_url: `${process.env.NEXT_PUBLIC_URL || "https://homeandheart.es"}/dashboard`,
+      booking_id: data.booking_id,
     }),
   });
 

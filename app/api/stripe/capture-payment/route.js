@@ -132,19 +132,38 @@ async function buildTransfersForPayment(paymentIntentId) {
 
 export async function POST(request) {
   try {
-    const { paymentIntentId } = await request.json();
+    const { paymentIntentId, bookingId } = await request.json();
 
-    if (!paymentIntentId) {
+    let resolvedPaymentIntentId = paymentIntentId;
+
+    if (!resolvedPaymentIntentId && bookingId) {
+      const { data: booking, error: bookingError } = await supabase
+        .from("bookings")
+        .select("payment_intent_id")
+        .eq("id", bookingId)
+        .single();
+
+      if (bookingError || !booking?.payment_intent_id) {
+        return Response.json(
+          { error: "No se encontró payment_intent_id para esta reserva" },
+          { status: 400 },
+        );
+      }
+
+      resolvedPaymentIntentId = booking.payment_intent_id;
+    }
+
+    if (!resolvedPaymentIntentId) {
       return Response.json(
-        { error: "Falta paymentIntentId" },
+        { error: "Falta paymentIntentId o bookingId" },
         { status: 400 },
       );
     }
 
-    const paymentIntent = await stripe.paymentIntents.capture(paymentIntentId);
+    const paymentIntent = await stripe.paymentIntents.capture(resolvedPaymentIntentId);
     const chargeId = paymentIntent.latest_charge;
 
-    const transferPlan = await buildTransfersForPayment(paymentIntentId);
+    const transferPlan = await buildTransfersForPayment(resolvedPaymentIntentId);
 
     let transfers = [];
     if (transferPlan.length && chargeId) {
@@ -171,7 +190,7 @@ export async function POST(request) {
         await rewardReferrerIfFirstCompletion(
           plan.proveedorId,
           plan.profile,
-          paymentIntentId,
+          resolvedPaymentIntentId,
         );
       }
     }

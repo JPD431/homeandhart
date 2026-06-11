@@ -34,7 +34,7 @@ export async function GET(request) {
     .from("bookings")
     .select("id, cliente_id, service_id, payment_intent_id, precio_total")
     .eq("estado", "en_curso")
-    .eq("confirmacion_cliente", false)
+    .is("confirmacion_cliente", null)
     .lte("fecha_fin", ahora.split("T")[0]);
 
   for (const booking of paraCompletar || []) {
@@ -54,15 +54,36 @@ export async function GET(request) {
     });
   }
 
+  const { data: conProblema } = await supabase
+    .from("bookings")
+    .select("id")
+    .eq("estado", "completada")
+    .eq("confirmacion_cliente", "problema");
+
+  for (const booking of conProblema || []) {
+    await supabase
+      .from("bookings")
+      .update({ estado: "incidencia" })
+      .eq("id", booking.id);
+  }
+
   const { data: paraLiberar } = await supabase
     .from("bookings")
-    .select("id, payment_intent_id")
+    .select("id, payment_intent_id, confirmacion_cliente")
     .eq("estado", "completada")
-    .eq("confirmacion_cliente", false)
+    .is("confirmacion_cliente", null)
     .not("payment_intent_id", "is", null)
     .lte("updated_at", hace24h);
 
   for (const booking of paraLiberar || []) {
+    if (booking.confirmacion_cliente === "problema") {
+      await supabase
+        .from("bookings")
+        .update({ estado: "incidencia" })
+        .eq("id", booking.id);
+      continue;
+    }
+
     await fetch(`${process.env.NEXT_PUBLIC_URL}/api/stripe/capture-payment`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -74,7 +95,7 @@ export async function GET(request) {
 
     await supabase
       .from("bookings")
-      .update({ confirmacion_cliente: true })
+      .update({ confirmacion_cliente: "ok" })
       .eq("id", booking.id);
   }
 
