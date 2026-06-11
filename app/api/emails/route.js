@@ -451,8 +451,10 @@ function bundleDetailsBlock(data) {
     .join("");
 
   const subtotal = data.subtotal ? `${data.subtotal} €` : null;
-  const comision = data.comision ? `${data.comision} €` : null;
+  const comision =
+    data.comision && Number(data.comision) > 0 ? `${data.comision} €` : null;
   const total = data.precio_total ? `${data.precio_total} €` : null;
+  const totalLabel = comision ? "Total" : "Total (gastos de gestión incluidos)";
 
   return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:20px 0 0;background-color:${BRAND_LIGHT};border-radius:8px;padding:16px 20px;">
     <tr>
@@ -460,8 +462,8 @@ function bundleDetailsBlock(data) {
     </tr>
     ${rowsHtml}
     ${subtotal ? `<tr><td style="padding:8px 0;font-size:14px;color:#666;">Subtotal</td><td style="padding:8px 0;font-size:14px;color:#222;text-align:right;">${subtotal}</td></tr>` : ""}
-    ${comision ? `<tr><td style="padding:4px 0;font-size:12px;color:#888;">Gastos de gestión (14%)</td><td style="padding:4px 0;font-size:12px;color:#888;text-align:right;">${comision}</td></tr>` : ""}
-    ${total ? `<tr><td style="padding:8px 0;font-size:16px;font-weight:600;color:${BRAND_PRIMARY};">Total</td><td style="padding:8px 0;font-size:16px;font-weight:600;color:${BRAND_PRIMARY};text-align:right;">${total}</td></tr>` : ""}
+    ${comision ? `<tr><td style="padding:4px 0;font-size:12px;color:#888;">Gastos de gestión</td><td style="padding:4px 0;font-size:12px;color:#888;text-align:right;">${comision}</td></tr>` : ""}
+    ${total ? `<tr><td style="padding:8px 0;font-size:16px;font-weight:600;color:${BRAND_PRIMARY};">${totalLabel}</td><td style="padding:8px 0;font-size:16px;font-weight:600;color:${BRAND_PRIMARY};text-align:right;">${total}</td></tr>` : ""}
     <tr>
       <td colspan="2" style="padding:8px 0 0;font-size:12px;color:#888;">Fechas: ${data.fecha_inicio}${data.fecha_fin && data.fecha_fin !== data.fecha_inicio ? ` — ${data.fecha_fin}` : ""}</td>
     </tr>
