@@ -1171,6 +1171,37 @@ export default function EditarPerfilPage() {
     }
   }
 
+  const handleEliminarCuenta = async () => {
+    const confirmacion = confirm(
+      "¿Estás segura de que quieres eliminar tu cuenta? Esta acción es irreversible y se eliminarán todos tus datos, reservas y mensajes.",
+    );
+
+    if (!confirmacion) return;
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    try {
+      const res = await fetch("/api/auth/delete-account", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user.id }),
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        await supabase.auth.signOut();
+        router.push("/");
+      } else {
+        alert("Error al eliminar la cuenta: " + (data.error || "Inténtalo de nuevo"));
+      }
+    } catch {
+      alert("Error al eliminar la cuenta");
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen font-sans" style={{ backgroundColor: BRAND.warm }}>
@@ -1380,7 +1411,11 @@ export default function EditarPerfilPage() {
             </div>
           </Card>
           <Card title="Zona de peligro">
-            <button type="button" className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-600">
+            <button
+              type="button"
+              onClick={handleEliminarCuenta}
+              className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-100"
+            >
               Eliminar mi cuenta
             </button>
           </Card>
