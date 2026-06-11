@@ -1176,7 +1176,7 @@ export default function ReservarPage() {
 
       const { data: perfilClienteData } = await supabase
         .from("profiles")
-        .select("nombre, apellido, stripe_customer_id")
+        .select("nombre, apellido, stripe_customer_id, reservas_sin_comision")
         .eq("id", user.id)
         .single();
 
@@ -1538,6 +1538,7 @@ export default function ReservarPage() {
     }
 
     const dateContext = { fechaInicio, fechaFin, duracionHoras, mainVertical: vertical };
+    const clienteSinComision = (perfilCliente?.reservas_sin_comision || 0) > 0;
     const lines = selectedServices.map((svc) => {
       const unitOverride =
         svc.id === service.id ? precioEspecialChat : null;
@@ -1580,7 +1581,7 @@ export default function ReservarPage() {
         id: svc.id,
         name,
         base: calc.base,
-        total: applyClientPrice(calc.base),
+        total: clienteSinComision ? calc.base : applyClientPrice(calc.base),
         detail,
         ready,
         vertical: svc.vertical,
@@ -1602,7 +1603,9 @@ export default function ReservarPage() {
     }
 
     const subtotal = lines.reduce((sum, line) => sum + line.base, 0);
-    const commission = Math.round(subtotal * COMMISSION_RATE * 100) / 100;
+    const commission = clienteSinComision
+      ? 0
+      : Math.round(subtotal * COMMISSION_RATE * 100) / 100;
     const total = Math.round((subtotal + commission) * 100) / 100;
 
     return {
@@ -1621,7 +1624,10 @@ export default function ReservarPage() {
     fechaFin,
     duracionHoras,
     precioEspecialChat,
+    perfilCliente,
   ]);
+
+  const clienteSinComision = (perfilCliente?.reservas_sin_comision || 0) > 0;
 
   const precioListo =
     priceSummary.ready && !calendarioError && !disponibilidadChecking;
@@ -1937,6 +1943,18 @@ export default function ReservarPage() {
 
       if (error) {
         throw new Error(error.message);
+      }
+
+      if (clienteSinComision) {
+        await supabase
+          .from("profiles")
+          .update({
+            reservas_sin_comision: Math.max(
+              0,
+              (perfilCliente.reservas_sin_comision || 0) - 1,
+            ),
+          })
+          .eq("id", userId);
       }
 
       if (insertedBookings?.length) {
@@ -2809,13 +2827,6 @@ export default function ReservarPage() {
                     );
                   })}
 
-                  <div className="my-3 h-px" style={{ backgroundColor: "#f0ede8" }} />
-
-                  <div className="flex items-center justify-between text-[11px] text-[#666]">
-                    <span>Gastos de gestión</span>
-                    <span>{formatEuro(priceSummary.commission)}</span>
-                  </div>
-
                   {precioEspecialChat && (
                     <div className="mt-2 flex items-center justify-between text-[11px] font-medium text-green-700">
                       <span>Precio especial 🏷️</span>
@@ -2835,14 +2846,31 @@ export default function ReservarPage() {
                       </div>
                     ))}
 
-                  <div className="my-3 h-px" style={{ backgroundColor: "#f0ede8" }} />
-
-                  <div className="flex items-center justify-between">
-                    <span className="text-[15px] font-medium text-[#1a1a1a]">Total</span>
-                    <span className="text-[15px] font-medium text-[#1a1a1a]">
-                      {formatEuro(priceSummary.total)}
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      fontWeight: 600,
+                      fontSize: 14,
+                      marginTop: 8,
+                      paddingTop: 8,
+                      borderTop: "1px solid #e8e4de",
+                    }}
+                  >
+                    <span className="text-[#1a1a1a]">
+                      Total{" "}
+                      {clienteSinComision ? "" : "(gastos de gestión incluidos)"}
+                    </span>
+                    <span className="text-[#1a1a1a]">
+                      {priceSummary.total.toFixed(2)}€
                     </span>
                   </div>
+                  {clienteSinComision && (
+                    <div style={{ fontSize: 10, color: "#0e7a5c", marginTop: 4 }}>
+                      🎁 Sin gastos de gestión - te quedan{" "}
+                      {perfilCliente.reservas_sin_comision} reservas gratis
+                    </div>
+                  )}
                 </>
               ) : (
                 <p className="mt-4 text-[11px] text-[#888]">{precioDetail}</p>
