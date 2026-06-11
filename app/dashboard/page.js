@@ -67,6 +67,12 @@ export default function DashboardPage() {
     load();
   }, []);
 
+  useEffect(() => {
+    if (perfil?.role === 'proveedor') {
+      setTabActiva('proveedor');
+    }
+  }, [perfil]);
+
   const copiarLink = (codigo) => {
     const link = `${window.location.origin}/registro?ref=${codigo}`;
     if (navigator.clipboard && window.isSecureContext) {
