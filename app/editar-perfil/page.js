@@ -1409,6 +1409,7 @@ export default function EditarPerfilPage() {
           const { error } = await supabase.from("services").insert(payload);
           if (error) throw error;
         } else {
+          console.log('DEBUG payload antes de guardar:', payload);
           const { error } = await supabase
             .from("services")
             .update(payload)
@@ -1432,6 +1433,7 @@ export default function EditarPerfilPage() {
           ),
           ...locationFields,
         };
+        console.log('DEBUG payload antes de guardar:', payload);
         const { data, error } = await supabase
           .from("services")
           .insert(payload)
