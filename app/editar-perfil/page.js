@@ -1008,6 +1008,7 @@ export default function EditarPerfilPage() {
   const [nombre, setNombre] = useState("");
   const [apellido, setApellido] = useState("");
   const [ciudad, setCiudad] = useState("");
+  const [telefono, setTelefono] = useState("");
   const [anosExperiencia, setAnosExperiencia] = useState("");
   const [descripcion, setDescripcion] = useState("");
   const [personalidad, setPersonalidad] = useState("");
@@ -1065,6 +1066,7 @@ export default function EditarPerfilPage() {
         setNombre(perfilData.nombre || "");
         setApellido(perfilData.apellido || "");
         setCiudad(perfilData.ciudad || "");
+        setTelefono(perfilData.telefono || "");
         const desc = perfilData.descripcion || "";
         const personalidadMatch = desc.match(/Personalidad:\s*(.+?)(?:\n\n|$)/s);
         const motivacionParts = desc.split(/\n\nPersonalidad:/);
@@ -1280,6 +1282,7 @@ export default function EditarPerfilPage() {
         nombre: nombre.trim(),
         apellido: apellido.trim(),
         ciudad: ciudad.trim(),
+        telefono: telefono.trim() || null,
         descripcion: descripcionParts.join("\n\n"),
         location_zone: ciudad.trim(),
         foto_perfil: fotoUrl,
@@ -1441,6 +1444,25 @@ export default function EditarPerfilPage() {
                 />
               </div>
               <div className="mt-4">
+                <label className="mb-1.5 block text-xs font-medium text-[#444]">Teléfono móvil</label>
+                <input
+                  type="tel"
+                  value={telefono}
+                  onChange={(e) => {
+                    markDirty();
+                    setTelefono(e.target.value);
+                  }}
+                  placeholder="+34 600 000 000"
+                  style={{
+                    width: "100%",
+                    padding: 10,
+                    borderRadius: 8,
+                    border: "1px solid #e8e4de",
+                    fontSize: 13,
+                  }}
+                />
+              </div>
+              <div className="mt-4">
                 <label className="mb-1.5 block text-xs font-medium text-[#444]">
                   Cuéntanos un poco sobre ti
                 </label>
@@ -1524,6 +1546,25 @@ export default function EditarPerfilPage() {
               <div>
                 <label className="mb-1.5 block text-xs font-medium text-[#444]">Ciudad</label>
                 <input type="text" required value={ciudad} onChange={(e) => { markDirty(); setCiudad(e.target.value); }} className={inputClass} style={{ borderColor: BRAND.border }} />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-[#444]">Teléfono móvil</label>
+                <input
+                  type="tel"
+                  value={telefono}
+                  onChange={(e) => {
+                    markDirty();
+                    setTelefono(e.target.value);
+                  }}
+                  placeholder="+34 600 000 000"
+                  style={{
+                    width: "100%",
+                    padding: 10,
+                    borderRadius: 8,
+                    border: "1px solid #e8e4de",
+                    fontSize: 13,
+                  }}
+                />
               </div>
               <div>
                 <label className="mb-1.5 block text-xs font-medium text-[#444]">Años de experiencia</label>
