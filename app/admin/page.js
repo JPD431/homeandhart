@@ -310,11 +310,8 @@ export default function AdminPage() {
     // --   tipo text NOT NULL,
     // --   enviado_at timestamp with time zone DEFAULT now()
     // -- );
-    const { data: profiles, error: profilesError } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("role", "proveedor")
-      .order("fecha_registro", { ascending: false });
+    const res = await fetch("/api/admin/providers");
+    const { providers: profiles, error: profilesError } = await res.json();
 
     if (profilesError) {
       setErrorMessage(profilesError.message);
