@@ -178,6 +178,8 @@ const EMPTY_SERVICE_DETAILS = {
     dias_disponibles: [...DIAS_DISPONIBLES_DEFAULT],
     capacidad: { personas: 2, habitaciones: 1, camas: 1, banos: 1 },
     amenities: [],
+    direccion_exacta: "",
+    telefono_contacto: "",
     normas: { petFriendly: false, bebes: false, fumar: false, fiestas: false },
     check_in: "15:00",
     check_out: "11:00",
@@ -196,6 +198,8 @@ const EMPTY_SERVICE_DETAILS = {
     location_lng: null,
     precio: "",
     modalidad: "domicilio_cliente",
+    direccion_exacta: "",
+    telefono_contacto: "",
     edadesTags: [],
     formacionTags: [],
     actividadesTags: [],
@@ -222,6 +226,8 @@ const EMPTY_SERVICE_DETAILS = {
     location_lng: null,
     precio: "0",
     modalidad: "domicilio_cliente",
+    direccion_exacta: "",
+    telefono_contacto: "",
     animalesTags: [],
     tamanoPerro: "",
     certificacionesTags: [],
@@ -307,6 +313,96 @@ async function geocodeBarrio(barrio, ciudad) {
     return { lat, lng };
   }
   return null;
+}
+
+async function geocodificarDireccion(direccion) {
+  const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+  const res = await fetch(
+    `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(direccion)}.json?access_token=${token}&limit=1`,
+  );
+  const data = await res.json();
+  if (data.features?.[0]) {
+    return {
+      lat: data.features[0].center[1],
+      lng: data.features[0].center[0],
+    };
+  }
+  return null;
+}
+
+function needsDireccionFields(vertical, modalidad) {
+  if (vertical === "alojamiento") return true;
+  if (vertical === "ninos" && modalidad === "domicilio_proveedor") return true;
+  if (vertical === "mascotas" && modalidad === "domicilio_proveedor") return true;
+  return false;
+}
+
+async function getServiceLocationFields(details, vertical) {
+  if (!needsDireccionFields(vertical, details.modalidad)) {
+    return {
+      direccion_exacta: null,
+      telefono_contacto: null,
+      location_lat: null,
+      location_lng: null,
+    };
+  }
+  const direccion_exacta = details.direccion_exacta?.trim() || null;
+  const telefono_contacto = details.telefono_contacto?.trim() || null;
+  let location_lat = null;
+  let location_lng = null;
+  if (direccion_exacta) {
+    const coords = await geocodificarDireccion(direccion_exacta);
+    if (coords) {
+      location_lat = coords.lat;
+      location_lng = coords.lng;
+    }
+  }
+  return { direccion_exacta, telefono_contacto, location_lat, location_lng };
+}
+
+function DireccionContactoFields({ d, upd, vertical }) {
+  if (!needsDireccionFields(vertical, d.modalidad)) return null;
+  return (
+    <>
+      <div className="sm:col-span-2">
+        <label className="mb-1.5 block text-xs font-medium text-[#444]">Dirección exacta</label>
+        <input
+          type="text"
+          value={d.direccion_exacta || ""}
+          onChange={(e) => upd("direccion_exacta", e.target.value)}
+          placeholder="Calle, número, piso, ciudad, código postal"
+          style={{
+            width: "100%",
+            padding: 10,
+            borderRadius: 8,
+            border: "1px solid #e8e4de",
+            fontSize: 13,
+          }}
+        />
+        <p style={{ fontSize: 10, color: "#aaa", marginTop: 4 }}>
+          Esta dirección solo se compartirá con el cliente tras confirmar la reserva
+        </p>
+      </div>
+      <div className="sm:col-span-2">
+        <label className="mb-1.5 block text-xs font-medium text-[#444]">
+          Teléfono de contacto para este servicio
+        </label>
+        <input
+          type="tel"
+          value={d.telefono_contacto || ""}
+          onChange={(e) => upd("telefono_contacto", e.target.value)}
+          placeholder="+34 600 000 000"
+          style={{
+            width: "100%",
+            padding: 10,
+            borderRadius: 8,
+            border: "1px solid #e8e4de",
+            fontSize: 13,
+          }}
+        />
+      </div>
+    </>
+  );
 }
 
 async function geocodeLocationZonesForServices(selectedIds, detailsByService, ciudad) {
@@ -914,6 +1010,8 @@ export default function SerProveedorPage() {
               ? serviceDetails.ninos
               : serviceDetails.mascotas;
 
+        const locationFields = await getServiceLocationFields(servicioData, vertical);
+
         const { data: nuevoServicio, error: serviceError } = await supabase
           .from("services")
           .insert({
@@ -925,6 +1023,7 @@ export default function SerProveedorPage() {
             ciudad: ciudad.trim(),
             disponible: false,
             amenities: servicioData.amenities || [],
+            ...locationFields,
           })
           .select("id")
           .single();
@@ -1220,6 +1319,9 @@ export default function SerProveedorPage() {
               </button>
             ))}
           </div>
+          <div className="mt-6 grid gap-4 sm:grid-cols-2">
+            <DireccionContactoFields d={d} upd={upd} vertical="alojamiento" />
+          </div>
           <p className="mt-6 mb-3 text-xs font-medium text-[#444]">Capacidad</p>
           <div className="grid grid-cols-4 gap-3">
             <CounterField label="Personas" value={d.capacidad.personas} onChange={(v) => updCap("personas", v)} min={1} />
@@ -1344,6 +1446,7 @@ export default function SerProveedorPage() {
                 ))}
               </div>
             </div>
+            <DireccionContactoFields d={d} upd={upd} vertical="ninos" />
           </div>
           <div className="mt-4">
             <p className="mb-2 text-xs font-medium text-[#444]">Rango de edad</p>
@@ -1485,6 +1588,7 @@ export default function SerProveedorPage() {
                 <option value="todo_incluido">Todo incluido</option>
               </select>
             </div>
+            <DireccionContactoFields d={d} upd={upd} vertical="mascotas" />
           </div>
           <div className="mt-4">
             <label className="mb-1.5 block text-xs font-medium text-[#444]">Descripción</label>

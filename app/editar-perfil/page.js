@@ -111,6 +111,8 @@ function emptyServiceDetails() {
     precio: "",
     tipo_alojamiento: "",
     modalidad: "domicilio_cliente",
+    direccion_exacta: "",
+    telefono_contacto: "",
     estancia_minima: "",
     estancia_maxima: "",
     antelacion_minima: 24,
@@ -171,8 +173,100 @@ function mapServiceFromDb(row) {
       proveedor_emergencia: row.proveedor_emergencia === true,
       amenities: row.amenities || [],
       foto_url: row.foto_url || "",
+      direccion_exacta: row.direccion_exacta || "",
+      telefono_contacto: row.telefono_contacto || "",
     },
   };
+}
+
+async function geocodificarDireccion(direccion) {
+  const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+  const res = await fetch(
+    `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(direccion)}.json?access_token=${token}&limit=1`,
+  );
+  const data = await res.json();
+  if (data.features?.[0]) {
+    return {
+      lat: data.features[0].center[1],
+      lng: data.features[0].center[0],
+    };
+  }
+  return null;
+}
+
+function needsDireccionFields(vertical, modalidad) {
+  if (vertical === "alojamiento") return true;
+  if (vertical === "ninos" && modalidad === "domicilio_proveedor") return true;
+  if (vertical === "mascotas" && modalidad === "domicilio_proveedor") return true;
+  return false;
+}
+
+async function getServiceLocationFields(details, vertical) {
+  if (!needsDireccionFields(vertical, details.modalidad)) {
+    return {
+      direccion_exacta: null,
+      telefono_contacto: null,
+      location_lat: null,
+      location_lng: null,
+    };
+  }
+  const direccion_exacta = details.direccion_exacta?.trim() || null;
+  const telefono_contacto = details.telefono_contacto?.trim() || null;
+  let location_lat = null;
+  let location_lng = null;
+  if (direccion_exacta) {
+    const coords = await geocodificarDireccion(direccion_exacta);
+    if (coords) {
+      location_lat = coords.lat;
+      location_lng = coords.lng;
+    }
+  }
+  return { direccion_exacta, telefono_contacto, location_lat, location_lng };
+}
+
+function DireccionContactoFields({ d, upd, vertical }) {
+  if (!needsDireccionFields(vertical, d.modalidad)) return null;
+  return (
+    <>
+      <div className="sm:col-span-2">
+        <label className="mb-1.5 block text-xs font-medium text-[#444]">Dirección exacta</label>
+        <input
+          type="text"
+          value={d.direccion_exacta || ""}
+          onChange={(e) => upd("direccion_exacta", e.target.value)}
+          placeholder="Calle, número, piso, ciudad, código postal"
+          style={{
+            width: "100%",
+            padding: 10,
+            borderRadius: 8,
+            border: "1px solid #e8e4de",
+            fontSize: 13,
+          }}
+        />
+        <p style={{ fontSize: 10, color: "#aaa", marginTop: 4 }}>
+          Esta dirección solo se compartirá con el cliente tras confirmar la reserva
+        </p>
+      </div>
+      <div className="sm:col-span-2">
+        <label className="mb-1.5 block text-xs font-medium text-[#444]">
+          Teléfono de contacto para este servicio
+        </label>
+        <input
+          type="tel"
+          value={d.telefono_contacto || ""}
+          onChange={(e) => upd("telefono_contacto", e.target.value)}
+          placeholder="+34 600 000 000"
+          style={{
+            width: "100%",
+            padding: 10,
+            borderRadius: 8,
+            border: "1px solid #e8e4de",
+            fontSize: 13,
+          }}
+        />
+      </div>
+    </>
+  );
 }
 
 function buildServicePayload(details, vertical, ciudad, proveedorId, disponible) {
@@ -649,6 +743,7 @@ function ServiceEditForm({ vertical, details, onChange, userId }) {
           </div>
         </div>
       )}
+      <DireccionContactoFields d={details} upd={update} vertical={vertical} />
       {vertical === "alojamiento" && (
         <>
           {AMENITIES_GROUPS.map((group) => (
@@ -1293,13 +1388,20 @@ export default function EditarPerfilPage() {
       if (profileError) throw profileError;
 
       for (const service of services) {
-        const payload = buildServicePayload(
+        const locationFields = await getServiceLocationFields(
           service.details,
           service.vertical,
-          ciudad,
-          userId,
-          service.disponible,
         );
+        const payload = {
+          ...buildServicePayload(
+            service.details,
+            service.vertical,
+            ciudad,
+            userId,
+            service.disponible,
+          ),
+          ...locationFields,
+        };
 
         if (service.isNew) {
           const { error } = await supabase.from("services").insert(payload);
@@ -1314,13 +1416,20 @@ export default function EditarPerfilPage() {
       }
 
       if (addingService && newServiceDetails.titulo.trim()) {
-        const payload = buildServicePayload(
+        const locationFields = await getServiceLocationFields(
           newServiceDetails,
           newVertical,
-          ciudad,
-          userId,
-          true,
         );
+        const payload = {
+          ...buildServicePayload(
+            newServiceDetails,
+            newVertical,
+            ciudad,
+            userId,
+            true,
+          ),
+          ...locationFields,
+        };
         const { data, error } = await supabase
           .from("services")
           .insert(payload)
