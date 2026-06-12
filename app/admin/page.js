@@ -523,12 +523,15 @@ export default function AdminPage() {
       .update({ verificado: true, rechazado: false })
       .eq("id", providerId);
 
-    setActionLoading(null);
+    console.log('DEBUG handleApprove error:', error);
 
     if (error) {
-      setErrorMessage(error.message);
+      setErrorMessage('Error al aprobar: ' + error.message);
+      setActionLoading(null);
       return;
     }
+
+    setActionLoading(null);
 
     if (proveedor?.email_contacto) {
       await fetch("/api/emails", {
