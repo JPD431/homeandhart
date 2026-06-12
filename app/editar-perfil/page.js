@@ -202,7 +202,6 @@ function needsDireccionFields(vertical, modalidad) {
 }
 
 async function getServiceLocationFields(details, vertical) {
-  console.log('DEBUG getServiceLocationFields:', { vertical, direccion: details.direccion_exacta, needsDireccion: needsDireccionFields(vertical, details.modalidad) });
   if (!needsDireccionFields(vertical, details.modalidad)) {
     return {
       direccion_exacta: null,
@@ -217,7 +216,6 @@ async function getServiceLocationFields(details, vertical) {
   let location_lng = null;
   if (direccion_exacta) {
     const coords = await geocodificarDireccion(direccion_exacta);
-    console.log('DEBUG coords:', coords);
     if (coords) {
       location_lat = coords.lat;
       location_lng = coords.lng;
@@ -1409,7 +1407,6 @@ export default function EditarPerfilPage() {
           const { error } = await supabase.from("services").insert(payload);
           if (error) throw error;
         } else {
-          console.log('DEBUG payload antes de guardar:', payload);
           const { error } = await supabase
             .from("services")
             .update(payload)
@@ -1433,7 +1430,6 @@ export default function EditarPerfilPage() {
           ),
           ...locationFields,
         };
-        console.log('DEBUG payload antes de guardar:', payload);
         const { data, error } = await supabase
           .from("services")
           .insert(payload)
