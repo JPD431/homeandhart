@@ -107,6 +107,7 @@ const inputClass =
 function emptyServiceDetails() {
   return {
     titulo: "",
+    descripcion_anuncio: "",
     precio: "",
     tipo_alojamiento: "",
     modalidad: "domicilio_cliente",
@@ -140,6 +141,7 @@ function mapServiceFromDb(row) {
     details: {
       ...emptyServiceDetails(),
       titulo: row.titulo || "",
+      descripcion_anuncio: row.descripcion_anuncio || "",
       precio: row.precio ?? "",
       tipo_alojamiento: row.tipo_alojamiento || "",
       modalidad: row.modalidad || "domicilio_cliente",
@@ -178,6 +180,7 @@ function buildServicePayload(details, vertical, ciudad, proveedorId, disponible)
     proveedor_id: proveedorId,
     vertical,
     titulo: details.titulo.trim(),
+    descripcion_anuncio: details.descripcion_anuncio?.trim() || null,
     precio: details.precio ? Number(details.precio) : null,
     estancia_minima: details.estancia_minima
       ? Number(details.estancia_minima)
@@ -554,6 +557,24 @@ function ServiceEditForm({ vertical, details, onChange, userId }) {
           onChange={(e) => update("titulo", e.target.value)}
           className={inputClass}
           style={{ borderColor: BRAND.border }}
+        />
+      </div>
+      <div className="sm:col-span-2">
+        <label className="mb-1.5 block text-xs font-medium text-[#444]">
+          Descripción del anuncio
+        </label>
+        <textarea
+          value={details.descripcion_anuncio || ""}
+          onChange={(e) => update("descripcion_anuncio", e.target.value)}
+          placeholder="Describe tu anuncio: qué ofreces, qué lo hace especial..."
+          rows={3}
+          style={{
+            width: "100%",
+            padding: 10,
+            borderRadius: 8,
+            border: "1px solid #e8e4de",
+            fontSize: 13,
+          }}
         />
       </div>
       <div>

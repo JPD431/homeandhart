@@ -162,6 +162,7 @@ const STORAGE_BUCKET = "Documentos";
 const EMPTY_SERVICE_DETAILS = {
   alojamiento: {
     titulo: "",
+    descripcion_anuncio: "",
     descripcion: "",
     location_zone: "",
     location_lat: null,
@@ -187,6 +188,7 @@ const EMPTY_SERVICE_DETAILS = {
   },
   ninos: {
     titulo: "",
+    descripcion_anuncio: "",
     descripcion: "",
     anos_experiencia: "",
     location_zone: "",
@@ -212,6 +214,7 @@ const EMPTY_SERVICE_DETAILS = {
   },
   mascotas: {
     titulo: "",
+    descripcion_anuncio: "",
     descripcion: "",
     anos_experiencia: "",
     location_zone: "",
@@ -917,6 +920,7 @@ export default function SerProveedorPage() {
             proveedor_id: user.id,
             vertical,
             titulo: servicioData.titulo || `Servicio de ${vertical}`,
+            descripcion_anuncio: servicioData.descripcion_anuncio?.trim() || null,
             precio: Number(servicioData.precio) || 0,
             ciudad: ciudad.trim(),
             disponible: false,
@@ -1176,6 +1180,16 @@ export default function SerProveedorPage() {
               <input value={d.titulo} onChange={(e) => upd("titulo", e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
             </div>
             <div className="sm:col-span-2">
+              <label className="mb-1.5 block text-xs font-medium text-[#444]">Descripción del anuncio</label>
+              <textarea
+                value={d.descripcion_anuncio || ""}
+                onChange={(e) => upd("descripcion_anuncio", e.target.value)}
+                placeholder="Describe tu anuncio: qué ofreces, qué lo hace especial..."
+                rows={3}
+                style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #e8e4de", fontSize: 13 }}
+              />
+            </div>
+            <div className="sm:col-span-2">
               <label className="mb-1.5 block text-xs font-medium text-[#444]">Descripción</label>
               <textarea rows={4} value={d.descripcion} onChange={(e) => upd("descripcion", e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
             </div>
@@ -1304,6 +1318,16 @@ export default function SerProveedorPage() {
               <label className="mb-1.5 block text-xs font-medium text-[#444]">Título</label>
               <input value={d.titulo} onChange={(e) => upd("titulo", e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
             </div>
+            <div className="sm:col-span-2">
+              <label className="mb-1.5 block text-xs font-medium text-[#444]">Descripción del anuncio</label>
+              <textarea
+                value={d.descripcion_anuncio || ""}
+                onChange={(e) => upd("descripcion_anuncio", e.target.value)}
+                placeholder="Describe tu anuncio: qué ofreces, qué lo hace especial..."
+                rows={3}
+                style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #e8e4de", fontSize: 13 }}
+              />
+            </div>
             <div>
               <label className="mb-1.5 block text-xs font-medium text-[#444]">Años de experiencia</label>
               <input type="number" min="0" value={d.anos_experiencia} onChange={(e) => upd("anos_experiencia", e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
@@ -1428,6 +1452,16 @@ export default function SerProveedorPage() {
             <div className="sm:col-span-2">
               <label className="mb-1.5 block text-xs font-medium text-[#444]">Título</label>
               <input value={d.titulo} onChange={(e) => upd("titulo", e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="mb-1.5 block text-xs font-medium text-[#444]">Descripción del anuncio</label>
+              <textarea
+                value={d.descripcion_anuncio || ""}
+                onChange={(e) => upd("descripcion_anuncio", e.target.value)}
+                placeholder="Describe tu anuncio: qué ofreces, qué lo hace especial..."
+                rows={3}
+                style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #e8e4de", fontSize: 13 }}
+              />
             </div>
             <div>
               <label className="mb-1.5 block text-xs font-medium text-[#444]">Años de experiencia</label>
