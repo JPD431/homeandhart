@@ -523,8 +523,6 @@ export default function AdminPage() {
       .update({ verificado: true, rechazado: false })
       .eq("id", providerId);
 
-    console.log('DEBUG handleApprove error:', error);
-
     if (error) {
       setErrorMessage('Error al aprobar: ' + error.message);
       setActionLoading(null);
