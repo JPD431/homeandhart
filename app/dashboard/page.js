@@ -427,7 +427,6 @@ function ReservasRecibidas({ perfil, BRAND }) {
 
   useEffect(() => {
     if (!perfil?.id) {
-      console.log('[ReservasRecibidas] skip load: perfil.id ausente', { perfil });
       return;
     }
 
@@ -435,14 +434,10 @@ function ReservasRecibidas({ perfil, BRAND }) {
       setLoading(true);
       setLoadError('');
 
-      console.log('[ReservasRecibidas] inicio carga', { proveedorId: perfil.id });
-
       const { data: services, error: servicesError } = await supabase
         .from('services')
         .select('id, titulo')
         .eq('proveedor_id', perfil.id);
-
-      console.log('[ReservasRecibidas] services', { data: services, error: servicesError });
 
       if (servicesError) {
         setLoadError(servicesError.message);
@@ -455,7 +450,6 @@ function ReservasRecibidas({ perfil, BRAND }) {
       setServiceMap(map);
 
       const serviceIds = servicesList.map((s) => s.id);
-      console.log('[ReservasRecibidas] serviceIds', serviceIds);
 
       if (serviceIds.length === 0) {
         setBookings([]);
@@ -469,8 +463,6 @@ function ReservasRecibidas({ perfil, BRAND }) {
         .select('id, cliente_id, service_id, fecha_inicio, fecha_fin, hora, precio_total, estado, mensaje, created_at')
         .in('service_id', serviceIds)
         .order('created_at', { ascending: false });
-
-      console.log('[ReservasRecibidas] bookings', { data: bookingsData, error: bookingsError });
 
       if (bookingsError) {
         setLoadError(bookingsError.message);
@@ -488,8 +480,6 @@ function ReservasRecibidas({ perfil, BRAND }) {
           .select('id, nombre, apellido')
           .in('id', clienteIds);
 
-        console.log('[ReservasRecibidas] profiles', { data: profiles, error: profilesError });
-
         const names = {};
         for (const p of profiles ?? []) {
           const full = [p.nombre, p.apellido].filter(Boolean).join(' ').trim();
@@ -497,7 +487,6 @@ function ReservasRecibidas({ perfil, BRAND }) {
         }
         setClientNames(names);
       } else {
-        console.log('[ReservasRecibidas] profiles skip: sin clienteIds');
         setClientNames({});
       }
 
