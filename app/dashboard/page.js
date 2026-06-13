@@ -426,16 +426,23 @@ function ReservasRecibidas({ perfil, BRAND }) {
   const [respondingId, setRespondingId] = useState(null);
 
   useEffect(() => {
-    if (!perfil?.id) return;
+    if (!perfil?.id) {
+      console.log('[ReservasRecibidas] skip load: perfil.id ausente', { perfil });
+      return;
+    }
 
     async function loadReservasRecibidas() {
       setLoading(true);
       setLoadError('');
 
+      console.log('[ReservasRecibidas] inicio carga', { proveedorId: perfil.id });
+
       const { data: services, error: servicesError } = await supabase
         .from('services')
         .select('id, titulo')
         .eq('proveedor_id', perfil.id);
+
+      console.log('[ReservasRecibidas] services', { data: services, error: servicesError });
 
       if (servicesError) {
         setLoadError(servicesError.message);
@@ -448,6 +455,8 @@ function ReservasRecibidas({ perfil, BRAND }) {
       setServiceMap(map);
 
       const serviceIds = servicesList.map((s) => s.id);
+      console.log('[ReservasRecibidas] serviceIds', serviceIds);
+
       if (serviceIds.length === 0) {
         setBookings([]);
         setClientNames({});
@@ -461,6 +470,8 @@ function ReservasRecibidas({ perfil, BRAND }) {
         .in('service_id', serviceIds)
         .order('created_at', { ascending: false });
 
+      console.log('[ReservasRecibidas] bookings', { data: bookingsData, error: bookingsError });
+
       if (bookingsError) {
         setLoadError(bookingsError.message);
         setLoading(false);
@@ -472,10 +483,12 @@ function ReservasRecibidas({ perfil, BRAND }) {
 
       const clienteIds = [...new Set(rows.map((b) => b.cliente_id).filter(Boolean))];
       if (clienteIds.length > 0) {
-        const { data: profiles } = await supabase
+        const { data: profiles, error: profilesError } = await supabase
           .from('profiles')
           .select('id, nombre, apellido')
           .in('id', clienteIds);
+
+        console.log('[ReservasRecibidas] profiles', { data: profiles, error: profilesError });
 
         const names = {};
         for (const p of profiles ?? []) {
@@ -484,6 +497,7 @@ function ReservasRecibidas({ perfil, BRAND }) {
         }
         setClientNames(names);
       } else {
+        console.log('[ReservasRecibidas] profiles skip: sin clienteIds');
         setClientNames({});
       }
 
