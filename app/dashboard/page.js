@@ -265,15 +265,407 @@ function TabCliente({ perfil, reservas, favoritos, viajes, router, BRAND, copiar
 
 function TabProveedor({ perfil, router, BRAND }) {
   return (
-    <div style={{textAlign: 'center', padding: '40px 0'}}>
-      <div style={{background:'#e6f4f0', borderRadius:8, padding:'12px 16px', marginBottom:16}}>
-        <div style={{fontSize:11, color:'#888', marginBottom:4}}>Reservas sin comisión</div>
-        <div style={{fontSize:20, fontWeight:600, color:'#0e7a5c'}}>{perfil?.reservas_sin_comision || 0} 🎁</div>
-        <div style={{fontSize:10, color:'#666', marginTop:4}}>Recibirás el 100% del pago en estas reservas</div>
+    <div style={{ maxWidth: 720, margin: '0 auto' }}>
+      <div style={{ textAlign: 'center', padding: '24px 0 16px' }}>
+        <div style={{ background: '#e6f4f0', borderRadius: 8, padding: '12px 16px', marginBottom: 16 }}>
+          <div style={{ fontSize: 11, color: '#888', marginBottom: 4 }}>Reservas sin comisión</div>
+          <div style={{ fontSize: 20, fontWeight: 600, color: '#0e7a5c' }}>{perfil?.reservas_sin_comision || 0} 🎁</div>
+          <div style={{ fontSize: 10, color: '#666', marginTop: 4 }}>Recibirás el 100% del pago en estas reservas</div>
+        </div>
+        <p style={{ fontSize: 14, color: '#aaa', marginBottom: 16 }}>Panel de proveedor</p>
+        <button onClick={() => router.push('/estadisticas')} style={{ minHeight: 44, background: BRAND.blue, color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 4, fontSize: 12, cursor: 'pointer', marginRight: 8 }}>Ver estadísticas</button>
+        <button onClick={() => router.push('/editar-perfil')} style={{ minHeight: 44, background: '#fff', color: BRAND.blue, border: `1px solid ${BRAND.blue}`, padding: '10px 20px', borderRadius: 4, fontSize: 12, cursor: 'pointer' }}>Editar servicios</button>
       </div>
-      <p style={{fontSize: 14, color: '#aaa', marginBottom: 16}}>Panel de proveedor</p>
-      <button onClick={() => router.push('/estadisticas')} style={{ minHeight: 44, background: BRAND.blue, color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 4, fontSize: 12, cursor: 'pointer', marginRight: 8 }}>Ver estadísticas</button>
-      <button onClick={() => router.push('/editar-perfil')} style={{ minHeight: 44, background: '#fff', color: BRAND.blue, border: `1px solid ${BRAND.blue}`, padding: '10px 20px', borderRadius: 4, fontSize: 12, cursor: 'pointer' }}>Editar servicios</button>
+      <ReservasRecibidas perfil={perfil} BRAND={BRAND} />
+    </div>
+  );
+}
+
+const PRIMARY = '#1d4f91';
+const GREEN = '#0e7a5c';
+const AMBER = '#c47d1a';
+const BORDER = '#e8e4de';
+
+const ESTADO_BADGE = {
+  pendiente: { bg: '#fdf3e3', color: AMBER, label: 'Pendiente' },
+  confirmada: { bg: '#e6f4f0', color: GREEN, label: 'Confirmada' },
+  rechazada: { bg: '#f3f4f6', color: '#6b7280', label: 'Rechazada' },
+  completada: { bg: '#e8f0fb', color: PRIMARY, label: 'Completada' },
+  cancelada: { bg: '#f3f4f6', color: '#6b7280', label: 'Cancelada' },
+  cancelada_garantia: { bg: '#f3f4f6', color: '#6b7280', label: 'Cancelada' },
+  en_curso: { bg: '#ede9fe', color: '#7c3aed', label: 'En curso' },
+  incidencia: { bg: '#fee2e2', color: '#b91c1c', label: 'Incidencia' },
+};
+
+function formatReservaFechas(booking) {
+  if (booking.hora) {
+    const fecha = booking.fecha_inicio || '';
+    return fecha ? `${fecha} · ${booking.hora}` : booking.hora;
+  }
+  if (booking.fecha_inicio && booking.fecha_fin && booking.fecha_fin !== booking.fecha_inicio) {
+    return `${booking.fecha_inicio} – ${booking.fecha_fin}`;
+  }
+  return booking.fecha_inicio || '—';
+}
+
+function EstadoBadge({ estado }) {
+  const meta = ESTADO_BADGE[estado] || { bg: '#f3f4f6', color: '#6b7280', label: estado || '—' };
+  return (
+    <span
+      style={{
+        fontSize: 10,
+        fontWeight: 600,
+        padding: '3px 8px',
+        borderRadius: 8,
+        background: meta.bg,
+        color: meta.color,
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {meta.label}
+    </span>
+  );
+}
+
+function ReservaRecibidaCard({ booking, serviceTitulo, clienteNombre, onRespond, responding }) {
+  const isPendiente = booking.estado === 'pendiente';
+
+  return (
+    <div
+      style={{
+        background: '#fff',
+        borderRadius: 10,
+        border: `0.5px solid ${isPendiente ? AMBER : BORDER}`,
+        padding: '14px 16px',
+        marginBottom: 10,
+        boxShadow: isPendiente ? '0 1px 4px rgba(196,125,26,0.08)' : 'none',
+      }}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#2a3a4a' }}>{serviceTitulo}</div>
+          <div style={{ fontSize: 11, color: '#888', marginTop: 4 }}>{clienteNombre}</div>
+          <div style={{ fontSize: 11, color: '#666', marginTop: 4 }}>{formatReservaFechas(booking)}</div>
+          <div style={{ fontSize: 13, fontWeight: 500, color: PRIMARY, marginTop: 6 }}>
+            {Number(booking.precio_total).toFixed(2)}€
+          </div>
+          {booking.mensaje && (
+            <p
+              style={{
+                fontSize: 11,
+                color: '#666',
+                marginTop: 8,
+                padding: '8px 10px',
+                background: '#f7f5f2',
+                borderRadius: 6,
+                lineHeight: 1.5,
+                marginBottom: 0,
+              }}
+            >
+              {booking.mensaje}
+            </p>
+          )}
+        </div>
+        <EstadoBadge estado={booking.estado} />
+      </div>
+      {isPendiente && (
+        <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            disabled={responding}
+            onClick={() => onRespond(booking.id, 'aceptar')}
+            style={{
+              minHeight: 40,
+              flex: 1,
+              minWidth: 120,
+              background: GREEN,
+              color: '#fff',
+              border: 'none',
+              borderRadius: 6,
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: responding ? 'not-allowed' : 'pointer',
+              opacity: responding ? 0.6 : 1,
+            }}
+          >
+            {responding ? 'Procesando…' : 'Aceptar'}
+          </button>
+          <button
+            type="button"
+            disabled={responding}
+            onClick={() => onRespond(booking.id, 'rechazar')}
+            style={{
+              minHeight: 40,
+              flex: 1,
+              minWidth: 120,
+              background: '#fff',
+              color: '#dc2626',
+              border: '1px solid #dc2626',
+              borderRadius: 6,
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: responding ? 'not-allowed' : 'pointer',
+              opacity: responding ? 0.6 : 1,
+            }}
+          >
+            {responding ? 'Procesando…' : 'Rechazar'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ReservasRecibidas({ perfil, BRAND }) {
+  const [bookings, setBookings] = useState([]);
+  const [serviceMap, setServiceMap] = useState({});
+  const [clientNames, setClientNames] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [actionError, setActionError] = useState('');
+  const [respondingId, setRespondingId] = useState(null);
+
+  useEffect(() => {
+    if (!perfil?.id) return;
+
+    async function loadReservasRecibidas() {
+      setLoading(true);
+      setLoadError('');
+
+      const { data: services, error: servicesError } = await supabase
+        .from('services')
+        .select('id, titulo')
+        .eq('proveedor_id', perfil.id);
+
+      if (servicesError) {
+        setLoadError(servicesError.message);
+        setLoading(false);
+        return;
+      }
+
+      const servicesList = services ?? [];
+      const map = Object.fromEntries(servicesList.map((s) => [s.id, s.titulo || 'Servicio']));
+      setServiceMap(map);
+
+      const serviceIds = servicesList.map((s) => s.id);
+      if (serviceIds.length === 0) {
+        setBookings([]);
+        setClientNames({});
+        setLoading(false);
+        return;
+      }
+
+      const { data: bookingsData, error: bookingsError } = await supabase
+        .from('bookings')
+        .select('id, cliente_id, service_id, fecha_inicio, fecha_fin, hora, precio_total, estado, mensaje, created_at')
+        .in('service_id', serviceIds)
+        .order('created_at', { ascending: false });
+
+      if (bookingsError) {
+        setLoadError(bookingsError.message);
+        setLoading(false);
+        return;
+      }
+
+      const rows = bookingsData ?? [];
+      setBookings(rows);
+
+      const clienteIds = [...new Set(rows.map((b) => b.cliente_id).filter(Boolean))];
+      if (clienteIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, nombre, apellido')
+          .in('id', clienteIds);
+
+        const names = {};
+        for (const p of profiles ?? []) {
+          const full = [p.nombre, p.apellido].filter(Boolean).join(' ').trim();
+          names[p.id] = full || 'Cliente';
+        }
+        setClientNames(names);
+      } else {
+        setClientNames({});
+      }
+
+      setLoading(false);
+    }
+
+    loadReservasRecibidas();
+  }, [perfil?.id]);
+
+  async function handleRespond(bookingId, action) {
+    const confirmMsg =
+      action === 'aceptar'
+        ? '¿Aceptar esta reserva?'
+        : '¿Rechazar esta reserva? Se liberará el pago retenido del cliente.';
+    if (!window.confirm(confirmMsg)) return;
+
+    setRespondingId(bookingId);
+    setActionError('');
+
+    try {
+      const res = await fetch('/api/bookings/respond', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bookingId, action }),
+      });
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        setActionError(data.error || 'No se pudo procesar la reserva.');
+        return;
+      }
+
+      setBookings((prev) =>
+        prev.map((b) => (b.id === bookingId ? { ...b, estado: data.estado } : b)),
+      );
+    } catch (err) {
+      setActionError(err.message || 'Error de conexión.');
+    } finally {
+      setRespondingId(null);
+    }
+  }
+
+  const pendientes = bookings.filter((b) => b.estado === 'pendiente');
+  const resto = bookings.filter((b) => b.estado !== 'pendiente');
+
+  return (
+    <div style={{ marginTop: 8, paddingBottom: 32 }}>
+      <div
+        style={{
+          background: '#fff',
+          borderRadius: 10,
+          border: `0.5px solid ${BORDER}`,
+          overflow: 'hidden',
+        }}
+      >
+        <div
+          style={{
+            padding: '13px 16px',
+            borderBottom: `0.5px solid #f0ede8`,
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}
+        >
+          <span style={{ fontSize: 12, fontWeight: 600, color: BRAND.dark }}>
+            📥 Reservas recibidas
+          </span>
+          {pendientes.length > 0 && (
+            <span
+              style={{
+                fontSize: 10,
+                fontWeight: 600,
+                padding: '2px 8px',
+                borderRadius: 8,
+                background: '#fdf3e3',
+                color: AMBER,
+              }}
+            >
+              {pendientes.length} pendiente{pendientes.length !== 1 ? 's' : ''}
+            </span>
+          )}
+        </div>
+
+        <div style={{ padding: '13px 16px' }}>
+          {loading && (
+            <p style={{ fontSize: 12, color: '#aaa', textAlign: 'center', padding: '20px 0' }}>
+              Cargando reservas…
+            </p>
+          )}
+
+          {!loading && loadError && (
+            <p
+              style={{
+                fontSize: 12,
+                color: '#b91c1c',
+                background: '#fee2e2',
+                padding: '10px 12px',
+                borderRadius: 6,
+              }}
+            >
+              {loadError}
+            </p>
+          )}
+
+          {!loading && !loadError && actionError && (
+            <p
+              style={{
+                fontSize: 12,
+                color: '#b91c1c',
+                background: '#fee2e2',
+                padding: '10px 12px',
+                borderRadius: 6,
+                marginBottom: 12,
+              }}
+            >
+              {actionError}
+            </p>
+          )}
+
+          {!loading && !loadError && bookings.length === 0 && (
+            <p style={{ fontSize: 12, color: '#bbb', textAlign: 'center', padding: '24px 0' }}>
+              Aún no has recibido reservas
+            </p>
+          )}
+
+          {!loading && !loadError && pendientes.length > 0 && (
+            <>
+              <p
+                style={{
+                  fontSize: 10,
+                  fontWeight: 600,
+                  color: AMBER,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.06em',
+                  marginBottom: 10,
+                }}
+              >
+                Requieren tu respuesta
+              </p>
+              {pendientes.map((booking) => (
+                <ReservaRecibidaCard
+                  key={booking.id}
+                  booking={booking}
+                  serviceTitulo={serviceMap[booking.service_id] || 'Servicio'}
+                  clienteNombre={clientNames[booking.cliente_id] || 'Cliente'}
+                  onRespond={handleRespond}
+                  responding={respondingId === booking.id}
+                />
+              ))}
+            </>
+          )}
+
+          {!loading && !loadError && resto.length > 0 && (
+            <>
+              {pendientes.length > 0 && (
+                <p
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 600,
+                    color: '#888',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.06em',
+                    margin: '20px 0 10px',
+                  }}
+                >
+                  Historial
+                </p>
+              )}
+              {resto.map((booking) => (
+                <ReservaRecibidaCard
+                  key={booking.id}
+                  booking={booking}
+                  serviceTitulo={serviceMap[booking.service_id] || 'Servicio'}
+                  clienteNombre={clientNames[booking.cliente_id] || 'Cliente'}
+                  onRespond={handleRespond}
+                  responding={respondingId === booking.id}
+                />
+              ))}
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
