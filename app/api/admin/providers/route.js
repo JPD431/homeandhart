@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { getAdminUser } from "@/lib/auth/requireAdmin";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -7,6 +8,11 @@ const supabaseAdmin = createClient(
 );
 
 export async function GET() {
+  const admin = await getAdminUser();
+  if (!admin) {
+    return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+  }
+
   const { data: profiles, error } = await supabaseAdmin
     .from("profiles")
     .select("*")
