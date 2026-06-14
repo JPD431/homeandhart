@@ -8,6 +8,8 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY,
 );
 
+const STRIPE_MIN_TRANSFER_EUR = 0.5;
+
 function getPrecioBase(precioTotal) {
   return (Number(precioTotal) || 0) / 1.14;
 }
@@ -75,7 +77,8 @@ async function buildTransfersForPayment(paymentIntentId) {
         id,
         stripe_account_id,
         reservas_sin_comision,
-        referido_por
+        referido_por,
+        deuda_pendiente
       )
     `,
     )
@@ -118,10 +121,13 @@ async function buildTransfersForPayment(paymentIntentId) {
     if (entry.amount <= 0) continue;
 
     const sinComision = entry.reservas_sin_comision > 0;
+    const amountBruto = sinComision ? entry.amount : entry.amount * 0.96;
     transfers.push({
       proveedorId: entry.proveedorId,
       stripe_account_id: entry.stripe_account_id,
-      amount: sinComision ? entry.amount : entry.amount * 0.96,
+      amount: amountBruto,
+      amount_bruto: amountBruto,
+      deuda_actual: Number(entry.profile?.deuda_pendiente) || 0,
       profile: entry.profile,
       decrementSinComision: sinComision,
     });
@@ -185,33 +191,70 @@ export async function POST(request) {
 
     const transferPlan = await buildTransfersForPayment(resolvedPaymentIntentId);
 
-    let transfers = [];
-    if (transferPlan.length && chargeId) {
-      transfers = await Promise.all(
-        transferPlan.map((p) =>
-          stripe.transfers.create({
-            amount: Math.round(p.amount * 100),
-            currency: "eur",
-            destination: p.stripe_account_id,
-            source_transaction: chargeId,
-          }),
-        ),
-      );
+    const transfers = [];
+    const transferSummaries = [];
 
+    if (transferPlan.length && chargeId) {
       for (const plan of transferPlan) {
-        if (plan.decrementSinComision) {
-          const current = Number(plan.profile.reservas_sin_comision) || 0;
-          await supabase
+        const summary = {
+          proveedorId: plan.proveedorId,
+          amount_bruto: plan.amount_bruto,
+          deuda_descontada: 0,
+          amount_transferido: 0,
+          deuda_restante: plan.deuda_actual,
+        };
+
+        try {
+          const deuda_a_descontar = Math.min(plan.deuda_actual, plan.amount_bruto);
+          const amount_final =
+            Math.round((plan.amount_bruto - deuda_a_descontar) * 100) / 100;
+
+          if (amount_final >= STRIPE_MIN_TRANSFER_EUR) {
+            const transfer = await stripe.transfers.create({
+              amount: Math.round(amount_final * 100),
+              currency: "eur",
+              destination: plan.stripe_account_id,
+              source_transaction: chargeId,
+            });
+            transfers.push(transfer);
+            summary.amount_transferido = amount_final;
+          }
+
+          const deuda_restante = Math.max(0, plan.deuda_actual - deuda_a_descontar);
+          const { error: deudaError } = await supabase
             .from("profiles")
-            .update({ reservas_sin_comision: Math.max(0, current - 1) })
+            .update({ deuda_pendiente: deuda_restante })
             .eq("id", plan.proveedorId);
+
+          if (deudaError) {
+            throw deudaError;
+          }
+
+          summary.deuda_descontada = deuda_a_descontar;
+          summary.deuda_restante = deuda_restante;
+
+          if (plan.decrementSinComision) {
+            const current = Number(plan.profile.reservas_sin_comision) || 0;
+            await supabase
+              .from("profiles")
+              .update({ reservas_sin_comision: Math.max(0, current - 1) })
+              .eq("id", plan.proveedorId);
+          }
+
+          await rewardReferrerIfFirstCompletion(
+            plan.proveedorId,
+            plan.profile,
+            resolvedPaymentIntentId,
+          );
+        } catch (providerError) {
+          console.error(
+            "[capture-payment] Error procesando proveedor",
+            plan.proveedorId,
+            providerError.message ?? providerError,
+          );
         }
 
-        await rewardReferrerIfFirstCompletion(
-          plan.proveedorId,
-          plan.profile,
-          resolvedPaymentIntentId,
-        );
+        transferSummaries.push(summary);
       }
     }
 
@@ -220,7 +263,12 @@ export async function POST(request) {
       .update({ pago_liberado_at: new Date().toISOString() })
       .eq("payment_intent_id", resolvedPaymentIntentId);
 
-    return Response.json({ success: true, paymentIntent, transfers });
+    return Response.json({
+      success: true,
+      paymentIntent,
+      transfers,
+      transferSummaries,
+    });
   } catch (error) {
     console.error("Error capture-payment:", error.message, error.type, error.code);
     return Response.json(
