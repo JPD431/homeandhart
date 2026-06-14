@@ -43,28 +43,71 @@ async function handleStripeForCancellation(paymentIntentId) {
   };
 }
 
-function calcularIndemnizacion(fechaInicio, precioTotal) {
+const PLATFORM_MULTIPLIER = 1.14;
+
+function roundMoney(amount) {
+  return Math.round(Number(amount) * 100) / 100;
+}
+
+function calcularRepartoIndemnizacion(fechaInicio, precioTotal) {
   const precio = Number(precioTotal) || 0;
+  const base_indemnizacion = roundMoney(precio / PLATFORM_MULTIPLIER);
+
+  let totalRate;
+  let clientRate;
+  let platformRate;
+
   if (!fechaInicio) {
-    return Math.round(precio * 0.5 * 100) / 100;
+    totalRate = 0.5;
+    clientRate = 0.2;
+    platformRate = 0.3;
+  } else {
+    const start = new Date(`${fechaInicio}T12:00:00`);
+    const hoursUntil = (start.getTime() - Date.now()) / (1000 * 60 * 60);
+    if (hoursUntil > 48) {
+      totalRate = 0.2;
+      clientRate = 0.1;
+      platformRate = 0.1;
+    } else {
+      totalRate = 0.5;
+      clientRate = 0.2;
+      platformRate = 0.3;
+    }
   }
 
-  const start = new Date(`${fechaInicio}T12:00:00`);
-  const hoursUntil = (start.getTime() - Date.now()) / (1000 * 60 * 60);
-  const rate = hoursUntil > 48 ? 0.2 : 0.5;
-  return Math.round(precio * rate * 100) / 100;
+  const indemnizacion_total = roundMoney(base_indemnizacion * totalRate);
+  let parte_cliente = roundMoney(base_indemnizacion * clientRate);
+  let parte_plataforma = roundMoney(base_indemnizacion * platformRate);
+
+  const sumPartes = roundMoney(parte_cliente + parte_plataforma);
+  if (sumPartes !== indemnizacion_total) {
+    parte_plataforma = roundMoney(indemnizacion_total - parte_cliente);
+  }
+
+  return {
+    base_indemnizacion,
+    indemnizacion_total,
+    parte_cliente,
+    parte_plataforma,
+  };
 }
 
 async function aplicarPenalizacionProveedor(proveedorId, booking) {
-  const indemnizacion = calcularIndemnizacion(
+  const reparto = calcularRepartoIndemnizacion(
     booking.fecha_inicio,
     booking.precio_total,
   );
+  const {
+    base_indemnizacion,
+    indemnizacion_total,
+    parte_cliente,
+    parte_plataforma,
+  } = reparto;
 
   const { data: profile, error: profileError } = await supabaseAdmin
     .from("profiles")
     .select(
-      "cancelaciones_proveedor_count, deuda_pendiente, penalizacion_valoracion",
+      "cancelaciones_proveedor_count, deuda_pendiente, penalizacion_valoracion, compensaciones_plataforma_acumuladas",
     )
     .eq("id", proveedorId)
     .single();
@@ -73,18 +116,35 @@ async function aplicarPenalizacionProveedor(proveedorId, booking) {
     throw new Error(profileError?.message || "Perfil del proveedor no encontrado");
   }
 
+  const { data: clienteProfile, error: clienteError } = await supabaseAdmin
+    .from("profiles")
+    .select("credito_disponible")
+    .eq("id", booking.cliente_id)
+    .single();
+
+  if (clienteError || !clienteProfile) {
+    throw new Error(clienteError?.message || "Perfil del cliente no encontrado");
+  }
+
   const cancelacionesActuales = Number(profile.cancelaciones_proveedor_count) || 0;
   const deudaActual = Number(profile.deuda_pendiente) || 0;
   const penalizacionActual = Number(profile.penalizacion_valoracion) || 0;
+  const compensacionesPlataformaActual =
+    Number(profile.compensaciones_plataforma_acumuladas) || 0;
+  const creditoClienteActual = Number(clienteProfile.credito_disponible) || 0;
 
   const cancelaciones_count = cancelacionesActuales + 1;
-  const nueva_deuda = Math.round((deudaActual + indemnizacion) * 100) / 100;
+  const nueva_deuda = roundMoney(deudaActual + indemnizacion_total);
+  const credito_cliente_nuevo = roundMoney(creditoClienteActual + parte_cliente);
   const requiere_revision = cancelaciones_count >= 3;
 
   const profileUpdate = {
     cancelaciones_proveedor_count: cancelaciones_count,
     deuda_pendiente: nueva_deuda,
     penalizacion_valoracion: penalizacionActual + 0.5,
+    compensaciones_plataforma_acumuladas: roundMoney(
+      compensacionesPlataformaActual + parte_plataforma,
+    ),
   };
 
   if (requiere_revision) {
@@ -100,8 +160,21 @@ async function aplicarPenalizacionProveedor(proveedorId, booking) {
     throw new Error(updateProfileError.message);
   }
 
+  const { error: updateClienteError } = await supabaseAdmin
+    .from("profiles")
+    .update({ credito_disponible: credito_cliente_nuevo })
+    .eq("id", booking.cliente_id);
+
+  if (updateClienteError) {
+    throw new Error(updateClienteError.message);
+  }
+
   return {
-    indemnizacion,
+    base_indemnizacion,
+    indemnizacion_total,
+    parte_cliente,
+    parte_plataforma,
+    credito_cliente_nuevo,
     nueva_deuda,
     cancelaciones_count,
     requiere_revision,
@@ -315,7 +388,12 @@ export async function POST(request) {
     ...(stripe_error ? { stripe_error } : {}),
     ...(penalizacion_ok
       ? {
-          indemnizacion: penalizacionData.indemnizacion,
+          indemnizacion: penalizacionData.indemnizacion_total,
+          indemnizacion_total: penalizacionData.indemnizacion_total,
+          base_indemnizacion: penalizacionData.base_indemnizacion,
+          parte_cliente: penalizacionData.parte_cliente,
+          parte_plataforma: penalizacionData.parte_plataforma,
+          credito_cliente_nuevo: penalizacionData.credito_cliente_nuevo,
           nueva_deuda: penalizacionData.nueva_deuda,
           cancelaciones_count: penalizacionData.cancelaciones_count,
           requiere_revision: penalizacionData.requiere_revision,
