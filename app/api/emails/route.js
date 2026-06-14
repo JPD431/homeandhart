@@ -1048,12 +1048,11 @@ export async function POST(request) {
           bodyHtml: `
             <h1 style="margin:0 0 16px;font-size:20px;color:${BRAND_PRIMARY};">🛡️ Tu reserva fue cancelada</h1>
             <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#444;">
-              Hola ${data.cliente_nombre ?? "Cliente"}, tu proveedor ha cancelado con menos de 24h de antelación.
-              Hemos activado la <strong>Garantía Home&Heart</strong> y encontrado estas alternativas para ti:
+              Hola ${data.cliente_nombre ?? "Cliente"}, tu proveedor ha cancelado esta reserva. Hemos activado la <strong>Garantía Home&Heart</strong> para ayudarte y te proponemos estas alternativas:
             </p>
             ${cardsHtml || "<p style='font-size:14px;color:#666;'>No hay alternativas disponibles en este momento.</p>"}
             <p style="margin:20px 0 0;font-size:13px;color:#888;font-style:italic;">
-              Precio garantizado igual al de tu reserva original (${precioOriginal}).
+              Tu reserva original costaba ${precioOriginal}. Te ofrecemos estas alternativas; si alguna tiene un precio distinto, se ajustará al reservar.
             </p>
           `,
         }),

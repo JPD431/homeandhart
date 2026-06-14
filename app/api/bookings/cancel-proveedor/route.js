@@ -108,6 +108,75 @@ async function aplicarPenalizacionProveedor(proveedorId, booking) {
   };
 }
 
+async function activarGarantiaCliente(booking, service) {
+  const baseUrl = process.env.NEXT_PUBLIC_URL || "https://homeandheart.es";
+
+  const { data: authData, error: authError } =
+    await supabaseAdmin.auth.admin.getUserById(booking.cliente_id);
+
+  if (authError) {
+    throw new Error(authError.message);
+  }
+
+  let clienteEmail = authData?.user?.email ?? null;
+
+  const { data: clienteProfile } = await supabaseAdmin
+    .from("profiles")
+    .select("nombre, apellido, email_contacto")
+    .eq("id", booking.cliente_id)
+    .maybeSingle();
+
+  if (!clienteEmail && clienteProfile?.email_contacto) {
+    clienteEmail = clienteProfile.email_contacto;
+  }
+
+  const clienteNombre =
+    [clienteProfile?.nombre, clienteProfile?.apellido]
+      .filter(Boolean)
+      .join(" ")
+      .trim() || "Cliente";
+
+  const garantiaRes = await fetch(`${baseUrl}/api/garantia`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      service_id: booking.service_id,
+      fecha_inicio: booking.fecha_inicio,
+      fecha_fin: booking.fecha_fin || booking.fecha_inicio,
+      vertical: service.vertical,
+      ciudad: service.ciudad,
+    }),
+  });
+
+  const garantiaData = await garantiaRes.json();
+  if (!garantiaRes.ok) {
+    throw new Error(garantiaData.error || "Error al buscar alternativas");
+  }
+
+  const alternativas = garantiaData.alternativas ?? [];
+
+  if (clienteEmail) {
+    const emailRes = await fetch(`${baseUrl}/api/emails`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        tipo: "cancelacion_garantia",
+        cliente_email: clienteEmail,
+        cliente_nombre: clienteNombre,
+        precio_original: booking.precio_total,
+        alternativas,
+      }),
+    });
+
+    const emailData = await emailRes.json();
+    if (!emailRes.ok || emailData.error) {
+      throw new Error(emailData.error || "Error al enviar email de garantía");
+    }
+  }
+
+  return { num_alternativas: alternativas.length };
+}
+
 export async function POST(request) {
   let body;
   try {
@@ -134,7 +203,9 @@ export async function POST(request) {
 
   const { data: booking, error: bookingError } = await supabaseAdmin
     .from("bookings")
-    .select("id, service_id, payment_intent_id, estado, precio_total, fecha_inicio")
+    .select(
+      "id, service_id, cliente_id, payment_intent_id, estado, precio_total, fecha_inicio, fecha_fin",
+    )
     .eq("id", bookingId)
     .maybeSingle();
 
@@ -148,7 +219,7 @@ export async function POST(request) {
 
   const { data: service, error: serviceError } = await supabaseAdmin
     .from("services")
-    .select("id, proveedor_id")
+    .select("id, proveedor_id, vertical, ciudad")
     .eq("id", booking.service_id)
     .maybeSingle();
 
@@ -219,11 +290,28 @@ export async function POST(request) {
     );
   }
 
+  let garantia_ok = true;
+  let num_alternativas = 0;
+
+  try {
+    const garantiaResult = await activarGarantiaCliente(booking, service);
+    num_alternativas = garantiaResult.num_alternativas;
+  } catch (err) {
+    garantia_ok = false;
+    console.error(
+      "Error activando garantía al cancelar reserva (proveedor):",
+      bookingId,
+      err?.message ?? err,
+    );
+  }
+
   return NextResponse.json({
     success: true,
     estado: "cancelada_proveedor",
     stripe_ok,
     penalizacion_ok,
+    garantia_ok,
+    num_alternativas,
     ...(stripe_error ? { stripe_error } : {}),
     ...(penalizacion_ok
       ? {
