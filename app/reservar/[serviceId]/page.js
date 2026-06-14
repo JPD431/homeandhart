@@ -435,6 +435,7 @@ function FechaInicioConDias({
 
 const PLATFORM_MULTIPLIER = 1.14;
 const COMMISSION_RATE = 0.14;
+const MAX_CREDITO_PORCENTAJE = 0.6;
 
 const inputClass =
   "w-full rounded-xl border px-4 py-3 text-sm text-[#1a1a1a] outline-none focus:ring-2 focus:ring-[#1d4f91]/30";
@@ -1176,7 +1177,9 @@ export default function ReservarPage() {
 
       const { data: perfilClienteData } = await supabase
         .from("profiles")
-        .select("nombre, apellido, stripe_customer_id, reservas_sin_comision")
+        .select(
+          "nombre, apellido, stripe_customer_id, reservas_sin_comision, credito_disponible",
+        )
         .eq("id", user.id)
         .single();
 
@@ -1631,7 +1634,20 @@ export default function ReservarPage() {
 
   const precioListo =
     priceSummary.ready && !calendarioError && !disponibilidadChecking;
-  const precioTotal = precioListo ? priceSummary.total : 0;
+
+  const { creditoAplicado, totalAPagar } = useMemo(() => {
+    if (!precioListo || priceSummary.total <= 0) {
+      return { creditoAplicado: 0, totalAPagar: 0 };
+    }
+    const creditoCliente = Number(perfilCliente?.credito_disponible) || 0;
+    const topeCredito =
+      Math.round(priceSummary.total * MAX_CREDITO_PORCENTAJE * 100) / 100;
+    const creditoAplicado = Math.min(creditoCliente, topeCredito);
+    const totalAPagar =
+      Math.round((priceSummary.total - creditoAplicado) * 100) / 100;
+    return { creditoAplicado, totalAPagar };
+  }, [precioListo, priceSummary.total, perfilCliente?.credito_disponible]);
+
   const precioDetail =
     calendarioError ||
     (disponibilidadChecking
@@ -1801,7 +1817,7 @@ export default function ReservarPage() {
   }, [userId, serviceId, grupoReserva]);
 
   useEffect(() => {
-    if (precioTotal <= 0 || !userId || !serviceId) {
+    if (totalAPagar <= 0 || !userId || !serviceId) {
       setClientSecret(null);
       setPaymentIntentId(null);
       setGrupoReserva(null);
@@ -1847,7 +1863,7 @@ export default function ReservarPage() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            amount: precioTotal,
+            amount: totalAPagar,
             customer: stripeCustomerId || undefined,
             metadata: {
               service_id: String(serviceId),
@@ -1876,7 +1892,7 @@ export default function ReservarPage() {
       cancelled = true;
     };
   }, [
-    precioTotal,
+    totalAPagar,
     userId,
     serviceId,
     useNewCard,
@@ -1955,6 +1971,31 @@ export default function ReservarPage() {
             ),
           })
           .eq("id", userId);
+      }
+
+      if (creditoAplicado > 0) {
+        try {
+          const { error: creditError } = await supabase
+            .from("profiles")
+            .update({
+              credito_disponible: Math.max(
+                0,
+                (Number(perfilCliente?.credito_disponible) || 0) - creditoAplicado,
+              ),
+            })
+            .eq("id", userId);
+          if (creditError) {
+            console.error(
+              "[completeBooking] No se pudo restar credito_disponible:",
+              creditError,
+            );
+          }
+        } catch (creditErr) {
+          console.error(
+            "[completeBooking] No se pudo restar credito_disponible:",
+            creditErr,
+          );
+        }
       }
 
       if (insertedBookings?.length) {
@@ -2049,6 +2090,9 @@ export default function ReservarPage() {
       router,
       reservarComoFamilia,
       familiaInfo,
+      precioListo,
+      clienteSinComision,
+      creditoAplicado,
     ],
   );
 
@@ -2846,6 +2890,24 @@ export default function ReservarPage() {
                       </div>
                     ))}
 
+                  {creditoAplicado > 0 && (
+                    <>
+                      <div
+                        className="mt-2 flex items-center justify-between text-[11px]"
+                        style={{ marginTop: 8 }}
+                      >
+                        <span className="text-[#444]">Total reserva</span>
+                        <span className="text-[#1a1a1a]">
+                          {priceSummary.total.toFixed(2)}€
+                        </span>
+                      </div>
+                      <div className="mt-2 flex items-center justify-between text-[11px] font-medium text-green-700">
+                        <span>Crédito aplicado</span>
+                        <span>−{creditoAplicado.toFixed(2)}€</span>
+                      </div>
+                    </>
+                  )}
+
                   <div
                     style={{
                       display: "flex",
@@ -2858,11 +2920,19 @@ export default function ReservarPage() {
                     }}
                   >
                     <span className="text-[#1a1a1a]">
-                      Total{" "}
-                      {clienteSinComision ? "" : "(gastos de gestión incluidos)"}
+                      {creditoAplicado > 0 ? (
+                        "Total a pagar"
+                      ) : (
+                        <>
+                          Total{" "}
+                          {clienteSinComision
+                            ? ""
+                            : "(gastos de gestión incluidos)"}
+                        </>
+                      )}
                     </span>
                     <span className="text-[#1a1a1a]">
-                      {priceSummary.total.toFixed(2)}€
+                      {(creditoAplicado > 0 ? totalAPagar : priceSummary.total).toFixed(2)}€
                     </span>
                   </div>
                   {clienteSinComision && (
@@ -2894,7 +2964,7 @@ export default function ReservarPage() {
                   paymentMetadata &&
                   stripeCustomerId ? (
                   <SavedCardCheckout
-                    precioTotal={priceSummary.total}
+                    precioTotal={totalAPagar}
                     paymentMethod={selectedPaymentMethod}
                     stripeCustomerId={stripeCustomerId}
                     userId={userId}
@@ -2914,7 +2984,7 @@ export default function ReservarPage() {
                       options={{ clientSecret }}
                     >
                       <CheckoutForm
-                        precioTotal={priceSummary.total}
+                        precioTotal={totalAPagar}
                         paymentIntentId={paymentIntentId}
                         metadata={paymentMetadata}
                         stripeCustomerId={stripeCustomerId}
@@ -2950,7 +3020,7 @@ export default function ReservarPage() {
                     className="mt-4 min-h-[44px] w-full py-3 text-[13px] font-semibold text-white opacity-60"
                     style={{ backgroundColor: "#1d4f91", borderRadius: 6 }}
                   >
-                    Pagar {priceSummary.total > 0 ? formatEuro(priceSummary.total) : ""} →
+                    Pagar {totalAPagar > 0 ? formatEuro(totalAPagar) : ""} →
                   </button>
                 )
               ) : (
