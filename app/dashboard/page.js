@@ -264,8 +264,37 @@ function TabCliente({ perfil, reservas, favoritos, viajes, router, BRAND, copiar
 }
 
 function TabProveedor({ perfil, router, BRAND }) {
+  const deudaPendiente = Number(perfil?.deuda_pendiente) || 0;
+
   return (
     <div style={{ maxWidth: 720, margin: '0 auto' }}>
+      {deudaPendiente > 0 && (
+        <div
+          style={{
+            marginTop: 16,
+            padding: '14px 16px',
+            borderRadius: 10,
+            border: '1px solid #c47d1a',
+            background: '#fdf4e7',
+          }}
+        >
+          <p style={{ fontSize: 13, fontWeight: 600, color: '#2a3a4a', margin: 0 }}>
+            Tienes una compensación pendiente
+          </p>
+          <p
+            style={{
+              fontSize: 12,
+              color: '#5c4a32',
+              marginTop: 8,
+              marginBottom: 0,
+              lineHeight: 1.5,
+            }}
+          >
+            Por una o más cancelaciones, tienes una compensación pendiente de{' '}
+            {deudaPendiente.toFixed(2)}€. Se descontará automáticamente de tus próximos cobros.
+          </p>
+        </div>
+      )}
       <div style={{ textAlign: 'center', padding: '24px 0 16px' }}>
         <div style={{ background: '#e6f4f0', borderRadius: 8, padding: '12px 16px', marginBottom: 16 }}>
           <div style={{ fontSize: 11, color: '#888', marginBottom: 4 }}>Reservas sin comisión</div>
