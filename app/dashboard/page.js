@@ -292,6 +292,7 @@ const ESTADO_BADGE = {
   rechazada: { bg: '#f3f4f6', color: '#6b7280', label: 'Rechazada' },
   completada: { bg: '#e8f0fb', color: PRIMARY, label: 'Completada' },
   cancelada: { bg: '#f3f4f6', color: '#6b7280', label: 'Cancelada' },
+  cancelada_proveedor: { bg: '#f3f4f6', color: '#6b7280', label: 'Cancelada por ti' },
   cancelada_garantia: { bg: '#f3f4f6', color: '#6b7280', label: 'Cancelada' },
   en_curso: { bg: '#ede9fe', color: '#7c3aed', label: 'En curso' },
   incidencia: { bg: '#fee2e2', color: '#b91c1c', label: 'Incidencia' },
@@ -327,8 +328,17 @@ function EstadoBadge({ estado }) {
   );
 }
 
-function ReservaRecibidaCard({ booking, serviceTitulo, clienteNombre, onRespond, responding }) {
+function ReservaRecibidaCard({
+  booking,
+  serviceTitulo,
+  clienteNombre,
+  onRespond,
+  responding,
+  onCancelProvider,
+  canceling,
+}) {
   const isPendiente = booking.estado === 'pendiente';
+  const isConfirmada = booking.estado === 'confirmada';
 
   return (
     <div
@@ -412,6 +422,30 @@ function ReservaRecibidaCard({ booking, serviceTitulo, clienteNombre, onRespond,
           </button>
         </div>
       )}
+      {isConfirmada && (
+        <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            disabled={canceling}
+            onClick={() => onCancelProvider(booking.id)}
+            style={{
+              minHeight: 40,
+              flex: 1,
+              minWidth: 120,
+              background: '#fff',
+              color: '#dc2626',
+              border: '1px solid #dc2626',
+              borderRadius: 6,
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: canceling ? 'not-allowed' : 'pointer',
+              opacity: canceling ? 0.6 : 1,
+            }}
+          >
+            {canceling ? 'Cancelando…' : 'Cancelar reserva'}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -423,7 +457,9 @@ function ReservasRecibidas({ perfil, BRAND }) {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [actionError, setActionError] = useState('');
+  const [stripeWarning, setStripeWarning] = useState('');
   const [respondingId, setRespondingId] = useState(null);
+  const [cancelingId, setCancelingId] = useState(null);
 
   useEffect(() => {
     if (!perfil?.id) {
@@ -505,6 +541,7 @@ function ReservasRecibidas({ perfil, BRAND }) {
 
     setRespondingId(bookingId);
     setActionError('');
+    setStripeWarning('');
 
     try {
       const res = await fetch('/api/bookings/respond', {
@@ -526,6 +563,52 @@ function ReservasRecibidas({ perfil, BRAND }) {
       setActionError(err.message || 'Error de conexión.');
     } finally {
       setRespondingId(null);
+    }
+  }
+
+  async function handleCancelProvider(bookingId) {
+    if (
+      !window.confirm(
+        '¿Seguro que quieres cancelar esta reserva confirmada? El cliente recibirá el reembolso íntegro y esta cancelación puede afectar a tu cuenta.',
+      )
+    ) {
+      return;
+    }
+
+    setCancelingId(bookingId);
+    setActionError('');
+    setStripeWarning('');
+
+    try {
+      const res = await fetch('/api/bookings/cancel-proveedor', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bookingId }),
+      });
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        setActionError(data.error || 'No se pudo cancelar la reserva.');
+        return;
+      }
+
+      setBookings((prev) =>
+        prev.map((b) =>
+          b.id === bookingId ? { ...b, estado: 'cancelada_proveedor' } : b,
+        ),
+      );
+
+      if (data.stripe_ok === false) {
+        setStripeWarning(
+          data.stripe_error
+            ? `La cancelación se registró, pero hubo una incidencia con el reembolso: ${data.stripe_error}`
+            : 'La cancelación se registró, pero hubo una incidencia al procesar el reembolso del cliente. Contacta con soporte si persiste.',
+        );
+      }
+    } catch (err) {
+      setActionError(err.message || 'Error de conexión.');
+    } finally {
+      setCancelingId(null);
     }
   }
 
@@ -606,6 +689,21 @@ function ReservasRecibidas({ perfil, BRAND }) {
             </p>
           )}
 
+          {!loading && !loadError && stripeWarning && (
+            <p
+              style={{
+                fontSize: 12,
+                color: '#854d0e',
+                background: '#fef3c7',
+                padding: '10px 12px',
+                borderRadius: 6,
+                marginBottom: 12,
+              }}
+            >
+              {stripeWarning}
+            </p>
+          )}
+
           {!loading && !loadError && bookings.length === 0 && (
             <p style={{ fontSize: 12, color: '#bbb', textAlign: 'center', padding: '24px 0' }}>
               Aún no has recibido reservas
@@ -634,6 +732,8 @@ function ReservasRecibidas({ perfil, BRAND }) {
                   clienteNombre={clientNames[booking.cliente_id] || 'Cliente'}
                   onRespond={handleRespond}
                   responding={respondingId === booking.id}
+                  onCancelProvider={handleCancelProvider}
+                  canceling={cancelingId === booking.id}
                 />
               ))}
             </>
@@ -663,6 +763,8 @@ function ReservasRecibidas({ perfil, BRAND }) {
                   clienteNombre={clientNames[booking.cliente_id] || 'Cliente'}
                   onRespond={handleRespond}
                   responding={respondingId === booking.id}
+                  onCancelProvider={handleCancelProvider}
+                  canceling={cancelingId === booking.id}
                 />
               ))}
             </>
