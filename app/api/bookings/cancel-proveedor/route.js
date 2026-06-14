@@ -43,6 +43,71 @@ async function handleStripeForCancellation(paymentIntentId) {
   };
 }
 
+function calcularIndemnizacion(fechaInicio, precioTotal) {
+  const precio = Number(precioTotal) || 0;
+  if (!fechaInicio) {
+    return Math.round(precio * 0.5 * 100) / 100;
+  }
+
+  const start = new Date(`${fechaInicio}T12:00:00`);
+  const hoursUntil = (start.getTime() - Date.now()) / (1000 * 60 * 60);
+  const rate = hoursUntil > 48 ? 0.2 : 0.5;
+  return Math.round(precio * rate * 100) / 100;
+}
+
+async function aplicarPenalizacionProveedor(proveedorId, booking) {
+  const indemnizacion = calcularIndemnizacion(
+    booking.fecha_inicio,
+    booking.precio_total,
+  );
+
+  const { data: profile, error: profileError } = await supabaseAdmin
+    .from("profiles")
+    .select(
+      "cancelaciones_proveedor_count, deuda_pendiente, penalizacion_valoracion",
+    )
+    .eq("id", proveedorId)
+    .single();
+
+  if (profileError || !profile) {
+    throw new Error(profileError?.message || "Perfil del proveedor no encontrado");
+  }
+
+  const cancelacionesActuales = Number(profile.cancelaciones_proveedor_count) || 0;
+  const deudaActual = Number(profile.deuda_pendiente) || 0;
+  const penalizacionActual = Number(profile.penalizacion_valoracion) || 0;
+
+  const cancelaciones_count = cancelacionesActuales + 1;
+  const nueva_deuda = Math.round((deudaActual + indemnizacion) * 100) / 100;
+  const requiere_revision = cancelaciones_count >= 3;
+
+  const profileUpdate = {
+    cancelaciones_proveedor_count: cancelaciones_count,
+    deuda_pendiente: nueva_deuda,
+    penalizacion_valoracion: penalizacionActual + 0.5,
+  };
+
+  if (requiere_revision) {
+    profileUpdate.requiere_revision_admin = true;
+  }
+
+  const { error: updateProfileError } = await supabaseAdmin
+    .from("profiles")
+    .update(profileUpdate)
+    .eq("id", proveedorId);
+
+  if (updateProfileError) {
+    throw new Error(updateProfileError.message);
+  }
+
+  return {
+    indemnizacion,
+    nueva_deuda,
+    cancelaciones_count,
+    requiere_revision,
+  };
+}
+
 export async function POST(request) {
   let body;
   try {
@@ -136,10 +201,37 @@ export async function POST(request) {
     return NextResponse.json({ error: updateError.message }, { status: 500 });
   }
 
+  let penalizacion_ok = true;
+  let penalizacionData = {};
+
+  try {
+    penalizacionData = await aplicarPenalizacionProveedor(
+      service.proveedor_id,
+      booking,
+    );
+  } catch (err) {
+    penalizacion_ok = false;
+    console.error(
+      "Error aplicando penalización/deuda al cancelar reserva (proveedor):",
+      service.proveedor_id,
+      bookingId,
+      err?.message ?? err,
+    );
+  }
+
   return NextResponse.json({
     success: true,
     estado: "cancelada_proveedor",
     stripe_ok,
+    penalizacion_ok,
     ...(stripe_error ? { stripe_error } : {}),
+    ...(penalizacion_ok
+      ? {
+          indemnizacion: penalizacionData.indemnizacion,
+          nueva_deuda: penalizacionData.nueva_deuda,
+          cancelaciones_count: penalizacionData.cancelaciones_count,
+          requiere_revision: penalizacionData.requiere_revision,
+        }
+      : {}),
   });
 }
