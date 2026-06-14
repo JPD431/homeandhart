@@ -160,6 +160,26 @@ export async function POST(request) {
       );
     }
 
+    const { data: existingBookings, error: existingBookingsError } =
+      await supabase
+        .from("bookings")
+        .select("id, pago_liberado_at")
+        .eq("payment_intent_id", resolvedPaymentIntentId);
+
+    if (existingBookingsError) {
+      return Response.json(
+        { error: "No se pudo comprobar el estado del pago" },
+        { status: 500 },
+      );
+    }
+
+    if (
+      existingBookings?.length > 0 &&
+      existingBookings.every((b) => b.pago_liberado_at != null)
+    ) {
+      return Response.json({ success: true, already_processed: true });
+    }
+
     const paymentIntent = await stripe.paymentIntents.capture(resolvedPaymentIntentId);
     const chargeId = paymentIntent.latest_charge;
 
@@ -194,6 +214,11 @@ export async function POST(request) {
         );
       }
     }
+
+    await supabase
+      .from("bookings")
+      .update({ pago_liberado_at: new Date().toISOString() })
+      .eq("payment_intent_id", resolvedPaymentIntentId);
 
     return Response.json({ success: true, paymentIntent, transfers });
   } catch (error) {
