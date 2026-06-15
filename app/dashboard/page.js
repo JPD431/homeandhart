@@ -265,6 +265,31 @@ function TabCliente({ perfil, reservas, favoritos, viajes, router, BRAND, copiar
 
 function TabProveedor({ perfil, router, BRAND }) {
   const deudaPendiente = Number(perfil?.deuda_pendiente) || 0;
+  const tieneCuentaCobros = Boolean(perfil?.stripe_account_id);
+  const [connectLoading, setConnectLoading] = useState(false);
+  const [connectError, setConnectError] = useState('');
+
+  async function handleConfigureCobros() {
+    setConnectLoading(true);
+    setConnectError('');
+    try {
+      const res = await fetch('/api/stripe/connect/create-account', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        setConnectError(data.error || 'No se pudo iniciar la configuración de cobros.');
+        return;
+      }
+      if (data.url) {
+        window.location.href = data.url;
+        return;
+      }
+      setConnectError('No se recibió la URL de onboarding de Stripe.');
+    } catch {
+      setConnectError('Error de conexión. Inténtalo de nuevo.');
+    } finally {
+      setConnectLoading(false);
+    }
+  }
 
   return (
     <div style={{ maxWidth: 720, margin: '0 auto' }}>
@@ -301,6 +326,101 @@ function TabProveedor({ perfil, router, BRAND }) {
           <div style={{ fontSize: 20, fontWeight: 600, color: '#0e7a5c' }}>{perfil?.reservas_sin_comision || 0} 🎁</div>
           <div style={{ fontSize: 10, color: '#666', marginTop: 4 }}>Recibirás el 100% del pago en estas reservas</div>
         </div>
+
+        {!tieneCuentaCobros ? (
+          <div
+            style={{
+              marginBottom: 16,
+              padding: '16px',
+              borderRadius: 10,
+              border: `1px solid ${BRAND.blue}`,
+              background: '#e8f0fb',
+              textAlign: 'left',
+            }}
+          >
+            <p style={{ fontSize: 13, fontWeight: 600, color: '#2a3a4a', margin: 0 }}>
+              Cobros
+            </p>
+            <p style={{ fontSize: 12, color: '#444', marginTop: 8, marginBottom: 12, lineHeight: 1.5 }}>
+              Configura tus cobros para poder recibir pagos de tus reservas.
+            </p>
+            <button
+              type="button"
+              onClick={handleConfigureCobros}
+              disabled={connectLoading}
+              style={{
+                minHeight: 44,
+                background: BRAND.blue,
+                color: '#fff',
+                border: 'none',
+                padding: '10px 20px',
+                borderRadius: 4,
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: connectLoading ? 'not-allowed' : 'pointer',
+                opacity: connectLoading ? 0.7 : 1,
+              }}
+            >
+              {connectLoading ? 'Conectando…' : 'Configurar cobros'}
+            </button>
+          </div>
+        ) : (
+          <div
+            style={{
+              marginBottom: 16,
+              padding: '12px 16px',
+              borderRadius: 8,
+              border: `0.5px solid ${BRAND.border}`,
+              background: '#fff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 12,
+              flexWrap: 'wrap',
+            }}
+          >
+            <p style={{ fontSize: 12, color: '#666', margin: 0 }}>
+              Cobros configurados
+            </p>
+            <button
+              type="button"
+              onClick={handleConfigureCobros}
+              disabled={connectLoading}
+              style={{
+                minHeight: 36,
+                background: '#fff',
+                color: BRAND.blue,
+                border: `1px solid ${BRAND.border}`,
+                padding: '8px 14px',
+                borderRadius: 4,
+                fontSize: 11,
+                fontWeight: 500,
+                cursor: connectLoading ? 'not-allowed' : 'pointer',
+                opacity: connectLoading ? 0.7 : 1,
+              }}
+            >
+              {connectLoading ? 'Conectando…' : 'Gestionar cobros'}
+            </button>
+          </div>
+        )}
+
+        {connectError && (
+          <p
+            style={{
+              marginBottom: 16,
+              padding: '10px 12px',
+              borderRadius: 6,
+              background: '#fee2e2',
+              color: '#b91c1c',
+              fontSize: 12,
+              lineHeight: 1.5,
+              textAlign: 'left',
+            }}
+          >
+            {connectError}
+          </p>
+        )}
+
         <p style={{ fontSize: 14, color: '#aaa', marginBottom: 16 }}>Panel de proveedor</p>
         <button onClick={() => router.push('/estadisticas')} style={{ minHeight: 44, background: BRAND.blue, color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 4, fontSize: 12, cursor: 'pointer', marginRight: 8 }}>Ver estadísticas</button>
         <button onClick={() => router.push('/editar-perfil')} style={{ minHeight: 44, background: '#fff', color: BRAND.blue, border: `1px solid ${BRAND.blue}`, padding: '10px 20px', borderRadius: 4, fontSize: 12, cursor: 'pointer' }}>Editar servicios</button>
