@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Navbar from '@/app/components/Navbar';
 import { supabase } from '@/app/lib/supabase';
 
@@ -16,6 +16,8 @@ const BRAND = {
 
 export default function DashboardPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const stripeParam = searchParams.get('stripe');
   const [user, setUser] = useState(null);
   const [perfil, setPerfil] = useState(null);
   const [reservas, setReservas] = useState([]);
@@ -23,6 +25,7 @@ export default function DashboardPage() {
   const [viajes, setViajes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [tabActiva, setTabActiva] = useState('cliente');
+  const [stripeBannerDismissed, setStripeBannerDismissed] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -65,13 +68,40 @@ export default function DashboardPage() {
       setLoading(false);
     }
     load();
-  }, []);
+  }, [router]);
+
+  useEffect(() => {
+    if (stripeParam !== 'success' && stripeParam !== 'refresh') return;
+
+    async function refetchPerfil() {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) return;
+      const { data: p } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', authUser.id)
+        .single();
+      if (p) {
+        setPerfil(p);
+        if (p.role === 'proveedor') {
+          setTabActiva('proveedor');
+        }
+      }
+    }
+
+    refetchPerfil();
+  }, [stripeParam]);
 
   useEffect(() => {
     if (perfil?.role === 'proveedor') {
       setTabActiva('proveedor');
     }
   }, [perfil]);
+
+  function dismissStripeBanner() {
+    setStripeBannerDismissed(true);
+    router.replace('/dashboard');
+  }
 
   const copiarLink = (codigo) => {
     const link = `${window.location.origin}/registro?ref=${codigo}`;
@@ -96,6 +126,78 @@ export default function DashboardPage() {
   return (
     <div style={{background: BRAND.warm, minHeight: '100vh'}}>
       <Navbar />
+
+      {!stripeBannerDismissed && stripeParam === 'success' && (
+        <div
+          style={{
+            background: '#e6f4f0',
+            borderBottom: `1px solid ${BRAND.green}`,
+            padding: '14px 16px',
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'space-between',
+            gap: 12,
+          }}
+        >
+          <p style={{ margin: 0, fontSize: 13, color: '#085041', lineHeight: 1.5 }}>
+            <strong style={{ color: BRAND.green }}>¡Listo!</strong> Tus cobros están configurados.
+            Ya puedes recibir pagos de tus reservas.
+          </p>
+          <button
+            type="button"
+            onClick={dismissStripeBanner}
+            aria-label="Cerrar"
+            style={{
+              flexShrink: 0,
+              background: 'none',
+              border: 'none',
+              color: BRAND.green,
+              fontSize: 18,
+              lineHeight: 1,
+              cursor: 'pointer',
+              padding: '0 4px',
+            }}
+          >
+            ×
+          </button>
+        </div>
+      )}
+
+      {!stripeBannerDismissed && stripeParam === 'refresh' && (
+        <div
+          style={{
+            background: '#fdf4e7',
+            borderBottom: `1px solid ${BRAND.amber}`,
+            padding: '14px 16px',
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'space-between',
+            gap: 12,
+          }}
+        >
+          <p style={{ margin: 0, fontSize: 13, color: '#5c4a32', lineHeight: 1.5 }}>
+            Parece que no terminaste de configurar tus cobros. Puedes continuar cuando quieras
+            desde el botón <strong>Configurar cobros</strong> en tu panel de proveedor.
+          </p>
+          <button
+            type="button"
+            onClick={dismissStripeBanner}
+            aria-label="Cerrar"
+            style={{
+              flexShrink: 0,
+              background: 'none',
+              border: 'none',
+              color: BRAND.amber,
+              fontSize: 18,
+              lineHeight: 1,
+              cursor: 'pointer',
+              padding: '0 4px',
+            }}
+          >
+            ×
+          </button>
+        </div>
+      )}
       
       {/* TABS */}
       <div
