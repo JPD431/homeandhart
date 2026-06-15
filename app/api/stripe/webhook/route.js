@@ -53,10 +53,6 @@ async function handleAccountUpdated(account) {
     console.error("[stripe/webhook] Error actualizando cobros_activos:", updateError.message);
     throw updateError;
   }
-
-  console.log(
-    `[stripe/webhook] Proveedor ${profile.id}: cobros_activos=${lista} (cuenta ${account.id})`,
-  );
 }
 
 export async function POST(request) {
