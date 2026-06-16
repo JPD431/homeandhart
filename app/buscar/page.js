@@ -251,7 +251,7 @@ function countActiveFilters(filters, vertical) {
 }
 
 function hasDocuments(profile) {
-  return !!(profile?.doc_dni_url && profile?.doc_antecedentes_url);
+  return profile?.documentos_completos === true;
 }
 
 function matchesEdadNinos(descripcion, ranges) {
@@ -269,7 +269,7 @@ function matchesEdadNinos(descripcion, ranges) {
 }
 
 function matchesClientFilters(service, filters, avgRating) {
-  const profile = service.profiles ?? {};
+  const profile = service.profiles_public ?? {};
 
   if (filters.soloVerificados && profile.verificado !== true) return false;
 
@@ -585,7 +585,7 @@ function ServiceCard({
   favoritos,
 }) {
   const router = useRouter();
-  const profile = service.profiles ?? {};
+  const profile = service.profiles_public ?? {};
   const theme = VERTICAL_THEME[service.vertical] ?? VERTICAL_THEME.alojamiento;
   const zone = getServiceZone(service, profile);
   const tags = getServiceTags(service, profile, lang);
@@ -933,7 +933,7 @@ function BuscarContent() {
           `
           id,
           titulo,
-          profiles (
+          profiles_public (
             nombre,
             apellido
           )
@@ -1024,7 +1024,7 @@ function BuscarContent() {
           oferta_descuento,
           oferta_valida_hasta,
           disponible_para_viajar,
-          profiles!inner (
+          profiles_public!inner (
             nombre,
             apellido,
             verificado,
@@ -1033,8 +1033,7 @@ function BuscarContent() {
             id,
             location_zone,
             ciudad,
-            doc_dni_url,
-            doc_antecedentes_url
+            documentos_completos
           )
         `,
         )
@@ -1061,7 +1060,7 @@ function BuscarContent() {
         query = query.eq("reserva_inmediata", true);
       }
       if (f.soloVerificados) {
-        query = query.eq("profiles.verificado", true);
+        query = query.eq("profiles_public.verificado", true);
       }
       if (f.tipoAlojamiento) {
         query = query.eq("tipo_alojamiento", f.tipoAlojamiento);
@@ -1204,7 +1203,7 @@ function BuscarContent() {
       const exists = prev.find((s) => s.id === service.id);
       if (exists) return prev.filter((s) => s.id !== service.id);
       if (prev.length >= 3) return prev;
-      const profile = service.profiles ?? {};
+      const profile = service.profiles_public ?? {};
       return [
         ...prev,
         {
@@ -1288,8 +1287,8 @@ function BuscarContent() {
   const origenLabel = origenService
     ? origenService.titulo ||
       formatShortName(
-        origenService.profiles?.nombre,
-        origenService.profiles?.apellido,
+        origenService.profiles_public?.nombre,
+        origenService.profiles_public?.apellido,
       ) ||
       "tu reserva"
     : "tu reserva";
