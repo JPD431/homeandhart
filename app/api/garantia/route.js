@@ -56,15 +56,17 @@ export async function POST(request) {
         ciudad,
         foto_url,
         proveedor_id,
-        profiles:proveedor_id (
+        profiles:proveedor_id!inner (
           nombre,
           apellido,
-          foto_perfil
+          foto_perfil,
+          verificado
         )
       `,
       )
       .eq("vertical", vertical)
       .eq("disponible", true)
+      .eq("profiles.verificado", true)
       .eq("proveedor_emergencia", true)
       .ilike("ciudad", `%${ciudad}%`);
 

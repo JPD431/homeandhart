@@ -199,9 +199,16 @@ export async function generateMetadata({ params }) {
 
   const { data: perfil } = await supabase
     .from("profiles_public")
-    .select("nombre, apellido, descripcion, ciudad")
+    .select("nombre, apellido, descripcion, ciudad, verificado")
     .eq("id", id)
     .single();
+
+  if (!perfil || perfil.verificado !== true) {
+    return {
+      title: "Perfil no disponible",
+      description: "Este perfil no está disponible en Home&Heart.",
+    };
+  }
 
   const { data: servicios } = await supabase
     .from("services")
@@ -246,7 +253,7 @@ export default async function ProveedorPage({ params }) {
     .eq("id", id)
     .single();
 
-  if (profileError || !profile) {
+  if (profileError || !profile || profile.verificado !== true) {
     notFound();
   }
 

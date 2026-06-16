@@ -630,9 +630,10 @@ export default function ChatPage() {
     async function loadOtherServices() {
       const { data } = await supabase
         .from("services")
-        .select("id, titulo, precio, vertical")
+        .select("id, titulo, precio, vertical, profiles!inner(verificado)")
         .eq("proveedor_id", otherParticipantId)
         .eq("disponible", true)
+        .eq("profiles.verificado", true)
         .order("titulo", { ascending: true });
 
       const list = data ?? [];

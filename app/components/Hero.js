@@ -239,8 +239,9 @@ export default function Hero() {
     async function loadVerticalStats() {
       const { data, error } = await supabase
         .from("services")
-        .select("vertical, precio")
-        .eq("disponible", true);
+        .select("vertical, precio, profiles_public!inner(verificado)")
+        .eq("disponible", true)
+        .eq("profiles_public.verificado", true);
 
       if (error || !data?.length) return;
 

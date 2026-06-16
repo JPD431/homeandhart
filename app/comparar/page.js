@@ -79,6 +79,12 @@ function formatPrice(precio, suffix) {
   return `${Number(precio)}€${suffix}`;
 }
 
+function isBookableService(service) {
+  return (
+    service?.disponible === true && service?.profiles?.verificado === true
+  );
+}
+
 function CompararContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -113,6 +119,7 @@ function CompararContent() {
           titulo,
           vertical,
           precio,
+          disponible,
           foto_url,
           reserva_inmediata,
           cancellation_policy,
@@ -133,7 +140,9 @@ function CompararContent() {
           )
         `,
         )
-        .in("id", ids);
+        .in("id", ids)
+        .eq("disponible", true)
+        .eq("profiles.verificado", true);
 
       if (fetchError) {
         setError(fetchError.message);
@@ -144,7 +153,8 @@ function CompararContent() {
 
       const ordered = ids
         .map((id) => (data ?? []).find((s) => s.id === id))
-        .filter(Boolean);
+        .filter(Boolean)
+        .filter(isBookableService);
 
       const proveedorIds = [...new Set(ordered.map((s) => s.proveedor_id).filter(Boolean))];
 
@@ -410,7 +420,9 @@ function CompararContent() {
         {!loading && !error && services.length < 2 && (
           <div className="mt-10 text-center">
             <p className="text-[14px] text-[#888]">
-              Selecciona al menos 2 servicios en la búsqueda para comparar.
+              {ids.length >= 2
+                ? "Los servicios seleccionados no están disponibles para comparar en este momento."
+                : "Selecciona al menos 2 servicios en la búsqueda para comparar."}
             </p>
             <Link
               href="/buscar"
