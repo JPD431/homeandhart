@@ -69,6 +69,14 @@ export async function POST() {
         transfers: { requested: true },
       },
       business_type: "individual",
+      business_profile: {
+        url: "https://www.homeandheart.es",
+        mcc: "7299",
+        product_description:
+          "Servicios de alojamiento, cuidado infantil y cuidado de mascotas ofrecidos a través de la plataforma Home&Heart.",
+        support_email: "soporte@homeandheart.es",
+        support_url: "https://www.homeandheart.es",
+      },
       metadata: { proveedor_id: user.id },
     });
 
