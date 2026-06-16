@@ -151,7 +151,6 @@ function getDefaultFilters() {
     precioMax: 500,
     valoracionMin: 0,
     soloInmediata: false,
-    soloVerificados: true,
     soloConDocumentos: false,
     idiomas: [],
     petFriendly: false,
@@ -172,9 +171,6 @@ function filtersFromSearchParams(searchParams) {
     precioMax: parseInt(searchParams.get("precioMax") || "500", 10) || 500,
     valoracionMin: parseFloat(searchParams.get("valoracion") || "0") || 0,
     soloInmediata: searchParams.get("inmediata") === "1",
-    soloVerificados: searchParams.has("verificados")
-      ? searchParams.get("verificados") === "1"
-      : true,
     soloConDocumentos: searchParams.get("documentos") === "1",
     idiomas: searchParams.get("idiomas")?.split(",").filter(Boolean) || [],
     petFriendly: searchParams.get("pet") === "1",
@@ -206,8 +202,6 @@ function buildBuscarQueryString({
   if (filters.precioMax < 500) params.set("precioMax", String(filters.precioMax));
   if (filters.valoracionMin > 0) params.set("valoracion", String(filters.valoracionMin));
   if (filters.soloInmediata) params.set("inmediata", "1");
-  if (filters.soloVerificados) params.set("verificados", "1");
-  else params.set("verificados", "0");
   if (filters.soloConDocumentos) params.set("documentos", "1");
   if (filters.idiomas.length > 0) params.set("idiomas", filters.idiomas.join(","));
   if (filters.petFriendly) params.set("pet", "1");
@@ -231,7 +225,6 @@ function countActiveFilters(filters, vertical) {
   if (filters.precioMax < 500) n++;
   if (filters.valoracionMin > 0) n++;
   if (filters.soloInmediata) n++;
-  if (!filters.soloVerificados) n++;
   if (filters.soloConDocumentos) n++;
   if (filters.idiomas.length > 0) n++;
   if (vertical === "alojamiento" || vertical === "todo") {
@@ -271,13 +264,11 @@ function matchesEdadNinos(descripcion, ranges) {
 function matchesClientFilters(service, filters, avgRating) {
   const profile = service.profiles_public ?? {};
 
-  if (filters.soloVerificados && profile.verificado !== true) return false;
+  if (filters.soloConDocumentos && !hasDocuments(profile)) return false;
 
   if (filters.valoracionMin > 0) {
     if (!avgRating || avgRating < filters.valoracionMin) return false;
   }
-
-  if (filters.soloConDocumentos && !hasDocuments(profile)) return false;
 
   if (filters.idiomas.length > 0) {
     const langs = Array.isArray(profile.idiomas) ? profile.idiomas : [];
@@ -1037,7 +1028,8 @@ function BuscarContent() {
           )
         `,
         )
-        .eq("disponible", true);
+        .eq("disponible", true)
+        .eq("profiles_public.verificado", true);
 
       if (verticalParam && verticalParam !== "todo") {
         query = query.eq("vertical", verticalParam);
@@ -1058,9 +1050,6 @@ function BuscarContent() {
       }
       if (f.soloInmediata) {
         query = query.eq("reserva_inmediata", true);
-      }
-      if (f.soloVerificados) {
-        query = query.eq("profiles_public.verificado", true);
       }
       if (f.tipoAlojamiento) {
         query = query.eq("tipo_alojamiento", f.tipoAlojamiento);
@@ -1599,11 +1588,6 @@ function BuscarContent() {
                     label="Solo reserva inmediata ⚡"
                     checked={draftFilters.soloInmediata}
                     onChange={(v) => updateDraft("soloInmediata", v)}
-                  />
-                  <ToggleRow
-                    label="Solo verificados"
-                    checked={draftFilters.soloVerificados}
-                    onChange={(v) => updateDraft("soloVerificados", v)}
                   />
                   <ToggleRow
                     label="Con documentos"
