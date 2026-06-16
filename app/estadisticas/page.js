@@ -382,6 +382,7 @@ export default function EstadisticasPage() {
     const counts = Object.fromEntries(months.map((m) => [m.key, 0]));
 
     for (const booking of periodBookings) {
+      if (isExcludedFromReservasCount(booking)) continue;
       if (!booking.created_at) continue;
       const d = new Date(booking.created_at);
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
@@ -416,7 +417,9 @@ export default function EstadisticasPage() {
     for (const booking of periodBookings) {
       const entry = serviceMap[booking.service_id];
       if (!entry) continue;
-      entry.reservas += 1;
+      if (!isExcludedFromReservasCount(booking)) {
+        entry.reservas += 1;
+      }
       if (
         !isExcludedFromMoney(booking) &&
         booking.pago_liberado_at != null
