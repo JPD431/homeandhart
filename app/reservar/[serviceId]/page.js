@@ -367,6 +367,41 @@ async function verificarDisponibilidad(serviceId, fechaInicio, fechaFin) {
   return (data?.length ?? 0) === 0;
 }
 
+function isServiceBookable(service) {
+  return (
+    service?.disponible === true && service?.profiles?.verificado === true
+  );
+}
+
+const SERVICE_UNAVAILABLE_MSG =
+  "Este servicio no está disponible en este momento";
+
+async function validateServicesBookable(services) {
+  if (!services?.length) return;
+
+  const ids = services.map((s) => s.id);
+  const { data, error } = await supabase
+    .from("services")
+    .select(
+      `
+      id,
+      disponible,
+      profiles (
+        verificado
+      )
+    `,
+    )
+    .in("id", ids);
+
+  if (error || !data || data.length !== ids.length) {
+    throw new Error(SERVICE_UNAVAILABLE_MSG);
+  }
+
+  if (!data.every(isServiceBookable)) {
+    throw new Error(SERVICE_UNAVAILABLE_MSG);
+  }
+}
+
 function FechaInicioConDias({
   id,
   value,
@@ -1120,6 +1155,7 @@ export default function ReservarPage() {
   const [successMessage, setSuccessMessage] = useState("");
   const [successVariant, setSuccessVariant] = useState("green");
   const [errorMessage, setErrorMessage] = useState("");
+  const [unavailableMessage, setUnavailableMessage] = useState("");
   const [clientSecret, setClientSecret] = useState(null);
   const [paymentIntentId, setPaymentIntentId] = useState(null);
   const [grupoReserva, setGrupoReserva] = useState(null);
@@ -1250,6 +1286,12 @@ export default function ReservarPage() {
         return;
       }
 
+      if (!isServiceBookable(data)) {
+        setUnavailableMessage(SERVICE_UNAVAILABLE_MSG);
+        setLoading(false);
+        return;
+      }
+
       setService(data);
 
       const { data: ratings } = await supabase
@@ -1307,6 +1349,7 @@ export default function ReservarPage() {
             `,
             )
             .eq("disponible", true)
+            .eq("profiles.verificado", true)
             .eq("vertical", compVertical)
             .ilike("ciudad", `%${city}%`)
             .neq("proveedor_id", data.proveedor_id)
@@ -1384,7 +1427,7 @@ export default function ReservarPage() {
         { scroll: false },
       );
 
-      if (error || !data) return;
+      if (error || !data || !isServiceBookable(data)) return;
 
       setBundleServices((prev) =>
         prev.some((s) => s.id === data.id) ? prev : [...prev, data],
@@ -1702,6 +1745,7 @@ export default function ReservarPage() {
         `,
         )
         .eq("disponible", true)
+        .eq("profiles.verificado", true)
         .eq("vertical", tabVertical)
         .ilike("ciudad", `%${city}%`)
         .neq("proveedor_id", service.proveedor_id)
@@ -1914,6 +1958,8 @@ export default function ReservarPage() {
       if (!precioListo || priceSummary.total <= 0) {
         throw new Error("Completa las fechas o la duración para calcular el precio.");
       }
+
+      await validateServicesBookable(selectedServices);
 
       const dateContext = {
         fechaInicio,
@@ -2142,8 +2188,39 @@ export default function ReservarPage() {
             Home<span className="italic" style={{ color: "#1d4f91" }}>&</span>Heart
           </p>
         </header>
-        <main className="mx-auto max-w-[1100px] px-6 py-16 text-center">
-          <p className="text-sm text-red-600">{errorMessage || "Servicio no disponible."}</p>
+        <main className="mx-auto max-w-[560px] px-6 py-16 text-center">
+          {unavailableMessage ? (
+            <>
+              <div
+                className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full"
+                style={{ backgroundColor: "#e8f0fb" }}
+              >
+                <InfoIcon className="h-8 w-8 text-[#1d4f91]" />
+              </div>
+              <h1
+                className="text-[22px] font-semibold text-[#111]"
+                style={{ fontFamily: SERIF }}
+              >
+                {unavailableMessage}
+              </h1>
+              <p className="mt-3 text-sm leading-relaxed text-[#666]">
+                Puede que el proveedor esté completando su perfil o que el
+                servicio esté temporalmente pausado. Explora otras opciones
+                disponibles en tu zona.
+              </p>
+              <Link
+                href="/buscar"
+                className="mt-8 inline-block min-h-[44px] px-6 py-3 text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
+                style={{ backgroundColor: "#1d4f91", borderRadius: 6 }}
+              >
+                Volver a buscar servicios
+              </Link>
+            </>
+          ) : (
+            <p className="text-sm text-red-600">
+              {errorMessage || "Servicio no disponible."}
+            </p>
+          )}
         </main>
       </div>
     );
