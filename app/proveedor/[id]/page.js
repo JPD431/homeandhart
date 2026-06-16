@@ -64,6 +64,9 @@ const DIAS_SEMANA_PILLS = [
 
 const GOLD = "#c8922a";
 
+const PROFILES_PUBLIC_SELECT =
+  "id, nombre, apellido, foto_perfil, foto_url, ciudad, location_zone, descripcion, idiomas, verificado, badge_respuesta, tiempo_respuesta_horas, role, anos_experiencia, fecha_registro";
+
 function getCancelPolicy(policyKey) {
   const key = LEGACY_CANCEL_POLICIES[policyKey] ?? policyKey;
   return CANCEL_POLICIES[key];
@@ -195,7 +198,7 @@ export async function generateMetadata({ params }) {
   const { id } = await params;
 
   const { data: perfil } = await supabase
-    .from("profiles")
+    .from("profiles_public")
     .select("nombre, apellido, descripcion, ciudad")
     .eq("id", id)
     .single();
@@ -238,8 +241,8 @@ export default async function ProveedorPage({ params }) {
   const { id } = await params;
 
   const { data: profile, error: profileError } = await supabase
-    .from("profiles")
-    .select("*")
+    .from("profiles_public")
+    .select(PROFILES_PUBLIC_SELECT)
     .eq("id", id)
     .single();
 
@@ -319,7 +322,7 @@ export default async function ProveedorPage({ params }) {
   if (reviews?.length) {
     const clienteIds = reviews.map((r) => r.cliente_id);
     const { data: clientes } = await supabase
-      .from("profiles")
+      .from("profiles_public")
       .select("id, nombre")
       .in("id", clienteIds);
 
@@ -335,9 +338,9 @@ export default async function ProveedorPage({ params }) {
 
   const fullName = [profile.nombre, profile.apellido].filter(Boolean).join(" ");
   const zone = profile.location_zone || profile.ciudad || "España";
-  const bio = profile.descripcion || profile.sobre_ti || "";
+  const bio = profile.descripcion || "";
   const languages = Array.isArray(profile.idiomas) ? profile.idiomas : [];
-  const avatarUrl = profile.foto_perfil || profile.avatar_url || null;
+  const avatarUrl = profile.foto_perfil || profile.foto_url || null;
   const initials = getInitials(profile.nombre, profile.apellido);
   const isVerified = profile.verificado === true;
   const primaryTheme = getPrimaryVertical(services);
