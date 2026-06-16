@@ -526,6 +526,18 @@ export default function AdminPage() {
       return;
     }
 
+    const { error: servicesError } = await supabase
+      .from("services")
+      .update({ disponible: true })
+      .eq("proveedor_id", providerId);
+
+    if (servicesError) {
+      console.error(
+        "[handleApprove] No se pudieron activar los servicios del proveedor:",
+        servicesError,
+      );
+    }
+
     setActionLoading(null);
 
     if (proveedor?.email_contacto) {
@@ -618,6 +630,18 @@ export default function AdminPage() {
     if (error) {
       setErrorMessage(error.message);
       return;
+    }
+
+    const { error: servicesError } = await supabase
+      .from("services")
+      .update({ disponible: false })
+      .eq("proveedor_id", providerId);
+
+    if (servicesError) {
+      console.error(
+        "[handleReject] No se pudieron desactivar los servicios del proveedor:",
+        servicesError,
+      );
     }
 
     setRejectingId(null);
