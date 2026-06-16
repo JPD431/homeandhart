@@ -42,6 +42,44 @@ function getNetIncome(precioTotal) {
   return ((Number(precioTotal) || 0) / 1.14) * 0.96;
 }
 
+const MONEY_EXCLUDED_ESTADOS = new Set([
+  "cancelada",
+  "cancelada_garantia",
+  "cancelada_proveedor",
+  "rechazada",
+  "incidencia",
+]);
+
+const RESERVAS_EXCLUDED_ESTADOS = new Set(["rechazada", "cancelada_proveedor"]);
+
+function getRawEstado(booking) {
+  return booking.estado ?? booking.status ?? "pendiente";
+}
+
+function isExcludedFromMoney(booking) {
+  return MONEY_EXCLUDED_ESTADOS.has(getRawEstado(booking));
+}
+
+function isExcludedFromReservasCount(booking) {
+  return RESERVAS_EXCLUDED_ESTADOS.has(getRawEstado(booking));
+}
+
+function sumCobrado(bookings) {
+  return bookings
+    .filter((b) => !isExcludedFromMoney(b) && b.pago_liberado_at != null)
+    .reduce((sum, b) => sum + (Number(b.importe_transferido) || 0), 0);
+}
+
+function sumPendienteDeCobrar(bookings) {
+  return bookings
+    .filter((b) => {
+      if (isExcludedFromMoney(b) || b.pago_liberado_at != null) return false;
+      const estado = getBookingEstado(b);
+      return estado === "confirmada" || estado === "en_curso";
+    })
+    .reduce((sum, b) => sum + getNetIncome(b.precio_total), 0);
+}
+
 function formatEuro(value) {
   return `${Number(value).toFixed(2)}€`;
 }
@@ -212,7 +250,9 @@ export default function EstadisticasPage() {
       if (serviceIds.length > 0) {
         const { data: bookingsData } = await supabase
           .from("bookings")
-          .select("id, service_id, precio_total, estado, created_at")
+          .select(
+            "id, service_id, precio_total, estado, created_at, pago_liberado_at, importe_transferido",
+          )
           .in("service_id", serviceIds);
 
         setBookings(bookingsData ?? []);
@@ -253,28 +293,17 @@ export default function EstadisticasPage() {
   );
 
   const metrics = useMemo(() => {
-    const completadas = periodBookings.filter(
-      (b) => getBookingEstado(b) === "completada",
+    const reservasReales = periodBookings.filter(
+      (b) => !isExcludedFromReservasCount(b),
     );
-    const prevCompletadas = prevPeriodBookings.filter(
-      (b) => getBookingEstado(b) === "completada",
-    );
-
-    const ingresosNetos = completadas.reduce(
-      (sum, b) => sum + getNetIncome(b.precio_total),
-      0,
-    );
-    const prevIngresosNetos = prevCompletadas.reduce(
-      (sum, b) => sum + getNetIncome(b.precio_total),
-      0,
+    const prevReservasReales = prevPeriodBookings.filter(
+      (b) => !isExcludedFromReservasCount(b),
     );
 
-    const pendienteDeCobrar = periodBookings
-      .filter((b) => {
-        const estado = getBookingEstado(b);
-        return estado === "confirmada" || estado === "en_curso";
-      })
-      .reduce((sum, b) => sum + getNetIncome(b.precio_total), 0);
+    const ingresosNetos = sumCobrado(periodBookings);
+    const prevIngresosNetos = sumCobrado(prevPeriodBookings);
+
+    const pendienteDeCobrar = sumPendienteDeCobrar(periodBookings);
 
     const cobrado = ingresosNetos;
     const totalEstimado = cobrado + pendienteDeCobrar;
@@ -293,21 +322,28 @@ export default function EstadisticasPage() {
           prevPeriodReviews.length
         : null;
 
+    const completadas = reservasReales.filter(
+      (b) => getBookingEstado(b) === "completada",
+    );
+    const prevCompletadas = prevReservasReales.filter(
+      (b) => getBookingEstado(b) === "completada",
+    );
+
     const tasaConversion =
-      periodBookings.length > 0
-        ? (completadas.length / periodBookings.length) * 100
+      reservasReales.length > 0
+        ? (completadas.length / reservasReales.length) * 100
         : 0;
 
     const prevTasaConversion =
-      prevPeriodBookings.length > 0
-        ? (prevCompletadas.length / prevPeriodBookings.length) * 100
+      prevReservasReales.length > 0
+        ? (prevCompletadas.length / prevReservasReales.length) * 100
         : 0;
 
     return {
       ingresosNetos,
       prevIngresosNetos,
-      totalReservas: periodBookings.length,
-      prevTotalReservas: prevPeriodBookings.length,
+      totalReservas: reservasReales.length,
+      prevTotalReservas: prevReservasReales.length,
       valoracionMedia,
       prevValoracionMedia,
       tasaConversion,
@@ -381,8 +417,11 @@ export default function EstadisticasPage() {
       const entry = serviceMap[booking.service_id];
       if (!entry) continue;
       entry.reservas += 1;
-      if (getBookingEstado(booking) === "completada") {
-        entry.ingresos += getNetIncome(booking.precio_total);
+      if (
+        !isExcludedFromMoney(booking) &&
+        booking.pago_liberado_at != null
+      ) {
+        entry.ingresos += Number(booking.importe_transferido) || 0;
       }
     }
 
