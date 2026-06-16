@@ -39,7 +39,9 @@ export async function POST(request) {
 
   const { data: booking, error: bookingError } = await supabaseAdmin
     .from("bookings")
-    .select("id, service_id, payment_intent_id, estado")
+    .select(
+      "id, service_id, payment_intent_id, estado, cliente_id, fecha_inicio, fecha_fin, precio_total, mensaje",
+    )
     .eq("id", bookingId)
     .maybeSingle();
 
@@ -94,6 +96,98 @@ export async function POST(request) {
 
   if (updateError) {
     return NextResponse.json({ error: updateError.message }, { status: 500 });
+  }
+
+  if (action === "aceptar") {
+    try {
+      const { data: bookingFull } = await supabaseAdmin
+        .from("bookings")
+        .select(
+          `
+          id,
+          cliente_id,
+          fecha_inicio,
+          fecha_fin,
+          precio_total,
+          mensaje,
+          services:service_id (
+            titulo,
+            direccion_exacta,
+            telefono_contacto,
+            modalidad,
+            proveedor_id
+          )
+        `,
+        )
+        .eq("id", bookingId)
+        .single();
+
+      const svc = bookingFull?.services;
+      const proveedorId = svc?.proveedor_id;
+
+      const [{ data: clienteProfile }, { data: proveedorProfile }] =
+        await Promise.all([
+          supabaseAdmin
+            .from("profiles")
+            .select("nombre, apellido, email_contacto")
+            .eq("id", bookingFull?.cliente_id)
+            .maybeSingle(),
+          proveedorId
+            ? supabaseAdmin
+                .from("profiles")
+                .select("nombre, apellido")
+                .eq("id", proveedorId)
+                .maybeSingle()
+            : Promise.resolve({ data: null }),
+        ]);
+
+      const clienteEmail = clienteProfile?.email_contacto;
+      if (clienteEmail && svc) {
+        const proveedorNombre =
+          [proveedorProfile?.nombre, proveedorProfile?.apellido]
+            .filter(Boolean)
+            .join(" ") || "Proveedor";
+        const clienteNombre =
+          [clienteProfile?.nombre, clienteProfile?.apellido]
+            .filter(Boolean)
+            .join(" ") || "Cliente";
+        const baseUrl =
+          process.env.NEXT_PUBLIC_URL || "https://homeandheart.es";
+
+        const emailRes = await fetch(`${baseUrl}/api/emails`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tipo: "reserva_confirmada",
+            solo_cliente: true,
+            cliente_email: clienteEmail,
+            cliente_nombre: clienteNombre,
+            proveedor_nombre: proveedorNombre,
+            servicio_titulo: svc.titulo || "Servicio",
+            fecha_inicio: bookingFull.fecha_inicio,
+            fecha_fin: bookingFull.fecha_fin || bookingFull.fecha_inicio,
+            precio_total: Number(bookingFull.precio_total || 0).toFixed(2),
+            mensaje: bookingFull.mensaje || "",
+            direccion_exacta: svc.direccion_exacta,
+            telefono_proveedor: svc.telefono_contacto,
+            modalidad: svc.modalidad,
+          }),
+        });
+
+        if (!emailRes.ok) {
+          const errBody = await emailRes.json().catch(() => ({}));
+          console.error(
+            "[bookings/respond] Error enviando email de confirmación:",
+            errBody.error || emailRes.status,
+          );
+        }
+      }
+    } catch (emailErr) {
+      console.error(
+        "[bookings/respond] Error enviando email de confirmación:",
+        emailErr,
+      );
+    }
   }
 
   return NextResponse.json({ success: true, estado: nuevoEstado });

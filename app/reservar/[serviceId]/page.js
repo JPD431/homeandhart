@@ -2094,11 +2094,15 @@ export default function ReservarPage() {
         };
       });
 
+      const todasInmediatas = selectedServices.every(
+        (s) => s.reserva_inmediata === true,
+      );
+
       await fetch("/api/emails", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          tipo: "reserva_confirmada",
+          tipo: todasInmediatas ? "reserva_confirmada" : "reserva_solicitud",
           cliente_email: userEmail,
           cliente_nombre: perfilCliente?.nombre || "Cliente",
           proveedor_email: service.profiles?.email || userEmail,

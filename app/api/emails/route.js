@@ -545,6 +545,48 @@ function clienteEmailHtml(data) {
   });
 }
 
+function reservaSolicitudEmailHtml(data) {
+  const isBundle = Array.isArray(data.servicios) && data.servicios.length > 0;
+  const mensajeBlock = data.mensaje
+    ? `<p style="margin:16px 0 0;font-size:14px;color:#444;line-height:1.6;"><strong>Tu mensaje:</strong> ${data.mensaje}</p>`
+    : "";
+
+  if (isBundle) {
+    return emailLayout({
+      title: "Hemos recibido tu solicitud — Home&Heart",
+      bodyHtml: `
+        <h1 style="margin:0;font-size:22px;color:${BRAND_PRIMARY};font-weight:600;text-align:center;">Hemos recibido tu solicitud</h1>
+        <p style="margin:16px 0 0;font-size:14px;color:#444;line-height:1.6;text-align:center;">
+          Tu solicitud está <strong>pendiente de confirmación</strong> por parte de uno o más proveedores.
+          Te avisaremos por email en cuanto respondan.
+        </p>
+        ${bundleDetailsBlock(data)}
+        ${mensajeBlock}
+        <p style="margin:20px 0 0;font-size:14px;color:#444;line-height:1.6;">
+          El pago queda retenido de forma segura hasta que el proveedor confirme la reserva.
+        </p>`,
+    });
+  }
+
+  return emailLayout({
+    title: "Hemos recibido tu solicitud — Home&Heart",
+    bodyHtml: `
+      <h1 style="margin:0;font-size:22px;color:${BRAND_PRIMARY};font-weight:600;text-align:center;">Hemos recibido tu solicitud</h1>
+      <p style="margin:16px 0 0;font-size:14px;color:#444;line-height:1.6;text-align:center;">
+        Tu solicitud está <strong>pendiente de confirmación</strong> por parte del proveedor.
+        Te avisaremos por email en cuanto responda.
+      </p>
+      ${detailsBlock(data)}
+      <p style="margin:20px 0 0;font-size:14px;color:#444;line-height:1.6;">
+        Proveedor: <strong>${data.proveedor_nombre}</strong>
+      </p>
+      ${mensajeBlock}
+      <p style="margin:20px 0 0;font-size:14px;color:#444;line-height:1.6;">
+        El pago queda retenido de forma segura hasta que el proveedor confirme la reserva.
+      </p>`,
+  });
+}
+
 function proveedorEmailHtml(data) {
   const mensajeBlock = data.mensaje
     ? `<p style="margin:16px 0 0;font-size:14px;color:#444;line-height:1.6;"><strong>Mensaje del cliente:</strong> ${data.mensaje}</p>`
@@ -634,6 +676,7 @@ async function sendReservaConfirmadaEmails(data) {
     }
   }
 
+  const soloCliente = data.solo_cliente === true;
   const isBundle = Array.isArray(data.servicios) && data.servicios.length > 0;
 
   if (isBundle) {
@@ -646,6 +689,10 @@ async function sendReservaConfirmadaEmails(data) {
 
     if (clienteResult.error) {
       return { error: clienteResult.error.message };
+    }
+
+    if (soloCliente) {
+      return { success: true };
     }
 
     const providerEmails = await Promise.all(
@@ -670,6 +717,21 @@ async function sendReservaConfirmadaEmails(data) {
     const providerError = providerEmails.find((r) => r.error);
     if (providerError?.error) {
       return { error: providerError.error.message };
+    }
+
+    return { success: true };
+  }
+
+  if (soloCliente) {
+    const clienteResult = await resend.emails.send({
+      from: FROM,
+      to: data.cliente_email,
+      subject: "¡Reserva confirmada! — Home&Heart",
+      html: clienteEmailHtml(data),
+    });
+
+    if (clienteResult.error) {
+      return { error: clienteResult.error.message };
     }
 
     return { success: true };
@@ -703,6 +765,45 @@ async function sendReservaConfirmadaEmails(data) {
 
   if (proveedorResult.error) {
     return { error: proveedorResult.error.message };
+  }
+
+  return { success: true };
+}
+
+async function sendReservaSolicitudEmail(data) {
+  const required = [
+    "cliente_email",
+    "cliente_nombre",
+    "fecha_inicio",
+    "precio_total",
+  ];
+
+  for (const field of required) {
+    if (!data[field]) {
+      return { error: `Falta el campo requerido: ${field}` };
+    }
+  }
+
+  const isBundle = Array.isArray(data.servicios) && data.servicios.length > 0;
+
+  if (!isBundle) {
+    const legacyRequired = ["proveedor_nombre", "servicio_titulo"];
+    for (const field of legacyRequired) {
+      if (!data[field]) {
+        return { error: `Falta el campo requerido: ${field}` };
+      }
+    }
+  }
+
+  const result = await resend.emails.send({
+    from: FROM,
+    to: data.cliente_email,
+    subject: "Hemos recibido tu solicitud — Home&Heart",
+    html: reservaSolicitudEmailHtml(data),
+  });
+
+  if (result.error) {
+    return { error: result.error.message };
   }
 
   return { success: true };
@@ -909,6 +1010,16 @@ export async function POST(request) {
 
     if (tipo === "reserva_confirmada") {
       const result = await sendReservaConfirmadaEmails(data);
+
+      if (result.error) {
+        return Response.json({ error: result.error }, { status: 400 });
+      }
+
+      return Response.json({ success: true });
+    }
+
+    if (tipo === "reserva_solicitud") {
+      const result = await sendReservaSolicitudEmail(data);
 
       if (result.error) {
         return Response.json({ error: result.error }, { status: 400 });
