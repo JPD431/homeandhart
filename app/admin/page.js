@@ -540,15 +540,14 @@ export default function AdminPage() {
 
     setActionLoading(null);
 
-    if (proveedor?.email_contacto) {
+    if (proveedor) {
       await fetch("/api/emails", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           tipo: "proveedor_verificado",
-          email: proveedor.email_contacto,
-          nombre: proveedor.nombre,
           user_id: providerId,
+          nombre: proveedor.nombre,
         }),
       });
     }
@@ -670,11 +669,6 @@ export default function AdminPage() {
       return;
     }
 
-    if (!provider.email_contacto) {
-      setErrorMessage("Este proveedor no tiene email de contacto registrado.");
-      return;
-    }
-
     const documentLabels = selectedDocuments.map(
       (id) => REQUESTABLE_DOCUMENTS.find((d) => d.id === id)?.label || id,
     );
@@ -689,7 +683,7 @@ export default function AdminPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           tipo: "solicitud_documentos",
-          destinatario: provider.email_contacto,
+          proveedor_id: provider.id,
           proveedor_nombre: fullName(provider),
           documentos: documentLabels,
           mensaje: requestMessage.trim() || "",
@@ -705,9 +699,7 @@ export default function AdminPage() {
         return;
       }
 
-      setSuccessMessage(
-        `Solicitud enviada a ${provider.email_contacto}`,
-      );
+      setSuccessMessage("Solicitud enviada correctamente.");
       setRequestingDocsId(null);
       setSelectedDocuments([]);
       setRequestMessage("");

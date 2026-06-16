@@ -1,6 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
 import { Resend } from "resend";
 import { sequences } from "@/app/lib/email-sequences";
+import {
+  resolverEmailUsuario,
+  resolverNombreUsuario,
+} from "@/app/lib/email-usuario";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -12,58 +16,6 @@ const BRAND_GREEN = "#0e7a5c";
 const BRAND_WARM = "#f7f5f2";
 const BRAND_BORDER = "#e8e4de";
 const BASE_URL = process.env.NEXT_PUBLIC_URL || "https://homeandheart.es";
-
-function getSupabaseAdmin() {
-  if (
-    !process.env.NEXT_PUBLIC_SUPABASE_URL ||
-    !process.env.SUPABASE_SERVICE_ROLE_KEY
-  ) {
-    return null;
-  }
-
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY,
-  );
-}
-
-async function resolverEmailUsuario(userId) {
-  if (!userId) return null;
-
-  const supabase = getSupabaseAdmin();
-  if (!supabase) return null;
-
-  const { data: authData, error: authError } =
-    await supabase.auth.admin.getUserById(userId);
-
-  if (!authError && authData?.user?.email) {
-    return authData.user.email;
-  }
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("email_contacto")
-    .eq("id", userId)
-    .maybeSingle();
-
-  return profile?.email_contacto || null;
-}
-
-async function resolverNombreUsuario(userId) {
-  if (!userId) return null;
-
-  const supabase = getSupabaseAdmin();
-  if (!supabase) return null;
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("nombre, apellido")
-    .eq("id", userId)
-    .maybeSingle();
-
-  if (!profile) return null;
-  return [profile.nombre, profile.apellido].filter(Boolean).join(" ") || null;
-}
 
 function marketingFooter() {
   return `<div style="margin-top:32px;padding-top:20px;border-top:1px solid ${BRAND_BORDER};text-align:center;">
@@ -376,12 +328,19 @@ async function logMarketingEmail(userId, tipo) {
 }
 
 async function sendMarketingSequenceEmail(data) {
-  const { tipo, email, user_id: userId } = data;
+  const userId = data.user_id || data.proveedor_id || data.cliente_id;
+  let email = data.email;
 
-  if (!email) {
-    return { error: "Falta el campo requerido: email" };
+  if (userId) {
+    const resolved = await resolverEmailUsuario(userId);
+    if (resolved) email = resolved;
   }
 
+  if (!email) {
+    return { error: "No se encontró el email del destinatario" };
+  }
+
+  const { tipo } = data;
   const sequence = sequences[tipo];
   const buildHtml = MARKETING_HTML_BUILDERS[tipo];
 
@@ -389,11 +348,13 @@ async function sendMarketingSequenceEmail(data) {
     return { error: `Tipo de email de secuencia no soportado: ${tipo}` };
   }
 
+  const payload = { ...data, email };
+
   const result = await resend.emails.send({
     from: FROM,
     to: email,
     subject: sequence.asunto,
-    html: buildHtml(data),
+    html: buildHtml(payload),
   });
 
   if (result.error) {
@@ -933,19 +894,39 @@ function solicitudDocumentosEmailHtml(data) {
 }
 
 async function sendSolicitudDocumentosEmail(data) {
-  const required = ["destinatario", "documentos"];
+  const destinatarioId =
+    data.destinatario_id || data.proveedor_id || data.user_id;
+  let destinatario = data.destinatario || data.destinatario_email;
 
-  for (const field of required) {
-    if (!data[field] || (field === "documentos" && data.documentos.length === 0)) {
-      return { error: `Falta el campo requerido: ${field}` };
-    }
+  if (destinatarioId) {
+    destinatario = await resolverEmailUsuario(destinatarioId);
   }
+
+  if (!destinatario) {
+    return { error: "No se encontró el email del destinatario" };
+  }
+
+  if (!data.documentos || data.documentos.length === 0) {
+    return { error: "Falta el campo requerido: documentos" };
+  }
+
+  let proveedorNombre = data.proveedor_nombre;
+  if (!proveedorNombre && destinatarioId) {
+    proveedorNombre =
+      (await resolverNombreUsuario(destinatarioId)) || "proveedor";
+  }
+
+  const payload = {
+    ...data,
+    destinatario,
+    proveedor_nombre: proveedorNombre || data.proveedor_nombre,
+  };
 
   const result = await resend.emails.send({
     from: FROM,
-    to: data.destinatario,
+    to: destinatario,
     subject: data.asunto || "Home&Heart — Necesitamos documentación adicional",
-    html: solicitudDocumentosEmailHtml(data),
+    html: solicitudDocumentosEmailHtml(payload),
   });
 
   if (result.error) {
@@ -1024,15 +1005,10 @@ async function sendServicioCompletadoEmail(data) {
     return { error: "No se encontró el email del cliente" };
   }
 
-  const supabase = getSupabaseAdmin();
   let clienteNombre = data.cliente_nombre;
-  if (!clienteNombre && supabase) {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("nombre")
-      .eq("id", data.cliente_id)
-      .maybeSingle();
-    clienteNombre = profile?.nombre || "Cliente";
+  if (!clienteNombre) {
+    clienteNombre =
+      (await resolverNombreUsuario(data.cliente_id)) || "Cliente";
   }
 
   const result = await resend.emails.send({

@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { sequences } from "@/app/lib/email-sequences";
+import { resolverEmailUsuario } from "@/app/lib/email-usuario";
 
 // -- CREATE TABLE email_logs (
 // --   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -146,20 +147,27 @@ export async function GET(request) {
     const w24h = windowIso(48, 24);
     const { data: activacionUsers } = await supabase
       .from("profiles")
-      .select("id, nombre, email_contacto, fecha_registro")
+      .select("id, nombre, fecha_registro")
       .neq("role", "proveedor")
       .gte("fecha_registro", w24h.from)
       .lte("fecha_registro", w24h.to);
 
     for (const user of activacionUsers || []) {
-      if (!user.email_contacto) continue;
       if (await alreadySent(user.id, "cliente_activacion")) continue;
       if (await userHasBookings(user.id, true)) continue;
+
+      const email = await resolverEmailUsuario(user.id);
+      if (!email) {
+        console.warn(
+          `[email-sequences] Sin email para ${user.id}, skip cliente_activacion`,
+        );
+        continue;
+      }
 
       try {
         await sendSequenceEmail({
           tipo: "cliente_activacion",
-          email: user.email_contacto,
+          user_id: user.id,
           nombre: user.nombre,
         });
         await logSent(user.id, "cliente_activacion");
@@ -172,20 +180,27 @@ export async function GET(request) {
     const w3d = windowIso(24 * 4, 24 * 3);
     const { data: primeraReservaUsers } = await supabase
       .from("profiles")
-      .select("id, nombre, email_contacto, fecha_registro")
+      .select("id, nombre, fecha_registro")
       .neq("role", "proveedor")
       .gte("fecha_registro", w3d.from)
       .lte("fecha_registro", w3d.to);
 
     for (const user of primeraReservaUsers || []) {
-      if (!user.email_contacto) continue;
       if (await alreadySent(user.id, "cliente_primera_reserva")) continue;
       if (await userHasBookings(user.id, true)) continue;
+
+      const email = await resolverEmailUsuario(user.id);
+      if (!email) {
+        console.warn(
+          `[email-sequences] Sin email para ${user.id}, skip cliente_primera_reserva`,
+        );
+        continue;
+      }
 
       try {
         await sendSequenceEmail({
           tipo: "cliente_primera_reserva",
-          email: user.email_contacto,
+          user_id: user.id,
           nombre: user.nombre,
         });
         await logSent(user.id, "cliente_primera_reserva");
@@ -198,13 +213,20 @@ export async function GET(request) {
     const hace30d = new Date(Date.now() - 30 * DAY_MS).toISOString();
     const { data: clientes } = await supabase
       .from("profiles")
-      .select("id, nombre, email_contacto, fecha_registro")
+      .select("id, nombre, fecha_registro")
       .neq("role", "proveedor")
       .lte("fecha_registro", hace30d);
 
     for (const user of clientes || []) {
-      if (!user.email_contacto) continue;
       if (await alreadySent(user.id, "cliente_reactivacion")) continue;
+
+      const email = await resolverEmailUsuario(user.id);
+      if (!email) {
+        console.warn(
+          `[email-sequences] Sin email para ${user.id}, skip cliente_reactivacion`,
+        );
+        continue;
+      }
 
       const { data: recentBooking } = await supabase
         .from("bookings")
@@ -224,7 +246,7 @@ export async function GET(request) {
       try {
         await sendSequenceEmail({
           tipo: "cliente_reactivacion",
-          email: user.email_contacto,
+          user_id: user.id,
           nombre: user.nombre,
           nuevos_proveedores: nuevosProveedores,
           proveedores,
@@ -247,18 +269,26 @@ export async function GET(request) {
     for (const log of verificadosLogs || []) {
       const { data: proveedor } = await supabase
         .from("profiles")
-        .select("id, nombre, email_contacto, role, verificado")
+        .select("id, nombre, role, verificado")
         .eq("id", log.user_id)
         .maybeSingle();
 
-      if (!proveedor?.email_contacto || !proveedor.verificado) continue;
+      if (!proveedor?.verificado) continue;
       if (await alreadySent(proveedor.id, "proveedor_sin_actividad")) continue;
       if (await userHasBookings(proveedor.id, false)) continue;
+
+      const email = await resolverEmailUsuario(proveedor.id);
+      if (!email) {
+        console.warn(
+          `[email-sequences] Sin email para ${proveedor.id}, skip proveedor_sin_actividad`,
+        );
+        continue;
+      }
 
       try {
         await sendSequenceEmail({
           tipo: "proveedor_sin_actividad",
-          email: proveedor.email_contacto,
+          user_id: proveedor.id,
           nombre: proveedor.nombre,
         });
         await logSent(proveedor.id, "proveedor_sin_actividad");

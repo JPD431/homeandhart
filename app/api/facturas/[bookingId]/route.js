@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { resolverEmailUsuario } from "@/app/lib/email-usuario";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -23,6 +24,11 @@ export async function GET(request, { params }) {
   if (!booking) {
     return Response.json({ error: "Reserva no encontrada" }, { status: 404 });
   }
+
+  const clienteEmail =
+    (await resolverEmailUsuario(booking.cliente_id)) ||
+    booking.profiles?.email_contacto ||
+    "";
 
   const precioTotal = Number(booking.precio_total) || 0;
   const precioBase = precioTotal / 1.21;
@@ -70,7 +76,7 @@ export async function GET(request, { params }) {
         <div class="info-box">
           <label>Cliente</label>
           <p>${booking.profiles?.nombre || ""} ${booking.profiles?.apellido || ""}</p>
-          <p style="color:#666; font-size:12px;">${booking.profiles?.email_contacto || ""}</p>
+          <p style="color:#666; font-size:12px;">${clienteEmail}</p>
         </div>
         <div class="info-box">
           <label>Proveedor</label>
