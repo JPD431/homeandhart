@@ -13,6 +13,58 @@ const BRAND_WARM = "#f7f5f2";
 const BRAND_BORDER = "#e8e4de";
 const BASE_URL = process.env.NEXT_PUBLIC_URL || "https://homeandheart.es";
 
+function getSupabaseAdmin() {
+  if (
+    !process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    !process.env.SUPABASE_SERVICE_ROLE_KEY
+  ) {
+    return null;
+  }
+
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+  );
+}
+
+async function resolverEmailUsuario(userId) {
+  if (!userId) return null;
+
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return null;
+
+  const { data: authData, error: authError } =
+    await supabase.auth.admin.getUserById(userId);
+
+  if (!authError && authData?.user?.email) {
+    return authData.user.email;
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("email_contacto")
+    .eq("id", userId)
+    .maybeSingle();
+
+  return profile?.email_contacto || null;
+}
+
+async function resolverNombreUsuario(userId) {
+  if (!userId) return null;
+
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return null;
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("nombre, apellido")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (!profile) return null;
+  return [profile.nombre, profile.apellido].filter(Boolean).join(" ") || null;
+}
+
 function marketingFooter() {
   return `<div style="margin-top:32px;padding-top:20px;border-top:1px solid ${BRAND_BORDER};text-align:center;">
     <p style="margin:0;font-size:11px;color:#999;line-height:1.6;">
@@ -633,8 +685,29 @@ function reservaNuevaEmailHtml(data) {
 }
 
 async function sendReservaNuevaEmail(data) {
+  let proveedorEmail = data.proveedor_email;
+
+  if (data.proveedor_id) {
+    proveedorEmail = await resolverEmailUsuario(data.proveedor_id);
+  }
+
+  if (!proveedorEmail) {
+    return { error: "No se encontró el email del proveedor" };
+  }
+
+  let proveedorNombre = data.proveedor_nombre;
+  if (!proveedorNombre && data.proveedor_id) {
+    proveedorNombre =
+      (await resolverNombreUsuario(data.proveedor_id)) || "Proveedor";
+  }
+
+  const payload = {
+    ...data,
+    proveedor_email: proveedorEmail,
+    proveedor_nombre: proveedorNombre,
+  };
+
   const required = [
-    "proveedor_email",
     "cliente_nombre",
     "servicio_titulo",
     "fecha_inicio",
@@ -643,16 +716,16 @@ async function sendReservaNuevaEmail(data) {
   ];
 
   for (const field of required) {
-    if (!data[field]) {
+    if (!payload[field]) {
       return { error: `Falta el campo requerido: ${field}` };
     }
   }
 
   const result = await resend.emails.send({
     from: FROM,
-    to: data.proveedor_email,
+    to: payload.proveedor_email,
     subject: "Nueva reserva recibida — Home&Heart",
-    html: reservaNuevaEmailHtml(data),
+    html: reservaNuevaEmailHtml(payload),
   });
 
   if (result.error) {
@@ -663,6 +736,17 @@ async function sendReservaNuevaEmail(data) {
 }
 
 async function sendReservaConfirmadaEmails(data) {
+  const payload = { ...data };
+
+  if (payload.cliente_id && !payload.cliente_email) {
+    payload.cliente_email = await resolverEmailUsuario(payload.cliente_id);
+  }
+
+  if (!payload.cliente_nombre && payload.cliente_id) {
+    payload.cliente_nombre =
+      (await resolverNombreUsuario(payload.cliente_id)) || "Cliente";
+  }
+
   const required = [
     "cliente_email",
     "cliente_nombre",
@@ -671,20 +755,20 @@ async function sendReservaConfirmadaEmails(data) {
   ];
 
   for (const field of required) {
-    if (!data[field]) {
+    if (!payload[field]) {
       return { error: `Falta el campo requerido: ${field}` };
     }
   }
 
-  const soloCliente = data.solo_cliente === true;
-  const isBundle = Array.isArray(data.servicios) && data.servicios.length > 0;
+  const soloCliente = payload.solo_cliente === true;
+  const isBundle = Array.isArray(payload.servicios) && payload.servicios.length > 0;
 
   if (isBundle) {
     const clienteResult = await resend.emails.send({
       from: FROM,
-      to: data.cliente_email,
+      to: payload.cliente_email,
       subject: "¡Reserva confirmada! — Home&Heart",
-      html: clienteEmailHtml(data),
+      html: clienteEmailHtml(payload),
     });
 
     if (clienteResult.error) {
@@ -696,13 +780,13 @@ async function sendReservaConfirmadaEmails(data) {
     }
 
     const providerEmails = await Promise.all(
-      data.servicios.map((svc) =>
+      payload.servicios.map((svc) =>
         resend.emails.send({
           from: FROM,
-          to: svc.proveedor_email || data.cliente_email,
+          to: svc.proveedor_email || payload.cliente_email,
           subject: "Nueva reserva recibida — Home&Heart",
           html: proveedorEmailHtml({
-            ...data,
+            ...payload,
             servicio_titulo: svc.titulo,
             proveedor_nombre: svc.proveedor_nombre,
             precio_total: svc.precio,
@@ -725,9 +809,9 @@ async function sendReservaConfirmadaEmails(data) {
   if (soloCliente) {
     const clienteResult = await resend.emails.send({
       from: FROM,
-      to: data.cliente_email,
+      to: payload.cliente_email,
       subject: "¡Reserva confirmada! — Home&Heart",
-      html: clienteEmailHtml(data),
+      html: clienteEmailHtml(payload),
     });
 
     if (clienteResult.error) {
@@ -739,7 +823,7 @@ async function sendReservaConfirmadaEmails(data) {
 
   const legacyRequired = ["proveedor_email", "proveedor_nombre", "servicio_titulo"];
   for (const field of legacyRequired) {
-    if (!data[field]) {
+    if (!payload[field]) {
       return { error: `Falta el campo requerido: ${field}` };
     }
   }
@@ -747,15 +831,15 @@ async function sendReservaConfirmadaEmails(data) {
   const [clienteResult, proveedorResult] = await Promise.all([
     resend.emails.send({
       from: FROM,
-      to: data.cliente_email,
+      to: payload.cliente_email,
       subject: "¡Reserva confirmada! — Home&Heart",
-      html: clienteEmailHtml(data),
+      html: clienteEmailHtml(payload),
     }),
     resend.emails.send({
       from: FROM,
-      to: data.proveedor_email,
+      to: payload.proveedor_email,
       subject: "Nueva reserva recibida — Home&Heart",
-      html: proveedorEmailHtml(data),
+      html: proveedorEmailHtml(payload),
     }),
   ]);
 
@@ -935,31 +1019,28 @@ async function sendServicioCompletadoEmail(data) {
     return { error: "Falta el campo requerido: booking_id" };
   }
 
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    return { error: "Supabase no está configurado para este email" };
+  const clienteEmail = await resolverEmailUsuario(data.cliente_id);
+  if (!clienteEmail) {
+    return { error: "No se encontró el email del cliente" };
   }
 
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY,
-  );
-
-  const { data: profile, error: profileError } = await supabase
-    .from("profiles")
-    .select("nombre, email_contacto")
-    .eq("id", data.cliente_id)
-    .single();
-
-  if (profileError || !profile?.email_contacto) {
-    return { error: "No se encontró el email del cliente" };
+  const supabase = getSupabaseAdmin();
+  let clienteNombre = data.cliente_nombre;
+  if (!clienteNombre && supabase) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("nombre")
+      .eq("id", data.cliente_id)
+      .maybeSingle();
+    clienteNombre = profile?.nombre || "Cliente";
   }
 
   const result = await resend.emails.send({
     from: FROM,
-    to: profile.email_contacto,
+    to: clienteEmail,
     subject: "¿Cómo fue tu experiencia? — Home&Heart",
     html: servicioCompletadoEmailHtml({
-      cliente_nombre: profile.nombre,
+      cliente_nombre: clienteNombre || "Cliente",
       booking_id: data.booking_id,
     }),
   });
@@ -972,10 +1053,14 @@ async function sendServicioCompletadoEmail(data) {
 }
 
 async function sendMensajeNuevoEmail(data) {
-  const destinatarioEmail = data.destinatario_email || data.destinatario;
+  let destinatarioEmail = data.destinatario_email || data.destinatario;
+
+  if (data.destinatario_id) {
+    destinatarioEmail = await resolverEmailUsuario(data.destinatario_id);
+  }
 
   if (!destinatarioEmail) {
-    return { error: "Falta el campo requerido: destinatario_email" };
+    return { error: "No se encontró el email del destinatario" };
   }
 
   if (!data.remitente_nombre) {

@@ -933,16 +933,6 @@ export default function ChatPage() {
     const debeEnviarEmail = true;
     if (!debeEnviarEmail) return;
 
-    const { data: otroParticipanteProfile } = await supabase
-      .from("profiles")
-      .select("email_contacto")
-      .eq("id", otroParticipanteId)
-      .single();
-
-    const emailDestinatario = otroParticipanteProfile?.email_contacto;
-
-    if (!emailDestinatario) return;
-
     const { data: senderProfile } = await supabase
       .from("profiles")
       .select("nombre, apellido")
@@ -958,7 +948,7 @@ export default function ChatPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         tipo: "mensaje_nuevo",
-        destinatario_email: emailDestinatario,
+        destinatario_id: otroParticipanteId,
         remitente_nombre: remitenteNombre,
         mensaje_preview: messageContent,
         chat_url: `${window.location.origin}/chat?conversation=${conversationId}`,

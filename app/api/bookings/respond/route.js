@@ -125,32 +125,19 @@ export async function POST(request) {
       const svc = bookingFull?.services;
       const proveedorId = svc?.proveedor_id;
 
-      const [{ data: clienteProfile }, { data: proveedorProfile }] =
-        await Promise.all([
-          supabaseAdmin
+      const { data: proveedorProfile } = proveedorId
+        ? await supabaseAdmin
             .from("profiles")
-            .select("nombre, apellido, email_contacto")
-            .eq("id", bookingFull?.cliente_id)
-            .maybeSingle(),
-          proveedorId
-            ? supabaseAdmin
-                .from("profiles")
-                .select("nombre, apellido")
-                .eq("id", proveedorId)
-                .maybeSingle()
-            : Promise.resolve({ data: null }),
-        ]);
+            .select("nombre, apellido")
+            .eq("id", proveedorId)
+            .maybeSingle()
+        : { data: null };
 
-      const clienteEmail = clienteProfile?.email_contacto;
-      if (clienteEmail && svc) {
+      if (bookingFull?.cliente_id && svc) {
         const proveedorNombre =
           [proveedorProfile?.nombre, proveedorProfile?.apellido]
             .filter(Boolean)
             .join(" ") || "Proveedor";
-        const clienteNombre =
-          [clienteProfile?.nombre, clienteProfile?.apellido]
-            .filter(Boolean)
-            .join(" ") || "Cliente";
         const baseUrl =
           process.env.NEXT_PUBLIC_URL || "https://homeandheart.es";
 
@@ -160,8 +147,7 @@ export async function POST(request) {
           body: JSON.stringify({
             tipo: "reserva_confirmada",
             solo_cliente: true,
-            cliente_email: clienteEmail,
-            cliente_nombre: clienteNombre,
+            cliente_id: bookingFull.cliente_id,
             proveedor_nombre: proveedorNombre,
             servicio_titulo: svc.titulo || "Servicio",
             fecha_inicio: bookingFull.fecha_inicio,

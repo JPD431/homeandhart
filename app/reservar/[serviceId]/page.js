@@ -2055,12 +2055,6 @@ export default function ReservarPage() {
         );
       }
 
-      const { data: proveedorProfile } = await supabase
-        .from("profiles")
-        .select("email_contacto, nombre")
-        .eq("id", service.proveedor_id)
-        .single();
-
       const mainBooking =
         insertedBookings?.find((b) => b.service_id === service.id) ||
         insertedBookings?.[0];
@@ -2070,8 +2064,8 @@ export default function ReservarPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           tipo: "reserva_nueva",
-          proveedor_email: proveedorProfile?.email_contacto,
-          proveedor_nombre: proveedorProfile?.nombre,
+          proveedor_id: service.proveedor_id,
+          proveedor_nombre: service.profiles?.nombre || "Proveedor",
           cliente_nombre: perfilCliente?.nombre || "Un cliente",
           servicio_titulo: service.titulo,
           fecha_inicio: fechaInicio,
