@@ -14,6 +14,42 @@ function getPrecioBase(precioTotal) {
   return (Number(precioTotal) || 0) / 1.14;
 }
 
+function splitTransferAmount(amountFinal, bookings) {
+  if (!bookings?.length) return [];
+
+  if (bookings.length === 1) {
+    return [{ bookingId: bookings[0].id, amount: amountFinal }];
+  }
+
+  const bases = bookings.map((b) => ({
+    id: b.id,
+    base: getPrecioBase(b.precio_total),
+  }));
+  const totalBase = bases.reduce((sum, b) => sum + b.base, 0);
+  if (totalBase <= 0) {
+    return bases.map((b) => ({ bookingId: b.id, amount: 0 }));
+  }
+
+  const parts = [];
+  let assigned = 0;
+
+  for (let i = 0; i < bases.length; i++) {
+    if (i === bases.length - 1) {
+      parts.push({
+        bookingId: bases[i].id,
+        amount: Math.round((amountFinal - assigned) * 100) / 100,
+      });
+    } else {
+      const share =
+        Math.round(((amountFinal * bases[i].base) / totalBase) * 100) / 100;
+      parts.push({ bookingId: bases[i].id, amount: share });
+      assigned += share;
+    }
+  }
+
+  return parts;
+}
+
 async function isProviderFirstCompletion(proveedorId, paymentIntentId) {
   const { data: services } = await supabase
     .from("services")
@@ -102,6 +138,8 @@ async function buildTransfersForPayment(paymentIntentId) {
         profile,
         serviceIds: new Set(),
         amount: 0,
+        bookingIds: [],
+        bookings: [],
       });
     }
 
@@ -112,6 +150,8 @@ async function buildTransfersForPayment(paymentIntentId) {
     for (const entry of proveedorMap.values()) {
       if (!entry.serviceIds.has(booking.service_id)) continue;
       entry.amount += getPrecioBase(booking.precio_total);
+      entry.bookingIds.push(booking.id);
+      entry.bookings.push({ id: booking.id, precio_total: booking.precio_total });
     }
   }
 
@@ -130,6 +170,8 @@ async function buildTransfersForPayment(paymentIntentId) {
       deuda_actual: Number(entry.profile?.deuda_pendiente) || 0,
       profile: entry.profile,
       decrementSinComision: sinComision,
+      bookingIds: entry.bookingIds,
+      bookings: entry.bookings,
     });
   }
 
@@ -232,6 +274,26 @@ export async function POST(request) {
 
           summary.deuda_descontada = deuda_a_descontar;
           summary.deuda_restante = deuda_restante;
+
+          try {
+            const splits = splitTransferAmount(amount_final, plan.bookings);
+            for (const { bookingId, amount } of splits) {
+              const { error: importeError } = await supabase
+                .from("bookings")
+                .update({ importe_transferido: amount })
+                .eq("id", bookingId);
+
+              if (importeError) {
+                throw importeError;
+              }
+            }
+          } catch (importeSaveError) {
+            console.error(
+              "[capture-payment] Error guardando importe_transferido",
+              plan.proveedorId,
+              importeSaveError.message ?? importeSaveError,
+            );
+          }
 
           if (plan.decrementSinComision) {
             const current = Number(plan.profile.reservas_sin_comision) || 0;
