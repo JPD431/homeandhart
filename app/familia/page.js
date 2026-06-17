@@ -404,65 +404,38 @@ function FamiliaPageContent() {
 
     const email = inviteEmail.trim().toLowerCase();
 
-    const { data: existingProfile } = await supabase
-      .from("profiles")
-      .select("id, nombre, email_contacto")
-      .ilike("email_contacto", email)
-      .maybeSingle();
+    try {
+      const res = await fetch("/api/familia/invitar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ familia_id: familia.id, email }),
+      });
 
-    if (existingProfile?.id) {
-      const { data: yaMiembro } = await supabase
-        .from("familia_miembros")
-        .select("id")
-        .eq("familia_id", familia.id)
-        .eq("perfil_id", existingProfile.id)
-        .maybeSingle();
+      const data = await res.json().catch(() => ({}));
 
-      if (yaMiembro) {
+      if (!res.ok) {
         setInviting(false);
-        setError("Esa persona ya pertenece al grupo.");
+        setError(
+          data.error ||
+            (res.status === 401
+              ? "Debes iniciar sesión para invitar."
+              : res.status === 403
+                ? "No tienes permiso para invitar a esta familia."
+                : res.status === 409
+                  ? "Esa persona ya está en el grupo o tiene una invitación pendiente."
+                  : "No se pudo enviar la invitación."),
+        );
         return;
       }
-    }
 
-    const { data: pendingInvite } = await supabase
-      .from("familia_miembros")
-      .select("id")
-      .eq("familia_id", familia.id)
-      .eq("email_invitado", email)
-      .eq("estado", "pendiente")
-      .maybeSingle();
-
-    if (pendingInvite) {
       setInviting(false);
-      setError("Ya hay una invitación pendiente para ese email.");
-      return;
-    }
-
-    const { data: invitacion, error: inviteError } = await supabase
-      .from("familia_miembros")
-      .insert({
-        familia_id: familia.id,
-        perfil_id: existingProfile?.id ?? null,
-        email_invitado: email,
-        rol: "miembro",
-        estado: "pendiente",
-      })
-      .select("id")
-      .single();
-
-    if (inviteError) {
+      setInviteEmail("");
+      setSuccess("Invitación enviada correctamente.");
+      await loadFamilia(userId);
+    } catch {
       setInviting(false);
-      setError(inviteError.message);
-      return;
+      setError("Error de conexión al enviar la invitación.");
     }
-
-    await sendInviteEmail(email, invitacion.id);
-
-    setInviting(false);
-    setInviteEmail("");
-    setSuccess("Invitación enviada correctamente.");
-    await loadFamilia(userId);
   }
 
   async function handleResendInvite(miembro) {

@@ -51,3 +51,40 @@ export async function resolverNombreUsuario(userId) {
   if (!profile) return null;
   return [profile.nombre, profile.apellido].filter(Boolean).join(" ") || null;
 }
+
+/**
+ * Busca un usuario en auth.users por email (no en profiles).
+ * Usa auth.admin.listUsers paginado — no hay getUserByEmail en el SDK v2.
+ */
+export async function resolverUserIdPorEmail(email) {
+  if (!email) return null;
+
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return null;
+
+  const normalized = email.trim().toLowerCase();
+  let page = 1;
+  const perPage = 1000;
+
+  while (true) {
+    const { data, error } = await supabase.auth.admin.listUsers({
+      page,
+      perPage,
+    });
+
+    if (error) {
+      console.error("[resolverUserIdPorEmail] listUsers error:", error.message);
+      return null;
+    }
+
+    const match = data.users.find(
+      (u) => u.email?.trim().toLowerCase() === normalized,
+    );
+    if (match) return match.id;
+
+    if (data.users.length < perPage) break;
+    page += 1;
+  }
+
+  return null;
+}
