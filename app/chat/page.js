@@ -412,7 +412,7 @@ export default function ChatPage() {
     let profilesMap = {};
     if (otherIds.length > 0) {
       const { data: profiles } = await supabase
-        .from("profiles")
+        .from("profiles_public")
         .select("id, nombre, apellido")
         .in("id", otherIds);
 
@@ -630,10 +630,10 @@ export default function ChatPage() {
     async function loadOtherServices() {
       const { data } = await supabase
         .from("services")
-        .select("id, titulo, precio, vertical, profiles!inner(verificado)")
+        .select("id, titulo, precio, vertical, profiles_public!inner(verificado)")
         .eq("proveedor_id", otherParticipantId)
         .eq("disponible", true)
-        .eq("profiles.verificado", true)
+        .eq("profiles_public.verificado", true)
         .order("titulo", { ascending: true });
 
       const list = data ?? [];

@@ -39,9 +39,9 @@ function DashboardContent() {
         await supabase.from('profiles').update({ codigo_referido: codigo }).eq('id', user.id);
         p.codigo_referido = codigo;
       }
-      const { data: r } = await supabase.from('bookings').select('*, services(titulo, vertical, proveedor_id, profiles!proveedor_id(nombre, apellido))').eq('cliente_id', user.id).order('created_at', { ascending: false }).limit(10);
+      const { data: r } = await supabase.from('bookings').select('*, services(titulo, vertical, proveedor_id, profiles_public!proveedor_id(nombre, apellido))').eq('cliente_id', user.id).order('created_at', { ascending: false }).limit(10);
       setReservas(r || []);
-      const { data: f } = await supabase.from('favoritos').select('*, profiles!proveedor_id(id, nombre, apellido)').eq('cliente_id', user.id);
+      const { data: f } = await supabase.from('favoritos').select('*, profiles_public!proveedor_id(id, nombre, apellido)').eq('cliente_id', user.id);
       setFavoritos(f || []);
       const { data: viajesData } = await supabase
         .from('viajes')
@@ -291,7 +291,7 @@ function TabCliente({ perfil, reservas, favoritos, viajes, router, BRAND, copiar
           {reservas.slice(0, 5).map(r => (
             <div key={r.id} style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '0.5px solid #f5f3f0'}}>
               <div>
-                <div style={{fontSize: 12, color: BRAND.dark, fontWeight: 500}}>{r.services?.titulo} · {r.services?.profiles?.nombre}</div>
+                <div style={{fontSize: 12, color: BRAND.dark, fontWeight: 500}}>{r.services?.titulo} · {r.services?.profiles_public?.nombre}</div>
                 <div style={{fontSize: 10, color: '#aaa', marginTop: 1}}>{r.fecha_inicio}{r.fecha_fin ? ` – ${r.fecha_fin}` : ''} · {r.precio_total}€</div>
               </div>
               <span style={{fontSize: 9, padding: '2px 7px', borderRadius: 8, background: r.estado === 'confirmada' ? '#e8f0fb' : r.estado === 'completada' ? '#e6f4f0' : r.estado === 'en_curso' ? '#f0e8fb' : '#fef3c7', color: r.estado === 'confirmada' ? '#163a6b' : r.estado === 'completada' ? '#085041' : r.estado === 'en_curso' ? '#5b21b6' : '#92400e', whiteSpace: 'nowrap'}}>{r.estado}</span>
@@ -327,8 +327,8 @@ function TabCliente({ perfil, reservas, favoritos, viajes, router, BRAND, copiar
           {favoritos.length === 0 && <p style={{fontSize: 12, color: '#bbb', textAlign: 'center', padding: '12px 0'}}>Guarda tus proveedores favoritos</p>}
           {favoritos.slice(0, 3).map(f => (
             <div key={f.id} style={{display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '0.5px solid #f5f3f0', cursor: 'pointer'}} onClick={() => router.push(`/proveedor/${f.proveedor_id}`)}>
-              <div style={{width: 32, height: 32, borderRadius: '50%', background: BRAND.blue, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 500, color: '#fff', flexShrink: 0}}>{(f.profiles?.nombre || 'P')[0]}</div>
-              <div style={{flex: 1}}><div style={{fontSize: 12, color: BRAND.dark, fontWeight: 500}}>{f.profiles?.nombre} {f.profiles?.apellido}</div></div>
+              <div style={{width: 32, height: 32, borderRadius: '50%', background: BRAND.blue, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 500, color: '#fff', flexShrink: 0}}>{(f.profiles_public?.nombre || 'P')[0]}</div>
+              <div style={{flex: 1}}><div style={{fontSize: 12, color: BRAND.dark, fontWeight: 500}}>{f.profiles_public?.nombre} {f.profiles_public?.apellido}</div></div>
               <span style={{fontSize: 14, color: BRAND.amber}}>♥</span>
             </div>
           ))}
@@ -785,7 +785,7 @@ function ReservasRecibidas({ perfil, BRAND }) {
       const clienteIds = [...new Set(rows.map((b) => b.cliente_id).filter(Boolean))];
       if (clienteIds.length > 0) {
         const { data: profiles, error: profilesError } = await supabase
-          .from('profiles')
+          .from('profiles_public')
           .select('id, nombre, apellido')
           .in('id', clienteIds);
 

@@ -261,7 +261,7 @@ export default function ViajePage() {
               {miembros.length > 0 && (
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   {miembros.map((miembro) => {
-                    const perfil = miembro.profiles;
+                    const perfil = miembro.profiles_public;
                     const avatarUrl =
                       perfil?.foto_perfil || perfil?.avatar_url || null;
                     const initials = getFamiliaInitials(

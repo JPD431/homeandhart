@@ -61,11 +61,10 @@ export async function getFamiliaMiembros(supabase, familiaId) {
       estado,
       email_invitado,
       perfil_id,
-      profiles:perfil_id (
+      profiles_public:perfil_id (
         nombre,
         apellido,
-        foto_perfil,
-        email_contacto
+        foto_perfil
       )
     `,
     )

@@ -212,11 +212,10 @@ function FamiliaPageContent() {
         email_invitado,
         perfil_id,
         created_at,
-        profiles:perfil_id (
+        profiles_public:perfil_id (
           nombre,
           apellido,
-          foto_perfil,
-          email_contacto
+          foto_perfil
         )
       `,
       )
@@ -238,7 +237,7 @@ function FamiliaPageContent() {
         estado,
         cliente_id,
         services:service_id (titulo, vertical),
-        profiles:cliente_id (nombre, apellido)
+        profiles_public:cliente_id (nombre, apellido)
       `,
       )
       .eq("familia_id", familiaId)
@@ -596,7 +595,7 @@ function FamiliaPageContent() {
 
                 <div className="mt-6 flex flex-wrap items-end gap-4">
                   {miembros.map((miembro) => {
-                    const perfil = miembro.profiles;
+                    const perfil = miembro.profiles_public;
                     const isPending = miembro.estado === "pendiente";
                     const isAdminMember = miembro.rol === "administrador";
                     const nombre =
@@ -654,14 +653,15 @@ function FamiliaPageContent() {
               <h2 className="text-sm font-semibold text-[#1a1a1a]">Miembros</h2>
               <ul className="mt-4 flex flex-col gap-3">
                 {miembros.map((miembro) => {
-                  const perfil = miembro.profiles;
+                  const perfil = miembro.profiles_public;
                   const isPending = miembro.estado === "pendiente";
                   const nombre =
                     perfil
                       ? [perfil.nombre, perfil.apellido].filter(Boolean).join(" ")
                       : miembro.email_invitado || "Invitado";
-                  const email =
-                    perfil?.email_contacto || miembro.email_invitado || "—";
+                  const subtitulo = isPending
+                    ? `${miembro.email_invitado || "—"} · ${formatMemberDate(miembro.created_at)}`
+                    : formatMemberDate(miembro.created_at);
 
                   return (
                     <li
@@ -681,9 +681,7 @@ function FamiliaPageContent() {
                             <p className="truncate font-medium text-[#1a1a1a]">{nombre}</p>
                             <RolBadge rol={miembro.rol} estado={miembro.estado} />
                           </div>
-                          <p className="text-[11px] text-[#888]">
-                            {email} · {formatMemberDate(miembro.created_at)}
-                          </p>
+                          <p className="text-[11px] text-[#888]">{subtitulo}</p>
                         </div>
                       </div>
                       <div className="flex shrink-0 gap-2">
@@ -769,7 +767,7 @@ function FamiliaPageContent() {
                   <ul className="mt-4 flex flex-col gap-3">
                     {reservas.slice(0, 4).map((booking) => {
                       const service = booking.services ?? {};
-                      const cliente = booking.profiles ?? {};
+                      const cliente = booking.profiles_public ?? {};
                       const reservo =
                         [cliente.nombre, cliente.apellido].filter(Boolean).join(" ") ||
                         "Miembro";
