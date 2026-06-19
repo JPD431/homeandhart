@@ -1732,12 +1732,36 @@ export default function EditarPerfilPage() {
             <Card title="Referencias externas">
               {referencias.length > 0 && (
                 <ul className="mb-4 flex flex-col gap-2">
-                  {referencias.map((ref) => (
-                    <li key={ref.id} className="flex items-center justify-between rounded-lg border px-3 py-2 text-sm" style={{ borderColor: BRAND.border }}>
-                      <span>{ref.nombre_referente}</span>
-                      <span className="text-xs text-[#888]">{ref.estado}</span>
-                    </li>
-                  ))}
+                  {referencias.map((ref) =>
+                    ref.estado === "completada" ? (
+                      <li key={ref.id} className="rounded-lg border px-3 py-2.5 text-sm" style={{ borderColor: BRAND.border }}>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <p className="font-medium text-[#1a1a1a]">{ref.nombre_referente}</p>
+                            <div className="mt-1.5 flex flex-col gap-1 text-xs text-[#666]">
+                              {ref.recomendaria != null && (
+                                <span className={ref.recomendaria ? "font-medium text-[#0e7a5c]" : "text-[#888]"}>
+                                  {ref.recomendaria ? "Recomienda" : "No recomienda"}
+                                </span>
+                              )}
+                              {ref.conoce_desde && (
+                                <span>Se conocen: {ref.conoce_desde}</span>
+                              )}
+                              {ref.comentario && (
+                                <p className="mt-0.5 italic leading-relaxed">{ref.comentario}</p>
+                              )}
+                            </div>
+                          </div>
+                          <span className="shrink-0 text-xs text-[#888]">{ref.estado}</span>
+                        </div>
+                      </li>
+                    ) : (
+                      <li key={ref.id} className="flex items-center justify-between rounded-lg border px-3 py-2 text-sm" style={{ borderColor: BRAND.border }}>
+                        <span>{ref.nombre_referente}</span>
+                        <span className="text-xs text-[#888]">{ref.estado}</span>
+                      </li>
+                    ),
+                  )}
                 </ul>
               )}
               <div>

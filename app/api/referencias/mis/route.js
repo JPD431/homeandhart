@@ -21,7 +21,7 @@ export async function GET() {
   const { data, error } = await supabaseAdmin
     .from("referencias")
     .select(
-      "id, nombre_referente, email_referente, relacion, estado, created_at",
+      "id, nombre_referente, email_referente, relacion, estado, conoce_desde, recomendaria, comentario, created_at",
     )
     .eq("proveedor_id", user.id)
     .order("created_at", { ascending: false });
