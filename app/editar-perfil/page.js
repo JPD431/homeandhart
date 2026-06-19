@@ -1191,13 +1191,11 @@ export default function EditarPerfilPage() {
       }
 
       if (perfilData?.role === "proveedor") {
-        const { data: refsData } = await supabase
-          .from("referencias")
-          .select("id, nombre_referente, email_referente, relacion, estado, created_at")
-          .eq("proveedor_id", user.id)
-          .order("created_at", { ascending: false });
-
-        setReferencias(refsData ?? []);
+        const refsRes = await fetch("/api/referencias/mis");
+        const refsData = await refsRes.json().catch(() => ({}));
+        if (refsRes.ok) {
+          setReferencias(refsData.referencias ?? []);
+        }
       }
 
       setLoading(false);
@@ -1324,13 +1322,11 @@ export default function EditarPerfilPage() {
       return;
     }
 
-    const { data: refsData } = await supabase
-      .from("referencias")
-      .select("id, nombre_referente, email_referente, relacion, estado, created_at")
-      .eq("proveedor_id", userId)
-      .order("created_at", { ascending: false });
-
-    setReferencias(refsData ?? []);
+    const refsRes = await fetch("/api/referencias/mis");
+    const refsPayload = await refsRes.json().catch(() => ({}));
+    if (refsRes.ok) {
+      setReferencias(refsPayload.referencias ?? []);
+    }
     setRefNombre("");
     setRefEmail("");
     setRefRelacion(RELACION_OPTIONS[0]);

@@ -181,10 +181,9 @@ function CompararContent() {
       const avalesMap = {};
       if (proveedorIds.length > 0) {
         const { data: referencias } = await supabase
-          .from("referencias")
+          .from("referencias_public")
           .select("proveedor_id")
-          .in("proveedor_id", proveedorIds)
-          .eq("estado", "completada");
+          .in("proveedor_id", proveedorIds);
 
         for (const ref of referencias ?? []) {
           avalesMap[ref.proveedor_id] = (avalesMap[ref.proveedor_id] ?? 0) + 1;

@@ -293,13 +293,12 @@ export default async function ProveedorPage({ params }) {
     .eq("proveedor_id", id);
 
   const { data: referenciasCompletadas } = await supabase
-    .from("referencias")
+    .from("referencias_public")
     .select(
-      "id, nombre_referente, relacion, conoce_desde, recomendaria, comentario",
+      "nombre_referente, relacion, conoce_desde, recomendaria, comentario",
     )
     .eq("proveedor_id", id)
-    .eq("estado", "completada")
-    .order("created_at", { ascending: false });
+    .order("nombre_referente", { ascending: true });
 
   let reservasCount = 0;
   if (serviceIds.length > 0) {
@@ -677,9 +676,9 @@ export default async function ProveedorPage({ params }) {
                   Avales externos
                 </h2>
                 <ul className="mt-4 flex flex-col gap-3">
-                  {referenciasCompletadas.map((ref) => (
+                  {referenciasCompletadas.map((ref, index) => (
                     <li
-                      key={ref.id}
+                      key={`${ref.nombre_referente}-${index}`}
                       className="rounded-lg border bg-white p-4"
                       style={{ borderColor: "#e8e4de" }}
                     >
