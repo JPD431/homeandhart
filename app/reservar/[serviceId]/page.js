@@ -12,10 +12,16 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CalendarioRangoFechas from "@/app/components/CalendarioRangoFechas";
 import { BRAND, SERIF } from "@/app/components/brand";
-import { applyBestDiscountToBase } from "@/app/lib/descuentosDuracion";
 import { getUserFamiliaActiva } from "@/app/lib/familia";
 import { procesarCancelacionTardia } from "@/app/lib/garantia";
 import { getHoyDateStr, getPrecioEfectivo, isOfertaActiva } from "@/app/lib/ofertas";
+import {
+  applyClientPrice,
+  calculateServiceBasePrice,
+  COMMISSION_RATE,
+  getEstanciaUnit,
+  getServiceDuration,
+} from "@/app/lib/pricing-reserva";
 import { supabase } from "@/app/lib/supabase";
 
 const stripePromise = loadStripe(
@@ -211,34 +217,6 @@ function formatShortName(nombre, apellido) {
   const first = nombre?.trim() || "";
   const lastInitial = apellido?.trim()?.[0] ? `${apellido.trim()[0]}.` : "";
   return [first, lastInitial].filter(Boolean).join(" ");
-}
-
-function daysBetween(start, end) {
-  if (!start || !end) return 0;
-  const a = new Date(`${start}T12:00:00`);
-  const b = new Date(`${end}T12:00:00`);
-  const diff = b.getTime() - a.getTime();
-  if (diff < 0) return 0;
-  return Math.max(1, Math.ceil(diff / (1000 * 60 * 60 * 24)));
-}
-
-function getEstanciaUnit(vertical, count) {
-  const n = Number(count);
-  if (vertical === "alojamiento") return n === 1 ? "noche" : "noches";
-  if (vertical === "ninos") return n === 1 ? "hora" : "horas";
-  return n === 1 ? "día" : "días";
-}
-
-function getServiceDuration(svc, { fechaInicio, fechaFin, duracionHoras, mainVertical }) {
-  if (svc.vertical === "ninos") {
-    let hours = Number(duracionHoras) || 0;
-    if (!hours && mainVertical !== "ninos") {
-      const days = daysBetween(fechaInicio, fechaFin || fechaInicio);
-      hours = days > 0 ? days : 0;
-    }
-    return hours;
-  }
-  return daysBetween(fechaInicio, fechaFin || fechaInicio);
 }
 
 function validateEstancia(svc, duration) {
@@ -468,17 +446,10 @@ function FechaInicioConDias({
   );
 }
 
-const PLATFORM_MULTIPLIER = 1.14;
-const COMMISSION_RATE = 0.14;
 const MAX_CREDITO_PORCENTAJE = 0.6;
 
 const inputClass =
   "w-full rounded-xl border px-4 py-3 text-sm text-[#1a1a1a] outline-none focus:ring-2 focus:ring-[#1d4f91]/30";
-
-function applyClientPrice(baseSubtotal) {
-  if (!baseSubtotal) return 0;
-  return Math.round(baseSubtotal * PLATFORM_MULTIPLIER * 100) / 100;
-}
 
 function formatEuro(amount) {
   return `${Number(amount).toFixed(2)}€`;
@@ -705,93 +676,6 @@ function getCardBrandLabel(brand) {
     amex: "American Express",
   };
   return labels[brand] ?? (brand ? brand.charAt(0).toUpperCase() + brand.slice(1) : "Tarjeta");
-}
-
-function calculateServiceBasePrice(
-  svc,
-  { fechaInicio, fechaFin, duracionHoras, mainVertical },
-  unitPriceOverride = null,
-) {
-  const useOverride =
-    unitPriceOverride != null && Number(unitPriceOverride) > 0;
-  const unitPrice = useOverride
-    ? Number(unitPriceOverride)
-    : Number(svc.precio) || 0;
-  if (!unitPrice) return { base: 0, detail: "", ready: false, discountPct: 0, discountSource: null };
-
-  const v = svc.vertical;
-  const dateContext = { fechaInicio, fechaFin, duracionHoras, mainVertical };
-
-  function finalizeBase(subtotal, detail, ready, duration) {
-    if (useOverride) {
-      return {
-        base: subtotal,
-        detail,
-        ready,
-        discountPct: 0,
-        discountSource: null,
-      };
-    }
-    const { total, pct, source } = applyBestDiscountToBase(
-      subtotal,
-      svc,
-      duration,
-    );
-    return {
-      base: total,
-      detail,
-      ready,
-      discountPct: pct,
-      discountSource: source,
-    };
-  }
-
-  if (v === "ninos") {
-    let hours = Number(duracionHoras) || 0;
-    if (!hours && mainVertical !== "ninos") {
-      const days = daysBetween(fechaInicio, fechaFin || fechaInicio);
-      hours = days > 0 ? days : 0;
-    }
-    if (!hours) {
-      return {
-        base: 0,
-        detail: "Introduce la duración en horas",
-        ready: false,
-        discountPct: 0,
-        discountSource: null,
-      };
-    }
-    const subtotal = unitPrice * hours;
-    const duration = getServiceDuration(svc, dateContext);
-    return finalizeBase(
-      subtotal,
-      `${hours} hora${hours > 1 ? "s" : ""}`,
-      true,
-      duration,
-    );
-  }
-
-  const start = fechaInicio;
-  const end = fechaFin || fechaInicio;
-  const days = daysBetween(start, end);
-  if (!start || days === 0) {
-    return {
-      base: 0,
-      detail: "Introduce fechas de inicio y fin",
-      ready: false,
-      discountPct: 0,
-      discountSource: null,
-    };
-  }
-  const unit = v === "alojamiento" ? "noche" : "día";
-  const subtotal = unitPrice * days;
-  const duration = getServiceDuration(svc, dateContext);
-  return finalizeBase(
-    subtotal,
-    `${days} ${unit}${days > 1 ? "s" : ""}`,
-    true,
-    duration,
-  );
 }
 
 // -- ALTER TABLE bookings ADD COLUMN IF NOT EXISTS familia_id uuid REFERENCES familias(id);
