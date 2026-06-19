@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
-import { generateCodigoReferido } from "@/app/lib/referidos";
 import { supabase } from "@/app/lib/supabase";
 
 const PRIMARY = "#1d4f91";
@@ -47,21 +46,6 @@ const ROLES = [
     subtitle: "Ofrezco servicios",
   },
 ];
-
-async function createUniqueCodigoReferido(seed) {
-  for (let attempt = 0; attempt < 8; attempt += 1) {
-    const codigo = generateCodigoReferido(seed);
-    const { data: existing } = await supabase
-      .from("profiles")
-      .select("id")
-      .eq("codigo_referido", codigo)
-      .maybeSingle();
-
-    if (!existing) return codigo;
-  }
-
-  return generateCodigoReferido(`${seed}${Date.now()}`);
-}
 
 function AuthShell({ children }) {
   return (
@@ -299,13 +283,15 @@ function RegistroForm() {
 
     const codigoTrim = codigoInvitacion.trim();
     if (codigoTrim) {
-      const { data: referidorCheck } = await supabase
-        .from("profiles")
-        .select("id")
-        .eq("codigo_referido", codigoTrim)
-        .maybeSingle();
+      const response = await fetch("/api/referidos/validar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ codigo: codigoTrim }),
+      });
 
-      if (!referidorCheck) {
+      const { valid } = await response.json();
+
+      if (!valid) {
         setError("Código no válido");
         return;
       }

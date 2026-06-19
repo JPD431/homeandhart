@@ -66,14 +66,14 @@ export default async function sitemap() {
   );
 
   const { data: proveedores } = await supabase
-    .from("profiles")
-    .select("id, updated_at")
+    .from("profiles_public")
+    .select("id, fecha_registro")
     .eq("role", "proveedor")
     .eq("verificado", true);
 
   const proveedorPages = (proveedores || []).map((p) => ({
     url: `${baseUrl}/proveedor/${p.id}`,
-    lastModified: new Date(p.updated_at),
+    lastModified: new Date(p.fecha_registro),
     changeFrequency: "weekly",
     priority: 0.8,
   }));
