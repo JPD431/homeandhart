@@ -16,6 +16,7 @@ import {
   getPrecioConDescuento,
   isOfertaActiva,
 } from "@/app/lib/ofertas";
+import { normalizeCancelPolicy } from "@/app/lib/cancelacion-politica";
 import { getReferenteInitial } from "@/app/lib/referencias";
 import { supabase } from "@/app/lib/supabase";
 
@@ -46,12 +47,6 @@ const CANCEL_POLICIES = {
   estricta: { name: "Estricta" },
 };
 
-const LEGACY_CANCEL_POLICIES = {
-  "24h": "flexible",
-  "48h": "moderada",
-  "7d": "estricta",
-};
-
 const DIAS_SEMANA_PILLS = [
   { id: "lun", label: "Lun" },
   { id: "mar", label: "Mar" },
@@ -68,7 +63,7 @@ const PROFILES_PUBLIC_SELECT =
   "id, nombre, apellido, foto_perfil, foto_url, ciudad, location_zone, descripcion, idiomas, verificado, badge_respuesta, tiempo_respuesta_horas, role, anos_experiencia, fecha_registro";
 
 function getCancelPolicy(policyKey) {
-  const key = LEGACY_CANCEL_POLICIES[policyKey] ?? policyKey;
+  const key = normalizeCancelPolicy(policyKey);
   return CANCEL_POLICIES[key];
 }
 
