@@ -1306,38 +1306,23 @@ export default function EditarPerfilPage() {
     setRefError("");
     setRefMessage("");
 
-    const token = crypto.randomUUID();
-
-    const { error: insertError } = await supabase.from("referencias").insert({
-      proveedor_id: userId,
-      nombre_referente: refNombre.trim(),
-      email_referente: refEmail.trim().toLowerCase(),
-      relacion: refRelacion,
-      estado: "pendiente",
-      token,
-    });
-
-    if (insertError) {
-      setRefSending(false);
-      setRefError(insertError.message);
-      return;
-    }
-
-    const proveedorNombre =
-      [nombre, apellido].filter(Boolean).join(" ") || "Proveedor";
-
-    await fetch("/api/emails", {
+    const res = await fetch("/api/referencias/solicitar", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        tipo: "solicitud_referencia",
-        destinatario_email: refEmail.trim().toLowerCase(),
-        referente_nombre: refNombre.trim(),
-        proveedor_nombre: proveedorNombre,
-        proveedor_foto: fotoPreview || fotoPerfil || null,
-        aval_url: `${process.env.NEXT_PUBLIC_URL || ""}/referencias/${token}`,
+        nombre_referente: refNombre.trim(),
+        email_referente: refEmail.trim(),
+        relacion: refRelacion,
       }),
     });
+
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok || !data.ok) {
+      setRefSending(false);
+      setRefError(data.error || "No se pudo enviar la solicitud.");
+      return;
+    }
 
     const { data: refsData } = await supabase
       .from("referencias")
