@@ -55,6 +55,41 @@ function roundMoney(amount) {
   return Math.round(amount * 100) / 100;
 }
 
+function buildBookingRow({
+  svc,
+  userId,
+  fechaInicio,
+  fechaFin,
+  hora,
+  duracionHoras,
+  mensaje,
+  precioTotal,
+  grupoReserva,
+  paymentIntentId,
+  familiaId,
+}) {
+  const v = svc.vertical;
+  const isImmediate = svc.reserva_inmediata === true;
+
+  return {
+    cliente_id: userId,
+    service_id: svc.id,
+    fecha_inicio: fechaInicio || null,
+    fecha_fin:
+      v === "alojamiento" || v === "mascotas"
+        ? fechaFin || fechaInicio || null
+        : null,
+    hora: v === "ninos" ? hora || null : null,
+    duracion_horas: v === "ninos" ? Number(duracionHoras) || null : null,
+    mensaje: mensaje?.trim() || null,
+    precio_total: precioTotal,
+    estado: isImmediate ? "confirmada" : "pendiente",
+    grupo_reserva: grupoReserva,
+    payment_intent_id: paymentIntentId,
+    familia_id: familiaId || null,
+  };
+}
+
 export async function POST(request) {
   try {
     const supabase = await createClient();
@@ -83,7 +118,10 @@ export async function POST(request) {
       service_ids,
       fecha_inicio = null,
       fecha_fin = null,
+      hora = null,
       duracion_horas = null,
+      mensaje = null,
+      familia_id = null,
       precio_especial = null,
       valida_hasta = null,
     } = body ?? {};
@@ -257,13 +295,107 @@ export async function POST(request) {
       );
     }
 
+    if (familia_id) {
+      const { data: membership, error: membershipError } = await supabaseAdmin
+        .from("familia_miembros")
+        .select("id")
+        .eq("perfil_id", userId)
+        .eq("familia_id", familia_id)
+        .eq("estado", "activo")
+        .maybeSingle();
+
+      if (membershipError) {
+        return NextResponse.json(
+          { error: membershipError.message },
+          { status: 500 },
+        );
+      }
+
+      if (!membership) {
+        return NextResponse.json(
+          { error: "No perteneces a esa familia" },
+          { status: 403 },
+        );
+      }
+    }
+
+    const { data: existingBookings, error: existingError } = await supabaseAdmin
+      .from("bookings")
+      .select("id, service_id")
+      .eq("payment_intent_id", payment_intent_id);
+
+    if (existingError) {
+      return NextResponse.json(
+        { error: existingError.message },
+        { status: 500 },
+      );
+    }
+
+    if (existingBookings?.length > 0) {
+      return NextResponse.json({
+        ok: true,
+        already_created: true,
+        booking_ids: existingBookings.map((b) => b.id),
+      });
+    }
+
+    const precioPorServicioMap = new Map(
+      preciosPorServicio.map((p) => [p.service_id, p.precio_total]),
+    );
+
+    const bookingRows = service_ids.map((serviceId) => {
+      const svc = serviceMap.get(serviceId);
+      return buildBookingRow({
+        svc,
+        userId,
+        fechaInicio: fecha_inicio,
+        fechaFin: fecha_fin,
+        hora,
+        duracionHoras: duracion_horas,
+        mensaje,
+        precioTotal: precioPorServicioMap.get(serviceId),
+        grupoReserva: grupo_reserva,
+        paymentIntentId: payment_intent_id,
+        familiaId: familia_id,
+      });
+    });
+
+    const { data: insertedBookings, error: insertError } = await supabaseAdmin
+      .from("bookings")
+      .insert(bookingRows)
+      .select("id, service_id");
+
+    if (insertError) {
+      return NextResponse.json({ error: insertError.message }, { status: 500 });
+    }
+
+    const finDisponibilidad = fecha_fin || fecha_inicio;
+    const { error: disponibilidadError } = await supabaseAdmin
+      .from("disponibilidad")
+      .insert(
+        insertedBookings.map((booking) => ({
+          service_id: booking.service_id,
+          fecha_inicio: fecha_inicio,
+          fecha_fin: finDisponibilidad,
+          booking_id: booking.id,
+        })),
+      );
+
+    if (disponibilidadError) {
+      console.error(
+        "[bookings/complete] No se pudo bloquear disponibilidad tras crear bookings:",
+        disponibilidadError,
+        {
+          payment_intent_id,
+          booking_ids: insertedBookings.map((b) => b.id),
+        },
+      );
+    }
+
     return NextResponse.json({
       ok: true,
-      validado: true,
-      total_grupo: totalGrupo,
-      total_a_pagar: totalAPagar,
-      credito_aplicado: creditoAplicado,
-      precios_por_servicio: preciosPorServicio,
+      booking_ids: insertedBookings.map((b) => b.id),
+      grupo_reserva,
     });
   } catch (error) {
     console.error("[bookings/complete]", error);
