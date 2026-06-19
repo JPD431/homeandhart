@@ -353,7 +353,7 @@ export default function AdminPage() {
         created_at,
         cliente_id,
         service_id,
-        profiles:cliente_id (
+        profiles_public:cliente_id (
           nombre,
           apellido
         ),
@@ -376,8 +376,8 @@ export default function AdminPage() {
       .select(
         `
         *,
-        reporter:reporter_id (nombre, apellido),
-        reported:reported_id (nombre, apellido)
+        reporter:profiles_public!reporter_id (nombre, apellido),
+        reported:profiles_public!reported_id (nombre, apellido)
       `,
       )
       .order("created_at", { ascending: false });
@@ -388,54 +388,15 @@ export default function AdminPage() {
       setReports(reportsData ?? []);
     }
 
-    // -- ALTER TABLE bookings ADD COLUMN IF NOT EXISTS estado_garantia text;
-    // -- ALTER TABLE bookings ADD COLUMN IF NOT EXISTS cancelado_at timestamp with time zone;
-    // -- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS penalizacion_valoracion numeric DEFAULT 0;
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const garantiaRes = await fetch("/api/admin/garantia/cancelaciones-tardias");
+    const garantiaData = await garantiaRes.json().catch(() => ({}));
 
-    const { data: garantiaBookings, error: garantiaError } = await supabase
-      .from("bookings")
-      .select(
-        `
-        id,
-        cancelado_at,
-        services:service_id (
-          proveedor_id,
-          profiles:proveedor_id (
-            nombre,
-            apellido,
-            penalizacion_valoracion
-          )
-        )
-      `,
-      )
-      .eq("estado", "cancelada_garantia")
-      .gte("cancelado_at", thirtyDaysAgo.toISOString());
-
-    if (garantiaError) {
-      setErrorMessage(garantiaError.message);
-    } else {
-      const grouped = {};
-      for (const booking of garantiaBookings ?? []) {
-        const proveedorId = booking.services?.proveedor_id;
-        if (!proveedorId) continue;
-        if (!grouped[proveedorId]) {
-          const perfil = booking.services?.profiles ?? {};
-          grouped[proveedorId] = {
-            proveedorId,
-            nombre:
-              [perfil.nombre, perfil.apellido].filter(Boolean).join(" ") ||
-              "Proveedor",
-            penalizacion: Number(perfil.penalizacion_valoracion) || 0,
-            count: 0,
-          };
-        }
-        grouped[proveedorId].count += 1;
-      }
-      setLateCancellations(
-        Object.values(grouped).sort((a, b) => b.count - a.count),
+    if (!garantiaRes.ok) {
+      setErrorMessage(
+        garantiaData.error || "Error al cargar cancelaciones tardías",
       );
+    } else {
+      setLateCancellations(garantiaData.cancelaciones ?? []);
     }
 
     const { data: blogData, error: blogError } = await supabase
@@ -1419,7 +1380,7 @@ export default function AdminPage() {
                       const precio = Number(booking.precio_total) || 0;
                       const transferido = getTransferidoProveedor(precio);
                       const comision = getComisionHH(precio);
-                      const cliente = booking.profiles;
+                      const cliente = booking.profiles_public;
                       const clienteNombre = cliente
                         ? [cliente.nombre, cliente.apellido].filter(Boolean).join(" ")
                         : "—";
