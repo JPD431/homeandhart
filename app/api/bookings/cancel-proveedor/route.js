@@ -345,6 +345,26 @@ export async function POST(request) {
     return NextResponse.json({ error: updateError.message }, { status: 500 });
   }
 
+  try {
+    const { error: disponibilidadError } = await supabaseAdmin
+      .from("disponibilidad")
+      .delete()
+      .eq("booking_id", bookingId);
+    if (disponibilidadError) {
+      console.error(
+        "[bookings/cancel-proveedor] No se pudo liberar disponibilidad:",
+        disponibilidadError,
+        { bookingId },
+      );
+    }
+  } catch (dispErr) {
+    console.error(
+      "[bookings/cancel-proveedor] No se pudo liberar disponibilidad:",
+      dispErr,
+      { bookingId },
+    );
+  }
+
   let penalizacion_ok = true;
   let penalizacionData = {};
 

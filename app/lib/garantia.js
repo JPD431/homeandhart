@@ -10,6 +10,26 @@ export function isCancelacionTardia(fechaInicio) {
   return hoursUntil < 24;
 }
 
+async function liberarFechasReserva(bookingId) {
+  try {
+    const res = await fetch("/api/bookings/liberar-fechas", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ booking_id: bookingId }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      console.error(
+        "No se pudo liberar disponibilidad:",
+        data.error || res.status,
+        { bookingId },
+      );
+    }
+  } catch (e) {
+    console.error("No se pudo liberar disponibilidad:", e, { bookingId });
+  }
+}
+
 export async function procesarCancelacionTardia({
   bookingId,
   supabaseClient,
@@ -38,10 +58,16 @@ export async function procesarCancelacionTardia({
   }
 
   if (!isCancelacionTardia(booking.fecha_inicio)) {
-    await supabaseClient
+    const { error: updateError } = await supabaseClient
       .from("bookings")
       .update({ estado: "cancelada" })
       .eq("id", bookingId);
+
+    if (updateError) {
+      return { ok: false, error: updateError.message };
+    }
+
+    await liberarFechasReserva(bookingId);
     return { ok: true, garantia: false };
   }
 
@@ -61,7 +87,7 @@ export async function procesarCancelacionTardia({
   const garantiaData = await garantiaRes.json();
   const alternativas = garantiaData.alternativas ?? [];
 
-  await supabaseClient
+  const { error: updateError } = await supabaseClient
     .from("bookings")
     .update({
       estado: "cancelada_garantia",
@@ -69,6 +95,12 @@ export async function procesarCancelacionTardia({
       cancelado_at: new Date().toISOString(),
     })
     .eq("id", bookingId);
+
+  if (updateError) {
+    return { ok: false, error: updateError.message };
+  }
+
+  await liberarFechasReserva(bookingId);
 
   if (alternativas.length > 0 && userEmail) {
     await fetch("/api/emails", {

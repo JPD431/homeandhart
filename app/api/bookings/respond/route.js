@@ -98,6 +98,28 @@ export async function POST(request) {
     return NextResponse.json({ error: updateError.message }, { status: 500 });
   }
 
+  if (action === "rechazar") {
+    try {
+      const { error: disponibilidadError } = await supabaseAdmin
+        .from("disponibilidad")
+        .delete()
+        .eq("booking_id", bookingId);
+      if (disponibilidadError) {
+        console.error(
+          "[bookings/respond] No se pudo liberar disponibilidad al rechazar:",
+          disponibilidadError,
+          { bookingId },
+        );
+      }
+    } catch (dispErr) {
+      console.error(
+        "[bookings/respond] No se pudo liberar disponibilidad al rechazar:",
+        dispErr,
+        { bookingId },
+      );
+    }
+  }
+
   if (action === "aceptar") {
     try {
       const { data: bookingFull } = await supabaseAdmin
