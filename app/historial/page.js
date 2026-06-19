@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { BRAND, SERIF } from "@/app/components/brand";
-import { procesarCancelacionTardia } from "@/app/lib/garantia";
 import { supabase } from "@/app/lib/supabase";
 
 const PRIMARY = "#1d4f91";
@@ -297,8 +296,6 @@ export default function HistorialPage() {
   const [reviewedIds, setReviewedIds] = useState(new Set());
   const [activeFilter, setActiveFilter] = useState("todas");
   const [searchQuery, setSearchQuery] = useState("");
-  const [userEmail, setUserEmail] = useState("");
-  const [clienteNombre, setClienteNombre] = useState("");
   const [cancellingId, setCancellingId] = useState(null);
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -313,18 +310,6 @@ export default function HistorialPage() {
         router.replace("/login");
         return;
       }
-
-      setUserEmail(user.email || "");
-
-      const { data: perfil } = await supabase
-        .from("profiles")
-        .select("nombre, apellido")
-        .eq("id", user.id)
-        .single();
-
-      setClienteNombre(
-        [perfil?.nombre, perfil?.apellido].filter(Boolean).join(" ") || "Cliente",
-      );
 
       const { data: bookingsData } = await supabase
         .from("bookings")
@@ -414,26 +399,22 @@ export default function HistorialPage() {
     setCancellingId(booking.id);
     setErrorMessage("");
 
-    const result = await procesarCancelacionTardia({
-      bookingId: booking.id,
-      supabaseClient: supabase,
-      userEmail,
-      clienteNombre,
+    const res = await fetch("/api/bookings/cancelar-cliente", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ booking_id: booking.id }),
     });
 
-    if (result.ok) {
+    const data = await res.json().catch(() => ({}));
+
+    if (res.ok && data.ok) {
       setBookings((prev) =>
         prev.map((b) =>
-          b.id === booking.id
-            ? {
-                ...b,
-                estado: result.garantia ? "cancelada_garantia" : "cancelada",
-              }
-            : b,
+          b.id === booking.id ? { ...b, estado: data.estado } : b,
         ),
       );
     } else {
-      setErrorMessage(result.error || "No se pudo cancelar la reserva.");
+      setErrorMessage(data.error || "No se pudo cancelar la reserva.");
     }
 
     setCancellingId(null);

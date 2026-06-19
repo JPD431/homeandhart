@@ -13,7 +13,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CalendarioRangoFechas from "@/app/components/CalendarioRangoFechas";
 import { BRAND, SERIF } from "@/app/components/brand";
 import { getUserFamiliaActiva } from "@/app/lib/familia";
-import { procesarCancelacionTardia } from "@/app/lib/garantia";
 import { getHoyDateStr, getPrecioEfectivo, isOfertaActiva } from "@/app/lib/ofertas";
 import {
   applyClientPrice,
@@ -1269,30 +1268,24 @@ export default function ReservarPage() {
     if (!cancelarBookingId || !userId || loading) return;
 
     async function ejecutarCancelacionGarantia() {
-      const clienteNombre =
-        [perfilCliente?.nombre, perfilCliente?.apellido]
-          .filter(Boolean)
-          .join(" ") || "Cliente";
-
-      await procesarCancelacionTardia({
-        bookingId: cancelarBookingId,
-        supabaseClient: supabase,
-        userEmail,
-        clienteNombre,
+      const res = await fetch("/api/bookings/cancelar-cliente", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ booking_id: cancelarBookingId }),
       });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || !data.ok) {
+        setErrorMessage(data.error || "No se pudo cancelar la reserva.");
+        return;
+      }
 
       router.replace("/dashboard");
     }
 
     ejecutarCancelacionGarantia();
-  }, [
-    cancelarBookingId,
-    userId,
-    loading,
-    perfilCliente,
-    userEmail,
-    router,
-  ]);
+  }, [cancelarBookingId, userId, loading, router]);
 
   const vertical = service?.vertical ?? "alojamiento";
   const verticalConfig = VERTICALS[vertical] ?? VERTICALS.alojamiento;
