@@ -59,6 +59,42 @@ function roundMoney(amount) {
   return Math.round(amount * 100) / 100;
 }
 
+function isDisponibilidadExclusionError(error) {
+  if (!error) return false;
+  if (error.code === "23P01") return true;
+  const text = [error.message, error.details, error.hint].filter(Boolean).join(" ");
+  return text.includes("disponibilidad_sin_solapamiento");
+}
+
+async function hasDisponibilidadSolapamiento(serviceId, fechaInicio, fechaFin) {
+  const fin = fechaFin || fechaInicio;
+  const { data, error } = await supabaseAdmin
+    .from("disponibilidad")
+    .select("id")
+    .eq("service_id", serviceId)
+    .lte("fecha_inicio", fin)
+    .gte("fecha_fin", fechaInicio)
+    .limit(1);
+
+  if (error) throw error;
+  return (data?.length ?? 0) > 0;
+}
+
+async function rollbackInsertedBookings(bookingIds, paymentIntentId) {
+  const { error } = await supabaseAdmin
+    .from("bookings")
+    .delete()
+    .in("id", bookingIds);
+
+  if (error) {
+    console.error(
+      "[bookings/complete] Fallo al revertir bookings tras conflicto de disponibilidad:",
+      error,
+      { payment_intent_id: paymentIntentId, booking_ids: bookingIds },
+    );
+  }
+}
+
 async function sendBookingEmail(payload) {
   const baseUrl = process.env.NEXT_PUBLIC_URL;
   if (!baseUrl) {
@@ -376,6 +412,35 @@ export async function POST(request) {
       preciosPorServicio.map((p) => [p.service_id, p.precio_total]),
     );
 
+    const finDisponibilidad = fecha_fin || fecha_inicio;
+    const uniqueServicesForDates = [...new Set(service_ids)];
+
+    for (const serviceId of uniqueServicesForDates) {
+      let solapamiento;
+      try {
+        solapamiento = await hasDisponibilidadSolapamiento(
+          serviceId,
+          fecha_inicio,
+          finDisponibilidad,
+        );
+      } catch (overlapError) {
+        return NextResponse.json(
+          { error: overlapError.message },
+          { status: 500 },
+        );
+      }
+
+      if (solapamiento) {
+        return NextResponse.json(
+          {
+            error:
+              "Estas fechas ya no están disponibles para uno de los servicios. Por favor elige otras.",
+          },
+          { status: 409 },
+        );
+      }
+    }
+
     const bookingRows = service_ids.map((serviceId) => {
       const svc = serviceMap.get(serviceId);
       return buildBookingRow({
@@ -402,7 +467,8 @@ export async function POST(request) {
       return NextResponse.json({ error: insertError.message }, { status: 500 });
     }
 
-    const finDisponibilidad = fecha_fin || fecha_inicio;
+    const insertedBookingIds = insertedBookings.map((b) => b.id);
+
     const { error: disponibilidadError } = await supabaseAdmin
       .from("disponibilidad")
       .insert(
@@ -415,13 +481,29 @@ export async function POST(request) {
       );
 
     if (disponibilidadError) {
+      await rollbackInsertedBookings(insertedBookingIds, payment_intent_id);
+
+      if (isDisponibilidadExclusionError(disponibilidadError)) {
+        return NextResponse.json(
+          {
+            error:
+              "Estas fechas se acaban de ocupar. Por favor elige otras.",
+          },
+          { status: 409 },
+        );
+      }
+
       console.error(
         "[bookings/complete] No se pudo bloquear disponibilidad tras crear bookings:",
         disponibilidadError,
         {
           payment_intent_id,
-          booking_ids: insertedBookings.map((b) => b.id),
+          booking_ids: insertedBookingIds,
         },
+      );
+      return NextResponse.json(
+        { error: disponibilidadError.message },
+        { status: 500 },
       );
     }
 
