@@ -369,7 +369,7 @@ async function verificarDisponibilidad(serviceId, fechaInicio, fechaFin) {
 
 function isServiceBookable(service) {
   return (
-    service?.disponible === true && service?.profiles?.verificado === true
+    service?.disponible === true && service?.profiles_public?.verificado === true
   );
 }
 
@@ -386,7 +386,7 @@ async function validateServicesBookable(services) {
       `
       id,
       disponible,
-      profiles (
+      profiles_public (
         verificado
       )
     `,
@@ -1267,7 +1267,7 @@ export default function ReservarPage() {
         .select(
           `
           *,
-          profiles (
+          profiles_public (
             nombre,
             apellido,
             ciudad,
@@ -1341,7 +1341,7 @@ export default function ReservarPage() {
               oferta_descuento,
               oferta_valida_hasta,
               descuentos_duracion,
-              profiles (
+              profiles_public (
                 nombre,
                 apellido,
                 verificado
@@ -1349,7 +1349,7 @@ export default function ReservarPage() {
             `,
             )
             .eq("disponible", true)
-            .eq("profiles.verificado", true)
+            .eq("profiles_public.verificado", true)
             .eq("vertical", compVertical)
             .ilike("ciudad", `%${city}%`)
             .neq("proveedor_id", data.proveedor_id)
@@ -1409,7 +1409,7 @@ export default function ReservarPage() {
           oferta_descuento,
           oferta_valida_hasta,
           descuentos_duracion,
-          profiles (
+          profiles_public (
             nombre,
             apellido,
             verificado
@@ -1434,7 +1434,7 @@ export default function ReservarPage() {
       );
       const nombreServicio =
         data.titulo ||
-        `${VERTICALS[data.vertical]?.label ?? "Servicio"} · ${formatShortName(data.profiles?.nombre, data.profiles?.apellido)}`;
+        `${VERTICALS[data.vertical]?.label ?? "Servicio"} · ${formatShortName(data.profiles_public?.nombre, data.profiles_public?.apellido)}`;
       setSuccessMessage(`✓ ${nombreServicio} añadido a tu reserva`);
       setSuccessVariant("green");
     }
@@ -1484,7 +1484,7 @@ export default function ReservarPage() {
     }
     return undefined;
   };
-  const profile = service?.profiles ?? {};
+  const profile = service?.profiles_public ?? {};
   const unitPrice = Number(service?.precio) || 0;
   const precioEspecialChat = useMemo(() => {
     const precio = Number(precioEspecialParam);
@@ -1622,7 +1622,7 @@ export default function ReservarPage() {
       const svcConfig = VERTICALS[svc.vertical] ?? VERTICALS.alojamiento;
       const name =
         svc.titulo ||
-        `${svcConfig.label} · ${formatShortName(svc.profiles?.nombre, svc.profiles?.apellido)}`;
+        `${svcConfig.label} · ${formatShortName(svc.profiles_public?.nombre, svc.profiles_public?.apellido)}`;
       return {
         id: svc.id,
         name,
@@ -1737,7 +1737,7 @@ export default function ReservarPage() {
           oferta_descuento,
           oferta_valida_hasta,
           descuentos_duracion,
-          profiles (
+          profiles_public (
             nombre,
             apellido,
             verificado
@@ -1745,7 +1745,7 @@ export default function ReservarPage() {
         `,
         )
         .eq("disponible", true)
-        .eq("profiles.verificado", true)
+        .eq("profiles_public.verificado", true)
         .eq("vertical", tabVertical)
         .ilike("ciudad", `%${city}%`)
         .neq("proveedor_id", service.proveedor_id)
@@ -2065,7 +2065,7 @@ export default function ReservarPage() {
         body: JSON.stringify({
           tipo: "reserva_nueva",
           proveedor_id: service.proveedor_id,
-          proveedor_nombre: service.profiles?.nombre || "Proveedor",
+          proveedor_nombre: service.profiles_public?.nombre || "Proveedor",
           cliente_nombre: perfilCliente?.nombre || "Un cliente",
           servicio_titulo: service.titulo,
           fecha_inicio: fechaInicio,
@@ -2079,8 +2079,8 @@ export default function ReservarPage() {
         const calc = calculateServiceBasePrice(svc, dateContext);
         return {
           titulo: svc.titulo || VERTICALS[svc.vertical]?.label,
-          proveedor_nombre: svc.profiles?.nombre || "Proveedor",
-          proveedor_email: svc.profiles?.email || userEmail,
+          proveedor_id: svc.proveedor_id,
+          proveedor_nombre: svc.profiles_public?.nombre || "Proveedor",
           precio: applyClientPrice(calc.base).toFixed(2),
           direccion_exacta: svc.direccion_exacta,
           telefono_proveedor: svc.telefono_contacto,
@@ -2099,8 +2099,8 @@ export default function ReservarPage() {
           tipo: todasInmediatas ? "reserva_confirmada" : "reserva_solicitud",
           cliente_email: userEmail,
           cliente_nombre: perfilCliente?.nombre || "Cliente",
-          proveedor_email: service.profiles?.email || userEmail,
-          proveedor_nombre: service.profiles?.nombre || "Proveedor",
+          proveedor_id: service.proveedor_id,
+          proveedor_nombre: service.profiles_public?.nombre || "Proveedor",
           servicio_titulo: service.titulo,
           fecha_inicio: fechaInicio,
           fecha_fin: fechaFin || fechaInicio,
@@ -2628,7 +2628,7 @@ export default function ReservarPage() {
                                 marginTop: 1,
                               }}
                             >
-                              {s.profiles?.nombre} {s.profiles?.apellido} · {s.precio}€/
+                              {s.profiles_public?.nombre} {s.profiles_public?.apellido} · {s.precio}€/
                               {s.vertical === "alojamiento"
                                 ? "noche"
                                 : s.vertical === "ninos"
@@ -2685,8 +2685,8 @@ export default function ReservarPage() {
                           const isAdded = bundleServices.some((s) => s.id === comp.id);
                           const addPrice = getCompAddPrice(comp);
                           const providerName = formatShortName(
-                            comp.profiles?.nombre,
-                            comp.profiles?.apellido,
+                            comp.profiles_public?.nombre,
+                            comp.profiles_public?.apellido,
                           );
                           return (
                             <li
@@ -2772,8 +2772,8 @@ export default function ReservarPage() {
                         const compConfig = VERTICALS[comp.vertical] ?? VERTICALS.alojamiento;
                         const isAdded = bundleServices.some((s) => s.id === comp.id);
                         const providerName = formatShortName(
-                          comp.profiles?.nombre,
-                          comp.profiles?.apellido,
+                          comp.profiles_public?.nombre,
+                          comp.profiles_public?.apellido,
                         );
                         const compTags = getServiceDisplayTags(comp);
                         return (
@@ -2787,7 +2787,7 @@ export default function ReservarPage() {
                                 className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white"
                                 style={{ backgroundColor: compConfig.color }}
                               >
-                                {getInitials(comp.profiles?.nombre, comp.profiles?.apellido)}
+                                {getInitials(comp.profiles_public?.nombre, comp.profiles_public?.apellido)}
                               </span>
                               <div className="min-w-0 flex-1">
                                 <div className="flex items-start justify-between gap-2">

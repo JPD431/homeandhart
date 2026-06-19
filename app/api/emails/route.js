@@ -708,6 +708,15 @@ async function sendReservaConfirmadaEmails(data) {
       (await resolverNombreUsuario(payload.cliente_id)) || "Cliente";
   }
 
+  if (payload.proveedor_id && !payload.proveedor_email) {
+    payload.proveedor_email = await resolverEmailUsuario(payload.proveedor_id);
+  }
+
+  if (!payload.proveedor_nombre && payload.proveedor_id) {
+    payload.proveedor_nombre =
+      (await resolverNombreUsuario(payload.proveedor_id)) || "Proveedor";
+  }
+
   const required = [
     "cliente_email",
     "cliente_nombre",
@@ -741,22 +750,36 @@ async function sendReservaConfirmadaEmails(data) {
     }
 
     const providerEmails = await Promise.all(
-      payload.servicios.map((svc) =>
-        resend.emails.send({
+      payload.servicios.map(async (svc) => {
+        let proveedorEmail = svc.proveedor_email;
+        if (svc.proveedor_id) {
+          proveedorEmail = await resolverEmailUsuario(svc.proveedor_id);
+        }
+        if (!proveedorEmail) {
+          return { error: { message: "No se encontró el email del proveedor" } };
+        }
+
+        let proveedorNombre = svc.proveedor_nombre;
+        if (!proveedorNombre && svc.proveedor_id) {
+          proveedorNombre =
+            (await resolverNombreUsuario(svc.proveedor_id)) || "Proveedor";
+        }
+
+        return resend.emails.send({
           from: FROM,
-          to: svc.proveedor_email || payload.cliente_email,
+          to: proveedorEmail,
           subject: "Nueva reserva recibida — Home&Heart",
           html: proveedorEmailHtml({
             ...payload,
             servicio_titulo: svc.titulo,
-            proveedor_nombre: svc.proveedor_nombre,
+            proveedor_nombre: proveedorNombre,
             precio_total: svc.precio,
             direccion_exacta: svc.direccion_exacta,
             telefono_proveedor: svc.telefono_proveedor,
             modalidad: svc.modalidad,
           }),
-        }),
-      ),
+        });
+      }),
     );
 
     const providerError = providerEmails.find((r) => r.error);
