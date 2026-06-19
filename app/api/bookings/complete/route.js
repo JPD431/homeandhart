@@ -59,6 +59,36 @@ function roundMoney(amount) {
   return Math.round(amount * 100) / 100;
 }
 
+/** Reparte creditoAplicado del grupo entre servicios según precio_total. */
+function splitCreditoPorServicio(preciosPorServicio, creditoAplicado, totalGrupo) {
+  const creditoMap = new Map();
+
+  if (!creditoAplicado || creditoAplicado <= 0 || !preciosPorServicio.length) {
+    for (const { service_id } of preciosPorServicio) {
+      creditoMap.set(service_id, 0);
+    }
+    return creditoMap;
+  }
+
+  let assigned = 0;
+
+  for (let i = 0; i < preciosPorServicio.length; i++) {
+    const { service_id, precio_total } = preciosPorServicio[i];
+
+    if (i === preciosPorServicio.length - 1) {
+      creditoMap.set(service_id, roundMoney(creditoAplicado - assigned));
+    } else {
+      const share = roundMoney(
+        creditoAplicado * (precio_total / totalGrupo),
+      );
+      creditoMap.set(service_id, share);
+      assigned += share;
+    }
+  }
+
+  return creditoMap;
+}
+
 function isDisponibilidadExclusionError(error) {
   if (!error) return false;
   if (error.code === "23P01") return true;
@@ -133,6 +163,7 @@ function buildBookingRow({
   duracionHoras,
   mensaje,
   precioTotal,
+  creditoAplicado = 0,
   grupoReserva,
   paymentIntentId,
   familiaId,
@@ -152,6 +183,7 @@ function buildBookingRow({
     duracion_horas: v === "ninos" ? Number(duracionHoras) || null : null,
     mensaje: mensaje?.trim() || null,
     precio_total: precioTotal,
+    credito_aplicado: creditoAplicado,
     estado: isImmediate ? "confirmada" : "pendiente",
     grupo_reserva: grupoReserva,
     payment_intent_id: paymentIntentId,
@@ -412,6 +444,12 @@ export async function POST(request) {
       preciosPorServicio.map((p) => [p.service_id, p.precio_total]),
     );
 
+    const creditoPorServicioMap = splitCreditoPorServicio(
+      preciosPorServicio,
+      creditoAplicado,
+      totalGrupo,
+    );
+
     const finDisponibilidad = fecha_fin || fecha_inicio;
     const uniqueServicesForDates = [...new Set(service_ids)];
 
@@ -452,6 +490,7 @@ export async function POST(request) {
         duracionHoras: duracion_horas,
         mensaje,
         precioTotal: precioPorServicioMap.get(serviceId),
+        creditoAplicado: creditoPorServicioMap.get(serviceId) ?? 0,
         grupoReserva: grupo_reserva,
         paymentIntentId: payment_intent_id,
         familiaId: familia_id,
