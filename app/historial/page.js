@@ -102,7 +102,7 @@ function getMonthLabel(key) {
 
 function getExtraTags(service, vertical) {
   const tags = [];
-  const proveedor = service.profiles ?? {};
+  const proveedor = service.profiles_public ?? {};
   const idiomas = Array.isArray(proveedor.idiomas) ? proveedor.idiomas : [];
 
   if (vertical === "alojamiento") tags.push("NRU ✓");
@@ -174,7 +174,7 @@ function GrayButton({ children, onClick, href, disabled }) {
 function BookingCard({ booking, reviewed, onCancel, cancelling }) {
   const estado = getBookingEstado(booking);
   const service = booking.services ?? {};
-  const proveedor = service.profiles ?? {};
+  const proveedor = service.profiles_public ?? {};
   const vertical = service.vertical ?? "alojamiento";
   const vMeta = VERTICAL_META[vertical] ?? VERTICAL_META.alojamiento;
   const proveedorNombre =
@@ -337,7 +337,7 @@ export default function HistorialPage() {
             precio,
             ciudad,
             proveedor_id,
-            profiles:proveedor_id (nombre, apellido, idiomas)
+            profiles_public:proveedor_id (nombre, apellido, idiomas)
           )
         `,
         )
@@ -385,7 +385,7 @@ export default function HistorialPage() {
     if (q) {
       result = result.filter((booking) => {
         const service = booking.services ?? {};
-        const proveedor = service.profiles ?? {};
+        const proveedor = service.profiles_public ?? {};
         const titulo = (service.titulo || "").toLowerCase();
         const proveedorNombre = [proveedor.nombre, proveedor.apellido]
           .filter(Boolean)

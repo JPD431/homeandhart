@@ -208,7 +208,7 @@ export default function ResenaPage() {
         .single();
 
       const { data: proveedor } = await supabase
-        .from("profiles")
+        .from("profiles_public")
         .select("nombre, apellido")
         .eq("id", service?.proveedor_id)
         .single();

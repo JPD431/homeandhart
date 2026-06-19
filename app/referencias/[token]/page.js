@@ -34,7 +34,7 @@ export default function ReferenciaPublicPage() {
           nombre_referente,
           estado,
           proveedor_id,
-          profiles:proveedor_id (nombre, apellido)
+          profiles_public:proveedor_id (nombre, apellido)
         `,
         )
         .eq("token", token)
@@ -48,7 +48,7 @@ export default function ReferenciaPublicPage() {
 
       if (data.estado === "completada") {
         setSuccess(true);
-        const p = data.profiles;
+        const p = data.profiles_public;
         setProveedorNombre(
           [p?.nombre, p?.apellido].filter(Boolean).join(" ") || "el proveedor",
         );
@@ -57,7 +57,7 @@ export default function ReferenciaPublicPage() {
       }
 
       setReferencia(data);
-      const p = data.profiles;
+      const p = data.profiles_public;
       setProveedorNombre(
         [p?.nombre, p?.apellido].filter(Boolean).join(" ") || "el proveedor",
       );

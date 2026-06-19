@@ -154,7 +154,7 @@ export default function ViajePage() {
             services:service_id (
               titulo,
               vertical,
-              profiles:proveedor_id (nombre, apellido)
+              profiles_public:proveedor_id (nombre, apellido)
             )
           )
         `,
@@ -374,7 +374,7 @@ export default function ViajePage() {
 
                   const booking = item.booking;
                   const service = booking.services ?? {};
-                  const proveedor = service.profiles ?? {};
+                  const proveedor = service.profiles_public ?? {};
                   const vertical = service.vertical || "alojamiento";
                   const theme =
                     VERTICAL_THEME[vertical] ?? VERTICAL_THEME.alojamiento;

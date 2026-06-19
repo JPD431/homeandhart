@@ -81,7 +81,7 @@ function formatPrice(precio, suffix) {
 
 function isBookableService(service) {
   return (
-    service?.disponible === true && service?.profiles?.verificado === true
+    service?.disponible === true && service?.profiles_public?.verificado === true
   );
 }
 
@@ -128,7 +128,7 @@ function CompararContent() {
           proveedor_id,
           location_zone,
           ciudad,
-          profiles!inner (
+          profiles_public!inner (
             nombre,
             apellido,
             verificado,
@@ -142,7 +142,7 @@ function CompararContent() {
         )
         .in("id", ids)
         .eq("disponible", true)
-        .eq("profiles.verificado", true);
+        .eq("profiles_public.verificado", true);
 
       if (fetchError) {
         setError(fetchError.message);
@@ -238,7 +238,7 @@ function CompararContent() {
   const gridCols = `180px repeat(${Math.max(services.length, 1)}, minmax(0, 1fr))`;
 
   function renderCell(service, rowIndex) {
-    const profile = service.profiles ?? {};
+    const profile = service.profiles_public ?? {};
     const theme = VERTICAL_THEME[service.vertical] ?? VERTICAL_THEME.alojamiento;
     const rating = ratingsByProveedor[service.proveedor_id];
     const avg =
@@ -448,7 +448,7 @@ function CompararContent() {
                 }}
               />
               {services.map((service) => {
-                const profile = service.profiles ?? {};
+                const profile = service.profiles_public ?? {};
                 const theme = VERTICAL_THEME[service.vertical] ?? VERTICAL_THEME.alojamiento;
                 const rating = ratingsByProveedor[service.proveedor_id];
                 const avg =

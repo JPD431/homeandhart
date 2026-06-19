@@ -174,7 +174,7 @@ export async function generateMetadata({ params }) {
 }
 
 function ProviderCard({ service, theme, rating }) {
-  const profile = service.profiles ?? {};
+  const profile = service.profiles_public ?? {};
   const nombre = formatShortName(profile.nombre, profile.apellido) || "Proveedor";
   const zone = service.location_zone || service.ciudad || profile.ciudad || "";
   const foto = service.foto_url || profile.foto_perfil || profile.avatar_url;
@@ -284,7 +284,7 @@ async function fetchLandingData(ciudadCapital, verticalDB) {
       ciudad,
       location_zone,
       proveedor_id,
-      profiles!inner (
+      profiles_public!inner (
         nombre,
         apellido,
         verificado,
@@ -295,7 +295,7 @@ async function fetchLandingData(ciudadCapital, verticalDB) {
     )
     .eq("vertical", verticalDB)
     .eq("disponible", true)
-    .eq("profiles.verificado", true)
+    .eq("profiles_public.verificado", true)
     .or(`ciudad.ilike.%${ciudadCapital}%,location_zone.ilike.%${ciudadCapital}%`)
     .limit(6);
 
@@ -328,10 +328,10 @@ async function fetchLandingData(ciudadCapital, verticalDB) {
 
   const { count: totalProveedores } = await supabase
     .from("services")
-    .select("id, profiles!inner(verificado)", { count: "exact", head: true })
+    .select("id, profiles_public!inner(verificado)", { count: "exact", head: true })
     .eq("vertical", verticalDB)
     .eq("disponible", true)
-    .eq("profiles.verificado", true)
+    .eq("profiles_public.verificado", true)
     .or(`ciudad.ilike.%${ciudadCapital}%,location_zone.ilike.%${ciudadCapital}%`);
 
   return {
