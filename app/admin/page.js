@@ -513,43 +513,16 @@ export default function AdminPage() {
     setActionLoading(providerId);
     setErrorMessage("");
 
-    const proveedor = providers.find((p) => p.id === providerId);
-
-    const { error } = await supabase
-      .from("profiles")
-      .update({ verificado: true, rechazado: false })
-      .eq("id", providerId);
-
-    if (error) {
-      setErrorMessage('Error al aprobar: ' + error.message);
-      setActionLoading(null);
-      return;
-    }
-
-    const { error: servicesError } = await supabase
-      .from("services")
-      .update({ disponible: true })
-      .eq("proveedor_id", providerId);
-
-    if (servicesError) {
-      console.error(
-        "[handleApprove] No se pudieron activar los servicios del proveedor:",
-        servicesError,
-      );
-    }
+    const response = await fetch(`/api/admin/providers/${providerId}/approve`, {
+      method: "POST",
+    });
+    const result = await response.json().catch(() => ({}));
 
     setActionLoading(null);
 
-    if (proveedor) {
-      await fetch("/api/emails", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tipo: "proveedor_verificado",
-          user_id: providerId,
-          nombre: proveedor.nombre,
-        }),
-      });
+    if (!response.ok) {
+      setErrorMessage(`Error al aprobar: ${result.error || "Error desconocido"}`);
+      return;
     }
 
     setRejectingId(null);
@@ -562,18 +535,15 @@ export default function AdminPage() {
     setErrorMessage("");
     setSuccessMessage("");
 
-    const entry = lateCancellations.find((p) => p.proveedorId === proveedorId);
-    const nuevaPenalizacion = (entry?.penalizacion ?? 0) + 0.5;
-
-    const { error } = await supabase
-      .from("profiles")
-      .update({ penalizacion_valoracion: nuevaPenalizacion })
-      .eq("id", proveedorId);
+    const response = await fetch(`/api/admin/providers/${proveedorId}/penalizar`, {
+      method: "POST",
+    });
+    const result = await response.json().catch(() => ({}));
 
     setActionLoading(null);
 
-    if (error) {
-      setErrorMessage(error.message);
+    if (!response.ok) {
+      setErrorMessage(result.error || "Error al aplicar la penalización.");
       return;
     }
 
@@ -615,32 +585,18 @@ export default function AdminPage() {
     setActionLoading(providerId);
     setErrorMessage("");
 
-    const { error } = await supabase
-      .from("profiles")
-      .update({
-        verificado: false,
-        rechazado: true,
-        motivo_rechazo: rejectReason.trim(),
-      })
-      .eq("id", providerId);
+    const response = await fetch(`/api/admin/providers/${providerId}/reject`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ motivo: rejectReason.trim() }),
+    });
+    const result = await response.json().catch(() => ({}));
 
     setActionLoading(null);
 
-    if (error) {
-      setErrorMessage(error.message);
+    if (!response.ok) {
+      setErrorMessage(result.error || "Error al rechazar el proveedor.");
       return;
-    }
-
-    const { error: servicesError } = await supabase
-      .from("services")
-      .update({ disponible: false })
-      .eq("proveedor_id", providerId);
-
-    if (servicesError) {
-      console.error(
-        "[handleReject] No se pudieron desactivar los servicios del proveedor:",
-        servicesError,
-      );
     }
 
     setRejectingId(null);
