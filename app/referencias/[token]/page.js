@@ -5,7 +5,6 @@ import { useEffect, useState } from "react";
 import Navbar from "@/app/components/Navbar";
 import { BRAND, SERIF } from "@/app/components/brand";
 import { CONOCE_DESDE_OPTIONS } from "@/app/lib/referencias";
-import { supabase } from "@/app/lib/supabase";
 
 const inputClass =
   "w-full rounded-xl border px-4 py-3 text-sm text-[#1a1a1a] outline-none focus:ring-2 focus:ring-[#1d4f91]/30";
@@ -26,41 +25,28 @@ export default function ReferenciaPublicPage() {
 
   useEffect(() => {
     async function load() {
-      const { data, error: fetchError } = await supabase
-        .from("referencias")
-        .select(
-          `
-          id,
-          nombre_referente,
-          estado,
-          proveedor_id,
-          profiles_public:proveedor_id (nombre, apellido)
-        `,
-        )
-        .eq("token", token)
-        .maybeSingle();
+      const res = await fetch(
+        `/api/referencias/responder?token=${encodeURIComponent(token)}`,
+      );
+      const data = await res.json().catch(() => ({}));
 
-      if (fetchError || !data) {
-        setError("Enlace de referencia no válido o expirado.");
-        setLoading(false);
-        return;
-      }
-
-      if (data.estado === "completada") {
-        setSuccess(true);
-        const p = data.profiles_public;
-        setProveedorNombre(
-          [p?.nombre, p?.apellido].filter(Boolean).join(" ") || "el proveedor",
+      if (!res.ok || !data.nombre_referente) {
+        setError(
+          data.error || "Enlace de referencia no válido o expirado.",
         );
         setLoading(false);
         return;
       }
 
-      setReferencia(data);
-      const p = data.profiles_public;
-      setProveedorNombre(
-        [p?.nombre, p?.apellido].filter(Boolean).join(" ") || "el proveedor",
-      );
+      setProveedorNombre(data.proveedor_nombre || "el proveedor");
+
+      if (data.estado === "completada") {
+        setSuccess(true);
+        setLoading(false);
+        return;
+      }
+
+      setReferencia({ nombre_referente: data.nombre_referente });
       setLoading(false);
     }
 
@@ -81,21 +67,27 @@ export default function ReferenciaPublicPage() {
     setSubmitting(true);
     setError("");
 
-    const { error: updateError } = await supabase
-      .from("referencias")
-      .update({
+    const res = await fetch("/api/referencias/responder", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        token,
         conoce_desde: conoceDesde,
         recomendaria,
-        comentario: comentario.trim() || null,
-        estado: "completada",
-      })
-      .eq("token", token)
-      .eq("estado", "pendiente");
+        comentario,
+      }),
+    });
 
+    const data = await res.json().catch(() => ({}));
     setSubmitting(false);
 
-    if (updateError) {
-      setError(updateError.message);
+    if (res.status === 409) {
+      setSuccess(true);
+      return;
+    }
+
+    if (!res.ok || !data.ok) {
+      setError(data.error || "No se pudo enviar el aval.");
       return;
     }
 
