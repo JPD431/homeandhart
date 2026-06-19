@@ -54,24 +54,25 @@ export async function getUserFamiliaActiva(supabase, userId) {
 export async function getFamiliaMiembros(supabase, familiaId) {
   const { data } = await supabase
     .from("familia_miembros")
-    .select(
-      `
-      id,
-      rol,
-      estado,
-      email_invitado,
-      perfil_id,
-      profiles_public:perfil_id (
-        nombre,
-        apellido,
-        foto_perfil
-      )
-    `,
-    )
+    .select("id, rol, estado, email_invitado, perfil_id")
     .eq("familia_id", familiaId)
     .order("created_at", { ascending: true });
 
-  return data ?? [];
+  const lista = data ?? [];
+  const ids = lista.map((m) => m.perfil_id).filter(Boolean);
+  let perfilesPorId = {};
+  if (ids.length > 0) {
+    const { data: perfiles } = await supabase
+      .from("profiles_public")
+      .select("id, nombre, apellido, foto_perfil")
+      .in("id", ids);
+    perfilesPorId = Object.fromEntries((perfiles ?? []).map((p) => [p.id, p]));
+  }
+
+  return lista.map((m) => ({
+    ...m,
+    profiles_public: m.perfil_id ? perfilesPorId[m.perfil_id] || null : null,
+  }));
 }
 
 export async function countFamiliaReservas(supabase, familiaId) {
