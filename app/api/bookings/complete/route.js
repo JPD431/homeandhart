@@ -33,7 +33,11 @@ const SERVICE_SELECT = `
   reserva_inmediata,
   proveedor_id,
   titulo,
+  direccion_exacta,
+  telefono_contacto,
+  modalidad,
   profiles_public (
+    nombre,
     verificado
   )
 `;
@@ -53,6 +57,35 @@ function getPrecioEspecialOverride(precioEspecial, validaHasta) {
 
 function roundMoney(amount) {
   return Math.round(amount * 100) / 100;
+}
+
+async function sendBookingEmail(payload) {
+  const baseUrl = process.env.NEXT_PUBLIC_URL;
+  if (!baseUrl) {
+    console.error(
+      "[bookings/complete] NEXT_PUBLIC_URL no configurada, email omitido:",
+      payload.tipo,
+    );
+    return;
+  }
+
+  try {
+    const res = await fetch(`${baseUrl}/api/emails`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      console.error(
+        "[bookings/complete] Error enviando email:",
+        payload.tipo,
+        data.error || res.status,
+      );
+    }
+  } catch (err) {
+    console.error("[bookings/complete] Error enviando email:", payload.tipo, err);
+  }
 }
 
 function buildBookingRow({
@@ -192,7 +225,7 @@ export async function POST(request) {
 
     const { data: perfilCliente, error: perfilError } = await supabaseAdmin
       .from("profiles")
-      .select("reservas_sin_comision, credito_disponible")
+      .select("reservas_sin_comision, credito_disponible, nombre")
       .eq("id", userId)
       .maybeSingle();
 
@@ -391,6 +424,105 @@ export async function POST(request) {
         },
       );
     }
+
+    if (clienteSinComision) {
+      try {
+        const actual = Number(perfilCliente?.reservas_sin_comision) || 0;
+        const { error: sinComisionError } = await supabaseAdmin
+          .from("profiles")
+          .update({ reservas_sin_comision: Math.max(0, actual - 1) })
+          .eq("id", userId);
+        if (sinComisionError) {
+          console.error(
+            "[bookings/complete] No se pudo restar reservas_sin_comision:",
+            sinComisionError,
+          );
+        }
+      } catch (err) {
+        console.error(
+          "[bookings/complete] No se pudo restar reservas_sin_comision:",
+          err,
+        );
+      }
+    }
+
+    if (creditoAplicado > 0) {
+      try {
+        const { error: creditError } = await supabaseAdmin
+          .from("profiles")
+          .update({
+            credito_disponible: Math.max(0, creditoDisponible - creditoAplicado),
+          })
+          .eq("id", userId);
+        if (creditError) {
+          console.error(
+            "[bookings/complete] No se pudo restar credito_disponible:",
+            creditError,
+          );
+        }
+      } catch (err) {
+        console.error(
+          "[bookings/complete] No se pudo restar credito_disponible:",
+          err,
+        );
+      }
+    }
+
+    const mainBooking =
+      insertedBookings.find((b) => b.service_id === main_service_id) ||
+      insertedBookings[0];
+    const clienteNombre = perfilCliente?.nombre || "Cliente";
+    const proveedorNombreMain =
+      mainService.profiles_public?.nombre || "Proveedor";
+    const finEmail = fecha_fin || fecha_inicio;
+
+    await sendBookingEmail({
+      tipo: "reserva_nueva",
+      proveedor_id: mainService.proveedor_id,
+      proveedor_nombre: proveedorNombreMain,
+      cliente_nombre: clienteNombre,
+      servicio_titulo: mainService.titulo,
+      fecha_inicio: fecha_inicio,
+      fecha_fin: finEmail,
+      precio_total: totalGrupo.toFixed(2),
+      booking_id: mainBooking?.id,
+    });
+
+    const emailServicios = service_ids.map((serviceId) => {
+      const svc = serviceMap.get(serviceId);
+      return {
+        titulo: svc.titulo,
+        proveedor_id: svc.proveedor_id,
+        proveedor_nombre: svc.profiles_public?.nombre || "Proveedor",
+        precio: precioPorServicioMap.get(serviceId).toFixed(2),
+        direccion_exacta: svc.direccion_exacta,
+        telefono_proveedor: svc.telefono_contacto,
+        modalidad: svc.modalidad,
+      };
+    });
+
+    const todasInmediatas = service_ids.every(
+      (id) => serviceMap.get(id)?.reserva_inmediata === true,
+    );
+
+    await sendBookingEmail({
+      tipo: todasInmediatas ? "reserva_confirmada" : "reserva_solicitud",
+      cliente_id: userId,
+      cliente_nombre: clienteNombre,
+      proveedor_id: mainService.proveedor_id,
+      proveedor_nombre: proveedorNombreMain,
+      servicio_titulo: mainService.titulo,
+      fecha_inicio: fecha_inicio,
+      fecha_fin: finEmail,
+      precio_total: totalGrupo.toFixed(2),
+      subtotal: subtotalGrupo.toFixed(2),
+      comision: comision.toFixed(2),
+      mensaje: mensaje?.trim() || "",
+      direccion_exacta: mainService.direccion_exacta,
+      telefono_proveedor: mainService.telefono_contacto,
+      modalidad: mainService.modalidad,
+      servicios: emailServicios,
+    });
 
     return NextResponse.json({
       ok: true,

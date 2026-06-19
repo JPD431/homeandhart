@@ -839,6 +839,17 @@ async function sendReservaConfirmadaEmails(data) {
 }
 
 async function sendReservaSolicitudEmail(data) {
+  const payload = { ...data };
+
+  if (payload.cliente_id && !payload.cliente_email) {
+    payload.cliente_email = await resolverEmailUsuario(payload.cliente_id);
+  }
+
+  if (!payload.cliente_nombre && payload.cliente_id) {
+    payload.cliente_nombre =
+      (await resolverNombreUsuario(payload.cliente_id)) || "Cliente";
+  }
+
   const required = [
     "cliente_email",
     "cliente_nombre",
@@ -847,17 +858,17 @@ async function sendReservaSolicitudEmail(data) {
   ];
 
   for (const field of required) {
-    if (!data[field]) {
+    if (!payload[field]) {
       return { error: `Falta el campo requerido: ${field}` };
     }
   }
 
-  const isBundle = Array.isArray(data.servicios) && data.servicios.length > 0;
+  const isBundle = Array.isArray(payload.servicios) && payload.servicios.length > 0;
 
   if (!isBundle) {
     const legacyRequired = ["proveedor_nombre", "servicio_titulo"];
     for (const field of legacyRequired) {
-      if (!data[field]) {
+      if (!payload[field]) {
         return { error: `Falta el campo requerido: ${field}` };
       }
     }
@@ -865,9 +876,9 @@ async function sendReservaSolicitudEmail(data) {
 
   const result = await resend.emails.send({
     from: FROM,
-    to: data.cliente_email,
+    to: payload.cliente_email,
     subject: "Hemos recibido tu solicitud — Home&Heart",
-    html: reservaSolicitudEmailHtml(data),
+    html: reservaSolicitudEmailHtml(payload),
   });
 
   if (result.error) {
