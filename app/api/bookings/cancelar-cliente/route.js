@@ -6,7 +6,6 @@ import {
   getRefundPercent,
   getServiceStartDateTime,
 } from "@/app/lib/cancelacion-politica";
-import { isCancelacionTardia } from "@/app/lib/is-cancelacion-tardia";
 
 const supabaseAdmin = createServiceClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -234,108 +233,6 @@ async function calcularYAplicarReembolso(booking, service) {
   };
 }
 
-async function resolveClienteContact(clienteId) {
-  const { data: authData } =
-    await supabaseAdmin.auth.admin.getUserById(clienteId);
-
-  let clienteEmail = authData?.user?.email ?? null;
-
-  const { data: clienteProfile } = await supabaseAdmin
-    .from("profiles")
-    .select("nombre, apellido, email_contacto")
-    .eq("id", clienteId)
-    .maybeSingle();
-
-  if (!clienteEmail && clienteProfile?.email_contacto) {
-    clienteEmail = clienteProfile.email_contacto;
-  }
-
-  const clienteNombre =
-    [clienteProfile?.nombre, clienteProfile?.apellido]
-      .filter(Boolean)
-      .join(" ")
-      .trim() || "Cliente";
-
-  return { clienteEmail, clienteNombre };
-}
-
-async function buscarAlternativasGarantia(booking, service) {
-  const baseUrl = process.env.NEXT_PUBLIC_URL || "https://homeandheart.es";
-
-  try {
-    const garantiaRes = await fetch(`${baseUrl}/api/garantia`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        service_id: booking.service_id,
-        fecha_inicio: booking.fecha_inicio,
-        fecha_fin: booking.fecha_fin || booking.fecha_inicio,
-        vertical: service?.vertical,
-        ciudad: service?.ciudad,
-      }),
-    });
-
-    const garantiaData = await garantiaRes.json().catch(() => ({}));
-    if (!garantiaRes.ok) {
-      console.error(
-        "[bookings/cancelar-cliente] Error al buscar alternativas:",
-        garantiaData.error || garantiaRes.status,
-        { bookingId: booking.id },
-      );
-      return [];
-    }
-
-    return garantiaData.alternativas ?? [];
-  } catch (err) {
-    console.error(
-      "[bookings/cancelar-cliente] Error al buscar alternativas:",
-      err,
-      { bookingId: booking.id },
-    );
-    return [];
-  }
-}
-
-async function enviarEmailCancelacionGarantia(
-  booking,
-  alternativas,
-  clienteEmail,
-  clienteNombre,
-) {
-  if (alternativas.length === 0 || !clienteEmail) return;
-
-  const baseUrl = process.env.NEXT_PUBLIC_URL || "https://homeandheart.es";
-
-  try {
-    const emailRes = await fetch(`${baseUrl}/api/emails`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        tipo: "cancelacion_garantia",
-        cliente_email: clienteEmail,
-        cliente_nombre: clienteNombre,
-        precio_original: booking.precio_total,
-        alternativas,
-      }),
-    });
-
-    if (!emailRes.ok) {
-      const emailData = await emailRes.json().catch(() => ({}));
-      console.error(
-        "[bookings/cancelar-cliente] Error al enviar email de garantía:",
-        emailData.error || emailRes.status,
-        { bookingId: booking.id },
-      );
-    }
-  } catch (err) {
-    console.error(
-      "[bookings/cancelar-cliente] Error al enviar email de garantía:",
-      err,
-      { bookingId: booking.id },
-    );
-  }
-}
-
 async function liberarFechasReserva(bookingId) {
   try {
     const { error } = await supabaseAdmin
@@ -428,53 +325,19 @@ export async function POST(request) {
     );
   }
 
-  const tardia = isCancelacionTardia(booking.fecha_inicio);
   const service = booking.services;
   const canceladoAt = new Date().toISOString();
-  let alternativas = [];
-  let estadoFinal;
 
-  if (!tardia) {
-    const { error: updateError } = await supabaseAdmin
-      .from("bookings")
-      .update({
-        estado: "cancelada",
-        cancelado_at: canceladoAt,
-      })
-      .eq("id", bookingId);
+  const { error: updateError } = await supabaseAdmin
+    .from("bookings")
+    .update({
+      estado: "cancelada",
+      cancelado_at: canceladoAt,
+    })
+    .eq("id", bookingId);
 
-    if (updateError) {
-      return NextResponse.json({ error: updateError.message }, { status: 500 });
-    }
-
-    estadoFinal = "cancelada";
-  } else {
-    alternativas = await buscarAlternativasGarantia(booking, service);
-
-    const { error: updateError } = await supabaseAdmin
-      .from("bookings")
-      .update({
-        estado: "cancelada_garantia",
-        estado_garantia: "activada",
-        cancelado_at: canceladoAt,
-      })
-      .eq("id", bookingId);
-
-    if (updateError) {
-      return NextResponse.json({ error: updateError.message }, { status: 500 });
-    }
-
-    estadoFinal = "cancelada_garantia";
-
-    const { clienteEmail, clienteNombre } = await resolveClienteContact(
-      booking.cliente_id,
-    );
-    await enviarEmailCancelacionGarantia(
-      booking,
-      alternativas,
-      clienteEmail,
-      clienteNombre,
-    );
+  if (updateError) {
+    return NextResponse.json({ error: updateError.message }, { status: 500 });
   }
 
   await liberarFechasReserva(bookingId);
@@ -483,9 +346,7 @@ export async function POST(request) {
 
   return NextResponse.json({
     ok: true,
-    estado: estadoFinal,
-    garantia: tardia,
-    alternativas,
+    estado: "cancelada",
     reembolso,
   });
 }

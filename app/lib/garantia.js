@@ -22,7 +22,7 @@ export async function procesarCancelacionTardia({ bookingId }) {
 
   return {
     ok: true,
-    garantia: data.garantia,
-    alternativas: data.alternativas ?? [],
+    estado: data.estado,
+    reembolso: data.reembolso,
   };
 }
