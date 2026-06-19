@@ -354,32 +354,6 @@ function isServiceBookable(service) {
 const SERVICE_UNAVAILABLE_MSG =
   "Este servicio no está disponible en este momento";
 
-async function validateServicesBookable(services) {
-  if (!services?.length) return;
-
-  const ids = services.map((s) => s.id);
-  const { data, error } = await supabase
-    .from("services")
-    .select(
-      `
-      id,
-      disponible,
-      profiles_public (
-        verificado
-      )
-    `,
-    )
-    .in("id", ids);
-
-  if (error || !data || data.length !== ids.length) {
-    throw new Error(SERVICE_UNAVAILABLE_MSG);
-  }
-
-  if (!data.every(isServiceBookable)) {
-    throw new Error(SERVICE_UNAVAILABLE_MSG);
-  }
-}
-
 function FechaInicioConDias({
   id,
   value,
@@ -676,41 +650,6 @@ function getCardBrandLabel(brand) {
     amex: "American Express",
   };
   return labels[brand] ?? (brand ? brand.charAt(0).toUpperCase() + brand.slice(1) : "Tarjeta");
-}
-
-// -- ALTER TABLE bookings ADD COLUMN IF NOT EXISTS familia_id uuid REFERENCES familias(id);
-
-function buildBookingPayload({
-  svc,
-  userId,
-  fechaInicio,
-  fechaFin,
-  hora,
-  duracionHoras,
-  mensaje,
-  precioTotal,
-  grupoReserva,
-  paymentIntentId,
-  familiaId = null,
-}) {
-  const v = svc.vertical;
-  const isImmediate = svc.reserva_inmediata === true;
-
-  return {
-    cliente_id: userId,
-    service_id: svc.id,
-    fecha_inicio: fechaInicio || null,
-    fecha_fin: v === "alojamiento" || v === "mascotas" ? fechaFin || fechaInicio || null : null,
-    hora: v === "ninos" ? hora || null : null,
-    duracion_horas: v === "ninos" ? Number(duracionHoras) || null : null,
-    mensaje: mensaje.trim() || null,
-    precio_total: precioTotal,
-    estado: isImmediate ? "confirmada" : "pendiente",
-    grupo_reserva: grupoReserva,
-    // -- ALTER TABLE bookings ADD COLUMN IF NOT EXISTS payment_intent_id text;
-    payment_intent_id: paymentIntentId,
-    familia_id: familiaId,
-  };
 }
 
 function SavedCardCheckout({
@@ -1843,161 +1782,31 @@ export default function ReservarPage() {
         throw new Error("Completa las fechas o la duración para calcular el precio.");
       }
 
-      await validateServicesBookable(selectedServices);
-
-      const dateContext = {
-        fechaInicio,
-        fechaFin,
-        duracionHoras,
-        mainVertical: vertical,
-      };
-
-      const bookingRows = selectedServices.map((svc) => {
-        const calc = calculateServiceBasePrice(svc, dateContext);
-        return buildBookingPayload({
-          svc,
-          userId,
-          fechaInicio,
-          fechaFin,
+      const res = await fetch("/api/bookings/complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          payment_intent_id: confirmedPaymentIntentId,
+          grupo_reserva: grupoReserva,
+          main_service_id: service.id,
+          service_ids: selectedServices.map((s) => s.id),
+          fecha_inicio: fechaInicio,
+          fecha_fin: fechaFin || fechaInicio,
           hora,
-          duracionHoras,
+          duracion_horas: duracionHoras,
           mensaje,
-          precioTotal: applyClientPrice(calc.base),
-          grupoReserva,
-          paymentIntentId: confirmedPaymentIntentId,
-          familiaId:
+          familia_id:
             reservarComoFamilia && familiaInfo?.id ? familiaInfo.id : null,
-        });
-      });
-
-      const fin = fechaFin || fechaInicio;
-      const disponibilidadChecks = await Promise.all(
-        selectedServices.map((svc) =>
-          verificarDisponibilidad(svc.id, fechaInicio, fin),
-        ),
-      );
-      if (!disponibilidadChecks.every(Boolean)) {
-        throw new Error(
-          "Este proveedor ya tiene una reserva en esas fechas. Por favor elige otras fechas.",
-        );
-      }
-
-      const { data: insertedBookings, error } = await supabase
-        .from("bookings")
-        .insert(bookingRows)
-        .select("id, service_id");
-
-      if (error) {
-        throw new Error(error.message);
-      }
-
-      if (clienteSinComision) {
-        await supabase
-          .from("profiles")
-          .update({
-            reservas_sin_comision: Math.max(
-              0,
-              (perfilCliente.reservas_sin_comision || 0) - 1,
-            ),
-          })
-          .eq("id", userId);
-      }
-
-      if (creditoAplicado > 0) {
-        try {
-          const { error: creditError } = await supabase
-            .from("profiles")
-            .update({
-              credito_disponible: Math.max(
-                0,
-                (Number(perfilCliente?.credito_disponible) || 0) - creditoAplicado,
-              ),
-            })
-            .eq("id", userId);
-          if (creditError) {
-            console.error(
-              "[completeBooking] No se pudo restar credito_disponible:",
-              creditError,
-            );
-          }
-        } catch (creditErr) {
-          console.error(
-            "[completeBooking] No se pudo restar credito_disponible:",
-            creditErr,
-          );
-        }
-      }
-
-      if (insertedBookings?.length) {
-        await supabase.from("disponibilidad").insert(
-          insertedBookings.map((booking) => ({
-            service_id: booking.service_id,
-            fecha_inicio: fechaInicio,
-            fecha_fin: fin,
-            booking_id: booking.id,
-          })),
-        );
-      }
-
-      const mainBooking =
-        insertedBookings?.find((b) => b.service_id === service.id) ||
-        insertedBookings?.[0];
-
-      await fetch("/api/emails", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tipo: "reserva_nueva",
-          proveedor_id: service.proveedor_id,
-          proveedor_nombre: service.profiles_public?.nombre || "Proveedor",
-          cliente_nombre: perfilCliente?.nombre || "Un cliente",
-          servicio_titulo: service.titulo,
-          fecha_inicio: fechaInicio,
-          fecha_fin: fechaFin || fechaInicio,
-          precio_total: priceSummary.total.toFixed(2),
-          booking_id: mainBooking?.id,
+          precio_especial: precioEspecialChat,
+          valida_hasta: validaHastaParam || null,
         }),
       });
 
-      const emailServicios = selectedServices.map((svc) => {
-        const calc = calculateServiceBasePrice(svc, dateContext);
-        return {
-          titulo: svc.titulo || VERTICALS[svc.vertical]?.label,
-          proveedor_id: svc.proveedor_id,
-          proveedor_nombre: svc.profiles_public?.nombre || "Proveedor",
-          precio: applyClientPrice(calc.base).toFixed(2),
-          direccion_exacta: svc.direccion_exacta,
-          telefono_proveedor: svc.telefono_contacto,
-          modalidad: svc.modalidad,
-        };
-      });
+      const data = await res.json().catch(() => ({}));
 
-      const todasInmediatas = selectedServices.every(
-        (s) => s.reserva_inmediata === true,
-      );
-
-      await fetch("/api/emails", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tipo: todasInmediatas ? "reserva_confirmada" : "reserva_solicitud",
-          cliente_email: userEmail,
-          cliente_nombre: perfilCliente?.nombre || "Cliente",
-          proveedor_id: service.proveedor_id,
-          proveedor_nombre: service.profiles_public?.nombre || "Proveedor",
-          servicio_titulo: service.titulo,
-          fecha_inicio: fechaInicio,
-          fecha_fin: fechaFin || fechaInicio,
-          precio_total: priceSummary.total.toFixed(2),
-          subtotal: priceSummary.subtotal.toFixed(2),
-          comision: priceSummary.commission.toFixed(2),
-          mensaje: mensaje || "",
-          direccion_exacta: service.direccion_exacta,
-          telefono_proveedor: service.telefono_contacto,
-          modalidad: service.modalidad,
-          servicios: emailServicios,
-        }),
-      });
+      if (!res.ok || data.error) {
+        throw new Error(data.error || "No se pudo completar la reserva.");
+      }
 
       router.push("/dashboard");
     },
@@ -2005,22 +1814,19 @@ export default function ReservarPage() {
       userId,
       service,
       grupoReserva,
-      priceSummary,
+      priceSummary.total,
       selectedServices,
       fechaInicio,
       fechaFin,
       hora,
       duracionHoras,
       mensaje,
-      vertical,
-      userEmail,
-      perfilCliente,
       router,
       reservarComoFamilia,
       familiaInfo,
       precioListo,
-      clienteSinComision,
-      creditoAplicado,
+      precioEspecialChat,
+      validaHastaParam,
     ],
   );
 
