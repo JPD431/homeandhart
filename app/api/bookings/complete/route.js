@@ -8,6 +8,7 @@ import {
   calculateServiceBasePrice,
   COMMISSION_RATE,
 } from "@/app/lib/pricing-reserva";
+import { cargarTarifasPorServicios } from "@/app/lib/tarifas";
 
 const MAX_CREDITO_PORCENTAJE = 0.6;
 
@@ -317,6 +318,21 @@ export async function POST(request) {
     const clienteSinComision =
       (Number(perfilCliente?.reservas_sin_comision) || 0) > 0;
 
+    let tarifasPorServicio;
+    try {
+      tarifasPorServicio = await cargarTarifasPorServicios(
+        supabaseAdmin,
+        service_ids,
+        fecha_inicio,
+        fecha_fin,
+      );
+    } catch (tarifasError) {
+      return NextResponse.json(
+        { error: tarifasError.message || "Error al cargar tarifas" },
+        { status: 500 },
+      );
+    }
+
     const preciosPorServicio = [];
     let subtotalGrupo = 0;
 
@@ -325,7 +341,12 @@ export async function POST(request) {
       const unitOverride =
         serviceId === main_service_id ? precioEspecialOverride : null;
 
-      const calc = calculateServiceBasePrice(svc, dateContext, unitOverride);
+      const calc = calculateServiceBasePrice(
+        svc,
+        dateContext,
+        unitOverride,
+        tarifasPorServicio[serviceId] ?? {},
+      );
 
       if (!calc.ready) {
         return NextResponse.json(

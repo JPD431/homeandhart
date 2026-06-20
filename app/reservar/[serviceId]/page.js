@@ -27,6 +27,7 @@ import {
   normalizeCancelPolicy,
 } from "@/app/lib/cancelacion-politica";
 import { supabase } from "@/app/lib/supabase";
+import { cargarTarifasPorServicios } from "@/app/lib/tarifas";
 
 const stripePromise = loadStripe(
   process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
@@ -947,6 +948,8 @@ export default function ReservarPage() {
   const [reservarComoFamilia, setReservarComoFamilia] = useState(false);
   const [paymentMethodsLoading, setPaymentMethodsLoading] = useState(false);
   const [disponibilidadChecking, setDisponibilidadChecking] = useState(false);
+  const [tarifasPorServicio, setTarifasPorServicio] = useState({});
+  const [tarifasLoading, setTarifasLoading] = useState(false);
   const [calendarioError, setCalendarioError] = useState("");
   const [fechasOcupadas, setFechasOcupadas] = useState([]);
   const [calendarOpen, setCalendarOpen] = useState(false);
@@ -1332,6 +1335,38 @@ export default function ReservarPage() {
   }, [fechaInicio, fechaFin, service, selectedServices]);
 
   useEffect(() => {
+    if (!fechaInicio || selectedServices.length === 0) {
+      setTarifasPorServicio({});
+      setTarifasLoading(false);
+      return;
+    }
+
+    const fin = fechaFin || fechaInicio;
+    let cancelled = false;
+    setTarifasLoading(true);
+
+    (async () => {
+      try {
+        const map = await cargarTarifasPorServicios(
+          supabase,
+          selectedServices.map((s) => s.id),
+          fechaInicio,
+          fin,
+        );
+        if (!cancelled) setTarifasPorServicio(map);
+      } catch {
+        if (!cancelled) setTarifasPorServicio({});
+      } finally {
+        if (!cancelled) setTarifasLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [fechaInicio, fechaFin, selectedServices]);
+
+  useEffect(() => {
     async function cargarOcupadas() {
       const { data } = await supabase
         .from("disponibilidad")
@@ -1360,7 +1395,12 @@ export default function ReservarPage() {
     const lines = selectedServices.map((svc) => {
       const unitOverride =
         svc.id === service.id ? precioEspecialChat : null;
-      const calc = calculateServiceBasePrice(svc, dateContext, unitOverride);
+      const calc = calculateServiceBasePrice(
+        svc,
+        dateContext,
+        unitOverride,
+        tarifasPorServicio[svc.id] ?? {},
+      );
       let ready = calc.ready;
       let detail = calc.detail;
 
@@ -1443,12 +1483,16 @@ export default function ReservarPage() {
     duracionHoras,
     precioEspecialChat,
     perfilCliente,
+    tarifasPorServicio,
   ]);
 
   const clienteSinComision = (perfilCliente?.reservas_sin_comision || 0) > 0;
 
   const precioListo =
-    priceSummary.ready && !calendarioError && !disponibilidadChecking;
+    priceSummary.ready &&
+    !calendarioError &&
+    !disponibilidadChecking &&
+    !tarifasLoading;
 
   const { creditoAplicado, totalAPagar } = useMemo(() => {
     if (!precioListo || priceSummary.total <= 0) {
@@ -1904,16 +1948,31 @@ export default function ReservarPage() {
   const unitBase =
     mainPriceLine?.base && durationCount
       ? mainPriceLine.base / durationCount
-      : Number(service.precio) || 0;
+      : (() => {
+          if (!fechaInicio || !service) return Number(service?.precio) || 0;
+          const calc = calculateServiceBasePrice(
+            service,
+            { fechaInicio, fechaFin, duracionHoras, mainVertical: vertical },
+            precioEspecialChat,
+            tarifasPorServicio[service.id] ?? {},
+          );
+          if (calc.ready && durationCount) return calc.base / durationCount;
+          return Number(service.precio) || 0;
+        })();
   const unitClientPrice = applyClientPrice(unitBase);
 
   function getCompAddPrice(comp) {
-    const calc = calculateServiceBasePrice(comp, {
-      fechaInicio,
-      fechaFin,
-      duracionHoras,
-      mainVertical: vertical,
-    });
+    const calc = calculateServiceBasePrice(
+      comp,
+      {
+        fechaInicio,
+        fechaFin,
+        duracionHoras,
+        mainVertical: vertical,
+      },
+      null,
+      tarifasPorServicio[comp.id] ?? {},
+    );
     if (calc.ready) return applyClientPrice(calc.base);
     if (comp.precio) return applyClientPrice(Number(comp.precio));
     return 0;
