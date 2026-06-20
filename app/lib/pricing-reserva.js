@@ -12,6 +12,55 @@ export function daysBetween(start, end) {
   return Math.max(1, Math.ceil(diff / (1000 * 60 * 60 * 24)));
 }
 
+function addDaysToDateStr(dateStr, offsetDays) {
+  const d = new Date(`${dateStr}T12:00:00`);
+  d.setDate(d.getDate() + offsetDays);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/** Fechas cobrables (YYYY-MM-DD), mismo conteo que daysBetween. */
+export function getNochesEstancia(fechaInicio, fechaFin, vertical) {
+  if (!fechaInicio) return [];
+  const end = fechaFin || fechaInicio;
+  const count = daysBetween(fechaInicio, end);
+  if (count === 0) return [];
+
+  const fechas = [];
+  for (let i = 0; i < count; i++) {
+    fechas.push(addDaysToDateStr(fechaInicio, i));
+  }
+  return fechas;
+}
+
+function hasTarifasPorFecha(tarifasPorFecha) {
+  return (
+    tarifasPorFecha != null &&
+    typeof tarifasPorFecha === "object" &&
+    Object.keys(tarifasPorFecha).length > 0
+  );
+}
+
+function precioParaFecha(fecha, unitPrice, tarifasPorFecha) {
+  if (Object.prototype.hasOwnProperty.call(tarifasPorFecha, fecha)) {
+    const tarifa = Number(tarifasPorFecha[fecha]);
+    if (Number.isFinite(tarifa) && tarifa > 0) return tarifa;
+  }
+  return unitPrice;
+}
+
+function subtotalPorEstancia(unitPrice, fechas, tarifasPorFecha) {
+  if (!hasTarifasPorFecha(tarifasPorFecha)) {
+    return unitPrice * fechas.length;
+  }
+  return fechas.reduce(
+    (sum, fecha) => sum + precioParaFecha(fecha, unitPrice, tarifasPorFecha),
+    0,
+  );
+}
+
 export function getEstanciaUnit(vertical, count) {
   const n = Number(count);
   if (vertical === "alojamiento") return n === 1 ? "noche" : "noches";
@@ -40,6 +89,7 @@ export function calculateServiceBasePrice(
   svc,
   { fechaInicio, fechaFin, duracionHoras, mainVertical },
   unitPriceOverride = null,
+  tarifasPorFecha = null,
 ) {
   const useOverride =
     unitPriceOverride != null && Number(unitPriceOverride) > 0;
@@ -113,7 +163,10 @@ export function calculateServiceBasePrice(
     };
   }
   const unit = v === "alojamiento" ? "noche" : "día";
-  const subtotal = unitPrice * days;
+  const fechasEstancia = getNochesEstancia(start, end, v);
+  const subtotal = useOverride
+    ? unitPrice * days
+    : subtotalPorEstancia(unitPrice, fechasEstancia, tarifasPorFecha);
   const duration = getServiceDuration(svc, dateContext);
   return finalizeBase(
     subtotal,
