@@ -692,7 +692,7 @@ function reservaConfirmadaProveedorEmailHtml(data) {
       <p style="margin:16px 0 0;font-size:14px;color:#444;line-height:1.6;text-align:center;">
         La reserva está <strong>confirmada</strong>. Aquí tienes los datos para coordinarte con el cliente.
       </p>
-      ${detailsBlock(data)}
+      ${proveedorDetailsBlock(data)}
       <p style="margin:20px 0 0;font-size:14px;color:#444;line-height:1.6;">
         Cliente: <strong>${data.cliente_nombre}</strong>
       </p>
