@@ -1,6 +1,7 @@
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { expandDisponibilidadAFechas } from "@/app/lib/tarifas";
 
 const supabaseAdmin = createServiceClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -122,7 +123,20 @@ export async function GET(request) {
     precio: Number(row.precio),
   }));
 
-  return NextResponse.json({ tarifas });
+  const { data: bloqueos, error: bloqueosError } = await supabaseAdmin
+    .from("disponibilidad")
+    .select("fecha_inicio, fecha_fin")
+    .eq("service_id", serviceId)
+    .lte("fecha_inicio", hasta)
+    .gte("fecha_fin", desde);
+
+  if (bloqueosError) {
+    return NextResponse.json({ error: bloqueosError.message }, { status: 500 });
+  }
+
+  const ocupadas = expandDisponibilidadAFechas(bloqueos, desde, hasta);
+
+  return NextResponse.json({ tarifas, ocupadas });
 }
 
 export async function POST(request) {

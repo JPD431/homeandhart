@@ -37,6 +37,7 @@ function MonthTarifasGrid({
   hoyStr,
   precioBase,
   tarifasMap,
+  ocupadasSet,
   selectedDays,
   onToggleDay,
 }) {
@@ -62,26 +63,32 @@ function MonthTarifasGrid({
           }
 
           const isPast = dateStr < hoyStr;
+          const isOcupado = ocupadasSet.has(dateStr);
           const isToday = dateStr === hoyStr;
           const isSelected = selectedDays.has(dateStr);
           const customPrecio = tarifasMap[dateStr];
           const hasCustom =
             customPrecio != null && Number(customPrecio) > 0;
           const displayPrecio = hasCustom ? customPrecio : precioBase;
-          const selectable = !isPast;
+          const selectable = !isPast && !isOcupado;
 
           let bg = "#fff";
           let borderColor = BRAND.border;
           let boxShadow;
+          let textDecoration = "none";
 
-          if (isPast) {
+          if (isOcupado) {
+            bg = "#fde8e8";
+            borderColor = "#f5c6c6";
+            textDecoration = "line-through";
+          } else if (isPast) {
             bg = "#f5f5f5";
           } else if (isSelected) {
             bg = RANGE_HIGHLIGHT;
             borderColor = PRIMARY;
           }
 
-          if (isToday && !isPast) {
+          if (isToday && selectable) {
             boxShadow = `inset 0 0 0 2px ${PRIMARY}`;
           }
 
@@ -96,25 +103,41 @@ function MonthTarifasGrid({
                 backgroundColor: bg,
                 borderColor,
                 boxShadow,
-                opacity: isPast ? 0.55 : 1,
+                opacity: isPast && !isOcupado ? 0.55 : 1,
               }}
-              aria-label={`${dateStr}, ${formatPrecio(displayPrecio)} euros`}
+              aria-label={
+                isOcupado
+                  ? `${dateStr}, reservado`
+                  : `${dateStr}, ${formatPrecio(displayPrecio)} euros`
+              }
               aria-pressed={isSelected}
             >
               <span
                 className="text-xs font-semibold leading-none"
-                style={{ color: isPast ? "#ccc" : "#1a1a1a" }}
+                style={{
+                  color: isOcupado ? "#c0392b" : isPast ? "#ccc" : "#1a1a1a",
+                  textDecoration,
+                }}
               >
                 {parseDateStr(dateStr).getDate()}
               </span>
-              <span
-                className="mt-0.5 text-[9px] font-medium leading-tight"
-                style={{
-                  color: hasCustom && !isPast ? PRIMARY : "#888",
-                }}
-              >
-                {formatPrecio(displayPrecio)}€
-              </span>
+              {isOcupado ? (
+                <span
+                  className="mt-0.5 text-[8px] font-semibold uppercase leading-tight tracking-wide"
+                  style={{ color: "#c0392b" }}
+                >
+                  Reservado
+                </span>
+              ) : (
+                <span
+                  className="mt-0.5 text-[9px] font-medium leading-tight"
+                  style={{
+                    color: hasCustom && !isPast ? PRIMARY : "#888",
+                  }}
+                >
+                  {formatPrecio(displayPrecio)}€
+                </span>
+              )}
             </button>
           );
         })}
@@ -135,6 +158,7 @@ export default function CalendarioTarifas({ serviceId, precioBase, unidad }) {
     () => new Date(hoy.getFullYear(), hoy.getMonth(), 1),
   );
   const [tarifasMap, setTarifasMap] = useState({});
+  const [ocupadasSet, setOcupadasSet] = useState(() => new Set());
   const [selectedDays, setSelectedDays] = useState(() => new Set());
   const [precioInput, setPrecioInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -150,6 +174,7 @@ export default function CalendarioTarifas({ serviceId, precioBase, unidad }) {
   const loadTarifas = useCallback(async () => {
     if (!serviceId) {
       setTarifasMap({});
+      setOcupadasSet(new Set());
       return;
     }
 
@@ -177,9 +202,11 @@ export default function CalendarioTarifas({ serviceId, precioBase, unidad }) {
         if (fecha) map[fecha] = Number(row.precio);
       }
       setTarifasMap(map);
+      setOcupadasSet(new Set(data.ocupadas ?? []));
     } catch (err) {
       setErrorMessage(err.message || "Error al cargar las tarifas");
       setTarifasMap({});
+      setOcupadasSet(new Set());
     } finally {
       setLoading(false);
     }
@@ -205,7 +232,7 @@ export default function CalendarioTarifas({ serviceId, precioBase, unidad }) {
   }
 
   function toggleDay(dateStr) {
-    if (dateStr < hoyStr) return;
+    if (dateStr < hoyStr || ocupadasSet.has(dateStr)) return;
     setSelectedDays((prev) => {
       const next = new Set(prev);
       if (next.has(dateStr)) next.delete(dateStr);
@@ -339,6 +366,7 @@ export default function CalendarioTarifas({ serviceId, precioBase, unidad }) {
           hoyStr={hoyStr}
           precioBase={baseLabel}
           tarifasMap={tarifasMap}
+          ocupadasSet={ocupadasSet}
           selectedDays={selectedDays}
           onToggleDay={toggleDay}
         />
