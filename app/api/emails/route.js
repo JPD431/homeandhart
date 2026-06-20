@@ -5,6 +5,7 @@ import {
   resolverEmailUsuario,
   resolverNombreUsuario,
 } from "@/app/lib/email-usuario";
+import { getIngresoProveedor } from "@/app/lib/ingresos-proveedor";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -508,6 +509,41 @@ function detailsBlock({ servicio_titulo, fecha_inicio, fecha_fin, precio_total }
   </table>`;
 }
 
+function proveedorDetailsBlock({
+  servicio_titulo,
+  fecha_inicio,
+  fecha_fin,
+  precio_total,
+}) {
+  const ingresoLabel =
+    precio_total != null && precio_total !== ""
+      ? getIngresoProveedor(precio_total).toFixed(2)
+      : null;
+
+  const rows = [
+    ["Servicio", servicio_titulo],
+    ["Fecha de inicio", fecha_inicio],
+    fecha_fin ? ["Fecha de fin", fecha_fin] : null,
+    ingresoLabel != null
+      ? ["Tu ingreso por esta reserva", `${ingresoLabel} €`]
+      : null,
+  ].filter(Boolean);
+
+  const rowsHtml = rows
+    .map(
+      ([label, value]) => `
+        <tr>
+          <td style="padding:8px 0;font-size:14px;color:#666;width:140px;vertical-align:top;">${label}</td>
+          <td style="padding:8px 0;font-size:14px;color:#222;font-weight:600;">${value}</td>
+        </tr>`,
+    )
+    .join("");
+
+  return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:20px 0 0;background-color:${BRAND_LIGHT};border-radius:8px;padding:16px 20px;">
+    ${rowsHtml}
+  </table>`;
+}
+
 function clienteEmailHtml(data) {
   const isBundle = Array.isArray(data.servicios) && data.servicios.length > 0;
   const mensajeBlock = data.mensaje
@@ -609,7 +645,7 @@ function proveedorEmailHtml(data) {
     title: "Nueva reserva recibida — Home&Heart",
     bodyHtml: `
       <h1 style="margin:0;font-size:22px;color:${BRAND_PRIMARY};font-weight:600;text-align:center;">Has recibido una nueva reserva</h1>
-      ${detailsBlock(data)}
+      ${proveedorDetailsBlock(data)}
       <p style="margin:20px 0 0;font-size:14px;color:#444;line-height:1.6;">
         Cliente: <strong>${data.cliente_nombre}</strong>
       </p>
@@ -636,7 +672,7 @@ function reservaNuevaEmailHtml(data) {
       <p style="margin:16px 0 0;font-size:14px;color:#444;line-height:1.6;">
         Cliente: <strong>${data.cliente_nombre || "Un cliente"}</strong>
       </p>
-      ${detailsBlock(data)}
+      ${proveedorDetailsBlock(data)}
       <p style="margin:24px 0 0;text-align:center;">
         <a href="${dashboardUrl}" style="display:inline-block;background-color:${BRAND_PRIMARY};color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;padding:14px 28px;border-radius:8px;">
           Ver reserva

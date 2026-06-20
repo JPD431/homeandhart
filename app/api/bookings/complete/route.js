@@ -626,7 +626,7 @@ export async function POST(request) {
       servicio_titulo: mainService.titulo,
       fecha_inicio: fecha_inicio,
       fecha_fin: finEmail,
-      precio_total: totalGrupo.toFixed(2),
+      precio_total: precioPorServicioMap.get(main_service_id).toFixed(2),
       booking_id: mainBooking?.id,
     });
 

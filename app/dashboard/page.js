@@ -3,6 +3,7 @@ import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Navbar from '@/app/components/Navbar';
+import { getIngresoProveedor } from '@/app/lib/ingresos-proveedor';
 import { supabase } from '@/app/lib/supabase';
 
 const BRAND = {
@@ -630,7 +631,7 @@ function ReservaRecibidaCard({
           <div style={{ fontSize: 11, color: '#888', marginTop: 4 }}>{clienteNombre}</div>
           <div style={{ fontSize: 11, color: '#666', marginTop: 4 }}>{formatReservaFechas(booking)}</div>
           <div style={{ fontSize: 13, fontWeight: 500, color: PRIMARY, marginTop: 6 }}>
-            {Number(booking.precio_total).toFixed(2)}€
+            Cobras: {getIngresoProveedor(booking.precio_total).toFixed(2)}€
           </div>
           {booking.mensaje && (
             <p
