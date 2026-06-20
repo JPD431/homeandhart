@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Navbar from "@/app/components/Navbar";
 import { BRAND, SERIF } from "@/app/components/brand";
 import { articulosIniciales, slugify } from "@/app/lib/blog-seed";
+import { getIngresoProveedor } from "@/app/lib/ingresos-proveedor";
 import { supabase } from "@/app/lib/supabase";
 
 const TABS = [
@@ -203,8 +204,7 @@ function ProviderDocuments({ provider }) {
 }
 
 function getTransferidoProveedor(precioTotal) {
-  const precio = Number(precioTotal) || 0;
-  return (precio / 1.14) * 0.96;
+  return getIngresoProveedor(precioTotal);
 }
 
 function getComisionHH(precioTotal) {

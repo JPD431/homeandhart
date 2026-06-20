@@ -1,5 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
 import Stripe from "stripe";
+import {
+  getIngresoProveedorDesdeBase,
+  getPrecioBaseProveedor,
+} from "@/app/lib/ingresos-proveedor";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
@@ -10,10 +14,6 @@ const supabase = createClient(
 
 const STRIPE_MIN_TRANSFER_EUR = 0.5;
 
-function getPrecioBase(precioTotal) {
-  return (Number(precioTotal) || 0) / 1.14;
-}
-
 function splitTransferAmount(amountFinal, bookings) {
   if (!bookings?.length) return [];
 
@@ -23,7 +23,7 @@ function splitTransferAmount(amountFinal, bookings) {
 
   const bases = bookings.map((b) => ({
     id: b.id,
-    base: getPrecioBase(b.precio_total),
+    base: getPrecioBaseProveedor(b.precio_total),
   }));
   const totalBase = bases.reduce((sum, b) => sum + b.base, 0);
   if (totalBase <= 0) {
@@ -149,7 +149,7 @@ async function buildTransfersForPayment(paymentIntentId) {
   for (const booking of bookings) {
     for (const entry of proveedorMap.values()) {
       if (!entry.serviceIds.has(booking.service_id)) continue;
-      entry.amount += getPrecioBase(booking.precio_total);
+      entry.amount += getPrecioBaseProveedor(booking.precio_total);
       entry.bookingIds.push(booking.id);
       entry.bookings.push({ id: booking.id, precio_total: booking.precio_total });
     }
@@ -161,7 +161,9 @@ async function buildTransfersForPayment(paymentIntentId) {
     if (entry.amount <= 0) continue;
 
     const sinComision = entry.reservas_sin_comision > 0;
-    const amountBruto = sinComision ? entry.amount : entry.amount * 0.96;
+    const amountBruto = getIngresoProveedorDesdeBase(entry.amount, {
+      sinComision,
+    });
     transfers.push({
       proveedorId: entry.proveedorId,
       stripe_account_id: entry.stripe_account_id,

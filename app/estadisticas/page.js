@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { BRAND, SERIF } from "@/app/components/brand";
+import { getIngresoProveedor } from "@/app/lib/ingresos-proveedor";
 import { supabase } from "@/app/lib/supabase";
 
 const PRIMARY = "#1d4f91";
@@ -39,7 +40,7 @@ function getBookingEstado(booking) {
 }
 
 function getNetIncome(precioTotal) {
-  return ((Number(precioTotal) || 0) / 1.14) * 0.96;
+  return getIngresoProveedor(precioTotal);
 }
 
 const MONEY_EXCLUDED_ESTADOS = new Set([
