@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import ProveedorEmergenciaToggle from "@/app/components/ProveedorEmergenciaToggle";
+import CalendarioTarifas from "@/app/components/CalendarioTarifas";
 import { BRAND, SERIF } from "@/app/components/brand";
 import {
   normalizeDescuentosDuracion,
@@ -1791,9 +1792,26 @@ export default function EditarPerfilPage() {
         return <p className="text-sm text-[#666]">No tienes un servicio de {v?.label}.</p>;
       }
       return (
-        <Card title={`${v?.emoji} ${v?.label}`}>
-          <ServiceEditForm vertical={service.vertical} details={service.details} userId={userId} onChange={(details) => updateServiceDetails(service.id, details)} />
-        </Card>
+        <>
+          <Card title={`${v?.emoji} ${v?.label}`}>
+            <ServiceEditForm
+              vertical={service.vertical}
+              details={service.details}
+              userId={userId}
+              onChange={(details) => updateServiceDetails(service.id, details)}
+            />
+          </Card>
+          {(service.vertical === "alojamiento" ||
+            service.vertical === "mascotas") && (
+            <Card title="Precios por fecha">
+              <CalendarioTarifas
+                serviceId={service.id}
+                precioBase={Number(service.details?.precio) || 0}
+                unidad={service.vertical === "alojamiento" ? "noche" : "día"}
+              />
+            </Card>
+          )}
+        </>
       );
     }
 
