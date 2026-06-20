@@ -455,8 +455,7 @@ function bundleDetailsBlock(data) {
     .map(
       (svc) => `
         <tr>
-          <td style="padding:8px 0;font-size:14px;color:#666;vertical-align:top;">${svc.titulo}</td>
-          <td style="padding:8px 0;font-size:14px;color:#222;font-weight:600;text-align:right;">${svc.precio} €</td>
+          <td colspan="2" style="padding:8px 0;font-size:14px;color:#666;vertical-align:top;">${svc.titulo}</td>
         </tr>
         <tr>
           <td colspan="2" style="padding:0 0 8px;font-size:12px;color:#888;">Proveedor: ${svc.proveedor_nombre}</td>
@@ -464,20 +463,17 @@ function bundleDetailsBlock(data) {
     )
     .join("");
 
-  const subtotal = data.subtotal ? `${data.subtotal} €` : null;
-  const comision =
-    data.comision && Number(data.comision) > 0 ? `${data.comision} €` : null;
-  const total = data.precio_total ? `${data.precio_total} €` : null;
-  const totalLabel = comision ? "Total" : "Total (gastos de gestión incluidos)";
+  const total =
+    data.precio_total != null && data.precio_total !== ""
+      ? `${data.precio_total} € (gastos de gestión incluidos)`
+      : null;
 
   return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:20px 0 0;background-color:${BRAND_LIGHT};border-radius:8px;padding:16px 20px;">
     <tr>
       <td colspan="2" style="padding:0 0 8px;font-size:12px;font-weight:600;color:${BRAND_PRIMARY};text-transform:uppercase;letter-spacing:0.05em;">Servicios reservados</td>
     </tr>
     ${rowsHtml}
-    ${subtotal ? `<tr><td style="padding:8px 0;font-size:14px;color:#666;">Subtotal</td><td style="padding:8px 0;font-size:14px;color:#222;text-align:right;">${subtotal}</td></tr>` : ""}
-    ${comision ? `<tr><td style="padding:4px 0;font-size:12px;color:#888;">Gastos de gestión</td><td style="padding:4px 0;font-size:12px;color:#888;text-align:right;">${comision}</td></tr>` : ""}
-    ${total ? `<tr><td style="padding:8px 0;font-size:16px;font-weight:600;color:${BRAND_PRIMARY};">${totalLabel}</td><td style="padding:8px 0;font-size:16px;font-weight:600;color:${BRAND_PRIMARY};text-align:right;">${total}</td></tr>` : ""}
+    ${total ? `<tr><td style="padding:8px 0;font-size:14px;color:#666;">Total</td><td style="padding:8px 0;font-size:14px;color:#222;font-weight:600;text-align:right;">${total}</td></tr>` : ""}
     <tr>
       <td colspan="2" style="padding:8px 0 0;font-size:12px;color:#888;">Fechas: ${data.fecha_inicio}${data.fecha_fin && data.fecha_fin !== data.fecha_inicio ? ` — ${data.fecha_fin}` : ""}</td>
     </tr>
@@ -490,7 +486,7 @@ function detailsBlock({ servicio_titulo, fecha_inicio, fecha_fin, precio_total }
     ["Fecha de inicio", fecha_inicio],
     fecha_fin ? ["Fecha de fin", fecha_fin] : null,
     precio_total != null && precio_total !== ""
-      ? ["Precio total", `${precio_total} €`]
+      ? ["Total", `${precio_total} € (gastos de gestión incluidos)`]
       : null,
   ].filter(Boolean);
 
