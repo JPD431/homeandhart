@@ -443,9 +443,27 @@ function proveedorContactBlock(data) {
 }
 
 function clienteContactBlock(data) {
+  const lines = [];
+
+  if (data.cliente_telefono) {
+    lines.push(`📞 Teléfono: ${data.cliente_telefono}`);
+  }
+  if (data.cliente_email) {
+    lines.push(`✉️ Email: ${data.cliente_email}`);
+  }
+
+  if (lines.length === 0) return "";
+
+  const linesHtml = lines
+    .map(
+      (line) =>
+        `<p style="margin:8px 0 0;font-size:14px;color:#222;line-height:1.6;">${line}</p>`,
+    )
+    .join("");
+
   return `<div style="margin:20px 0 0;background-color:#e8f0fb;border-radius:8px;padding:16px 20px;">
     <p style="margin:0;font-size:14px;font-weight:600;color:${BRAND_PRIMARY};">Datos de contacto del cliente:</p>
-    <p style="margin:8px 0 0;font-size:14px;color:#222;line-height:1.6;">📞 Email: ${data.cliente_email}</p>
+    ${linesHtml}
   </div>`;
 }
 
@@ -473,7 +491,7 @@ function bundleDetailsBlock(data) {
       <td colspan="2" style="padding:0 0 8px;font-size:12px;font-weight:600;color:${BRAND_PRIMARY};text-transform:uppercase;letter-spacing:0.05em;">Servicios reservados</td>
     </tr>
     ${rowsHtml}
-    ${total ? `<tr><td style="padding:8px 0;font-size:14px;color:#666;">Total</td><td style="padding:8px 0;font-size:14px;color:#222;font-weight:600;text-align:right;">${total}</td></tr>` : ""}
+    ${total ? `<tr><td style="padding:8px 0;font-size:12px;color:#888;">Total</td><td style="padding:8px 0;font-size:12px;color:#888;text-align:right;">${total}</td></tr>` : ""}
     <tr>
       <td colspan="2" style="padding:8px 0 0;font-size:12px;color:#888;">Fechas: ${data.fecha_inicio}${data.fecha_fin && data.fecha_fin !== data.fecha_inicio ? ` — ${data.fecha_fin}` : ""}</td>
     </tr>
@@ -492,11 +510,20 @@ function detailsBlock({ servicio_titulo, fecha_inicio, fecha_fin, precio_total }
 
   const rowsHtml = rows
     .map(
-      ([label, value]) => `
+      ([label, value]) => {
+        const isTotal = label === "Total";
+        const labelStyle = isTotal
+          ? "padding:8px 0;font-size:12px;color:#888;width:140px;vertical-align:top;"
+          : "padding:8px 0;font-size:14px;color:#666;width:140px;vertical-align:top;";
+        const valueStyle = isTotal
+          ? "padding:8px 0;font-size:12px;color:#888;"
+          : "padding:8px 0;font-size:14px;color:#222;font-weight:600;";
+        return `
         <tr>
-          <td style="padding:8px 0;font-size:14px;color:#666;width:140px;vertical-align:top;">${label}</td>
-          <td style="padding:8px 0;font-size:14px;color:#222;font-weight:600;">${value}</td>
-        </tr>`,
+          <td style="${labelStyle}">${label}</td>
+          <td style="${valueStyle}">${value}</td>
+        </tr>`;
+      },
     )
     .join("");
 
@@ -653,6 +680,30 @@ function proveedorEmailHtml(data) {
   });
 }
 
+function reservaConfirmadaProveedorEmailHtml(data) {
+  const mensajeBlock = data.mensaje
+    ? `<p style="margin:16px 0 0;font-size:14px;color:#444;line-height:1.6;"><strong>Mensaje del cliente:</strong> ${data.mensaje}</p>`
+    : "";
+
+  return emailLayout({
+    title: "Reserva confirmada — Home&Heart",
+    bodyHtml: `
+      <h1 style="margin:0;font-size:22px;color:${BRAND_PRIMARY};font-weight:600;text-align:center;">Has confirmado la reserva</h1>
+      <p style="margin:16px 0 0;font-size:14px;color:#444;line-height:1.6;text-align:center;">
+        La reserva está <strong>confirmada</strong>. Aquí tienes los datos para coordinarte con el cliente.
+      </p>
+      ${detailsBlock(data)}
+      <p style="margin:20px 0 0;font-size:14px;color:#444;line-height:1.6;">
+        Cliente: <strong>${data.cliente_nombre}</strong>
+      </p>
+      ${mensajeBlock}
+      ${clienteContactBlock(data)}
+      <p style="margin:20px 0 0;font-size:14px;color:#444;line-height:1.6;">
+        El cliente ha recibido tus datos de contacto para coordinarse contigo.
+      </p>`,
+  });
+}
+
 function reservaNuevaEmailHtml(data) {
   const dashboardUrl =
     data.dashboard_url ||
@@ -719,6 +770,49 @@ async function sendReservaNuevaEmail(data) {
     to: payload.proveedor_email,
     subject: "Nueva reserva recibida — Home&Heart",
     html: reservaNuevaEmailHtml(payload),
+  });
+
+  if (result.error) {
+    return { error: result.error.message };
+  }
+
+  return { success: true };
+}
+
+async function sendReservaConfirmadaProveedorEmail(data) {
+  const payload = { ...data };
+
+  if (payload.proveedor_id && !payload.proveedor_email) {
+    payload.proveedor_email = await resolverEmailUsuario(payload.proveedor_id);
+  }
+
+  if (payload.cliente_id && !payload.cliente_email) {
+    payload.cliente_email = await resolverEmailUsuario(payload.cliente_id);
+  }
+
+  if (!payload.cliente_nombre && payload.cliente_id) {
+    payload.cliente_nombre =
+      (await resolverNombreUsuario(payload.cliente_id)) || "Cliente";
+  }
+
+  const required = [
+    "proveedor_email",
+    "cliente_nombre",
+    "servicio_titulo",
+    "fecha_inicio",
+  ];
+
+  for (const field of required) {
+    if (!payload[field]) {
+      return { error: `Falta el campo requerido: ${field}` };
+    }
+  }
+
+  const result = await resend.emails.send({
+    from: FROM,
+    to: payload.proveedor_email,
+    subject: "Reserva confirmada — Home&Heart",
+    html: reservaConfirmadaProveedorEmailHtml(payload),
   });
 
   if (result.error) {
@@ -1137,6 +1231,16 @@ export async function POST(request) {
 
     if (tipo === "reserva_confirmada") {
       const result = await sendReservaConfirmadaEmails(data);
+
+      if (result.error) {
+        return Response.json({ error: result.error }, { status: 400 });
+      }
+
+      return Response.json({ success: true });
+    }
+
+    if (tipo === "reserva_confirmada_proveedor") {
+      const result = await sendReservaConfirmadaProveedorEmail(data);
 
       if (result.error) {
         return Response.json({ error: result.error }, { status: 400 });
