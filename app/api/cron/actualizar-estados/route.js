@@ -40,7 +40,7 @@ export async function GET(request) {
   for (const booking of paraCompletar || []) {
     await supabase
       .from("bookings")
-      .update({ estado: "completada" })
+      .update({ estado: "completada", completada_at: ahora })
       .eq("id", booking.id);
 
     await fetch(`${process.env.NEXT_PUBLIC_URL}/api/emails`, {
@@ -69,11 +69,12 @@ export async function GET(request) {
 
   const { data: paraLiberar } = await supabase
     .from("bookings")
-    .select("id, payment_intent_id, confirmacion_cliente")
+    .select("id, payment_intent_id, confirmacion_cliente, completada_at")
     .eq("estado", "completada")
     .is("confirmacion_cliente", null)
     .not("payment_intent_id", "is", null)
-    .lte("updated_at", hace24h);
+    .not("completada_at", "is", null)
+    .lte("completada_at", hace24h);
 
   for (const booking of paraLiberar || []) {
     if (booking.confirmacion_cliente === "problema") {
