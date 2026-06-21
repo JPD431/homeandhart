@@ -94,15 +94,25 @@ async function rewardReferrerIfFirstCompletion(proveedorId, proveedorProfile, pa
 }
 
 async function buildTransfersForPayment(paymentIntentId) {
+  const empty = { plans: [], creditoGrupo: 0, grupoUsaCredito: false };
+
   const { data: bookings, error: bookingsError } = await supabase
     .from("bookings")
-    .select("id, service_id, precio_total")
+    .select("id, service_id, precio_total, credito_aplicado")
     .eq("payment_intent_id", paymentIntentId);
 
-  if (bookingsError || !bookings?.length) return [];
+  if (bookingsError || !bookings?.length) return empty;
+
+  const creditoGrupo = bookings.reduce(
+    (sum, b) => sum + (Number(b.credito_aplicado) || 0),
+    0,
+  );
+  const creditoGrupoRounded = Math.round(creditoGrupo * 100) / 100;
 
   const serviceIds = [...new Set(bookings.map((b) => b.service_id).filter(Boolean))];
-  if (serviceIds.length === 0) return [];
+  if (serviceIds.length === 0) {
+    return { ...empty, creditoGrupo: creditoGrupoRounded };
+  }
 
   const { data: services, error: servicesError } = await supabase
     .from("services")
@@ -121,7 +131,9 @@ async function buildTransfersForPayment(paymentIntentId) {
     )
     .in("id", serviceIds);
 
-  if (servicesError || !services?.length) return [];
+  if (servicesError || !services?.length) {
+    return { ...empty, creditoGrupo: creditoGrupoRounded };
+  }
 
   const proveedorMap = new Map();
 
@@ -156,7 +168,7 @@ async function buildTransfersForPayment(paymentIntentId) {
     }
   }
 
-  const transfers = [];
+  const plans = [];
 
   for (const entry of proveedorMap.values()) {
     if (entry.amount <= 0) continue;
@@ -165,7 +177,7 @@ async function buildTransfersForPayment(paymentIntentId) {
     const amountBruto = getIngresoProveedorDesdeBase(entry.amount, {
       sinComision,
     });
-    transfers.push({
+    plans.push({
       proveedorId: entry.proveedorId,
       stripe_account_id: entry.stripe_account_id,
       amount: amountBruto,
@@ -178,7 +190,11 @@ async function buildTransfersForPayment(paymentIntentId) {
     });
   }
 
-  return transfers;
+  return {
+    plans,
+    creditoGrupo: creditoGrupoRounded,
+    grupoUsaCredito: creditoGrupoRounded > 0,
+  };
 }
 
 export async function POST(request) {
@@ -262,38 +278,76 @@ export async function POST(request) {
     const paymentIntent = await stripe.paymentIntents.capture(resolvedPaymentIntentId);
     const chargeId = paymentIntent.latest_charge;
 
-    const transferPlan = await buildTransfersForPayment(resolvedPaymentIntentId);
+    const {
+      plans: transferPlan,
+      creditoGrupo,
+      grupoUsaCredito,
+    } = await buildTransfersForPayment(resolvedPaymentIntentId);
+
+    const preparedPlans = transferPlan.map((plan) => {
+      const deuda_a_descontar = Math.min(plan.deuda_actual, plan.amount_bruto);
+      const amount_final =
+        Math.round((plan.amount_bruto - deuda_a_descontar) * 100) / 100;
+      return {
+        ...plan,
+        deuda_a_descontar,
+        amount_final,
+        transfer_required: amount_final >= STRIPE_MIN_TRANSFER_EUR,
+      };
+    });
+
+    const totalTransferir = preparedPlans.reduce(
+      (sum, plan) => sum + plan.amount_final,
+      0,
+    );
+    const totalTransferirRounded = Math.round(totalTransferir * 100) / 100;
+    const capturadoNeto = Math.round(paymentIntent.amount) / 100;
+    const usePlatformBalance =
+      creditoGrupo > 0 || totalTransferirRounded > capturadoNeto;
+    const financiamiento = usePlatformBalance ? "balance_plataforma" : "cargo";
 
     const transfers = [];
     const transferSummaries = [];
+    const transferErrors = [];
+    const bookingIdsLiberados = [];
 
-    if (transferPlan.length && chargeId) {
-      for (const plan of transferPlan) {
+    if (preparedPlans.length && chargeId) {
+      for (const plan of preparedPlans) {
         const summary = {
           proveedorId: plan.proveedorId,
           amount_bruto: plan.amount_bruto,
+          amount_final: plan.amount_final,
           deuda_descontada: 0,
           amount_transferido: 0,
           deuda_restante: plan.deuda_actual,
+          transfer_required: plan.transfer_required,
+          financiamiento,
+          success: false,
+          error: null,
+          booking_ids: plan.bookingIds,
         };
 
         try {
-          const deuda_a_descontar = Math.min(plan.deuda_actual, plan.amount_bruto);
-          const amount_final =
-            Math.round((plan.amount_bruto - deuda_a_descontar) * 100) / 100;
-
-          if (amount_final >= STRIPE_MIN_TRANSFER_EUR) {
-            const transfer = await stripe.transfers.create({
-              amount: Math.round(amount_final * 100),
+          if (plan.transfer_required) {
+            const transferParams = {
+              amount: Math.round(plan.amount_final * 100),
               currency: "eur",
               destination: plan.stripe_account_id,
-              source_transaction: chargeId,
-            });
+            };
+
+            if (!usePlatformBalance) {
+              transferParams.source_transaction = chargeId;
+            }
+
+            const transfer = await stripe.transfers.create(transferParams);
             transfers.push(transfer);
-            summary.amount_transferido = amount_final;
+            summary.amount_transferido = plan.amount_final;
           }
 
-          const deuda_restante = Math.max(0, plan.deuda_actual - deuda_a_descontar);
+          const deuda_restante = Math.max(
+            0,
+            plan.deuda_actual - plan.deuda_a_descontar,
+          );
           const { error: deudaError } = await supabase
             .from("profiles")
             .update({ deuda_pendiente: deuda_restante })
@@ -303,16 +357,16 @@ export async function POST(request) {
             throw deudaError;
           }
 
-          summary.deuda_descontada = deuda_a_descontar;
+          summary.deuda_descontada = plan.deuda_a_descontar;
           summary.deuda_restante = deuda_restante;
 
           try {
-            const splits = splitTransferAmount(amount_final, plan.bookings);
-            for (const { bookingId, amount } of splits) {
+            const splits = splitTransferAmount(plan.amount_final, plan.bookings);
+            for (const { bookingId: splitBookingId, amount } of splits) {
               const { error: importeError } = await supabase
                 .from("bookings")
                 .update({ importe_transferido: amount })
-                .eq("id", bookingId);
+                .eq("id", splitBookingId);
 
               if (importeError) {
                 throw importeError;
@@ -339,29 +393,72 @@ export async function POST(request) {
             plan.profile,
             resolvedPaymentIntentId,
           );
+
+          summary.success = true;
+          bookingIdsLiberados.push(...plan.bookingIds);
         } catch (providerError) {
+          const errorMessage =
+            providerError?.message ?? String(providerError);
+          summary.error = errorMessage;
           console.error(
             "[capture-payment] Error procesando proveedor",
             plan.proveedorId,
-            providerError.message ?? providerError,
+            errorMessage,
           );
+
+          if (plan.transfer_required) {
+            transferErrors.push({
+              proveedorId: plan.proveedorId,
+              amount_final: plan.amount_final,
+              error: errorMessage,
+              booking_ids: plan.bookingIds,
+            });
+          } else {
+            summary.success = true;
+            bookingIdsLiberados.push(...plan.bookingIds);
+          }
         }
 
         transferSummaries.push(summary);
       }
     }
 
-    await supabase
-      .from("bookings")
-      .update({ pago_liberado_at: new Date().toISOString() })
-      .eq("payment_intent_id", resolvedPaymentIntentId);
+    if (bookingIdsLiberados.length > 0) {
+      const liberadoAt = new Date().toISOString();
+      const { error: liberarError } = await supabase
+        .from("bookings")
+        .update({ pago_liberado_at: liberadoAt })
+        .in("id", [...new Set(bookingIdsLiberados)]);
+
+      if (liberarError) {
+        console.error(
+          "[capture-payment] Error marcando pago_liberado_at:",
+          liberarError.message,
+        );
+      }
+    }
+
+    const hasRequiredTransferFailure = transferErrors.length > 0;
 
     return Response.json({
-      success: true,
+      success: !hasRequiredTransferFailure,
       paymentIntent,
       transfers,
+      credito_grupo: creditoGrupo,
+      grupo_usa_credito: grupoUsaCredito,
+      capturado_neto: capturadoNeto,
+      total_transferir: totalTransferirRounded,
+      financiamiento,
       transferSummaries,
-    });
+      transfer_errors: transferErrors,
+      bookings_liberados: [...new Set(bookingIdsLiberados)],
+      ...(hasRequiredTransferFailure
+        ? {
+            error:
+              "Una o más transferencias obligatorias fallaron; pago_liberado_at no marcado en esas reservas",
+          }
+        : {}),
+    }, hasRequiredTransferFailure ? { status: 500 } : undefined);
   } catch (error) {
     console.error("Error capture-payment:", error.message, error.type, error.code);
     return Response.json(
