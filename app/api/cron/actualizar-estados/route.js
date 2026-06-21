@@ -87,10 +87,12 @@ export async function GET(request) {
 
     await fetch(`${process.env.NEXT_PUBLIC_URL}/api/stripe/capture-payment`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.CRON_SECRET}`,
+      },
       body: JSON.stringify({
         paymentIntentId: booking.payment_intent_id,
-        proveedores: [],
       }),
     });
 

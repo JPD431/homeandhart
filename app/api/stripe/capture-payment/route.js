@@ -182,6 +182,13 @@ async function buildTransfersForPayment(paymentIntentId) {
 
 export async function POST(request) {
   try {
+    const authHeader = request.headers.get("authorization");
+    const isInternalCall =
+      authHeader === `Bearer ${process.env.CRON_SECRET}`;
+
+    // TODO: exigir token firmado o sesión de dueño para llamadas del cliente (confirmar-servicio).
+    // if (!isInternalCall) { ... verificar sesión/token del cliente; return 401/403 si falla }
+
     const { paymentIntentId, bookingId } = await request.json();
 
     let resolvedPaymentIntentId = paymentIntentId;
