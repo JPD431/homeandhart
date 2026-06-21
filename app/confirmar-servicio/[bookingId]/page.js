@@ -2,57 +2,71 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
-import { supabase } from "@/app/lib/supabase";
 
 export default function ConfirmarServicioPage() {
   const { bookingId } = useParams();
   const searchParams = useSearchParams();
   const resultado = searchParams.get("resultado");
+  const token = searchParams.get("token");
   const router = useRouter();
   const [estado, setEstado] = useState("cargando");
   const [comentario, setComentario] = useState("");
 
   useEffect(() => {
+    if (!token) {
+      setEstado("no_autorizado");
+      return;
+    }
+
     if (resultado === "ok") {
       confirmarOk();
     } else {
       setEstado("formulario_problema");
     }
-  }, [resultado]);
+  }, [resultado, token]);
 
   async function confirmarOk() {
-    await supabase
-      .from("bookings")
-      .update({
-        confirmacion_cliente: "ok",
-        confirmado_at: new Date().toISOString(),
-      })
-      .eq("id", bookingId);
-
     try {
-      await fetch("/api/stripe/capture-payment", {
+      const res = await fetch("/api/stripe/capture-payment", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ bookingId }),
+        body: JSON.stringify({ bookingId, token }),
       });
+
+      if (!res.ok) {
+        setEstado("no_autorizado");
+        return;
+      }
+
+      setEstado("confirmado");
     } catch (err) {
       console.error("Error liberando pago:", err);
+      setEstado("no_autorizado");
     }
-
-    setEstado("confirmado");
   }
 
   async function reportarProblema() {
-    await supabase
-      .from("bookings")
-      .update({
-        confirmacion_cliente: "problema",
-        comentario_problema: comentario,
-        confirmado_at: new Date().toISOString(),
-      })
-      .eq("id", bookingId);
+    try {
+      const res = await fetch("/api/bookings/reportar-problema", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          bookingId,
+          token,
+          comentario,
+        }),
+      });
 
-    setEstado("reportado");
+      if (!res.ok) {
+        setEstado("no_autorizado");
+        return;
+      }
+
+      setEstado("reportado");
+    } catch (err) {
+      console.error("Error reportando problema:", err);
+      setEstado("no_autorizado");
+    }
   }
 
   return (
@@ -77,6 +91,26 @@ export default function ConfirmarServicioPage() {
           border: "0.5px solid #e8e4de",
         }}
       >
+        {estado === "no_autorizado" && (
+          <>
+            <div style={{ fontSize: 48, marginBottom: 16 }}>🔒</div>
+            <h1
+              style={{
+                fontFamily: "Georgia,serif",
+                fontSize: 24,
+                color: "#2a3a4a",
+                marginBottom: 8,
+              }}
+            >
+              Enlace no válido
+            </h1>
+            <p style={{ fontSize: 14, color: "#888" }}>
+              Este enlace ha expirado o no es válido. Usa el enlace del email que
+              te enviamos al finalizar el servicio.
+            </p>
+          </>
+        )}
+
         {estado === "confirmado" && (
           <>
             <div style={{ fontSize: 48, marginBottom: 16 }}>✅</div>

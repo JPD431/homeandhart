@@ -4,6 +4,7 @@ import {
   getIngresoProveedorDesdeBase,
   getPrecioBaseProveedor,
 } from "@/app/lib/ingresos-proveedor";
+import { verificarTokenConfirmacion } from "@/app/lib/confirmar-token";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
@@ -186,10 +187,17 @@ export async function POST(request) {
     const isInternalCall =
       authHeader === `Bearer ${process.env.CRON_SECRET}`;
 
-    // TODO: exigir token firmado o sesión de dueño para llamadas del cliente (confirmar-servicio).
-    // if (!isInternalCall) { ... verificar sesión/token del cliente; return 401/403 si falla }
+    const { paymentIntentId, bookingId, token } = await request.json();
 
-    const { paymentIntentId, bookingId } = await request.json();
+    if (!isInternalCall) {
+      if (
+        !bookingId ||
+        !token ||
+        !verificarTokenConfirmacion(bookingId, token)
+      ) {
+        return Response.json({ error: "Unauthorized" }, { status: 401 });
+      }
+    }
 
     let resolvedPaymentIntentId = paymentIntentId;
 
@@ -215,6 +223,20 @@ export async function POST(request) {
         { error: "Falta paymentIntentId o bookingId" },
         { status: 400 },
       );
+    }
+
+    if (!isInternalCall && bookingId) {
+      const { error: confirmError } = await supabase
+        .from("bookings")
+        .update({
+          confirmacion_cliente: "ok",
+          confirmado_at: new Date().toISOString(),
+        })
+        .eq("id", bookingId);
+
+      if (confirmError) {
+        return Response.json({ error: confirmError.message }, { status: 500 });
+      }
     }
 
     const { data: existingBookings, error: existingBookingsError } =

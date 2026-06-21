@@ -6,6 +6,7 @@ import {
   resolverNombreUsuario,
 } from "@/app/lib/email-usuario";
 import { getIngresoProveedor } from "@/app/lib/ingresos-proveedor";
+import { firmarTokenConfirmacion } from "@/app/lib/confirmar-token";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -1127,6 +1128,9 @@ function mensajeNuevoEmailHtml(data) {
 function servicioCompletadoEmailHtml(data) {
   const baseUrl = process.env.NEXT_PUBLIC_URL || "https://homeandheart.es";
   const confirmUrl = `${baseUrl}/confirmar-servicio/${data.booking_id}`;
+  const tokenParam = data.confirm_token
+    ? `&token=${encodeURIComponent(data.confirm_token)}`
+    : "";
 
   return emailLayout({
     title: "¿Cómo fue tu experiencia? — Home&Heart",
@@ -1136,12 +1140,12 @@ function servicioCompletadoEmailHtml(data) {
         Hola <strong>${data.cliente_nombre || "Cliente"}</strong>, tu servicio en Home&amp;Heart ha finalizado. Cuéntanos cómo fue.
       </p>
       <p style="margin:28px 0 0;text-align:center;">
-        <a href="${confirmUrl}?resultado=ok" style="display:inline-block;width:100%;max-width:280px;background-color:#16a34a;color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;padding:14px 24px;border-radius:8px;box-sizing:border-box;">
+        <a href="${confirmUrl}?resultado=ok${tokenParam}" style="display:inline-block;width:100%;max-width:280px;background-color:#16a34a;color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;padding:14px 24px;border-radius:8px;box-sizing:border-box;">
           ✅ Todo fue bien
         </a>
       </p>
       <p style="margin:16px 0 0;text-align:center;">
-        <a href="${confirmUrl}?resultado=problema" style="display:inline-block;width:100%;max-width:280px;background-color:${AMBER};color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;padding:14px 24px;border-radius:8px;box-sizing:border-box;">
+        <a href="${confirmUrl}?resultado=problema${tokenParam}" style="display:inline-block;width:100%;max-width:280px;background-color:${AMBER};color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;padding:14px 24px;border-radius:8px;box-sizing:border-box;">
           ⚠️ Hubo un problema
         </a>
       </p>
@@ -1171,6 +1175,11 @@ async function sendServicioCompletadoEmail(data) {
       (await resolverNombreUsuario(data.cliente_id)) || "Cliente";
   }
 
+  const confirmToken = firmarTokenConfirmacion(data.booking_id);
+  if (!confirmToken) {
+    return { error: "No se pudo generar el token de confirmación" };
+  }
+
   const result = await resend.emails.send({
     from: FROM,
     to: clienteEmail,
@@ -1178,6 +1187,7 @@ async function sendServicioCompletadoEmail(data) {
     html: servicioCompletadoEmailHtml({
       cliente_nombre: clienteNombre || "Cliente",
       booking_id: data.booking_id,
+      confirm_token: confirmToken,
     }),
   });
 
