@@ -602,6 +602,22 @@ function EstadoBadge({ estado }) {
   );
 }
 
+function formatImporteReservaRecibida(booking) {
+  if (booking.pago_liberado_at != null) {
+    if (booking.importe_transferido != null) {
+      return {
+        label: 'Cobrado:',
+        amount: `${Number(booking.importe_transferido).toFixed(2)}€`,
+      };
+    }
+    return { label: 'Cobrado:', amount: '—' };
+  }
+  return {
+    label: 'Cobras (estimado):',
+    amount: `${getIngresoProveedor(booking.precio_total).toFixed(2)}€`,
+  };
+}
+
 function ReservaRecibidaCard({
   booking,
   serviceTitulo,
@@ -613,6 +629,7 @@ function ReservaRecibidaCard({
 }) {
   const isPendiente = booking.estado === 'pendiente';
   const isConfirmada = booking.estado === 'confirmada';
+  const importeReserva = formatImporteReservaRecibida(booking);
 
   return (
     <div
@@ -631,7 +648,7 @@ function ReservaRecibidaCard({
           <div style={{ fontSize: 11, color: '#888', marginTop: 4 }}>{clienteNombre}</div>
           <div style={{ fontSize: 11, color: '#666', marginTop: 4 }}>{formatReservaFechas(booking)}</div>
           <div style={{ fontSize: 13, fontWeight: 500, color: PRIMARY, marginTop: 6 }}>
-            Cobras: {getIngresoProveedor(booking.precio_total).toFixed(2)}€
+            {importeReserva.label} {importeReserva.amount}
           </div>
           {booking.mensaje && (
             <p
@@ -770,7 +787,7 @@ function ReservasRecibidas({ perfil, BRAND }) {
 
       const { data: bookingsData, error: bookingsError } = await supabase
         .from('bookings')
-        .select('id, cliente_id, service_id, fecha_inicio, fecha_fin, hora, precio_total, estado, mensaje, created_at')
+        .select('id, cliente_id, service_id, fecha_inicio, fecha_fin, hora, precio_total, estado, mensaje, created_at, pago_liberado_at, importe_transferido')
         .in('service_id', serviceIds)
         .order('created_at', { ascending: false });
 
