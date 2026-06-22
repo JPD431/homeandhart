@@ -390,6 +390,8 @@ function TabCliente({ perfil, reservas, favoritos, viajes, router, BRAND, copiar
 
 function TabProveedor({ perfil, router, BRAND }) {
   const deudaPendiente = Number(perfil?.deuda_pendiente) || 0;
+  const saldoPendienteTransferir =
+    Math.round((Number(perfil?.saldo_pendiente_transferir) || 0) * 100) / 100;
   const tieneCuentaCobros = Boolean(perfil?.stripe_account_id);
   const [connectLoading, setConnectLoading] = useState(false);
   const [connectError, setConnectError] = useState('');
@@ -442,6 +444,33 @@ function TabProveedor({ perfil, router, BRAND }) {
           >
             Por una o más cancelaciones, tienes una compensación pendiente de{' '}
             {deudaPendiente.toFixed(2)}€. Se descontará automáticamente de tus próximos cobros.
+          </p>
+        </div>
+      )}
+      {saldoPendienteTransferir > 0 && (
+        <div
+          style={{
+            marginTop: 16,
+            padding: '14px 16px',
+            borderRadius: 10,
+            border: `1px solid ${BRAND.green}`,
+            background: '#e6f4f0',
+          }}
+        >
+          <p style={{ fontSize: 13, fontWeight: 600, color: '#2a3a4a', margin: 0 }}>
+            Cobro en camino
+          </p>
+          <p
+            style={{
+              fontSize: 12,
+              color: '#085041',
+              marginTop: 8,
+              marginBottom: 0,
+              lineHeight: 1.5,
+            }}
+          >
+            Tienes {saldoPendienteTransferir.toFixed(2)}€ pendientes de envío a tu cuenta. Se
+            enviarán automáticamente cuando el total alcance el mínimo de 0,50€.
           </p>
         </div>
       )}
