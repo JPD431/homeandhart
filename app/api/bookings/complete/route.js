@@ -9,6 +9,10 @@ import {
   COMMISSION_RATE,
 } from "@/app/lib/pricing-reserva";
 import { cargarTarifasPorServicios } from "@/app/lib/tarifas";
+import {
+  COBROS_INACTIVE_MSG,
+  getProveedorFromService,
+} from "@/app/lib/service-bookable";
 
 const MAX_CREDITO_PORCENTAJE = 0.6;
 
@@ -37,16 +41,24 @@ const SERVICE_SELECT = `
   direccion_exacta,
   telefono_contacto,
   modalidad,
-  profiles_public (
+  profiles!proveedor_id (
     nombre,
-    verificado
+    verificado,
+    cobros_activos
   )
 `;
 
-function isServiceBookable(service) {
-  return (
-    service?.disponible === true && service?.profiles_public?.verificado === true
-  );
+function validateServicesBookable(services) {
+  for (const service of services) {
+    const proveedor = getProveedorFromService(service);
+    if (service?.disponible !== true || proveedor?.verificado !== true) {
+      return { ok: false, error: "Algún servicio ya no está disponible" };
+    }
+    if (proveedor?.cobros_activos !== true) {
+      return { ok: false, error: COBROS_INACTIVE_MSG };
+    }
+  }
+  return { ok: true };
 }
 
 function getPrecioEspecialOverride(precioEspecial, validaHasta) {
@@ -285,11 +297,9 @@ export async function POST(request) {
       );
     }
 
-    if (!services.every(isServiceBookable)) {
-      return NextResponse.json(
-        { error: "Algún servicio ya no está disponible" },
-        { status: 409 },
-      );
+    const bookability = validateServicesBookable(services);
+    if (!bookability.ok) {
+      return NextResponse.json({ error: bookability.error }, { status: 409 });
     }
 
     const { data: perfilCliente, error: perfilError } = await supabaseAdmin
@@ -615,7 +625,7 @@ export async function POST(request) {
       insertedBookings[0];
     const clienteNombre = perfilCliente?.nombre || "Cliente";
     const proveedorNombreMain =
-      mainService.profiles_public?.nombre || "Proveedor";
+      getProveedorFromService(mainService)?.nombre || "Proveedor";
     const finEmail = fecha_fin || fecha_inicio;
 
     await sendBookingEmail({
@@ -635,7 +645,7 @@ export async function POST(request) {
       return {
         titulo: svc.titulo,
         proveedor_id: svc.proveedor_id,
-        proveedor_nombre: svc.profiles_public?.nombre || "Proveedor",
+        proveedor_nombre: getProveedorFromService(svc)?.nombre || "Proveedor",
         precio: precioPorServicioMap.get(serviceId).toFixed(2),
         direccion_exacta: svc.direccion_exacta,
         telefono_proveedor: svc.telefono_contacto,

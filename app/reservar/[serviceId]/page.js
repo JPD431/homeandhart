@@ -28,6 +28,10 @@ import {
 } from "@/app/lib/cancelacion-politica";
 import { supabase } from "@/app/lib/supabase";
 import { cargarTarifasPorServicios } from "@/app/lib/tarifas";
+import {
+  getServiceBookabilityIssue,
+  isServiceBookable,
+} from "@/app/lib/service-bookable";
 
 const stripePromise = loadStripe(
   process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
@@ -300,15 +304,6 @@ async function verificarDisponibilidad(serviceId, fechaInicio, fechaFin) {
 
   return (data?.length ?? 0) === 0;
 }
-
-function isServiceBookable(service) {
-  return (
-    service?.disponible === true && service?.profiles_public?.verificado === true
-  );
-}
-
-const SERVICE_UNAVAILABLE_MSG =
-  "Este servicio no está disponible en este momento";
 
 function FechaInicioConDias({
   id,
@@ -1055,6 +1050,9 @@ export default function ReservarPage() {
             idiomas,
             verificado,
             location_zone
+          ),
+          profiles!proveedor_id (
+            cobros_activos
           )
         `,
         )
@@ -1067,8 +1065,9 @@ export default function ReservarPage() {
         return;
       }
 
-      if (!isServiceBookable(data)) {
-        setUnavailableMessage(SERVICE_UNAVAILABLE_MSG);
+      const bookabilityIssue = getServiceBookabilityIssue(data);
+      if (bookabilityIssue) {
+        setUnavailableMessage(bookabilityIssue);
         setLoading(false);
         return;
       }
@@ -1126,11 +1125,15 @@ export default function ReservarPage() {
                 nombre,
                 apellido,
                 verificado
+              ),
+              profiles!proveedor_id (
+                cobros_activos
               )
             `,
             )
             .eq("disponible", true)
             .eq("profiles_public.verificado", true)
+            .eq("profiles!proveedor_id.cobros_activos", true)
             .eq("vertical", compVertical)
             .ilike("ciudad", `%${city}%`)
             .neq("proveedor_id", data.proveedor_id)
@@ -1194,6 +1197,9 @@ export default function ReservarPage() {
             nombre,
             apellido,
             verificado
+          ),
+          profiles!proveedor_id (
+            cobros_activos
           )
         `,
         )
@@ -1208,7 +1214,15 @@ export default function ReservarPage() {
         { scroll: false },
       );
 
-      if (error || !data || !isServiceBookable(data)) return;
+      if (error || !data) return;
+
+      const bundleIssue = getServiceBookabilityIssue(data);
+      if (bundleIssue) {
+        setErrorMessage(bundleIssue);
+        return;
+      }
+
+      if (!isServiceBookable(data)) return;
 
       setBundleServices((prev) =>
         prev.some((s) => s.id === data.id) ? prev : [...prev, data],
@@ -1298,6 +1312,14 @@ export default function ReservarPage() {
     () => (service ? [service, ...bundleServices] : []),
     [service, bundleServices],
   );
+
+  const bookabilityBlock = useMemo(() => {
+    for (const svc of selectedServices) {
+      const issue = getServiceBookabilityIssue(svc);
+      if (issue) return issue;
+    }
+    return null;
+  }, [selectedServices]);
 
   useEffect(() => {
     if (!fechaInicio || !service || selectedServices.length === 0) {
@@ -1557,11 +1579,15 @@ export default function ReservarPage() {
             nombre,
             apellido,
             verificado
+          ),
+          profiles!proveedor_id (
+            cobros_activos
           )
         `,
         )
         .eq("disponible", true)
         .eq("profiles_public.verificado", true)
+        .eq("profiles!proveedor_id.cobros_activos", true)
         .eq("vertical", tabVertical)
         .ilike("ciudad", `%${city}%`)
         .neq("proveedor_id", service.proveedor_id)
@@ -1829,7 +1855,13 @@ export default function ReservarPage() {
         return prev.filter((s) => s.id !== id);
       }
       const svc = allBundleCandidates.find((s) => s.id === id);
-      return svc ? [...prev, svc] : prev;
+      if (!svc) return prev;
+      const issue = getServiceBookabilityIssue(svc);
+      if (issue) {
+        setErrorMessage(issue);
+        return prev;
+      }
+      return [...prev, svc];
     });
   }
 
@@ -2726,7 +2758,16 @@ export default function ReservarPage() {
                 🛡️ Pago retenido hasta que el servicio se completa. Reembolso total si algo falla.
               </div>
 
-              {precioListo && priceSummary.total > 0 ? (
+              {bookabilityBlock && (
+                <p
+                  className="mt-4 rounded-lg px-3 py-2.5 text-[12px] leading-relaxed text-[#92400e]"
+                  style={{ backgroundColor: "#fef3c7" }}
+                >
+                  {bookabilityBlock}
+                </p>
+              )}
+
+              {precioListo && priceSummary.total > 0 && !bookabilityBlock ? (
                 paymentMethodsLoading || paymentIntentLoading ? (
                   <p className="mt-4 text-center text-[11px] text-[#666]">
                     Preparando formulario de pago…
