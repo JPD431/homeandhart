@@ -377,9 +377,47 @@ function SectionLabel({ number, title }) {
   );
 }
 
-function ServiceDisponibleRow({ service, puedePublicar, onToggle }) {
+function ServiceDisponibleRow({ service, puedePublicar, onToggle, compact = false }) {
   const activo = service.disponible;
   const switchBlocked = !activo && !puedePublicar;
+
+  const switchControl = (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={activo}
+      aria-label={activo ? "Desactivar servicio" : "Activar servicio"}
+      aria-disabled={switchBlocked}
+      onClick={() => onToggle(service.id)}
+      className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${
+        switchBlocked ? "cursor-not-allowed opacity-50" : ""
+      }`}
+      style={{
+        backgroundColor: activo ? SERVICE_ACTIVE_GREEN : "#d1d5db",
+      }}
+    >
+      <span
+        className="absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform"
+        style={{
+          left: activo ? "calc(100% - 1.625rem)" : "0.125rem",
+        }}
+      />
+    </button>
+  );
+
+  if (compact) {
+    return (
+      <div className="flex shrink-0 items-center gap-2">
+        <span
+          className="text-xs font-semibold"
+          style={{ color: activo ? SERVICE_ACTIVE_GREEN : "#666" }}
+        >
+          {activo ? "Activo" : "En pausa"}
+        </span>
+        {switchControl}
+      </div>
+    );
+  }
 
   return (
     <div
@@ -397,27 +435,7 @@ function ServiceDisponibleRow({ service, puedePublicar, onToggle }) {
           {activo ? "Visible en búsqueda" : "No visible para clientes"}
         </p>
       </div>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={activo}
-        aria-label={activo ? "Desactivar servicio" : "Activar servicio"}
-        aria-disabled={switchBlocked}
-        onClick={() => onToggle(service.id)}
-        className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${
-          switchBlocked ? "cursor-not-allowed opacity-50" : ""
-        }`}
-        style={{
-          backgroundColor: activo ? SERVICE_ACTIVE_GREEN : "#d1d5db",
-        }}
-      >
-        <span
-          className="absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform"
-          style={{
-            left: activo ? "calc(100% - 1.625rem)" : "0.125rem",
-          }}
-        />
-      </button>
+      {switchControl}
     </div>
   );
 }
@@ -1038,14 +1056,17 @@ function ServiceEditForm({ vertical, details, onChange, userId }) {
   );
 }
 
-function Card({ title, children }) {
+function Card({ title, headerRight, children }) {
   return (
     <div
       className="rounded-xl border bg-white p-5"
       style={{ borderColor: BRAND.border, marginBottom: 16 }}
     >
       {title && (
-        <p className="mb-4 text-sm font-semibold text-[#1a1a1a]">{title}</p>
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <p className="text-sm font-semibold text-[#1a1a1a]">{title}</p>
+          {headerRight}
+        </div>
       )}
       {children}
     </div>
@@ -1888,17 +1909,22 @@ export default function EditarPerfilPage() {
       }
       return (
         <>
-          <Card title={`${v?.emoji} ${v?.label}`}>
+          <Card
+            title={`${v?.emoji} ${v?.label}`}
+            headerRight={
+              <ServiceDisponibleRow
+                compact
+                service={service}
+                puedePublicar={puedePublicarServicios}
+                onToggle={toggleServiceDisponible}
+              />
+            }
+          >
             <ServiceEditForm
               vertical={service.vertical}
               details={service.details}
               userId={userId}
               onChange={(details) => updateServiceDetails(service.id, details)}
-            />
-            <ServiceDisponibleRow
-              service={service}
-              puedePublicar={puedePublicarServicios}
-              onToggle={toggleServiceDisponible}
             />
           </Card>
           {(service.vertical === "alojamiento" ||
