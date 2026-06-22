@@ -4,7 +4,7 @@ export const SERVICE_UNAVAILABLE_MSG =
 export const COBROS_INACTIVE_MSG =
   "Este proveedor todavía no puede recibir pagos. Inténtalo más tarde.";
 
-/** Une profiles_public y profiles!proveedor_id del mismo servicio. */
+/** Datos del proveedor desde profiles_public (y opcionalmente profiles en servidor). */
 export function getProveedorFromService(service) {
   if (!service) return null;
   const pub = service.profiles_public;
@@ -14,7 +14,7 @@ export function getProveedorFromService(service) {
     ...pub,
     ...prov,
     verificado: pub?.verificado ?? prov?.verificado,
-    cobros_activos: prov?.cobros_activos ?? pub?.cobros_activos,
+    cobros_activos: pub?.cobros_activos ?? prov?.cobros_activos,
   };
 }
 

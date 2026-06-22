@@ -1049,9 +1049,7 @@ export default function ReservarPage() {
             ciudad,
             idiomas,
             verificado,
-            location_zone
-          ),
-          profiles!proveedor_id (
+            location_zone,
             cobros_activos
           )
         `,
@@ -1124,16 +1122,14 @@ export default function ReservarPage() {
               profiles_public (
                 nombre,
                 apellido,
-                verificado
-              ),
-              profiles!proveedor_id (
+                verificado,
                 cobros_activos
               )
             `,
             )
             .eq("disponible", true)
             .eq("profiles_public.verificado", true)
-            .eq("profiles!proveedor_id.cobros_activos", true)
+            .eq("profiles_public.cobros_activos", true)
             .eq("vertical", compVertical)
             .ilike("ciudad", `%${city}%`)
             .neq("proveedor_id", data.proveedor_id)
@@ -1196,9 +1192,7 @@ export default function ReservarPage() {
           profiles_public (
             nombre,
             apellido,
-            verificado
-          ),
-          profiles!proveedor_id (
+            verificado,
             cobros_activos
           )
         `,
@@ -1578,16 +1572,14 @@ export default function ReservarPage() {
           profiles_public (
             nombre,
             apellido,
-            verificado
-          ),
-          profiles!proveedor_id (
+            verificado,
             cobros_activos
           )
         `,
         )
         .eq("disponible", true)
         .eq("profiles_public.verificado", true)
-        .eq("profiles!proveedor_id.cobros_activos", true)
+        .eq("profiles_public.cobros_activos", true)
         .eq("vertical", tabVertical)
         .ilike("ciudad", `%${city}%`)
         .neq("proveedor_id", service.proveedor_id)
