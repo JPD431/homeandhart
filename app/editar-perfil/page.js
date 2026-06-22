@@ -19,6 +19,13 @@ const STORAGE_BUCKET = "Documentos";
 
 const PRIMARY = "#1d4f91";
 
+const COBROS_REQUERIDOS_MSG =
+  "Configura tus cobros antes de activar un servicio. Ve a tu panel de proveedor y pulsa «Configurar cobros».";
+
+function proveedorPuedePublicar(perfil) {
+  return perfil?.cobros_activos === true;
+}
+
 const VERTICALS = [
   { id: "alojamiento", label: "Alojamiento", color: PRIMARY, emoji: "🏠" },
   { id: "ninos", label: "Niñera", color: "#0e7a5c", emoji: "🧒" },
@@ -1217,6 +1224,13 @@ export default function EditarPerfilPage() {
   }
 
   function toggleServiceDisponible(serviceId) {
+    const target = services.find((s) => s.id === serviceId);
+    if (target && !target.disponible && !proveedorPuedePublicar(perfil)) {
+      setErrorMessage(COBROS_REQUERIDOS_MSG);
+      return;
+    }
+
+    setErrorMessage("");
     markDirty();
     setServices((prev) =>
       prev.map((s) =>
@@ -1231,6 +1245,8 @@ export default function EditarPerfilPage() {
       prev.includes(lang) ? prev.filter((l) => l !== lang) : [...prev, lang],
     );
   }
+
+  const puedePublicarServicios = proveedorPuedePublicar(perfil);
 
   const verticalsActivos = [...new Set(services.map((s) => s.vertical))];
   const esClienteSinServicios = perfil?.role === "cliente" && services.length === 0;
@@ -1369,6 +1385,18 @@ export default function EditarPerfilPage() {
 
       if (profileError) throw profileError;
 
+      const puedePublicar = proveedorPuedePublicar(perfil);
+
+      if (
+        !puedePublicar &&
+        (services.some((s) => s.disponible) ||
+          (addingService && newServiceDetails.titulo.trim()))
+      ) {
+        if (services.some((s) => s.disponible)) {
+          throw new Error(COBROS_REQUERIDOS_MSG);
+        }
+      }
+
       for (const service of services) {
         const locationFields = await getServiceLocationFields(
           service.details,
@@ -1380,7 +1408,7 @@ export default function EditarPerfilPage() {
             service.vertical,
             ciudad,
             userId,
-            service.disponible,
+            puedePublicar && service.disponible,
           ),
           ...locationFields,
         };
@@ -1408,7 +1436,7 @@ export default function EditarPerfilPage() {
             newVertical,
             ciudad,
             userId,
-            true,
+            puedePublicar,
           ),
           ...locationFields,
         };
@@ -1681,6 +1709,25 @@ export default function EditarPerfilPage() {
           </Card>
 
           <Card title="Mis servicios">
+            {!puedePublicarServicios && perfil?.role === "proveedor" && (
+              <div
+                className="mb-4 rounded-lg border px-3 py-2.5 text-xs leading-relaxed"
+                style={{
+                  borderColor: "#c47d1a",
+                  backgroundColor: "#fdf4e7",
+                  color: "#5c4a32",
+                }}
+              >
+                {COBROS_REQUERIDOS_MSG}{" "}
+                <Link
+                  href="/dashboard"
+                  className="font-semibold underline"
+                  style={{ color: PRIMARY }}
+                >
+                  Ir a configurar cobros
+                </Link>
+              </div>
+            )}
             <ul className="flex flex-col gap-3">
               {services.map((service) => {
                 const v = VERTICALS.find((x) => x.id === service.vertical);

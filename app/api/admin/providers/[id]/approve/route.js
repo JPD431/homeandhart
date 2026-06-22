@@ -37,28 +37,50 @@ export async function POST(_request, { params }) {
     .from("profiles")
     .update({ verificado: true, rechazado: false })
     .eq("id", id)
-    .select("nombre")
+    .select("nombre, cobros_activos")
     .maybeSingle();
 
   if (profileError) {
     return NextResponse.json({ error: profileError.message }, { status: 500 });
   }
 
-  const { error: servicesError } = await supabaseAdmin
-    .from("services")
-    .update({ disponible: true })
-    .eq("proveedor_id", id);
+  let serviciosActivados = false;
 
-  if (servicesError) {
-    console.error(
-      "[approve] No se pudieron activar los servicios del proveedor:",
-      servicesError,
-    );
+  if (proveedor?.cobros_activos === true) {
+    const { error: servicesError } = await supabaseAdmin
+      .from("services")
+      .update({ disponible: true })
+      .eq("proveedor_id", id);
+
+    if (servicesError) {
+      console.error(
+        "[approve] No se pudieron activar los servicios del proveedor:",
+        servicesError,
+      );
+    } else {
+      serviciosActivados = true;
+    }
+  } else {
+    const { error: servicesError } = await supabaseAdmin
+      .from("services")
+      .update({ disponible: false })
+      .eq("proveedor_id", id);
+
+    if (servicesError) {
+      console.error(
+        "[approve] No se pudieron pausar los servicios del proveedor:",
+        servicesError,
+      );
+    }
   }
 
   if (proveedor) {
     await sendProveedorVerificadoEmail(id, proveedor.nombre);
   }
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({
+    ok: true,
+    servicios_activados: serviciosActivados,
+    cobros_activos: proveedor?.cobros_activos === true,
+  });
 }
