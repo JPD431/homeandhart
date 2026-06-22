@@ -1895,6 +1895,11 @@ export default function EditarPerfilPage() {
               userId={userId}
               onChange={(details) => updateServiceDetails(service.id, details)}
             />
+            <ServiceDisponibleRow
+              service={service}
+              puedePublicar={puedePublicarServicios}
+              onToggle={toggleServiceDisponible}
+            />
           </Card>
           {(service.vertical === "alojamiento" ||
             service.vertical === "mascotas") && (
