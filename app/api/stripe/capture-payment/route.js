@@ -15,6 +15,10 @@ const supabase = createClient(
 
 const STRIPE_MIN_TRANSFER_EUR = 0.5;
 
+function roundMoney(amount) {
+  return Math.round(Number(amount) * 100) / 100;
+}
+
 function splitTransferAmount(amountFinal, bookings) {
   if (!bookings?.length) return [];
 
@@ -125,7 +129,8 @@ async function buildTransfersForPayment(paymentIntentId) {
         stripe_account_id,
         reservas_sin_comision,
         referido_por,
-        deuda_pendiente
+        deuda_pendiente,
+        saldo_pendiente_transferir
       )
     `,
     )
@@ -286,21 +291,32 @@ export async function POST(request) {
 
     const preparedPlans = transferPlan.map((plan) => {
       const deuda_a_descontar = Math.min(plan.deuda_actual, plan.amount_bruto);
-      const amount_final =
-        Math.round((plan.amount_bruto - deuda_a_descontar) * 100) / 100;
+      const amount_este_ciclo = roundMoney(
+        plan.amount_bruto - deuda_a_descontar,
+      );
+      const saldo_pendiente_anterior = roundMoney(
+        plan.profile?.saldo_pendiente_transferir,
+      );
+      const total_a_transferir = roundMoney(
+        saldo_pendiente_anterior + amount_este_ciclo,
+      );
       return {
         ...plan,
         deuda_a_descontar,
-        amount_final,
-        transfer_required: amount_final >= STRIPE_MIN_TRANSFER_EUR,
+        amount_este_ciclo,
+        amount_final: amount_este_ciclo,
+        saldo_pendiente_anterior,
+        total_a_transferir,
+        transfer_required: total_a_transferir >= STRIPE_MIN_TRANSFER_EUR,
       };
     });
 
     const totalTransferir = preparedPlans.reduce(
-      (sum, plan) => sum + plan.amount_final,
+      (sum, plan) =>
+        plan.transfer_required ? sum + plan.total_a_transferir : sum,
       0,
     );
-    const totalTransferirRounded = Math.round(totalTransferir * 100) / 100;
+    const totalTransferirRounded = roundMoney(totalTransferir);
     const capturadoNeto = Math.round(paymentIntent.amount) / 100;
     const usePlatformBalance =
       creditoGrupo > 0 || totalTransferirRounded > capturadoNeto;
@@ -316,21 +332,55 @@ export async function POST(request) {
         const summary = {
           proveedorId: plan.proveedorId,
           amount_bruto: plan.amount_bruto,
-          amount_final: plan.amount_final,
+          amount_este_ciclo: plan.amount_este_ciclo,
+          amount_final: plan.amount_este_ciclo,
+          saldo_pendiente_anterior: plan.saldo_pendiente_anterior,
+          saldo_pendiente_nuevo: plan.saldo_pendiente_anterior,
+          total_a_transferir: plan.total_a_transferir,
+          transferido_stripe: 0,
           deuda_descontada: 0,
           amount_transferido: 0,
           deuda_restante: plan.deuda_actual,
           transfer_required: plan.transfer_required,
           financiamiento,
           success: false,
+          skipped: false,
           error: null,
           booking_ids: plan.bookingIds,
         };
 
+        const { data: bookingStates, error: bookingStatesError } =
+          await supabase
+            .from("bookings")
+            .select("id, pago_liberado_at")
+            .in("id", plan.bookingIds);
+
+        if (bookingStatesError) {
+          throw bookingStatesError;
+        }
+
+        const liberadosCount =
+          bookingStates?.filter((b) => b.pago_liberado_at != null).length ?? 0;
+
+        if (liberadosCount === plan.bookingIds.length) {
+          summary.skipped = true;
+          summary.success = true;
+          transferSummaries.push(summary);
+          continue;
+        }
+
+        if (liberadosCount > 0) {
+          throw new Error(
+            `Estado inconsistente: algunos bookings del proveedor ${plan.proveedorId} ya tienen pago_liberado_at`,
+          );
+        }
+
         try {
+          let saldo_pendiente_nuevo = plan.saldo_pendiente_anterior;
+
           if (plan.transfer_required) {
             const transferParams = {
-              amount: Math.round(plan.amount_final * 100),
+              amount: Math.round(plan.total_a_transferir * 100),
               currency: "eur",
               destination: plan.stripe_account_id,
             };
@@ -341,27 +391,38 @@ export async function POST(request) {
 
             const transfer = await stripe.transfers.create(transferParams);
             transfers.push(transfer);
-            summary.amount_transferido = plan.amount_final;
+            summary.amount_transferido = plan.total_a_transferir;
+            summary.transferido_stripe = plan.total_a_transferir;
+            saldo_pendiente_nuevo = 0;
+          } else if (plan.total_a_transferir > 0) {
+            saldo_pendiente_nuevo = plan.total_a_transferir;
           }
 
           const deuda_restante = Math.max(
             0,
             plan.deuda_actual - plan.deuda_a_descontar,
           );
-          const { error: deudaError } = await supabase
+          const { error: profileError } = await supabase
             .from("profiles")
-            .update({ deuda_pendiente: deuda_restante })
+            .update({
+              deuda_pendiente: deuda_restante,
+              saldo_pendiente_transferir: saldo_pendiente_nuevo,
+            })
             .eq("id", plan.proveedorId);
 
-          if (deudaError) {
-            throw deudaError;
+          if (profileError) {
+            throw profileError;
           }
 
           summary.deuda_descontada = plan.deuda_a_descontar;
           summary.deuda_restante = deuda_restante;
+          summary.saldo_pendiente_nuevo = saldo_pendiente_nuevo;
 
           try {
-            const splits = splitTransferAmount(plan.amount_final, plan.bookings);
+            const splits = splitTransferAmount(
+              plan.amount_este_ciclo,
+              plan.bookings,
+            );
             for (const { bookingId: splitBookingId, amount } of splits) {
               const { error: importeError } = await supabase
                 .from("bookings")
@@ -409,7 +470,9 @@ export async function POST(request) {
           if (plan.transfer_required) {
             transferErrors.push({
               proveedorId: plan.proveedorId,
-              amount_final: plan.amount_final,
+              amount_este_ciclo: plan.amount_este_ciclo,
+              total_a_transferir: plan.total_a_transferir,
+              saldo_pendiente_anterior: plan.saldo_pendiente_anterior,
               error: errorMessage,
               booking_ids: plan.bookingIds,
             });
