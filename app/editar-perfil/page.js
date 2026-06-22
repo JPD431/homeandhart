@@ -18,6 +18,7 @@ const DARK_BLUE = "#163a6b";
 const STORAGE_BUCKET = "Documentos";
 
 const PRIMARY = "#1d4f91";
+const SERVICE_ACTIVE_GREEN = "#0e7a5c";
 
 const COBROS_REQUERIDOS_MSG =
   "Configura tus cobros antes de activar un servicio. Ve a tu panel de proveedor y pulsa «Configurar cobros».";
@@ -373,6 +374,51 @@ function SectionLabel({ number, title }) {
     >
       {number} · {title}
     </p>
+  );
+}
+
+function ServiceDisponibleRow({ service, puedePublicar, onToggle }) {
+  const activo = service.disponible;
+  const switchBlocked = !activo && !puedePublicar;
+
+  return (
+    <div
+      className="mt-3 flex items-center justify-between gap-4 border-t pt-3"
+      style={{ borderColor: BRAND.border }}
+    >
+      <div>
+        <p
+          className="text-sm font-semibold"
+          style={{ color: activo ? SERVICE_ACTIVE_GREEN : "#666" }}
+        >
+          {activo ? "Servicio activo" : "Servicio en pausa"}
+        </p>
+        <p className="text-xs text-[#888]">
+          {activo ? "Visible en búsqueda" : "No visible para clientes"}
+        </p>
+      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={activo}
+        aria-label={activo ? "Desactivar servicio" : "Activar servicio"}
+        aria-disabled={switchBlocked}
+        onClick={() => onToggle(service.id)}
+        className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${
+          switchBlocked ? "cursor-not-allowed opacity-50" : ""
+        }`}
+        style={{
+          backgroundColor: activo ? SERVICE_ACTIVE_GREEN : "#d1d5db",
+        }}
+      >
+        <span
+          className="absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform"
+          style={{
+            left: activo ? "calc(100% - 1.625rem)" : "0.125rem",
+          }}
+        />
+      </button>
+    </div>
   );
 }
 
@@ -1746,11 +1792,13 @@ export default function EditarPerfilPage() {
                         <button type="button" onClick={() => setEditingId(isEditing ? null : service.id)} className="rounded-lg border px-3 py-1.5 text-xs font-semibold" style={{ borderColor: BRAND.border, color: PRIMARY }}>
                           {isEditing ? "Cerrar" : "Editar"}
                         </button>
-                        <button type="button" onClick={() => toggleServiceDisponible(service.id)} className="rounded-lg border px-3 py-1.5 text-xs font-semibold" style={{ borderColor: BRAND.border, color: service.disponible ? "#166534" : "#666" }}>
-                          {service.disponible ? "Activo" : "Inactivo"}
-                        </button>
                       </div>
                     </div>
+                    <ServiceDisponibleRow
+                      service={service}
+                      puedePublicar={puedePublicarServicios}
+                      onToggle={toggleServiceDisponible}
+                    />
                     {isEditing && (
                       <ServiceEditForm vertical={service.vertical} details={service.details} userId={userId} onChange={(details) => updateServiceDetails(service.id, details)} />
                     )}
