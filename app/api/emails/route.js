@@ -729,6 +729,156 @@ function reservaNuevaEmailHtml(data) {
   });
 }
 
+function formatEurEmail(amount) {
+  const n = Number(amount);
+  if (!Number.isFinite(n)) return "0,00 €";
+  return `${n.toFixed(2).replace(".", ",")} €`;
+}
+
+function formatFechaReservaEmail(fechaInicio, fechaFin) {
+  if (!fechaInicio) return "—";
+  if (fechaFin && fechaFin !== fechaInicio) {
+    return `${fechaInicio} – ${fechaFin}`;
+  }
+  return fechaInicio;
+}
+
+function reservaCanceladaClienteEmailHtml(data) {
+  const pct = Number(data.pct) || 0;
+  const precioTotal = Number(data.precio_total) || 0;
+  const reembolsoTotal = Number(data.reembolso_total) || 0;
+  const reembolsoTarjeta = Number(data.reembolso_tarjeta) || 0;
+  const reembolsoCredito = Number(data.reembolso_credito) || 0;
+  const importeFinal =
+    data.importe_final != null
+      ? Number(data.importe_final)
+      : Math.max(0, precioTotal - reembolsoTotal);
+  const creditoAplicado = Number(data.credito_aplicado) || 0;
+  const importeTarjetaInicial = Math.max(0, precioTotal - creditoAplicado);
+  const importeTarjetaFinal = Math.max(0, importeTarjetaInicial - reembolsoTarjeta);
+  const proveedorNombre = data.proveedor_nombre || "tu proveedor";
+  const servicioTitulo = data.servicio_titulo || "tu reserva";
+  const fechaLabel = formatFechaReservaEmail(
+    data.fecha_inicio,
+    data.fecha_fin,
+  );
+  const historialUrl = `${BASE_URL}/historial`;
+
+  let tarjetaHtml = "";
+  if (importeTarjetaInicial > 0) {
+    if (pct >= 100) {
+      tarjetaHtml = `<p style="margin:16px 0 0;font-size:14px;color:#444;line-height:1.7;">
+        <strong>Tarjeta:</strong> no se te cobrará nada por esta reserva.
+      </p>`;
+    } else if (pct === 0 || reembolsoTarjeta <= 0) {
+      tarjetaHtml = `<p style="margin:16px 0 0;font-size:14px;color:#444;line-height:1.7;">
+        <strong>Tarjeta:</strong> se mantiene el cargo de <strong>${formatEurEmail(importeTarjetaFinal)}</strong> según la política de cancelación.
+      </p>`;
+    } else {
+      tarjetaHtml = `<p style="margin:16px 0 0;font-size:14px;color:#444;line-height:1.7;">
+        <strong>Tarjeta:</strong> cargo final de <strong>${formatEurEmail(importeTarjetaFinal)}</strong>
+        (no se cobrarán los <strong>${formatEurEmail(reembolsoTarjeta)}</strong> restantes de la reserva).
+        Puede tardar unos días en reflejarse en tu banco.
+      </p>`;
+    }
+  }
+
+  let creditoHtml = "";
+  if (reembolsoCredito > 0) {
+    creditoHtml = `<div style="margin:16px 0 0;padding:14px 18px;background-color:#e6f4f0;border-radius:8px;border:1px solid #c5e8dc;">
+      <p style="margin:0;font-size:14px;color:#444;line-height:1.7;">
+        <strong style="color:${BRAND_GREEN};">Crédito Home&amp;Heart:</strong>
+        hemos devuelto <strong>${formatEurEmail(reembolsoCredito)}</strong> a tu saldo,
+        disponible en tu próxima reserva.
+      </p>
+    </div>`;
+  }
+
+  const devolucionLabel =
+    pct > 0 ? `Devolución (${pct}%)` : "Devolución";
+
+  return emailLayout({
+    title: "Tu reserva en Home&Heart ha sido cancelada",
+    bodyHtml: `
+      <h1 style="margin:0;font-size:22px;color:${BRAND_PRIMARY};font-weight:600;text-align:center;">
+        Tu reserva ha sido cancelada
+      </h1>
+      <p style="margin:20px 0 0;font-size:15px;color:#444;line-height:1.7;">
+        Hola ${data.cliente_nombre ?? "Cliente"}, hemos cancelado tu reserva de
+        <strong>${servicioTitulo}</strong> con <strong>${proveedorNombre}</strong>
+        para el <strong>${fechaLabel}</strong>.
+      </p>
+      <p style="margin:16px 0 0;font-size:14px;color:#444;line-height:1.7;">
+        Según la política de cancelación del anuncio, te corresponde un
+        <strong>${pct}%</strong> de devolución.
+      </p>
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:24px 0 0;background-color:${BRAND_LIGHT};border-radius:8px;padding:16px 20px;">
+        <tr>
+          <td style="padding:6px 0;font-size:14px;color:#666;">Total de la reserva</td>
+          <td style="padding:6px 0;font-size:14px;color:#222;font-weight:600;text-align:right;">${formatEurEmail(precioTotal)}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;font-size:14px;color:#666;">${devolucionLabel}</td>
+          <td style="padding:6px 0;font-size:14px;color:${BRAND_GREEN};font-weight:600;text-align:right;">−${formatEurEmail(reembolsoTotal)}</td>
+        </tr>
+        <tr>
+          <td colspan="2" style="padding:8px 0 0;border-top:1px solid ${BRAND_BORDER};"></td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;font-size:15px;color:#222;font-weight:600;">Importe final que pagas</td>
+          <td style="padding:6px 0;font-size:15px;color:${BRAND_PRIMARY};font-weight:700;text-align:right;">${formatEurEmail(importeFinal)}</td>
+        </tr>
+      </table>
+      ${creditoHtml}
+      ${tarjetaHtml}
+      <p style="margin:20px 0 0;font-size:13px;color:#888;line-height:1.6;">
+        El importe final es lo que pagas por esta reserva tras la cancelación.
+        Si tienes dudas, puedes revisar tu historial o escribirnos.
+      </p>
+      ${ctaButton(historialUrl, "Ver historial de reservas")}
+    `,
+  });
+}
+
+async function sendReservaCanceladaClienteEmail(data) {
+  const payload = { ...data };
+
+  if (payload.cliente_id && !payload.cliente_email) {
+    payload.cliente_email = await resolverEmailUsuario(payload.cliente_id);
+  }
+
+  if (!payload.cliente_nombre && payload.cliente_id) {
+    payload.cliente_nombre =
+      (await resolverNombreUsuario(payload.cliente_id)) || "Cliente";
+  }
+
+  const required = [
+    "cliente_email",
+    "servicio_titulo",
+    "fecha_inicio",
+    "precio_total",
+  ];
+
+  for (const field of required) {
+    if (payload[field] == null || payload[field] === "") {
+      return { error: `Falta el campo requerido: ${field}` };
+    }
+  }
+
+  const result = await resend.emails.send({
+    from: FROM,
+    to: payload.cliente_email,
+    subject: "Tu reserva en Home&Heart ha sido cancelada",
+    html: reservaCanceladaClienteEmailHtml(payload),
+  });
+
+  if (result.error) {
+    return { error: result.error.message };
+  }
+
+  return { success: true };
+}
+
 async function sendReservaNuevaEmail(data) {
   let proveedorEmail = data.proveedor_email;
 
@@ -1348,6 +1498,16 @@ export async function POST(request) {
 
       if (result.error) {
         return Response.json({ error: result.error.message }, { status: 400 });
+      }
+
+      return Response.json({ success: true });
+    }
+
+    if (tipo === "reserva_cancelada_cliente") {
+      const result = await sendReservaCanceladaClienteEmail(data);
+
+      if (result.error) {
+        return Response.json({ error: result.error }, { status: 400 });
       }
 
       return Response.json({ success: true });

@@ -8,6 +8,7 @@ import {
 } from "@/app/lib/cancelacion-politica";
 import { calcularRepartoCancelacionCliente } from "@/app/lib/cancelacion-cliente-reparto";
 import { ejecutarTransferProveedorConDeudaSaldo } from "@/app/lib/transfer-proveedor";
+import { getProveedorFromService } from "@/app/lib/service-bookable";
 
 const supabaseAdmin = createServiceClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -544,6 +545,68 @@ async function aplicarCompensacionProveedorCancelacionCliente(
   };
 }
 
+/** Solo reservas individuales: en bundle el reembolso Stripe no es fiable aún. */
+async function enviarEmailReservaCanceladaCliente(
+  booking,
+  service,
+  reembolso,
+  esBundle,
+) {
+  if (esBundle || !service) return;
+
+  const baseUrl = process.env.NEXT_PUBLIC_URL;
+  if (!baseUrl) {
+    console.error(
+      "[bookings/cancelar-cliente] NEXT_PUBLIC_URL no configurada, email omitido",
+    );
+    return;
+  }
+
+  const proveedor = getProveedorFromService(service);
+  const proveedorNombre =
+    [proveedor?.nombre, proveedor?.apellido].filter(Boolean).join(" ").trim() ||
+    undefined;
+  const precioTotal = Number(booking.precio_total) || 0;
+  const reembolsoBruto = Number(reembolso.bruto) || 0;
+
+  try {
+    const res = await fetch(`${baseUrl}/api/emails`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        tipo: "reserva_cancelada_cliente",
+        cliente_id: booking.cliente_id,
+        servicio_titulo: service.titulo || "Servicio Home&Heart",
+        proveedor_nombre: proveedorNombre,
+        fecha_inicio: booking.fecha_inicio,
+        fecha_fin: booking.fecha_fin,
+        precio_total: precioTotal,
+        credito_aplicado: Number(booking.credito_aplicado) || 0,
+        pct: reembolso.pct,
+        reembolso_total: reembolsoBruto,
+        reembolso_tarjeta: Number(reembolso.tarjeta) || 0,
+        reembolso_credito: Number(reembolso.credito) || 0,
+        importe_final: roundMoney(precioTotal - reembolsoBruto),
+      }),
+    });
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      console.error(
+        "[bookings/cancelar-cliente] Error enviando email reserva_cancelada_cliente:",
+        data.error || res.status,
+        { bookingId: booking.id },
+      );
+    }
+  } catch (err) {
+    console.error(
+      "[bookings/cancelar-cliente] Error enviando email reserva_cancelada_cliente:",
+      err,
+      { bookingId: booking.id },
+    );
+  }
+}
+
 async function liberarFechasReserva(bookingId) {
   try {
     const { error } = await supabaseAdmin
@@ -611,7 +674,12 @@ export async function POST(request) {
         titulo,
         vertical,
         ciudad,
-        cancellation_policy
+        cancellation_policy,
+        proveedor_id,
+        profiles!proveedor_id (
+          nombre,
+          apellido
+        )
       )
     `,
     )
@@ -662,6 +730,25 @@ export async function POST(request) {
       service,
       reembolso,
     );
+
+  let esBundle = false;
+  try {
+    esBundle =
+      (await contarBookingsPorPaymentIntent(booking.payment_intent_id)) > 1;
+  } catch (err) {
+    console.error(
+      "[bookings/cancelar-cliente] Error comprobando bundle para email:",
+      err,
+      { bookingId },
+    );
+  }
+
+  await enviarEmailReservaCanceladaCliente(
+    booking,
+    service,
+    reembolso,
+    esBundle,
+  );
 
   return NextResponse.json({
     ok: true,
