@@ -607,6 +607,28 @@ async function enviarEmailReservaCanceladaCliente(
   }
 }
 
+/** Persiste el desglose de reembolso al cliente (historial). Solo reservas individuales. */
+async function guardarReembolsoClienteEnBooking(bookingId, reembolso, esBundle) {
+  if (esBundle) return;
+
+  const { error } = await supabaseAdmin
+    .from("bookings")
+    .update({
+      reembolso_cliente_pct: reembolso.pct,
+      reembolso_cliente_total: roundMoney(reembolso.bruto),
+      reembolso_cliente_credito: roundMoney(reembolso.credito),
+    })
+    .eq("id", bookingId);
+
+  if (error) {
+    console.error(
+      "[bookings/cancelar-cliente] No se pudo guardar reembolso_cliente en booking:",
+      error,
+      { bookingId },
+    );
+  }
+}
+
 async function liberarFechasReserva(bookingId) {
   try {
     const { error } = await supabaseAdmin
@@ -724,24 +746,26 @@ export async function POST(request) {
 
   const reembolso = await calcularYAplicarReembolso(booking, service);
 
-  const compensacion =
-    await aplicarCompensacionProveedorCancelacionCliente(
-      booking,
-      service,
-      reembolso,
-    );
-
   let esBundle = false;
   try {
     esBundle =
       (await contarBookingsPorPaymentIntent(booking.payment_intent_id)) > 1;
   } catch (err) {
     console.error(
-      "[bookings/cancelar-cliente] Error comprobando bundle para email:",
+      "[bookings/cancelar-cliente] Error comprobando bundle:",
       err,
       { bookingId },
     );
   }
+
+  await guardarReembolsoClienteEnBooking(bookingId, reembolso, esBundle);
+
+  const compensacion =
+    await aplicarCompensacionProveedorCancelacionCliente(
+      booking,
+      service,
+      reembolso,
+    );
 
   await enviarEmailReservaCanceladaCliente(
     booking,
