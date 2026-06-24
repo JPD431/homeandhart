@@ -1386,7 +1386,6 @@ function BundleNewCardCheckoutForm({
           clientSecret: first.clientSecret,
           confirmParams: {
             return_url: `${window.location.origin}/dashboard`,
-            setup_future_usage: "off_session",
           },
           redirect: "if_required",
         });
