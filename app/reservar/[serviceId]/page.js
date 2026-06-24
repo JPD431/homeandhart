@@ -1487,6 +1487,7 @@ function BundleNewCardCheckout(props) {
         amount: deferredAmountCents,
         currency: "eur",
         captureMethod: "manual",
+        setupFutureUsage: "off_session",
       }}
     >
       <BundleNewCardCheckoutForm {...props} />
