@@ -1282,19 +1282,18 @@ function BundleNewCardCheckoutForm({
 
     if (!stripe || !elements) return;
 
-    setPaying(true);
-    setErrorMessage("");
-    setError("");
-
     const plan = buildPaymentPlan(priceSummary, creditoAplicado);
     const planError = validateBundlePaymentPlan(plan);
     if (planError) {
-      setPaying(false);
       setErrorMessage(planError);
       return;
     }
 
     const needsPiItems = plan.filter((item) => item.needsPi);
+
+    setPaying(true);
+    setErrorMessage("");
+    setError("");
 
     try {
       if (needsPiItems.length === 0) {
@@ -1305,6 +1304,11 @@ function BundleNewCardCheckoutForm({
           })),
         );
         return;
+      }
+
+      const { error: submitError } = await elements.submit();
+      if (submitError) {
+        throw new Error(submitError.message);
       }
 
       const created = [];
