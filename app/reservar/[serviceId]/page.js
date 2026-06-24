@@ -132,6 +132,50 @@ const COMPLEMENTARY_VERTICALS = {
   mascotas: ["alojamiento", "ninos"],
 };
 
+const RESERVAR_SERVICE_COLUMNS = `
+  id,
+  titulo,
+  vertical,
+  precio,
+  disponible,
+  cancellation_policy,
+  descripcion,
+  estancia_minima,
+  estancia_maxima,
+  antelacion_minima,
+  dias_disponibles,
+  reserva_inmediata,
+  disponible_para_viajar,
+  ciudad,
+  proveedor_id,
+  oferta_descuento,
+  oferta_valida_hasta,
+  descuentos_duracion
+`;
+
+const RESERVAR_SERVICE_SELECT = `
+  ${RESERVAR_SERVICE_COLUMNS},
+  profiles_public (
+    nombre,
+    apellido,
+    verificado,
+    cobros_activos
+  )
+`;
+
+const RESERVAR_MAIN_SERVICE_SELECT = `
+  ${RESERVAR_SERVICE_COLUMNS},
+  profiles_public (
+    nombre,
+    apellido,
+    ciudad,
+    idiomas,
+    verificado,
+    location_zone,
+    cobros_activos
+  )
+`;
+
 function HomeIcon({ className, style }) {
   return (
     <svg className={className} style={style} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" aria-hidden>
@@ -1630,20 +1674,7 @@ export default function ReservarPage() {
 
       const { data, error } = await supabase
         .from("services")
-        .select(
-          `
-          *,
-          profiles_public (
-            nombre,
-            apellido,
-            ciudad,
-            idiomas,
-            verificado,
-            location_zone,
-            cobros_activos
-          )
-        `,
-        )
+        .select(RESERVAR_MAIN_SERVICE_SELECT)
         .eq("id", serviceId)
         .single();
 
@@ -1688,37 +1719,7 @@ export default function ReservarPage() {
         for (const compVertical of complementaryVerticals) {
           const { data: compData } = await supabase
             .from("services")
-            .select(
-              `
-              id,
-              titulo,
-              vertical,
-              precio,
-              disponible,
-              cancellation_policy,
-              descripcion,
-              estancia_minima,
-              estancia_maxima,
-              antelacion_minima,
-              dias_disponibles,
-              reserva_inmediata,
-              disponible_para_viajar,
-              ciudad,
-              proveedor_id,
-              direccion_exacta,
-              telefono_contacto,
-              modalidad,
-              oferta_descuento,
-              oferta_valida_hasta,
-              descuentos_duracion,
-              profiles_public (
-                nombre,
-                apellido,
-                verificado,
-                cobros_activos
-              )
-            `,
-            )
+            .select(RESERVAR_SERVICE_SELECT)
             .eq("disponible", true)
             .eq("profiles_public.verificado", true)
             .eq("profiles_public.cobros_activos", true)
@@ -1760,37 +1761,7 @@ export default function ReservarPage() {
 
       const { data, error } = await supabase
         .from("services")
-        .select(
-          `
-          id,
-          titulo,
-          vertical,
-          precio,
-          disponible,
-          cancellation_policy,
-          descripcion,
-          estancia_minima,
-          estancia_maxima,
-          antelacion_minima,
-          dias_disponibles,
-          reserva_inmediata,
-          disponible_para_viajar,
-          ciudad,
-          proveedor_id,
-          direccion_exacta,
-          telefono_contacto,
-          modalidad,
-          oferta_descuento,
-          oferta_valida_hasta,
-          descuentos_duracion,
-          profiles_public (
-            nombre,
-            apellido,
-            verificado,
-            cobros_activos
-          )
-        `,
-        )
+        .select(RESERVAR_SERVICE_SELECT)
         .eq("id", bundleAddId)
         .single();
 
@@ -2153,37 +2124,7 @@ export default function ReservarPage() {
 
       const { data: compData } = await supabase
         .from("services")
-        .select(
-          `
-          id,
-          titulo,
-          vertical,
-          precio,
-          disponible,
-          cancellation_policy,
-          descripcion,
-          estancia_minima,
-          estancia_maxima,
-          antelacion_minima,
-          dias_disponibles,
-          reserva_inmediata,
-          disponible_para_viajar,
-          ciudad,
-          proveedor_id,
-          direccion_exacta,
-          telefono_contacto,
-          modalidad,
-          oferta_descuento,
-          oferta_valida_hasta,
-          descuentos_duracion,
-          profiles_public (
-            nombre,
-            apellido,
-            verificado,
-            cobros_activos
-          )
-        `,
-        )
+        .select(RESERVAR_SERVICE_SELECT)
         .eq("disponible", true)
         .eq("profiles_public.verificado", true)
         .eq("profiles_public.cobros_activos", true)
