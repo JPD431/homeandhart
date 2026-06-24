@@ -372,6 +372,178 @@ function FechaInicioConDias({
 }
 
 const MAX_CREDITO_PORCENTAJE = 0.6;
+const MIN_STRIPE_EUR = 0.5;
+
+function roundMoney(amount) {
+  return Math.round(amount * 100) / 100;
+}
+
+/** Reparte creditoAplicado del grupo entre servicios según precio_total (igual que servidor). */
+function splitCreditoPorServicio(preciosPorServicio, creditoAplicado, totalGrupo) {
+  const creditoMap = new Map();
+
+  if (!creditoAplicado || creditoAplicado <= 0 || !preciosPorServicio.length) {
+    for (const { service_id } of preciosPorServicio) {
+      creditoMap.set(service_id, 0);
+    }
+    return creditoMap;
+  }
+
+  let assigned = 0;
+
+  for (let i = 0; i < preciosPorServicio.length; i++) {
+    const { service_id, precio_total } = preciosPorServicio[i];
+
+    if (i === preciosPorServicio.length - 1) {
+      creditoMap.set(service_id, roundMoney(creditoAplicado - assigned));
+    } else {
+      const share = roundMoney(
+        creditoAplicado * (precio_total / totalGrupo),
+      );
+      creditoMap.set(service_id, share);
+      assigned += share;
+    }
+  }
+
+  return creditoMap;
+}
+
+function buildPaymentPlan(priceSummary, creditoAplicado) {
+  const preciosPorServicio = priceSummary.lines.map((line) => ({
+    service_id: line.id,
+    precio_total: line.total,
+  }));
+  const creditoMap = splitCreditoPorServicio(
+    preciosPorServicio,
+    creditoAplicado,
+    priceSummary.total,
+  );
+
+  return preciosPorServicio.map(({ service_id, precio_total }) => {
+    const creditoServicio = creditoMap.get(service_id) ?? 0;
+    const tarjeta = roundMoney(precio_total - creditoServicio);
+    return {
+      service_id,
+      precio_total,
+      creditoServicio,
+      tarjeta,
+      needsPi: tarjeta > 0,
+    };
+  });
+}
+
+function validateBundlePaymentPlan(plan) {
+  for (const item of plan) {
+    if (item.needsPi && item.tarjeta < MIN_STRIPE_EUR) {
+      return `El importe con tarjeta (${item.tarjeta.toFixed(2)}€) es inferior al mínimo de Stripe (0,50€).`;
+    }
+  }
+  return null;
+}
+
+async function createServicePaymentIntent({
+  amount,
+  serviceId,
+  clienteId,
+  grupoReserva,
+  customer,
+  paymentMethod,
+  confirmSaved,
+}) {
+  const res = await fetch("/api/stripe/create-payment-intent", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      amount,
+      customer: customer || undefined,
+      payment_method: paymentMethod || undefined,
+      confirm_saved: confirmSaved || undefined,
+      metadata: {
+        service_id: String(serviceId),
+        cliente_id: String(clienteId),
+        grupo_reserva: String(grupoReserva),
+      },
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok || data.error) {
+    throw new Error(data.error || "No se pudo crear la retención de pago.");
+  }
+  return data;
+}
+
+async function rollbackBundlePaymentIntents(paymentIntentIds) {
+  for (const paymentIntentId of paymentIntentIds) {
+    try {
+      await fetch("/api/stripe/cancel-payment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paymentIntentId }),
+      });
+    } catch (err) {
+      console.error("[bundle] No se pudo cancelar PI en rollback:", paymentIntentId, err);
+    }
+  }
+}
+
+function extractPaymentMethodId(paymentIntent) {
+  if (!paymentIntent?.payment_method) return null;
+  return typeof paymentIntent.payment_method === "string"
+    ? paymentIntent.payment_method
+    : paymentIntent.payment_method?.id ?? null;
+}
+
+function paymentsPayloadFromPlan(plan, createdPis) {
+  return plan.map((item) => ({
+    service_id: item.service_id,
+    payment_intent_id: item.needsPi
+      ? createdPis.find((c) => c.service_id === item.service_id)?.paymentIntentId ?? null
+      : null,
+  }));
+}
+
+async function attachPaymentMethodToCustomer({
+  paymentMethodId,
+  stripeCustomerId,
+  userEmail,
+  clienteNombre,
+  userId,
+}) {
+  if (!paymentMethodId) return;
+
+  let customerId = stripeCustomerId;
+  if (!customerId) {
+    const customerRes = await fetch("/api/stripe/customer", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: userEmail,
+        nombre: clienteNombre || "Cliente",
+      }),
+    });
+    const customerData = await customerRes.json();
+    if (customerRes.ok && customerData.customer_id) {
+      customerId = customerData.customer_id;
+    }
+  }
+
+  if (paymentMethodId && customerId) {
+    await fetch("/api/stripe/customer", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "attach",
+        payment_method_id: paymentMethodId,
+        customer_id: customerId,
+      }),
+    });
+
+    await supabase
+      .from("profiles")
+      .update({ stripe_customer_id: customerId })
+      .eq("id", userId);
+  }
+}
 
 const inputClass =
   "w-full rounded-xl border px-4 py-3 text-sm text-[#1a1a1a] outline-none focus:ring-2 focus:ring-[#1d4f91]/30";
@@ -902,6 +1074,369 @@ function CheckoutForm({
         {paying ? "Procesando pago…" : `Pagar ${precioTotal.toFixed(2)}€ →`}
       </button>
     </form>
+  );
+}
+
+function BundleSavedCardCheckout({
+  priceSummary,
+  creditoAplicado,
+  totalAPagar,
+  paymentMethod,
+  stripeCustomerId,
+  userId,
+  grupoReserva,
+  onComplete,
+  onUseNewCard,
+  getBookingDateError,
+  disabled,
+}) {
+  const [paying, setPaying] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handlePayWithSaved() {
+    setPaying(true);
+    setError("");
+
+    const dateError = getBookingDateError?.();
+    if (dateError) {
+      setError(dateError);
+      setPaying(false);
+      return;
+    }
+
+    if (!grupoReserva) {
+      setError("Datos de reserva incompletos. Recarga la página e inténtalo de nuevo.");
+      setPaying(false);
+      return;
+    }
+
+    const plan = buildPaymentPlan(priceSummary, creditoAplicado);
+    const planError = validateBundlePaymentPlan(plan);
+    if (planError) {
+      setError(planError);
+      setPaying(false);
+      return;
+    }
+
+    const needsPiItems = plan.filter((item) => item.needsPi);
+
+    try {
+      if (needsPiItems.length === 0) {
+        await onComplete(
+          plan.map((item) => ({
+            service_id: item.service_id,
+            payment_intent_id: null,
+          })),
+        );
+        return;
+      }
+
+      const created = [];
+      for (const item of needsPiItems) {
+        const data = await createServicePaymentIntent({
+          amount: item.tarjeta,
+          serviceId: item.service_id,
+          clienteId: userId,
+          grupoReserva,
+          customer: stripeCustomerId,
+          paymentMethod: paymentMethod.id,
+          confirmSaved: true,
+        });
+        created.push({
+          service_id: item.service_id,
+          paymentIntentId: data.paymentIntentId,
+          clientSecret: data.clientSecret,
+        });
+      }
+
+      const stripe = await stripePromise;
+      if (!stripe) {
+        throw new Error("Stripe no está disponible.");
+      }
+
+      const confirmedIds = [];
+      try {
+        for (const item of created) {
+          const { error: confirmError, paymentIntent } =
+            await stripe.confirmCardPayment(item.clientSecret, {
+              payment_method: paymentMethod.id,
+            });
+
+          if (confirmError) {
+            throw new Error(confirmError.message);
+          }
+
+          confirmedIds.push(paymentIntent?.id || item.paymentIntentId);
+        }
+
+        try {
+          await onComplete(paymentsPayloadFromPlan(plan, created));
+        } catch (completeErr) {
+          await rollbackBundlePaymentIntents(confirmedIds);
+          throw completeErr;
+        }
+      } catch (confirmErr) {
+        await rollbackBundlePaymentIntents(
+          created.map((item) => item.paymentIntentId),
+        );
+        throw confirmErr;
+      }
+    } catch (err) {
+      setError(
+        err.message ||
+          "No se pudieron confirmar todas las retenciones. No se ha creado la reserva.",
+      );
+    } finally {
+      setPaying(false);
+    }
+  }
+
+  const retencionesCount = buildPaymentPlan(priceSummary, creditoAplicado).filter(
+    (item) => item.needsPi,
+  ).length;
+
+  return (
+    <div className="mt-6">
+      <p className="text-[11px] leading-relaxed text-[#666]">
+        {retencionesCount > 1
+          ? `${retencionesCount} retenciones en tarjeta, una por servicio.`
+          : "Retención en tarjeta por servicio."}
+      </p>
+      <div
+        className="mt-3 rounded-xl border px-4 py-4"
+        style={{ borderColor: BRAND.border, backgroundColor: BRAND.light }}
+      >
+        <p className="text-sm font-semibold text-[#1a1a1a]">
+          {getCardBrandLabel(paymentMethod.card?.brand)} ····{" "}
+          {paymentMethod.card?.last4}
+        </p>
+      </div>
+      {error && (
+        <p className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </p>
+      )}
+      <button
+        type="button"
+        disabled={paying || disabled}
+        onClick={handlePayWithSaved}
+        className="mt-4 min-h-[44px] w-full py-3 text-[13px] font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+        style={{ backgroundColor: "#1d4f91", borderRadius: 6 }}
+      >
+        {paying ? "Procesando pago…" : `Pagar ${totalAPagar.toFixed(2)}€ →`}
+      </button>
+      <button
+        type="button"
+        onClick={onUseNewCard}
+        className="mt-3 w-full text-center text-sm font-medium no-underline hover:underline"
+        style={{ color: BRAND.primary }}
+      >
+        Usar otra tarjeta
+      </button>
+    </div>
+  );
+}
+
+function BundleNewCardCheckoutForm({
+  priceSummary,
+  creditoAplicado,
+  totalAPagar,
+  userId,
+  grupoReserva,
+  stripeCustomerId,
+  userEmail,
+  clienteNombre,
+  onComplete,
+  vertical,
+  fechaInicio,
+  hora,
+  setErrorMessage,
+  service,
+  disabled,
+}) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [paying, setPaying] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+
+    if (service?.vertical === "ninos") {
+      if (!hora || hora.trim() === "") {
+        setErrorMessage("Por favor selecciona una hora válida");
+        return;
+      }
+    }
+
+    const dateError = validateBookingDates(vertical, fechaInicio, hora);
+    if (dateError) {
+      setErrorMessage(dateError);
+      return;
+    }
+
+    if (!grupoReserva) {
+      setErrorMessage("Datos de reserva incompletos. Recarga la página e inténtalo de nuevo.");
+      return;
+    }
+
+    if (!stripe || !elements) return;
+
+    setPaying(true);
+    setErrorMessage("");
+    setError("");
+
+    const plan = buildPaymentPlan(priceSummary, creditoAplicado);
+    const planError = validateBundlePaymentPlan(plan);
+    if (planError) {
+      setPaying(false);
+      setErrorMessage(planError);
+      return;
+    }
+
+    const needsPiItems = plan.filter((item) => item.needsPi);
+
+    try {
+      if (needsPiItems.length === 0) {
+        await onComplete(
+          plan.map((item) => ({
+            service_id: item.service_id,
+            payment_intent_id: null,
+          })),
+        );
+        return;
+      }
+
+      const created = [];
+      for (const item of needsPiItems) {
+        const data = await createServicePaymentIntent({
+          amount: item.tarjeta,
+          serviceId: item.service_id,
+          clienteId: userId,
+          grupoReserva,
+          customer: stripeCustomerId || undefined,
+        });
+        created.push({
+          service_id: item.service_id,
+          paymentIntentId: data.paymentIntentId,
+          clientSecret: data.clientSecret,
+        });
+      }
+
+      const confirmedIds = [];
+      let paymentMethodId = null;
+
+      try {
+        const first = created[0];
+        const { error: confirmError, paymentIntent } = await stripe.confirmPayment({
+          elements,
+          clientSecret: first.clientSecret,
+          confirmParams: {
+            return_url: `${window.location.origin}/dashboard`,
+          },
+          redirect: "if_required",
+        });
+
+        if (confirmError) {
+          throw new Error(confirmError.message);
+        }
+
+        confirmedIds.push(paymentIntent?.id || first.paymentIntentId);
+        paymentMethodId = extractPaymentMethodId(paymentIntent);
+
+        for (let i = 1; i < created.length; i++) {
+          const item = created[i];
+          const { error: cardError, paymentIntent: pi } =
+            await stripe.confirmCardPayment(item.clientSecret, {
+              payment_method: paymentMethodId,
+            });
+
+          if (cardError) {
+            throw new Error(cardError.message);
+          }
+
+          confirmedIds.push(pi?.id || item.paymentIntentId);
+        }
+
+        try {
+          await onComplete(paymentsPayloadFromPlan(plan, created));
+        } catch (completeErr) {
+          await rollbackBundlePaymentIntents(
+            created.map((item) => item.paymentIntentId),
+          );
+          throw completeErr;
+        }
+
+        await attachPaymentMethodToCustomer({
+          paymentMethodId,
+          stripeCustomerId,
+          userEmail,
+          clienteNombre,
+          userId,
+        });
+      } catch (confirmErr) {
+        await rollbackBundlePaymentIntents(
+          created.map((item) => item.paymentIntentId),
+        );
+        throw confirmErr;
+      }
+    } catch (err) {
+      setErrorMessage(
+        err.message ||
+          "No se pudieron confirmar todas las retenciones. No se ha creado la reserva.",
+      );
+      setError(
+        err.message ||
+          "No se pudieron confirmar todas las retenciones. No se ha creado la reserva.",
+      );
+    } finally {
+      setPaying(false);
+    }
+  }
+
+  const retencionesCount = buildPaymentPlan(priceSummary, creditoAplicado).filter(
+    (item) => item.needsPi,
+  ).length;
+
+  return (
+    <form onSubmit={handleSubmit} className="mt-6">
+      <p className="mb-3 text-[11px] leading-relaxed text-[#666]">
+        {retencionesCount > 1
+          ? `${retencionesCount} retenciones en tarjeta, una por servicio.`
+          : "Retención en tarjeta por servicio."}
+      </p>
+      <PaymentElement />
+      {error && (
+        <p className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </p>
+      )}
+      <button
+        type="submit"
+        disabled={!stripe || paying || disabled}
+        className="mt-4 min-h-[44px] w-full py-3 text-[13px] font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+        style={{ backgroundColor: "#1d4f91", borderRadius: 6 }}
+      >
+        {paying ? "Procesando pago…" : `Pagar ${totalAPagar.toFixed(2)}€ →`}
+      </button>
+    </form>
+  );
+}
+
+function BundleNewCardCheckout(props) {
+  const deferredAmountCents = Math.max(Math.round(props.totalAPagar * 100), 50);
+
+  return (
+    <Elements
+      stripe={stripePromise}
+      options={{
+        mode: "payment",
+        amount: deferredAmountCents,
+        currency: "eur",
+      }}
+    >
+      <BundleNewCardCheckoutForm {...props} />
+    </Elements>
   );
 }
 
@@ -1723,6 +2258,13 @@ export default function ReservarPage() {
     const grupo = crypto.randomUUID();
     setGrupoReserva(grupo);
 
+    if (selectedServices.length > 1) {
+      setClientSecret(null);
+      setPaymentIntentId(null);
+      setPaymentIntentLoading(false);
+      return;
+    }
+
     if (savedPaymentMethods.length > 0 && !useNewCard) {
       setClientSecret(null);
       setPaymentIntentId(null);
@@ -1781,6 +2323,7 @@ export default function ReservarPage() {
     hora,
     calendarioError,
     disponibilidadChecking,
+    selectedServices.length,
   ]);
 
   const completeBooking = useCallback(
@@ -1798,6 +2341,64 @@ export default function ReservarPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           payment_intent_id: confirmedPaymentIntentId,
+          grupo_reserva: grupoReserva,
+          main_service_id: service.id,
+          service_ids: selectedServices.map((s) => s.id),
+          fecha_inicio: fechaInicio,
+          fecha_fin: fechaFin || fechaInicio,
+          hora,
+          duracion_horas: duracionHoras,
+          mensaje,
+          familia_id:
+            reservarComoFamilia && familiaInfo?.id ? familiaInfo.id : null,
+          precio_especial: precioEspecialChat,
+          valida_hasta: validaHastaParam || null,
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || data.error) {
+        throw new Error(data.error || "No se pudo completar la reserva.");
+      }
+
+      router.push("/dashboard");
+    },
+    [
+      userId,
+      service,
+      grupoReserva,
+      priceSummary.total,
+      selectedServices,
+      fechaInicio,
+      fechaFin,
+      hora,
+      duracionHoras,
+      mensaje,
+      router,
+      reservarComoFamilia,
+      familiaInfo,
+      precioListo,
+      precioEspecialChat,
+      validaHastaParam,
+    ],
+  );
+
+  const completeBundleBooking = useCallback(
+    async (payments) => {
+      if (!userId || !service || !grupoReserva) {
+        throw new Error("Datos de reserva incompletos.");
+      }
+
+      if (!precioListo || priceSummary.total <= 0) {
+        throw new Error("Completa las fechas o la duración para calcular el precio.");
+      }
+
+      const res = await fetch("/api/bookings/complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          payments,
           grupo_reserva: grupoReserva,
           main_service_id: service.id,
           service_ids: selectedServices.map((s) => s.id),
@@ -1963,6 +2564,7 @@ export default function ReservarPage() {
   const mainPriceLine =
     priceSummary.lines.find((l) => l.id === service.id) ?? priceSummary.lines[0];
   const bundleLines = priceSummary.lines.filter((l) => l.id !== service.id);
+  const isBundle = selectedServices.length > 1;
   const durationCount = getServiceDuration(service, {
     fechaInicio,
     fechaFin,
@@ -2760,7 +3362,74 @@ export default function ReservarPage() {
               )}
 
               {precioListo && priceSummary.total > 0 && !bookabilityBlock ? (
-                paymentMethodsLoading || paymentIntentLoading ? (
+                isBundle ? (
+                  paymentMethodsLoading ? (
+                    <p className="mt-4 text-center text-[11px] text-[#666]">
+                      Preparando formulario de pago…
+                    </p>
+                  ) : savedPaymentMethods.length > 0 &&
+                    !useNewCard &&
+                    selectedPaymentMethod &&
+                    stripeCustomerId &&
+                    grupoReserva ? (
+                    <BundleSavedCardCheckout
+                      priceSummary={priceSummary}
+                      creditoAplicado={creditoAplicado}
+                      totalAPagar={totalAPagar}
+                      paymentMethod={selectedPaymentMethod}
+                      stripeCustomerId={stripeCustomerId}
+                      userId={userId}
+                      grupoReserva={grupoReserva}
+                      onComplete={completeBundleBooking}
+                      onUseNewCard={() => setUseNewCard(true)}
+                      getBookingDateError={() =>
+                        validateBookingDates(vertical, fechaInicio, hora)
+                      }
+                      disabled={!!successMessage || !aceptaPolitica}
+                    />
+                  ) : grupoReserva ? (
+                    <>
+                      <BundleNewCardCheckout
+                        priceSummary={priceSummary}
+                        creditoAplicado={creditoAplicado}
+                        totalAPagar={totalAPagar}
+                        userId={userId}
+                        grupoReserva={grupoReserva}
+                        stripeCustomerId={stripeCustomerId}
+                        userEmail={userEmail}
+                        clienteNombre={[perfilCliente?.nombre, perfilCliente?.apellido]
+                          .filter(Boolean)
+                          .join(" ")}
+                        onComplete={completeBundleBooking}
+                        vertical={vertical}
+                        fechaInicio={fechaInicio}
+                        hora={hora}
+                        setErrorMessage={setErrorMessage}
+                        service={service}
+                        disabled={!!successMessage || !aceptaPolitica}
+                      />
+                      {savedPaymentMethods.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setUseNewCard(false)}
+                          className="mt-3 w-full text-center text-[11px] font-medium no-underline hover:underline"
+                          style={{ color: "#1d4f91" }}
+                        >
+                          Usar tarjeta guardada
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled
+                      className="mt-4 min-h-[44px] w-full py-3 text-[13px] font-semibold text-white opacity-60"
+                      style={{ backgroundColor: "#1d4f91", borderRadius: 6 }}
+                    >
+                      Pagar {totalAPagar > 0 ? formatEuro(totalAPagar) : ""} →
+                    </button>
+                  )
+                ) : paymentMethodsLoading || paymentIntentLoading ? (
                   <p className="mt-4 text-center text-[11px] text-[#666]">
                     Preparando formulario de pago…
                   </p>
