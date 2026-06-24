@@ -11,6 +11,7 @@ export async function POST(request) {
       customer,
       payment_method,
       confirm_saved,
+      setup_future_usage,
     } = await request.json();
 
     const intentParams = {
@@ -21,6 +22,10 @@ export async function POST(request) {
     };
 
     if (customer) intentParams.customer = customer;
+
+    if (setup_future_usage) {
+      intentParams.setup_future_usage = setup_future_usage;
+    }
 
     if (confirm_saved && customer && payment_method) {
       intentParams.payment_method = payment_method;

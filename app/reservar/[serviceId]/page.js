@@ -449,6 +449,7 @@ async function createServicePaymentIntent({
   customer,
   paymentMethod,
   confirmSaved,
+  setupFutureUsage,
 }) {
   const res = await fetch("/api/stripe/create-payment-intent", {
     method: "POST",
@@ -458,6 +459,7 @@ async function createServicePaymentIntent({
       customer: customer || undefined,
       payment_method: paymentMethod || undefined,
       confirm_saved: confirmSaved || undefined,
+      setup_future_usage: setupFutureUsage || undefined,
       metadata: {
         service_id: String(serviceId),
         cliente_id: String(clienteId),
@@ -502,6 +504,38 @@ function paymentsPayloadFromPlan(plan, createdPis) {
   }));
 }
 
+async function ensureStripeCustomer({
+  stripeCustomerId,
+  userEmail,
+  clienteNombre,
+  userId,
+  onCustomerId,
+}) {
+  if (stripeCustomerId) return stripeCustomerId;
+
+  const customerRes = await fetch("/api/stripe/customer", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      email: userEmail,
+      nombre: clienteNombre || "Cliente",
+    }),
+  });
+  const customerData = await customerRes.json();
+
+  if (!customerRes.ok || !customerData.customer_id) {
+    throw new Error(customerData.error || "No se pudo preparar el cliente de pago.");
+  }
+
+  await supabase
+    .from("profiles")
+    .update({ stripe_customer_id: customerData.customer_id })
+    .eq("id", userId);
+
+  onCustomerId?.(customerData.customer_id);
+  return customerData.customer_id;
+}
+
 async function attachPaymentMethodToCustomer({
   paymentMethodId,
   stripeCustomerId,
@@ -513,36 +547,40 @@ async function attachPaymentMethodToCustomer({
 
   let customerId = stripeCustomerId;
   if (!customerId) {
-    const customerRes = await fetch("/api/stripe/customer", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: userEmail,
-        nombre: clienteNombre || "Cliente",
-      }),
+    customerId = await ensureStripeCustomer({
+      stripeCustomerId: null,
+      userEmail,
+      clienteNombre,
+      userId,
     });
-    const customerData = await customerRes.json();
-    if (customerRes.ok && customerData.customer_id) {
-      customerId = customerData.customer_id;
+  }
+
+  if (!customerId) return;
+
+  const attachRes = await fetch("/api/stripe/customer", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      action: "attach",
+      payment_method_id: paymentMethodId,
+      customer_id: customerId,
+    }),
+  });
+  const attachData = await attachRes.json().catch(() => ({}));
+
+  if (!attachRes.ok && attachData.error) {
+    const msg = attachData.error.toLowerCase();
+    const alreadyAttached =
+      msg.includes("already been attached") || msg.includes("already attached");
+    if (!alreadyAttached) {
+      throw new Error(attachData.error);
     }
   }
 
-  if (paymentMethodId && customerId) {
-    await fetch("/api/stripe/customer", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "attach",
-        payment_method_id: paymentMethodId,
-        customer_id: customerId,
-      }),
-    });
-
-    await supabase
-      .from("profiles")
-      .update({ stripe_customer_id: customerId })
-      .eq("id", userId);
-  }
+  await supabase
+    .from("profiles")
+    .update({ stripe_customer_id: customerId })
+    .eq("id", userId);
 }
 
 const inputClass =
@@ -1244,6 +1282,7 @@ function BundleNewCardCheckoutForm({
   userId,
   grupoReserva,
   stripeCustomerId,
+  setStripeCustomerId,
   userEmail,
   clienteNombre,
   onComplete,
@@ -1311,14 +1350,24 @@ function BundleNewCardCheckoutForm({
         throw new Error(submitError.message);
       }
 
+      const customerId = await ensureStripeCustomer({
+        stripeCustomerId,
+        userEmail,
+        clienteNombre,
+        userId,
+        onCustomerId: setStripeCustomerId,
+      });
+
       const created = [];
-      for (const item of needsPiItems) {
+      for (let i = 0; i < needsPiItems.length; i++) {
+        const item = needsPiItems[i];
         const data = await createServicePaymentIntent({
           amount: item.tarjeta,
           serviceId: item.service_id,
           clienteId: userId,
           grupoReserva,
-          customer: stripeCustomerId || undefined,
+          customer: customerId,
+          setupFutureUsage: i === 0 ? "off_session" : undefined,
         });
         created.push({
           service_id: item.service_id,
@@ -1337,6 +1386,7 @@ function BundleNewCardCheckoutForm({
           clientSecret: first.clientSecret,
           confirmParams: {
             return_url: `${window.location.origin}/dashboard`,
+            setup_future_usage: "off_session",
           },
           redirect: "if_required",
         });
@@ -1347,6 +1397,14 @@ function BundleNewCardCheckoutForm({
 
         confirmedIds.push(paymentIntent?.id || first.paymentIntentId);
         paymentMethodId = extractPaymentMethodId(paymentIntent);
+
+        await attachPaymentMethodToCustomer({
+          paymentMethodId,
+          stripeCustomerId: customerId,
+          userEmail,
+          clienteNombre,
+          userId,
+        });
 
         for (let i = 1; i < created.length; i++) {
           const item = created[i];
@@ -1370,14 +1428,6 @@ function BundleNewCardCheckoutForm({
           );
           throw completeErr;
         }
-
-        await attachPaymentMethodToCustomer({
-          paymentMethodId,
-          stripeCustomerId,
-          userEmail,
-          clienteNombre,
-          userId,
-        });
       } catch (confirmErr) {
         await rollbackBundlePaymentIntents(
           created.map((item) => item.paymentIntentId),
@@ -3482,6 +3532,7 @@ export default function ReservarPage() {
                         userId={userId}
                         grupoReserva={grupoReserva}
                         stripeCustomerId={stripeCustomerId}
+                        setStripeCustomerId={setStripeCustomerId}
                         userEmail={userEmail}
                         clienteNombre={[perfilCliente?.nombre, perfilCliente?.apellido]
                           .filter(Boolean)
