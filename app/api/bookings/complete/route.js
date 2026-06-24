@@ -167,6 +167,221 @@ async function sendBookingEmail(payload) {
   }
 }
 
+function formatProfileName(profile, fallback = "Usuario") {
+  const name = [profile?.nombre, profile?.apellido].filter(Boolean).join(" ");
+  return name || fallback;
+}
+
+async function loadClienteProfileForEmails(userId, perfilCliente) {
+  if (perfilCliente?.telefono) {
+    return perfilCliente;
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("profiles")
+    .select("nombre, apellido, telefono")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (error) {
+    console.error(
+      "[bookings/complete] Error cargando perfil cliente para emails:",
+      error,
+    );
+    return perfilCliente ?? data;
+  }
+
+  return { ...perfilCliente, ...data };
+}
+
+async function sendContactEmailsForConfirmedBooking(
+  booking,
+  svc,
+  clienteProfile,
+  proveedorProfile,
+) {
+  const proveedorNombre = formatProfileName(
+    proveedorProfile,
+    getProveedorFromService(svc)?.nombre || "Proveedor",
+  );
+  const clienteNombre = formatProfileName(clienteProfile, "Cliente");
+  const finEmail = booking.fecha_fin || booking.fecha_inicio;
+  const precioTotal = Number(booking.precio_total || 0).toFixed(2);
+  const mensaje = booking.mensaje?.trim?.() || booking.mensaje || "";
+
+  await sendBookingEmail({
+    tipo: "reserva_confirmada",
+    solo_cliente: true,
+    cliente_id: booking.cliente_id,
+    cliente_nombre: clienteNombre,
+    proveedor_nombre: proveedorNombre,
+    servicio_titulo: svc.titulo || "Servicio",
+    fecha_inicio: booking.fecha_inicio,
+    fecha_fin: finEmail,
+    precio_total: precioTotal,
+    mensaje,
+    direccion_exacta: svc.direccion_exacta,
+    telefono_proveedor: svc.telefono_contacto,
+    modalidad: svc.modalidad,
+  });
+
+  await sendBookingEmail({
+    tipo: "reserva_confirmada_proveedor",
+    proveedor_id: svc.proveedor_id,
+    cliente_id: booking.cliente_id,
+    cliente_nombre: clienteNombre,
+    cliente_telefono: clienteProfile?.telefono || undefined,
+    servicio_titulo: svc.titulo || "Servicio",
+    fecha_inicio: booking.fecha_inicio,
+    fecha_fin: finEmail,
+    precio_total: precioTotal,
+    mensaje,
+  });
+}
+
+async function sendPostCompleteBookingEmails({
+  userId,
+  perfilCliente,
+  insertedBookings,
+  serviceIds,
+  serviceMap,
+  precioPorServicioMap,
+  mainService,
+  fechaInicio,
+  fechaFin,
+  totalGrupo,
+  subtotalGrupo,
+  comision,
+  mensaje,
+}) {
+  const finEmail = fechaFin || fechaInicio;
+  const clienteProfile = await loadClienteProfileForEmails(userId, perfilCliente);
+  const clienteNombre = formatProfileName(clienteProfile, "Cliente");
+
+  const proveedorIds = [
+    ...new Set(
+      serviceIds.map((id) => serviceMap.get(id)?.proveedor_id).filter(Boolean),
+    ),
+  ];
+  const proveedorProfileMap = new Map();
+  if (proveedorIds.length > 0) {
+    const { data: proveedorProfiles, error: proveedorProfilesError } =
+      await supabaseAdmin
+        .from("profiles")
+        .select("id, nombre, apellido")
+        .in("id", proveedorIds);
+
+    if (proveedorProfilesError) {
+      console.error(
+        "[bookings/complete] Error cargando perfiles proveedor:",
+        proveedorProfilesError,
+      );
+    } else {
+      for (const profile of proveedorProfiles ?? []) {
+        proveedorProfileMap.set(profile.id, profile);
+      }
+    }
+  }
+
+  const bookingByServiceId = new Map(
+    insertedBookings.map((booking) => [booking.service_id, booking]),
+  );
+
+  for (const serviceId of serviceIds) {
+    const svc = serviceMap.get(serviceId);
+    const inserted = bookingByServiceId.get(serviceId);
+    if (!svc || !inserted) continue;
+
+    const proveedorProfile = proveedorProfileMap.get(svc.proveedor_id);
+    const proveedorNombre = formatProfileName(
+      proveedorProfile,
+      getProveedorFromService(svc)?.nombre || "Proveedor",
+    );
+
+    const booking = {
+      id: inserted.id,
+      cliente_id: userId,
+      fecha_inicio: fechaInicio,
+      fecha_fin: finEmail,
+      precio_total: precioPorServicioMap.get(serviceId),
+      mensaje: mensaje?.trim() || "",
+    };
+
+    if (svc.reserva_inmediata === true) {
+      await sendContactEmailsForConfirmedBooking(
+        booking,
+        svc,
+        clienteProfile,
+        proveedorProfile,
+      );
+    } else {
+      await sendBookingEmail({
+        tipo: "reserva_nueva",
+        proveedor_id: svc.proveedor_id,
+        proveedor_nombre: proveedorNombre,
+        cliente_nombre: clienteNombre,
+        servicio_titulo: svc.titulo,
+        fecha_inicio: fechaInicio,
+        fecha_fin: finEmail,
+        precio_total: Number(booking.precio_total || 0).toFixed(2),
+        booking_id: inserted.id,
+      });
+    }
+  }
+
+  const pendingServiceIds = serviceIds.filter(
+    (id) => serviceMap.get(id)?.reserva_inmediata !== true,
+  );
+
+  if (pendingServiceIds.length === 0) {
+    return;
+  }
+
+  const isMultiService = serviceIds.length > 1;
+  const solicitudPayload = {
+    tipo: "reserva_solicitud",
+    cliente_id: userId,
+    cliente_nombre: clienteNombre,
+    fecha_inicio: fechaInicio,
+    fecha_fin: finEmail,
+    precio_total: totalGrupo.toFixed(2),
+    subtotal: subtotalGrupo.toFixed(2),
+    comision: comision.toFixed(2),
+    mensaje: mensaje?.trim() || "",
+  };
+
+  if (isMultiService) {
+    solicitudPayload.servicios = pendingServiceIds.map((serviceId) => {
+      const svc = serviceMap.get(serviceId);
+      return {
+        titulo: svc.titulo,
+        proveedor_id: svc.proveedor_id,
+        proveedor_nombre: formatProfileName(
+          proveedorProfileMap.get(svc.proveedor_id),
+          getProveedorFromService(svc)?.nombre || "Proveedor",
+        ),
+        precio: precioPorServicioMap.get(serviceId).toFixed(2),
+      };
+    });
+    solicitudPayload.proveedor_id = mainService.proveedor_id;
+    solicitudPayload.proveedor_nombre = formatProfileName(
+      proveedorProfileMap.get(mainService.proveedor_id),
+      getProveedorFromService(mainService)?.nombre || "Proveedor",
+    );
+    solicitudPayload.servicio_titulo = mainService.titulo;
+  } else {
+    const svc = serviceMap.get(serviceIds[0]);
+    solicitudPayload.proveedor_id = svc.proveedor_id;
+    solicitudPayload.proveedor_nombre = formatProfileName(
+      proveedorProfileMap.get(svc.proveedor_id),
+      getProveedorFromService(svc)?.nombre || "Proveedor",
+    );
+    solicitudPayload.servicio_titulo = svc.titulo;
+  }
+
+  await sendBookingEmail(solicitudPayload);
+}
+
 function buildBookingRow({
   svc,
   userId,
@@ -503,60 +718,20 @@ async function finalizeInsertedBookings({
     }
   }
 
-  const mainBooking =
-    insertedBookings.find((b) => b.service_id === mainServiceId) ||
-    insertedBookings[0];
-  const clienteNombre = perfilCliente?.nombre || "Cliente";
-  const proveedorNombreMain =
-    getProveedorFromService(mainService)?.nombre || "Proveedor";
-  const finEmail = fechaFin || fechaInicio;
-
-  await sendBookingEmail({
-    tipo: "reserva_nueva",
-    proveedor_id: mainService.proveedor_id,
-    proveedor_nombre: proveedorNombreMain,
-    cliente_nombre: clienteNombre,
-    servicio_titulo: mainService.titulo,
-    fecha_inicio: fechaInicio,
-    fecha_fin: finEmail,
-    precio_total: precioPorServicioMap.get(mainServiceId).toFixed(2),
-    booking_id: mainBooking?.id,
-  });
-
-  const emailServicios = serviceIds.map((serviceId) => {
-    const svc = serviceMap.get(serviceId);
-    return {
-      titulo: svc.titulo,
-      proveedor_id: svc.proveedor_id,
-      proveedor_nombre: getProveedorFromService(svc)?.nombre || "Proveedor",
-      precio: precioPorServicioMap.get(serviceId).toFixed(2),
-      direccion_exacta: svc.direccion_exacta,
-      telefono_proveedor: svc.telefono_contacto,
-      modalidad: svc.modalidad,
-    };
-  });
-
-  const todasInmediatas = serviceIds.every(
-    (id) => serviceMap.get(id)?.reserva_inmediata === true,
-  );
-
-  await sendBookingEmail({
-    tipo: todasInmediatas ? "reserva_confirmada" : "reserva_solicitud",
-    cliente_id: userId,
-    cliente_nombre: clienteNombre,
-    proveedor_id: mainService.proveedor_id,
-    proveedor_nombre: proveedorNombreMain,
-    servicio_titulo: mainService.titulo,
-    fecha_inicio: fechaInicio,
-    fecha_fin: finEmail,
-    precio_total: totalGrupo.toFixed(2),
-    subtotal: subtotalGrupo.toFixed(2),
-    comision: comision.toFixed(2),
-    mensaje: mensaje?.trim() || "",
-    direccion_exacta: mainService.direccion_exacta,
-    telefono_proveedor: mainService.telefono_contacto,
-    modalidad: mainService.modalidad,
-    servicios: emailServicios,
+  await sendPostCompleteBookingEmails({
+    userId,
+    perfilCliente,
+    insertedBookings,
+    serviceIds,
+    serviceMap,
+    precioPorServicioMap,
+    mainService,
+    fechaInicio,
+    fechaFin,
+    totalGrupo,
+    subtotalGrupo,
+    comision,
+    mensaje,
   });
 
   return NextResponse.json({
@@ -1305,60 +1480,20 @@ export async function POST(request) {
       }
     }
 
-    const mainBooking =
-      insertedBookings.find((b) => b.service_id === main_service_id) ||
-      insertedBookings[0];
-    const clienteNombre = perfilCliente?.nombre || "Cliente";
-    const proveedorNombreMain =
-      getProveedorFromService(mainService)?.nombre || "Proveedor";
-    const finEmail = fecha_fin || fecha_inicio;
-
-    await sendBookingEmail({
-      tipo: "reserva_nueva",
-      proveedor_id: mainService.proveedor_id,
-      proveedor_nombre: proveedorNombreMain,
-      cliente_nombre: clienteNombre,
-      servicio_titulo: mainService.titulo,
-      fecha_inicio: fecha_inicio,
-      fecha_fin: finEmail,
-      precio_total: precioPorServicioMap.get(main_service_id).toFixed(2),
-      booking_id: mainBooking?.id,
-    });
-
-    const emailServicios = service_ids.map((serviceId) => {
-      const svc = serviceMap.get(serviceId);
-      return {
-        titulo: svc.titulo,
-        proveedor_id: svc.proveedor_id,
-        proveedor_nombre: getProveedorFromService(svc)?.nombre || "Proveedor",
-        precio: precioPorServicioMap.get(serviceId).toFixed(2),
-        direccion_exacta: svc.direccion_exacta,
-        telefono_proveedor: svc.telefono_contacto,
-        modalidad: svc.modalidad,
-      };
-    });
-
-    const todasInmediatas = service_ids.every(
-      (id) => serviceMap.get(id)?.reserva_inmediata === true,
-    );
-
-    await sendBookingEmail({
-      tipo: todasInmediatas ? "reserva_confirmada" : "reserva_solicitud",
-      cliente_id: userId,
-      cliente_nombre: clienteNombre,
-      proveedor_id: mainService.proveedor_id,
-      proveedor_nombre: proveedorNombreMain,
-      servicio_titulo: mainService.titulo,
-      fecha_inicio: fecha_inicio,
-      fecha_fin: finEmail,
-      precio_total: totalGrupo.toFixed(2),
-      subtotal: subtotalGrupo.toFixed(2),
-      comision: comision.toFixed(2),
-      mensaje: mensaje?.trim() || "",
-      direccion_exacta: mainService.direccion_exacta,
-      telefono_proveedor: mainService.telefono_contacto,
-      modalidad: mainService.modalidad,
-      servicios: emailServicios,
+    await sendPostCompleteBookingEmails({
+      userId,
+      perfilCliente,
+      insertedBookings,
+      serviceIds: service_ids,
+      serviceMap,
+      precioPorServicioMap,
+      mainService,
+      fechaInicio: fecha_inicio,
+      fechaFin: fecha_fin,
+      totalGrupo,
+      subtotalGrupo,
+      comision,
+      mensaje,
     });
 
     return NextResponse.json({
