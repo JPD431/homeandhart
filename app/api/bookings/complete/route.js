@@ -204,6 +204,678 @@ function buildBookingRow({
   };
 }
 
+const VALID_PAYMENT_INTENT_STATUSES = new Set(["requires_capture", "succeeded"]);
+
+function isPerServicePaymentsFormat(body) {
+  return Array.isArray(body?.payments) && body.payments.length > 0;
+}
+
+function parsePaymentsByService(payments, serviceIds) {
+  const map = new Map();
+
+  for (const entry of payments) {
+    if (!entry || typeof entry.service_id !== "string") {
+      return { error: "Cada pago debe incluir service_id" };
+    }
+    if (map.has(entry.service_id)) {
+      return { error: `Pago duplicado para service_id ${entry.service_id}` };
+    }
+
+    const pi = entry.payment_intent_id;
+    if (pi != null && typeof pi !== "string") {
+      return { error: `payment_intent_id inválido para ${entry.service_id}` };
+    }
+
+    map.set(entry.service_id, pi ?? null);
+  }
+
+  for (const serviceId of serviceIds) {
+    if (!map.has(serviceId)) {
+      return { error: `Falta pago para service_id ${serviceId}` };
+    }
+  }
+
+  if (map.size !== serviceIds.length) {
+    return { error: "payments contiene service_id fuera de service_ids" };
+  }
+
+  const seenPaymentIntentIds = new Set();
+  for (const pi of map.values()) {
+    if (pi == null) continue;
+    if (seenPaymentIntentIds.has(pi)) {
+      return {
+        error: "Un mismo payment_intent_id no puede cubrir varios servicios",
+      };
+    }
+    seenPaymentIntentIds.add(pi);
+  }
+
+  return { map };
+}
+
+async function validateFamiliaMembership(userId, familiaId) {
+  if (!familiaId) return null;
+
+  const { data: membership, error: membershipError } = await supabaseAdmin
+    .from("familia_miembros")
+    .select("id")
+    .eq("perfil_id", userId)
+    .eq("familia_id", familiaId)
+    .eq("estado", "activo")
+    .maybeSingle();
+
+  if (membershipError) {
+    return NextResponse.json({ error: membershipError.message }, { status: 500 });
+  }
+
+  if (!membership) {
+    return NextResponse.json(
+      { error: "No perteneces a esa familia" },
+      { status: 403 },
+    );
+  }
+
+  return null;
+}
+
+async function validatePerServicePaymentIntent({
+  paymentIntentId,
+  serviceId,
+  userId,
+  grupoReserva,
+  expectedTarjetaCents,
+}) {
+  const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+
+  if (paymentIntent.metadata?.cliente_id !== userId) {
+    return { error: "El pago no pertenece a este usuario", status: 403 };
+  }
+
+  if (paymentIntent.metadata?.grupo_reserva !== grupoReserva) {
+    return { error: "grupo_reserva no coincide con el pago", status: 400 };
+  }
+
+  const metaServiceId = paymentIntent.metadata?.service_id;
+  if (metaServiceId && metaServiceId !== serviceId) {
+    return {
+      error: `El pago no corresponde al servicio ${serviceId}`,
+      status: 400,
+    };
+  }
+
+  if (!VALID_PAYMENT_INTENT_STATUSES.has(paymentIntent.status)) {
+    return { error: "El pago no está confirmado", status: 400 };
+  }
+
+  const amountDiff = Math.abs(paymentIntent.amount - expectedTarjetaCents);
+  if (amountDiff > 2) {
+    return {
+      error: `El importe del pago no coincide para el servicio ${serviceId}`,
+      status: 400,
+    };
+  }
+
+  return { paymentIntent };
+}
+
+async function checkPerServiceIdempotency({
+  userId,
+  grupoReserva,
+  serviceIds,
+  paymentsByService,
+}) {
+  const { data: existingByGrupo, error: existingError } = await supabaseAdmin
+    .from("bookings")
+    .select("id, service_id, payment_intent_id")
+    .eq("grupo_reserva", grupoReserva)
+    .eq("cliente_id", userId)
+    .in("service_id", serviceIds);
+
+  if (existingError) {
+    return { error: NextResponse.json({ error: existingError.message }, { status: 500 }) };
+  }
+
+  const existing = existingByGrupo ?? [];
+  if (existing.length > 0) {
+    const existingServiceIds = new Set(existing.map((b) => b.service_id));
+    const allPresent = serviceIds.every((id) => existingServiceIds.has(id));
+
+    if (allPresent) {
+      return {
+        earlyResponse: NextResponse.json({
+          ok: true,
+          already_created: true,
+          booking_ids: existing.map((b) => b.id),
+        }),
+      };
+    }
+
+    return {
+      error: NextResponse.json(
+        {
+          error:
+            "Estado inconsistente: algunas reservas del grupo ya existen y otras no",
+        },
+        { status: 409 },
+      ),
+    };
+  }
+
+  const paymentIntentIds = [
+    ...new Set(
+      [...paymentsByService.values()].filter(
+        (pi) => typeof pi === "string" && pi.length > 0,
+      ),
+    ),
+  ];
+
+  if (paymentIntentIds.length === 0) {
+    return {};
+  }
+
+  const { data: existingByPi, error: piError } = await supabaseAdmin
+    .from("bookings")
+    .select("id, payment_intent_id, grupo_reserva, service_id")
+    .in("payment_intent_id", paymentIntentIds);
+
+  if (piError) {
+    return { error: NextResponse.json({ error: piError.message }, { status: 500 }) };
+  }
+
+  for (const row of existingByPi ?? []) {
+    if (row.grupo_reserva !== grupoReserva) {
+      return {
+        error: NextResponse.json(
+          {
+            error: `payment_intent_id ${row.payment_intent_id} ya está asociado a otra reserva`,
+          },
+          { status: 409 },
+        ),
+      };
+    }
+  }
+
+  return {};
+}
+
+async function finalizeInsertedBookings({
+  userId,
+  perfilCliente,
+  clienteSinComision,
+  creditoDisponible,
+  creditoAplicado,
+  insertedBookings,
+  insertedBookingIds,
+  rollbackPaymentIntentId,
+  fechaInicio,
+  fechaFin,
+  familiaId,
+  mainService,
+  mainServiceId,
+  serviceIds,
+  serviceMap,
+  precioPorServicioMap,
+  totalGrupo,
+  subtotalGrupo,
+  comision,
+  mensaje,
+  grupoReserva,
+}) {
+  const finDisponibilidad = fechaFin || fechaInicio;
+
+  const { error: disponibilidadError } = await supabaseAdmin
+    .from("disponibilidad")
+    .insert(
+      insertedBookings.map((booking) => ({
+        service_id: booking.service_id,
+        fecha_inicio: fechaInicio,
+        fecha_fin: finDisponibilidad,
+        booking_id: booking.id,
+      })),
+    );
+
+  if (disponibilidadError) {
+    await rollbackInsertedBookings(insertedBookingIds, rollbackPaymentIntentId);
+
+    if (isDisponibilidadExclusionError(disponibilidadError)) {
+      return NextResponse.json(
+        {
+          error: "Estas fechas se acaban de ocupar. Por favor elige otras.",
+        },
+        { status: 409 },
+      );
+    }
+
+    console.error(
+      "[bookings/complete] No se pudo bloquear disponibilidad tras crear bookings:",
+      disponibilidadError,
+      {
+        payment_intent_id: rollbackPaymentIntentId,
+        booking_ids: insertedBookingIds,
+      },
+    );
+    return NextResponse.json(
+      { error: disponibilidadError.message },
+      { status: 500 },
+    );
+  }
+
+  if (clienteSinComision) {
+    try {
+      const actual = Number(perfilCliente?.reservas_sin_comision) || 0;
+      const { error: sinComisionError } = await supabaseAdmin
+        .from("profiles")
+        .update({ reservas_sin_comision: Math.max(0, actual - 1) })
+        .eq("id", userId);
+      if (sinComisionError) {
+        console.error(
+          "[bookings/complete] No se pudo restar reservas_sin_comision:",
+          sinComisionError,
+        );
+      }
+    } catch (err) {
+      console.error(
+        "[bookings/complete] No se pudo restar reservas_sin_comision:",
+        err,
+      );
+    }
+  }
+
+  if (creditoAplicado > 0) {
+    try {
+      const { error: creditError } = await supabaseAdmin
+        .from("profiles")
+        .update({
+          credito_disponible: Math.max(0, creditoDisponible - creditoAplicado),
+        })
+        .eq("id", userId);
+      if (creditError) {
+        console.error(
+          "[bookings/complete] No se pudo restar credito_disponible:",
+          creditError,
+        );
+      }
+    } catch (err) {
+      console.error(
+        "[bookings/complete] No se pudo restar credito_disponible:",
+        err,
+      );
+    }
+  }
+
+  const mainBooking =
+    insertedBookings.find((b) => b.service_id === mainServiceId) ||
+    insertedBookings[0];
+  const clienteNombre = perfilCliente?.nombre || "Cliente";
+  const proveedorNombreMain =
+    getProveedorFromService(mainService)?.nombre || "Proveedor";
+  const finEmail = fechaFin || fechaInicio;
+
+  await sendBookingEmail({
+    tipo: "reserva_nueva",
+    proveedor_id: mainService.proveedor_id,
+    proveedor_nombre: proveedorNombreMain,
+    cliente_nombre: clienteNombre,
+    servicio_titulo: mainService.titulo,
+    fecha_inicio: fechaInicio,
+    fecha_fin: finEmail,
+    precio_total: precioPorServicioMap.get(mainServiceId).toFixed(2),
+    booking_id: mainBooking?.id,
+  });
+
+  const emailServicios = serviceIds.map((serviceId) => {
+    const svc = serviceMap.get(serviceId);
+    return {
+      titulo: svc.titulo,
+      proveedor_id: svc.proveedor_id,
+      proveedor_nombre: getProveedorFromService(svc)?.nombre || "Proveedor",
+      precio: precioPorServicioMap.get(serviceId).toFixed(2),
+      direccion_exacta: svc.direccion_exacta,
+      telefono_proveedor: svc.telefono_contacto,
+      modalidad: svc.modalidad,
+    };
+  });
+
+  const todasInmediatas = serviceIds.every(
+    (id) => serviceMap.get(id)?.reserva_inmediata === true,
+  );
+
+  await sendBookingEmail({
+    tipo: todasInmediatas ? "reserva_confirmada" : "reserva_solicitud",
+    cliente_id: userId,
+    cliente_nombre: clienteNombre,
+    proveedor_id: mainService.proveedor_id,
+    proveedor_nombre: proveedorNombreMain,
+    servicio_titulo: mainService.titulo,
+    fecha_inicio: fechaInicio,
+    fecha_fin: finEmail,
+    precio_total: totalGrupo.toFixed(2),
+    subtotal: subtotalGrupo.toFixed(2),
+    comision: comision.toFixed(2),
+    mensaje: mensaje?.trim() || "",
+    direccion_exacta: mainService.direccion_exacta,
+    telefono_proveedor: mainService.telefono_contacto,
+    modalidad: mainService.modalidad,
+    servicios: emailServicios,
+  });
+
+  return NextResponse.json({
+    ok: true,
+    booking_ids: insertedBookings.map((b) => b.id),
+    grupo_reserva: grupoReserva,
+  });
+}
+
+async function completePerServicePayments(userId, body) {
+  const {
+    payments,
+    grupo_reserva,
+    main_service_id,
+    service_ids,
+    fecha_inicio = null,
+    fecha_fin = null,
+    hora = null,
+    duracion_horas = null,
+    mensaje = null,
+    familia_id = null,
+    precio_especial = null,
+    valida_hasta = null,
+  } = body ?? {};
+
+  if (!grupo_reserva || typeof grupo_reserva !== "string") {
+    return NextResponse.json({ error: "Falta grupo_reserva" }, { status: 400 });
+  }
+  if (!main_service_id || typeof main_service_id !== "string") {
+    return NextResponse.json({ error: "Falta main_service_id" }, { status: 400 });
+  }
+  if (!Array.isArray(service_ids) || service_ids.length === 0) {
+    return NextResponse.json(
+      { error: "Falta service_ids (debe ser un array no vacío)" },
+      { status: 400 },
+    );
+  }
+
+  const uniqueServiceIds = [...new Set(service_ids)];
+  const parsedPayments = parsePaymentsByService(payments, uniqueServiceIds);
+  if (parsedPayments.error) {
+    return NextResponse.json({ error: parsedPayments.error }, { status: 400 });
+  }
+  const paymentsByService = parsedPayments.map;
+
+  const { data: services, error: servicesError } = await supabaseAdmin
+    .from("services")
+    .select(SERVICE_SELECT)
+    .in("id", uniqueServiceIds);
+
+  if (servicesError) {
+    return NextResponse.json({ error: servicesError.message }, { status: 500 });
+  }
+
+  if (!services || services.length !== uniqueServiceIds.length) {
+    const foundIds = new Set(services?.map((s) => s.id) ?? []);
+    const missing = uniqueServiceIds.filter((id) => !foundIds.has(id));
+    return NextResponse.json(
+      { error: "Algunos servicios no existen", missing_service_ids: missing },
+      { status: 400 },
+    );
+  }
+
+  const serviceMap = new Map(services.map((s) => [s.id, s]));
+  const mainService = serviceMap.get(main_service_id);
+  if (!mainService) {
+    return NextResponse.json(
+      { error: "main_service_id no está en service_ids" },
+      { status: 400 },
+    );
+  }
+
+  const bookability = validateServicesBookable(services);
+  if (!bookability.ok) {
+    return NextResponse.json({ error: bookability.error }, { status: 409 });
+  }
+
+  const { data: perfilCliente, error: perfilError } = await supabaseAdmin
+    .from("profiles")
+    .select("reservas_sin_comision, credito_disponible, nombre")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (perfilError) {
+    return NextResponse.json({ error: perfilError.message }, { status: 500 });
+  }
+
+  const mainVertical = mainService.vertical;
+  const dateContext = {
+    fechaInicio: fecha_inicio,
+    fechaFin: fecha_fin,
+    duracionHoras: duracion_horas,
+    mainVertical,
+  };
+
+  const precioEspecialOverride = getPrecioEspecialOverride(
+    precio_especial,
+    valida_hasta,
+  );
+
+  const clienteSinComision =
+    (Number(perfilCliente?.reservas_sin_comision) || 0) > 0;
+
+  let tarifasPorServicio;
+  try {
+    tarifasPorServicio = await cargarTarifasPorServicios(
+      supabaseAdmin,
+      service_ids,
+      fecha_inicio,
+      fecha_fin,
+    );
+  } catch (tarifasError) {
+    return NextResponse.json(
+      { error: tarifasError.message || "Error al cargar tarifas" },
+      { status: 500 },
+    );
+  }
+
+  const preciosPorServicio = [];
+  let subtotalGrupo = 0;
+
+  for (const serviceId of service_ids) {
+    const svc = serviceMap.get(serviceId);
+    const unitOverride =
+      serviceId === main_service_id ? precioEspecialOverride : null;
+
+    const calc = calculateServiceBasePrice(
+      svc,
+      dateContext,
+      unitOverride,
+      tarifasPorServicio[serviceId] ?? {},
+    );
+
+    if (!calc.ready) {
+      return NextResponse.json(
+        {
+          error: "No se pudo calcular el precio",
+          service_id: serviceId,
+          detail: calc.detail,
+        },
+        { status: 400 },
+      );
+    }
+
+    subtotalGrupo += calc.base;
+
+    const precioTotal = clienteSinComision
+      ? calc.base
+      : applyClientPrice(calc.base);
+
+    preciosPorServicio.push({
+      service_id: serviceId,
+      precio_total: roundMoney(precioTotal),
+    });
+  }
+
+  subtotalGrupo = roundMoney(subtotalGrupo);
+  const comision = clienteSinComision
+    ? 0
+    : roundMoney(subtotalGrupo * COMMISSION_RATE);
+  const totalGrupo = roundMoney(subtotalGrupo + comision);
+
+  const creditoDisponible = Number(perfilCliente?.credito_disponible) || 0;
+  const topeCredito = roundMoney(totalGrupo * MAX_CREDITO_PORCENTAJE);
+  const creditoAplicado = Math.min(creditoDisponible, topeCredito);
+
+  const precioPorServicioMap = new Map(
+    preciosPorServicio.map((p) => [p.service_id, p.precio_total]),
+  );
+
+  const creditoPorServicioMap = splitCreditoPorServicio(
+    preciosPorServicio,
+    creditoAplicado,
+    totalGrupo,
+  );
+
+  for (const serviceId of uniqueServiceIds) {
+    const precioTotal = precioPorServicioMap.get(serviceId);
+    const creditoServicio = creditoPorServicioMap.get(serviceId) ?? 0;
+    const tarjetaEsperada = roundMoney(precioTotal - creditoServicio);
+    const paymentIntentId = paymentsByService.get(serviceId);
+
+    if (tarjetaEsperada <= 0) {
+      if (paymentIntentId != null) {
+        return NextResponse.json(
+          {
+            error: `El servicio ${serviceId} no requiere pago con tarjeta (cubierto con crédito)`,
+          },
+          { status: 400 },
+        );
+      }
+      continue;
+    }
+
+    if (!paymentIntentId) {
+      return NextResponse.json(
+        {
+          error: `Falta payment_intent_id para el servicio ${serviceId}`,
+        },
+        { status: 400 },
+      );
+    }
+
+    const expectedTarjetaCents = Math.round(tarjetaEsperada * 100);
+    const validation = await validatePerServicePaymentIntent({
+      paymentIntentId,
+      serviceId,
+      userId,
+      grupoReserva: grupo_reserva,
+      expectedTarjetaCents,
+    });
+
+    if (validation.error) {
+      return NextResponse.json(
+        { error: validation.error },
+        { status: validation.status ?? 400 },
+      );
+    }
+  }
+
+  if (familia_id) {
+    const familiaError = await validateFamiliaMembership(userId, familia_id);
+    if (familiaError) return familiaError;
+  }
+
+  const idempotency = await checkPerServiceIdempotency({
+    userId,
+    grupoReserva: grupo_reserva,
+    serviceIds: uniqueServiceIds,
+    paymentsByService,
+  });
+  if (idempotency.error) return idempotency.error;
+  if (idempotency.earlyResponse) return idempotency.earlyResponse;
+
+  const finDisponibilidad = fecha_fin || fecha_inicio;
+  const uniqueServicesForDates = [...new Set(service_ids)];
+
+  for (const serviceId of uniqueServicesForDates) {
+    let solapamiento;
+    try {
+      solapamiento = await hasDisponibilidadSolapamiento(
+        serviceId,
+        fecha_inicio,
+        finDisponibilidad,
+      );
+    } catch (overlapError) {
+      return NextResponse.json(
+        { error: overlapError.message },
+        { status: 500 },
+      );
+    }
+
+    if (solapamiento) {
+      return NextResponse.json(
+        {
+          error:
+            "Estas fechas ya no están disponibles para uno de los servicios. Por favor elige otras.",
+        },
+        { status: 409 },
+      );
+    }
+  }
+
+  const bookingRows = service_ids.map((serviceId) => {
+    const svc = serviceMap.get(serviceId);
+    return buildBookingRow({
+      svc,
+      userId,
+      fechaInicio: fecha_inicio,
+      fechaFin: fecha_fin,
+      hora,
+      duracionHoras: duracion_horas,
+      mensaje,
+      precioTotal: precioPorServicioMap.get(serviceId),
+      creditoAplicado: creditoPorServicioMap.get(serviceId) ?? 0,
+      grupoReserva: grupo_reserva,
+      paymentIntentId: paymentsByService.get(serviceId),
+      familiaId: familia_id,
+    });
+  });
+
+  const { data: insertedBookings, error: insertError } = await supabaseAdmin
+    .from("bookings")
+    .insert(bookingRows)
+    .select("id, service_id");
+
+  if (insertError) {
+    return NextResponse.json({ error: insertError.message }, { status: 500 });
+  }
+
+  const insertedBookingIds = insertedBookings.map((b) => b.id);
+  const rollbackPaymentIntentId =
+    [...paymentsByService.values()].find((pi) => typeof pi === "string") ?? null;
+
+  return finalizeInsertedBookings({
+    userId,
+    perfilCliente,
+    clienteSinComision,
+    creditoDisponible,
+    creditoAplicado,
+    insertedBookings,
+    insertedBookingIds,
+    rollbackPaymentIntentId,
+    fechaInicio: fecha_inicio,
+    fechaFin: fecha_fin,
+    familiaId: familia_id,
+    mainService,
+    mainServiceId: main_service_id,
+    serviceIds: service_ids,
+    serviceMap,
+    precioPorServicioMap,
+    totalGrupo,
+    subtotalGrupo,
+    comision,
+    mensaje,
+    grupoReserva: grupo_reserva,
+  });
+}
+
 export async function POST(request) {
   try {
     const supabase = await createClient();
@@ -223,6 +895,19 @@ export async function POST(request) {
       body = await request.json();
     } catch {
       return NextResponse.json({ error: "Body inválido" }, { status: 400 });
+    }
+
+    if (isPerServicePaymentsFormat(body)) {
+      if (
+        typeof body.payment_intent_id === "string" &&
+        body.payment_intent_id.length > 0
+      ) {
+        return NextResponse.json(
+          { error: "Formato de pago ambiguo" },
+          { status: 400 },
+        );
+      }
+      return completePerServicePayments(userId, body);
     }
 
     const {
