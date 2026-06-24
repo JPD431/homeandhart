@@ -1640,6 +1640,7 @@ export default function ReservarPage() {
               vertical,
               precio,
               disponible,
+              cancellation_policy,
               descripcion,
               estancia_minima,
               estancia_maxima,
@@ -1711,6 +1712,7 @@ export default function ReservarPage() {
           vertical,
           precio,
           disponible,
+          cancellation_policy,
           descripcion,
           estancia_minima,
           estancia_maxima,
@@ -1843,6 +1845,17 @@ export default function ReservarPage() {
     () => (service ? [service, ...bundleServices] : []),
     [service, bundleServices],
   );
+
+  const isBundle = selectedServices.length > 1;
+
+  const selectedServiceIdsKey = useMemo(
+    () => selectedServices.map((s) => s.id).join(","),
+    [selectedServices],
+  );
+
+  useEffect(() => {
+    setAceptaPolitica(false);
+  }, [selectedServiceIdsKey]);
 
   const bookabilityBlock = useMemo(() => {
     for (const svc of selectedServices) {
@@ -2092,6 +2105,7 @@ export default function ReservarPage() {
           vertical,
           precio,
           disponible,
+          cancellation_policy,
           descripcion,
           estancia_minima,
           estancia_maxima,
@@ -2567,7 +2581,6 @@ export default function ReservarPage() {
   const mainPriceLine =
     priceSummary.lines.find((l) => l.id === service.id) ?? priceSummary.lines[0];
   const bundleLines = priceSummary.lines.filter((l) => l.id !== service.id);
-  const isBundle = selectedServices.length > 1;
   const durationCount = getServiceDuration(service, {
     fechaInicio,
     fechaFin,
@@ -2833,7 +2846,7 @@ export default function ReservarPage() {
             </section>
 
             {/* Sección 2 — Política de cancelación */}
-            {cancelPolicy && (
+            {!isBundle && cancelPolicy && (
               <section
                 className="rounded-[10px] border bg-white p-5"
                 style={{ borderColor: "#e8e4de" }}
@@ -2875,6 +2888,71 @@ export default function ReservarPage() {
                       He leído y acepto la política de cancelación{" "}
                       <strong style={{ color: "#1d4f91" }}>{cancelPolicy.name}</strong>{" "}
                       y las condiciones del servicio
+                    </span>
+                  </label>
+                )}
+              </section>
+            )}
+
+            {isBundle && (
+              <section
+                className="rounded-[10px] border bg-white p-5"
+                style={{ borderColor: "#e8e4de" }}
+              >
+                <SectionHeader number={2} title="Política de cancelación" />
+                <div className="flex flex-col gap-3">
+                  {selectedServices.map((svc) => {
+                    const svcPolicy = getCancelPolicy(svc.cancellation_policy);
+                    const svcConfig = VERTICALS[svc.vertical] ?? VERTICALS.alojamiento;
+                    const svcName =
+                      svc.titulo ||
+                      `${svcConfig.label} · ${formatShortName(svc.profiles_public?.nombre, svc.profiles_public?.apellido)}`;
+                    const providerName = formatShortName(
+                      svc.profiles_public?.nombre,
+                      svc.profiles_public?.apellido,
+                    );
+                    return (
+                      <div
+                        key={svc.id}
+                        className="rounded-lg border p-4"
+                        style={{ backgroundColor: "#fdf3e3", borderColor: "#e8c47a" }}
+                      >
+                        <p className="text-[12px] font-semibold text-[#2a3a4a]">
+                          {svcName}
+                        </p>
+                        {providerName && (
+                          <p className="mt-0.5 text-[10px] text-[#888]">{providerName}</p>
+                        )}
+                        {svcPolicy ? (
+                          <>
+                            <p className="mt-2 text-[12px] font-semibold text-[#854d0e]">
+                              🛡️ {svcPolicy.name}
+                            </p>
+                            <p className="mt-1 text-[11px] leading-relaxed text-[#854d0e]">
+                              {svcPolicy.description}
+                            </p>
+                          </>
+                        ) : (
+                          <p className="mt-2 text-[11px] text-[#854d0e]">
+                            Política de cancelación no especificada
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                {precioListo && priceSummary.total > 0 && (
+                  <label className="mt-4 flex min-h-[44px] cursor-pointer items-start gap-3 py-1">
+                    <input
+                      type="checkbox"
+                      checked={aceptaPolitica}
+                      onChange={(e) => setAceptaPolitica(e.target.checked)}
+                      className="mt-1 h-5 w-5 shrink-0 cursor-pointer rounded border-[#1d4f91] accent-[#1d4f91] sm:mt-0.5 sm:h-4 sm:w-4"
+                      style={{ backgroundColor: aceptaPolitica ? "#e8f0fb" : "#fff" }}
+                    />
+                    <span className="text-[11px] leading-relaxed text-[#444]">
+                      He leído y acepto las políticas de cancelación de todos los
+                      servicios reservados
                     </span>
                   </label>
                 )}
