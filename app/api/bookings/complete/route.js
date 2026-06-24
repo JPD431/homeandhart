@@ -172,6 +172,10 @@ function formatProfileName(profile, fallback = "Usuario") {
   return name || fallback;
 }
 
+function resolveTelefonoProveedor(svc, proveedorProfile) {
+  return svc.telefono_contacto || proveedorProfile?.telefono || undefined;
+}
+
 async function loadClienteProfileForEmails(userId, perfilCliente) {
   if (perfilCliente?.telefono) {
     return perfilCliente;
@@ -221,7 +225,7 @@ async function sendContactEmailsForConfirmedBooking(
     precio_total: precioTotal,
     mensaje,
     direccion_exacta: svc.direccion_exacta,
-    telefono_proveedor: svc.telefono_contacto,
+    telefono_proveedor: resolveTelefonoProveedor(svc, proveedorProfile),
     modalidad: svc.modalidad,
   });
 
@@ -268,7 +272,7 @@ async function sendPostCompleteBookingEmails({
     const { data: proveedorProfiles, error: proveedorProfilesError } =
       await supabaseAdmin
         .from("profiles")
-        .select("id, nombre, apellido")
+        .select("id, nombre, apellido, telefono")
         .in("id", proveedorIds);
 
     if (proveedorProfilesError) {

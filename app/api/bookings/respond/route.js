@@ -207,7 +207,7 @@ export async function POST(request) {
             proveedorId
               ? supabaseAdmin
                   .from("profiles")
-                  .select("nombre, apellido")
+                  .select("nombre, apellido, telefono")
                   .eq("id", proveedorId)
                   .maybeSingle()
               : Promise.resolve({ data: null, error: null }),
@@ -261,7 +261,8 @@ export async function POST(request) {
             precio_total: precioTotal,
             mensaje,
             direccion_exacta: svc.direccion_exacta,
-            telefono_proveedor: svc.telefono_contacto,
+            telefono_proveedor:
+              svc.telefono_contacto || proveedorProfile?.telefono || undefined,
             modalidad: svc.modalidad,
           });
 
