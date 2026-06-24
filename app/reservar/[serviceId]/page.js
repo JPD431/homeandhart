@@ -1437,6 +1437,7 @@ function BundleNewCardCheckout(props) {
         mode: "payment",
         amount: deferredAmountCents,
         currency: "eur",
+        captureMethod: "manual",
       }}
     >
       <BundleNewCardCheckoutForm {...props} />
