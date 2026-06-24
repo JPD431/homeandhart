@@ -279,6 +279,8 @@ export default function DashboardPage() {
 }
 
 function TabCliente({ perfil, reservas, favoritos, viajes, router, BRAND, copiarLink }) {
+  const creditoDisponible = Number(perfil?.credito_disponible) || 0;
+
   return (
     <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
       {/* RESERVAS */}
@@ -314,6 +316,11 @@ function TabCliente({ perfil, reservas, favoritos, viajes, router, BRAND, copiar
             {perfil?.codigo_referido && <span style={{fontSize: 8, padding: '2px 7px', borderRadius: 8, background: '#e8f0fb', color: '#163a6b'}}>{perfil.codigo_referido}</span>}
             {perfil?.reservas_sin_comision > 0 && <span style={{fontSize: 8, padding: '2px 7px', borderRadius: 8, background: '#e6f4f0', color: '#085041'}}>{perfil.reservas_sin_comision} sin comisión 🎁</span>}
           </div>
+          {creditoDisponible > 0 && (
+            <p style={{ fontSize: 11, color: BRAND.green, fontWeight: 500, marginBottom: 10 }}>
+              Crédito disponible: {creditoDisponible.toFixed(2)}€
+            </p>
+          )}
           <button onClick={() => router.push('/editar-perfil')} style={{ width: '100%', minHeight: 44, background: '#f7f5f2', color: BRAND.blue, border: `0.5px solid ${BRAND.blue}`, padding: '10px 8px', borderRadius: 5, fontSize: 10, cursor: 'pointer', fontWeight: 500 }}>Editar perfil</button>
         </div>
       </div>

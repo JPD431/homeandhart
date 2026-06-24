@@ -7,6 +7,7 @@ import { BRAND, SERIF } from "@/app/components/brand";
 import { supabase } from "@/app/lib/supabase";
 
 const PRIMARY = "#1d4f91";
+const GREEN = "#0e7a5c";
 const BORDER = "#e8e4de";
 
 const VERTICAL_META = {
@@ -99,6 +100,23 @@ function getMonthLabel(key) {
   return `${MONTH_NAMES[m - 1]?.toUpperCase() ?? ""} ${y}`;
 }
 
+function getCancelRefundBreakdown(booking) {
+  if (getBookingEstado(booking) !== "cancelada") return null;
+  if (booking.reembolso_cliente_total == null) return null;
+
+  const precioTotal = Number(booking.precio_total) || 0;
+  const reembolsoTotal = Number(booking.reembolso_cliente_total) || 0;
+  const reembolsoPct = Number(booking.reembolso_cliente_pct) || 0;
+  const reembolsoCredito = Number(booking.reembolso_cliente_credito) || 0;
+
+  return {
+    importeFinal: Math.max(0, precioTotal - reembolsoTotal),
+    reembolsoTotal,
+    reembolsoPct,
+    reembolsoCredito,
+  };
+}
+
 function getExtraTags(service, vertical) {
   const tags = [];
   const proveedor = service.profiles_public ?? {};
@@ -183,6 +201,7 @@ function BookingCard({ booking, reviewed, onCancel, cancelling }) {
   const personas = vertical === "alojamiento" ? "2 pers." : null;
   const metaParts = [getDateRangeLabel(booking), duration, personas].filter(Boolean);
   const extraTags = getExtraTags(service, vertical);
+  const refundBreakdown = getCancelRefundBreakdown(booking);
 
   return (
     <article
@@ -200,9 +219,28 @@ function BookingCard({ booking, reviewed, onCancel, cancelling }) {
           <p className="text-[13px] font-medium text-[#1a1a1a]">
             {service.titulo || "Servicio Home&Heart"}
           </p>
-          <p className="shrink-0 text-[13px] font-medium" style={{ color: PRIMARY }}>
-            {formatPrice(booking.precio_total)}
-          </p>
+          <div className="shrink-0 text-right">
+            {refundBreakdown ? (
+              <>
+                <p className="text-[13px] font-semibold" style={{ color: PRIMARY }}>
+                  Pagas: {formatPrice(refundBreakdown.importeFinal)}
+                </p>
+                <p className="mt-0.5 text-[10px] font-medium" style={{ color: GREEN }}>
+                  Devolución: {formatPrice(refundBreakdown.reembolsoTotal)} (
+                  {refundBreakdown.reembolsoPct}%)
+                </p>
+                {refundBreakdown.reembolsoCredito > 0 && (
+                  <p className="mt-0.5 text-[10px] font-medium" style={{ color: GREEN }}>
+                    +{formatPrice(refundBreakdown.reembolsoCredito)} a tu crédito
+                  </p>
+                )}
+              </>
+            ) : (
+              <p className="text-[13px] font-medium" style={{ color: PRIMARY }}>
+                {formatPrice(booking.precio_total)}
+              </p>
+            )}
+          </div>
         </div>
 
         <p className="mt-0.5 text-[11px] text-[#888]">
@@ -298,6 +336,7 @@ export default function HistorialPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [cancellingId, setCancellingId] = useState(null);
   const [errorMessage, setErrorMessage] = useState("");
+  const [creditoDisponible, setCreditoDisponible] = useState(0);
 
   useEffect(() => {
     async function loadHistorial() {
@@ -310,6 +349,14 @@ export default function HistorialPage() {
         router.replace("/login");
         return;
       }
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("credito_disponible")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      setCreditoDisponible(Number(profile?.credito_disponible) || 0);
 
       const { data: bookingsData } = await supabase
         .from("bookings")
@@ -408,11 +455,28 @@ export default function HistorialPage() {
     const data = await res.json().catch(() => ({}));
 
     if (res.ok && data.ok) {
+      const reembolso = data.reembolso ?? {};
       setBookings((prev) =>
         prev.map((b) =>
-          b.id === booking.id ? { ...b, estado: data.estado } : b,
+          b.id === booking.id
+            ? {
+                ...b,
+                estado: data.estado,
+                reembolso_cliente_pct: reembolso.pct ?? null,
+                reembolso_cliente_total:
+                  reembolso.bruto != null ? reembolso.bruto : null,
+                reembolso_cliente_credito:
+                  reembolso.credito != null ? reembolso.credito : null,
+              }
+            : b,
         ),
       );
+      const creditoDevuelto = Number(reembolso.credito) || 0;
+      if (creditoDevuelto > 0) {
+        setCreditoDisponible(
+          (prev) => Math.round((prev + creditoDevuelto) * 100) / 100,
+        );
+      }
     } else {
       setErrorMessage(data.error || "No se pudo cancelar la reserva.");
     }
@@ -465,6 +529,13 @@ export default function HistorialPage() {
             value={formatPrice(stats.totalGastado)}
             showDivider
           />
+          {creditoDisponible > 0 && (
+            <StatItem
+              label="Crédito disponible"
+              value={formatPrice(creditoDisponible)}
+              showDivider
+            />
+          )}
         </div>
       </div>
 
