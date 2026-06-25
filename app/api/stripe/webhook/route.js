@@ -11,6 +11,181 @@ const supabase = createClient(
 
 export const runtime = "nodejs";
 
+const ACTIVE_BOOKING_STATES = new Set(["confirmada", "pendiente", "en_curso"]);
+
+const REFUND_MISMATCH_TOLERANCE_EUR = 0.02;
+
+function getPaymentIntentId(ref) {
+  if (!ref) return null;
+  if (typeof ref === "string") return ref;
+  return ref.id ?? null;
+}
+
+function roundMoney(amount) {
+  return Math.round(Number(amount) * 100) / 100;
+}
+
+async function findBookingsByPaymentIntentId(paymentIntentId) {
+  if (!paymentIntentId) {
+    return { bookings: [], queryError: null };
+  }
+
+  const { data, error } = await supabase
+    .from("bookings")
+    .select(
+      "id, estado, payment_intent_id, reembolso_cliente_total, reembolso_cliente_credito",
+    )
+    .eq("payment_intent_id", paymentIntentId);
+
+  if (error) {
+    console.error(
+      "[stripe/webhook] Error buscando bookings por payment_intent_id:",
+      paymentIntentId,
+      error.message,
+    );
+    return { bookings: [], queryError: error };
+  }
+
+  return { bookings: data ?? [], queryError: null };
+}
+
+async function handlePaymentIntentCanceled(event) {
+  const paymentIntent = event.data.object;
+  const paymentIntentId = paymentIntent?.id;
+
+  if (!paymentIntentId) {
+    console.warn(
+      "[stripe/webhook] payment_intent.canceled sin id en el payload",
+      { event_id: event.id },
+    );
+    return;
+  }
+
+  const { bookings, queryError } =
+    await findBookingsByPaymentIntentId(paymentIntentId);
+
+  if (queryError) {
+    return;
+  }
+
+  if (bookings.length === 0) {
+    console.log(
+      "[stripe/webhook] payment_intent.canceled sin bookings en BD",
+      { payment_intent_id: paymentIntentId, event_id: event.id },
+    );
+    return;
+  }
+
+  const activos = bookings.filter((b) => ACTIVE_BOOKING_STATES.has(b.estado));
+
+  if (activos.length === 0) {
+    console.log(
+      "[stripe/webhook] payment_intent.canceled coherente con bookings terminales",
+      {
+        payment_intent_id: paymentIntentId,
+        booking_ids: bookings.map((b) => b.id),
+        estados: bookings.map((b) => ({ id: b.id, estado: b.estado })),
+      },
+    );
+    return;
+  }
+
+  for (const booking of activos) {
+    console.warn(
+      "[stripe/webhook] DESCUADRE payment_intent.canceled: PI cancelado en Stripe pero booking activo",
+      {
+        booking_id: booking.id,
+        payment_intent_id: paymentIntentId,
+        estado: booking.estado,
+        event_id: event.id,
+      },
+    );
+  }
+}
+
+async function handleChargeRefunded(event) {
+  const charge = event.data.object;
+  const paymentIntentId = getPaymentIntentId(charge?.payment_intent);
+  const amountRefundedCents = Number(charge?.amount_refunded) || 0;
+  const amountRefundedEur = roundMoney(amountRefundedCents / 100);
+
+  if (!paymentIntentId) {
+    console.warn("[stripe/webhook] charge.refunded sin payment_intent", {
+      charge_id: charge?.id,
+      event_id: event.id,
+    });
+    return;
+  }
+
+  const { bookings, queryError } =
+    await findBookingsByPaymentIntentId(paymentIntentId);
+
+  if (queryError) {
+    return;
+  }
+
+  if (bookings.length === 0) {
+    console.log("[stripe/webhook] charge.refunded sin bookings en BD", {
+      payment_intent_id: paymentIntentId,
+      charge_id: charge?.id,
+      amount_refunded_eur: amountRefundedEur,
+      event_id: event.id,
+    });
+    return;
+  }
+
+  for (const booking of bookings) {
+    const reembolsoTotal =
+      booking.reembolso_cliente_total != null
+        ? roundMoney(booking.reembolso_cliente_total)
+        : null;
+    const reembolsoCredito =
+      booking.reembolso_cliente_credito != null
+        ? roundMoney(booking.reembolso_cliente_credito)
+        : 0;
+    const expectedTarjetaEur =
+      reembolsoTotal != null
+        ? roundMoney(Math.max(0, reembolsoTotal - reembolsoCredito))
+        : null;
+
+    const logPayload = {
+      booking_id: booking.id,
+      payment_intent_id: paymentIntentId,
+      charge_id: charge?.id,
+      stripe_amount_refunded_eur: amountRefundedEur,
+      reembolso_cliente_total: reembolsoTotal,
+      reembolso_cliente_credito: reembolsoCredito,
+      expected_tarjeta_eur: expectedTarjetaEur,
+      estado: booking.estado,
+      event_id: event.id,
+    };
+
+    const compareAgainst =
+      expectedTarjetaEur != null ? expectedTarjetaEur : reembolsoTotal;
+
+    if (compareAgainst == null) {
+      console.log(
+        "[stripe/webhook] charge.refunded registrado (sin reembolso_cliente_total en booking)",
+        logPayload,
+      );
+      continue;
+    }
+
+    const diff = Math.abs(amountRefundedEur - compareAgainst);
+    if (diff > REFUND_MISMATCH_TOLERANCE_EUR) {
+      console.warn(
+        "[stripe/webhook] DESCUADRE charge.refunded: importe Stripe difiere del esperado",
+        { ...logPayload, diff_eur: roundMoney(diff) },
+      );
+    } else {
+      console.log(
+        "[stripe/webhook] charge.refunded coherente con booking",
+        logPayload,
+      );
+    }
+  }
+}
+
 function isCuentaListaParaCobrar(account) {
   if (!account.payouts_enabled || !account.details_submitted) {
     return false;
@@ -58,6 +233,8 @@ async function handleAccountUpdated(account) {
 /** Handlers de reconciliación (Fase B). Sin acciones de dinero. */
 const eventHandlers = {
   "account.updated": (event) => handleAccountUpdated(event.data.object),
+  "payment_intent.canceled": handlePaymentIntentCanceled,
+  "charge.refunded": handleChargeRefunded,
 };
 
 function getErrorMessage(err) {
