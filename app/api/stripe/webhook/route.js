@@ -55,6 +55,97 @@ async function handleAccountUpdated(account) {
   }
 }
 
+/** Handlers de reconciliación (Fase B). Sin acciones de dinero. */
+const eventHandlers = {
+  "account.updated": (event) => handleAccountUpdated(event.data.object),
+};
+
+function getErrorMessage(err) {
+  if (err instanceof Error) return err.message;
+  if (typeof err?.message === "string") return err.message;
+  return String(err);
+}
+
+/**
+ * INSERT ON CONFLICT DO NOTHING vía insert + 23505.
+ * Si ya existe con processed_at → duplicado.
+ * Si ya existe sin processed_at → reintento Stripe tras fallo previo.
+ */
+async function claimWebhookEvent(event) {
+  const row = {
+    event_id: event.id,
+    type: event.type,
+    livemode: event.livemode,
+  };
+
+  const { error: insertError } = await supabase
+    .from("stripe_webhook_events")
+    .insert(row);
+
+  if (!insertError) {
+    return { status: "new" };
+  }
+
+  if (insertError.code !== "23505") {
+    throw insertError;
+  }
+
+  const { data: existing, error: fetchError } = await supabase
+    .from("stripe_webhook_events")
+    .select("processed_at")
+    .eq("event_id", event.id)
+    .maybeSingle();
+
+  if (fetchError) {
+    throw fetchError;
+  }
+
+  if (existing?.processed_at != null) {
+    return { status: "duplicate" };
+  }
+
+  return { status: "retry" };
+}
+
+async function markEventProcessed(eventId) {
+  const { error } = await supabase
+    .from("stripe_webhook_events")
+    .update({
+      processed_at: new Date().toISOString(),
+      error: null,
+    })
+    .eq("event_id", eventId);
+
+  if (error) {
+    throw error;
+  }
+}
+
+async function markEventFailed(eventId, err) {
+  const { error } = await supabase
+    .from("stripe_webhook_events")
+    .update({ error: getErrorMessage(err) })
+    .eq("event_id", eventId);
+
+  if (error) {
+    console.error(
+      "[stripe/webhook] No se pudo guardar error del evento:",
+      eventId,
+      error.message,
+    );
+  }
+}
+
+async function dispatchEvent(event) {
+  const handler = eventHandlers[event.type];
+  if (!handler) {
+    return { handled: false };
+  }
+
+  await handler(event);
+  return { handled: true };
+}
+
 export async function POST(request) {
   const signature = request.headers.get("stripe-signature");
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -76,17 +167,43 @@ export async function POST(request) {
     return NextResponse.json({ error: "Firma inválida" }, { status: 400 });
   }
 
+  let claim;
   try {
-    if (event.type === "account.updated") {
-      await handleAccountUpdated(event.data.object);
-    }
+    claim = await claimWebhookEvent(event);
   } catch (err) {
-    console.error("[stripe/webhook] Error procesando evento:", event.type, err.message);
+    console.error(
+      "[stripe/webhook] Error registrando evento:",
+      event.id,
+      getErrorMessage(err),
+    );
+    return NextResponse.json(
+      { error: "Error al registrar el evento" },
+      { status: 500 },
+    );
+  }
+
+  if (claim.status === "duplicate") {
+    return NextResponse.json({ received: true, duplicate: true });
+  }
+
+  try {
+    const { handled } = await dispatchEvent(event);
+    await markEventProcessed(event.id);
+
+    return NextResponse.json({
+      received: true,
+      handled,
+    });
+  } catch (err) {
+    console.error(
+      "[stripe/webhook] Error procesando evento:",
+      event.type,
+      getErrorMessage(err),
+    );
+    await markEventFailed(event.id, err);
     return NextResponse.json(
       { error: "Error al procesar el evento" },
       { status: 500 },
     );
   }
-
-  return NextResponse.json({ received: true });
 }
