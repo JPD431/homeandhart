@@ -8,6 +8,25 @@ const supabaseAdmin = createServiceClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY,
 );
 
+function getReservasSinComisionProveedor(perfil) {
+  if (perfil?.reservas_sin_comision_proveedor != null) {
+    return Number(perfil.reservas_sin_comision_proveedor) || 0;
+  }
+  return Number(perfil?.reservas_sin_comision) || 0;
+}
+
+function buildProveedorIngresoEmailFields(booking, proveedorProfile) {
+  const precioTotal = Number(booking.precio_total || 0);
+
+  return {
+    precio_base: booking.precio_base,
+    precio_total: precioTotal.toFixed(2),
+    cliente_sin_comision: booking.cliente_sin_comision === true,
+    proveedor_sin_comision: booking.proveedor_sin_comision === true,
+    sinComisionProveedor: getReservasSinComisionProveedor(proveedorProfile) > 0,
+  };
+}
+
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 async function contarBookingsPorPaymentIntent(paymentIntentId) {
@@ -216,6 +235,9 @@ export async function POST(request) {
           fecha_inicio,
           fecha_fin,
           precio_total,
+          precio_base,
+          cliente_sin_comision,
+          proveedor_sin_comision,
           mensaje,
           services:service_id (
             titulo,
@@ -257,7 +279,9 @@ export async function POST(request) {
             proveedorId
               ? supabaseAdmin
                   .from("profiles")
-                  .select("nombre, apellido, telefono")
+                  .select(
+                    "nombre, apellido, telefono, reservas_sin_comision_proveedor, reservas_sin_comision",
+                  )
                   .eq("id", proveedorId)
                   .maybeSingle()
               : Promise.resolve({ data: null, error: null }),
@@ -325,8 +349,8 @@ export async function POST(request) {
             servicio_titulo: svc.titulo || "Servicio",
             fecha_inicio: bookingFull.fecha_inicio,
             fecha_fin: finEmail,
-            precio_total: precioTotal,
             mensaje,
+            ...buildProveedorIngresoEmailFields(bookingFull, proveedorProfile),
           });
         }
       }

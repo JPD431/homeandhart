@@ -5,7 +5,7 @@ import {
   resolverEmailUsuario,
   resolverNombreUsuario,
 } from "@/app/lib/email-usuario";
-import { getIngresoProveedor } from "@/app/lib/ingresos-proveedor";
+import { getIngresoProveedorFromBooking } from "@/app/lib/ingresos-proveedor";
 import { firmarTokenConfirmacion } from "@/app/lib/confirmar-token";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -533,23 +533,37 @@ function detailsBlock({ servicio_titulo, fecha_inicio, fecha_fin, precio_total }
   </table>`;
 }
 
-function proveedorDetailsBlock({
-  servicio_titulo,
-  fecha_inicio,
-  fecha_fin,
-  precio_total,
-}) {
-  const ingresoLabel =
-    precio_total != null && precio_total !== ""
-      ? getIngresoProveedor(precio_total).toFixed(2)
-      : null;
+function proveedorDetailsBlock(data) {
+  const {
+    servicio_titulo,
+    fecha_inicio,
+    fecha_fin,
+    precio_total,
+    precio_base,
+    cliente_sin_comision,
+    proveedor_sin_comision,
+    sinComisionProveedor,
+  } = data;
+
+  let ingresoLabel = null;
+  if (precio_total != null && precio_total !== "") {
+    ingresoLabel = getIngresoProveedorFromBooking(
+      {
+        precio_base,
+        precio_total,
+        cliente_sin_comision,
+        proveedor_sin_comision,
+      },
+      { sinComisionProveedor },
+    ).toFixed(2);
+  }
 
   const rows = [
     ["Servicio", servicio_titulo],
     ["Fecha de inicio", fecha_inicio],
     fecha_fin ? ["Fecha de fin", fecha_fin] : null,
     ingresoLabel != null
-      ? ["Tu ingreso por esta reserva", `${ingresoLabel} €`]
+      ? ["Tu ingreso estimado por esta reserva", `${ingresoLabel} €`]
       : null,
   ].filter(Boolean);
 
@@ -1051,6 +1065,10 @@ async function sendReservaConfirmadaEmails(data) {
             servicio_titulo: svc.titulo,
             proveedor_nombre: proveedorNombre,
             precio_total: svc.precio,
+            precio_base: svc.precio_base,
+            cliente_sin_comision: svc.cliente_sin_comision,
+            proveedor_sin_comision: svc.proveedor_sin_comision,
+            sinComisionProveedor: svc.sinComisionProveedor,
             direccion_exacta: svc.direccion_exacta,
             telefono_proveedor: svc.telefono_proveedor,
             modalidad: svc.modalidad,

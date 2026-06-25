@@ -24,6 +24,25 @@ function getReservasSinComisionCliente(perfil) {
   return Number(perfil?.reservas_sin_comision) || 0;
 }
 
+function getReservasSinComisionProveedor(perfil) {
+  if (perfil?.reservas_sin_comision_proveedor != null) {
+    return Number(perfil.reservas_sin_comision_proveedor) || 0;
+  }
+  return Number(perfil?.reservas_sin_comision) || 0;
+}
+
+function buildProveedorIngresoEmailFields(booking, proveedorProfile) {
+  const precioTotal = Number(booking.precio_total || 0);
+
+  return {
+    precio_base: booking.precio_base,
+    precio_total: precioTotal.toFixed(2),
+    cliente_sin_comision: booking.cliente_sin_comision === true,
+    proveedor_sin_comision: booking.proveedor_sin_comision === true,
+    sinComisionProveedor: getReservasSinComisionProveedor(proveedorProfile) > 0,
+  };
+}
+
 async function decrementReservasSinComisionCliente(userId, perfilCliente) {
   const actual = getReservasSinComisionCliente(perfilCliente);
   const nuevo = Math.max(0, actual - 1);
@@ -277,8 +296,8 @@ async function sendContactEmailsForConfirmedBooking(
     servicio_titulo: svc.titulo || "Servicio",
     fecha_inicio: booking.fecha_inicio,
     fecha_fin: finEmail,
-    precio_total: precioTotal,
     mensaje,
+    ...buildProveedorIngresoEmailFields(booking, proveedorProfile),
   });
 }
 
@@ -289,6 +308,8 @@ async function sendPostCompleteBookingEmails({
   serviceIds,
   serviceMap,
   precioPorServicioMap,
+  precioBasePorServicioMap,
+  clienteSinComision,
   mainService,
   fechaInicio,
   fechaFin,
@@ -311,7 +332,9 @@ async function sendPostCompleteBookingEmails({
     const { data: proveedorProfiles, error: proveedorProfilesError } =
       await supabaseAdmin
         .from("profiles")
-        .select("id, nombre, apellido, telefono")
+        .select(
+          "id, nombre, apellido, telefono, reservas_sin_comision_proveedor, reservas_sin_comision",
+        )
         .in("id", proveedorIds);
 
     if (proveedorProfilesError) {
@@ -347,6 +370,9 @@ async function sendPostCompleteBookingEmails({
       fecha_inicio: fechaInicio,
       fecha_fin: finEmail,
       precio_total: precioPorServicioMap.get(serviceId),
+      precio_base: precioBasePorServicioMap.get(serviceId),
+      cliente_sin_comision: clienteSinComision,
+      proveedor_sin_comision: false,
       mensaje: mensaje?.trim() || "",
     };
 
@@ -366,8 +392,8 @@ async function sendPostCompleteBookingEmails({
         servicio_titulo: svc.titulo,
         fecha_inicio: fechaInicio,
         fecha_fin: finEmail,
-        precio_total: Number(booking.precio_total || 0).toFixed(2),
         booking_id: inserted.id,
+        ...buildProveedorIngresoEmailFields(booking, proveedorProfile),
       });
     }
   }
@@ -678,6 +704,7 @@ async function finalizeInsertedBookings({
   serviceIds,
   serviceMap,
   precioPorServicioMap,
+  precioBasePorServicioMap,
   totalGrupo,
   subtotalGrupo,
   comision,
@@ -769,6 +796,8 @@ async function finalizeInsertedBookings({
     serviceIds,
     serviceMap,
     precioPorServicioMap,
+    precioBasePorServicioMap,
+    clienteSinComision,
     mainService,
     fechaInicio,
     fechaFin,
@@ -1093,6 +1122,7 @@ async function completePerServicePayments(userId, body) {
     serviceIds: service_ids,
     serviceMap,
     precioPorServicioMap,
+    precioBasePorServicioMap,
     totalGrupo,
     subtotalGrupo,
     comision,
@@ -1539,6 +1569,8 @@ export async function POST(request) {
       serviceIds: service_ids,
       serviceMap,
       precioPorServicioMap,
+      precioBasePorServicioMap,
+      clienteSinComision,
       mainService,
       fechaInicio: fecha_inicio,
       fechaFin: fecha_fin,
