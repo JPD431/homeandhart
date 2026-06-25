@@ -105,6 +105,8 @@ export async function GET(request) {
             role,
             codigo_referido: codigoReferidoPropio,
             reservas_sin_comision: 3,
+            reservas_sin_comision_cliente: 3,
+            reservas_sin_comision_proveedor: 3,
           },
           { onConflict: "id" },
         );
@@ -121,14 +123,16 @@ export async function GET(request) {
     if (codigoReferido) {
       const { data: perfilActual } = await supabaseAdmin
         .from("profiles")
-        .select("reservas_sin_comision, referido_aplicado")
+        .select("referido_aplicado")
         .eq("id", user.id)
         .maybeSingle();
 
       if (perfilActual && !perfilActual.referido_aplicado) {
         const { data: referidor } = await supabaseAdmin
           .from("profiles")
-          .select("id, reservas_sin_comision, referidos_count")
+          .select(
+            "id, reservas_sin_comision_cliente, reservas_sin_comision, referidos_count",
+          )
           .eq("codigo_referido", codigoReferido)
           .maybeSingle();
 
@@ -136,16 +140,23 @@ export async function GET(request) {
           await supabaseAdmin
             .from("profiles")
             .update({
+              reservas_sin_comision_cliente: 4,
               reservas_sin_comision: 4,
               referido_aplicado: true,
             })
             .eq("id", user.id);
 
+          const referidorClienteActual =
+            Number(referidor.reservas_sin_comision_cliente) ||
+            Number(referidor.reservas_sin_comision) ||
+            0;
+          const referidorClienteNuevo = referidorClienteActual + 1;
+
           await supabaseAdmin
             .from("profiles")
             .update({
-              reservas_sin_comision:
-                (Number(referidor.reservas_sin_comision) || 0) + 1,
+              reservas_sin_comision_cliente: referidorClienteNuevo,
+              reservas_sin_comision: referidorClienteNuevo,
               referidos_count: (Number(referidor.referidos_count) || 0) + 1,
             })
             .eq("id", referidor.id);
