@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { BRAND, SERIF } from "@/app/components/brand";
-import { getIngresoProveedor } from "@/app/lib/ingresos-proveedor";
+import { getIngresoProveedorFromBooking } from "@/app/lib/ingresos-proveedor";
 import { supabase } from "@/app/lib/supabase";
 
 const PRIMARY = "#1d4f91";
@@ -33,14 +33,32 @@ const PERIOD_TABS = [
   { id: "todo", label: "Todo", days: null },
 ];
 
+function getReservasSinComisionProveedor(perfil) {
+  if (perfil?.reservas_sin_comision_proveedor != null) {
+    return Number(perfil.reservas_sin_comision_proveedor) || 0;
+  }
+  return Number(perfil?.reservas_sin_comision) || 0;
+}
+
 function getBookingEstado(booking) {
   const estado = booking.estado ?? booking.status ?? "pendiente";
   if (estado === "cancelada_garantia") return "cancelada";
   return estado;
 }
 
-function getNetIncome(precioTotal) {
-  return getIngresoProveedor(precioTotal);
+function sumPendienteDeCobrar(bookings, sinComisionProveedor) {
+  return bookings
+    .filter((b) => {
+      if (isExcludedFromMoney(b) || b.pago_liberado_at != null) return false;
+      const estado = getBookingEstado(b);
+      return estado === "confirmada" || estado === "en_curso";
+    })
+    .reduce(
+      (sum, b) =>
+        sum +
+        getIngresoProveedorFromBooking(b, { sinComisionProveedor }),
+      0,
+    );
 }
 
 const MONEY_EXCLUDED_ESTADOS = new Set([
@@ -69,16 +87,6 @@ function sumCobrado(bookings) {
   return bookings
     .filter((b) => !isExcludedFromMoney(b) && b.pago_liberado_at != null)
     .reduce((sum, b) => sum + (Number(b.importe_transferido) || 0), 0);
-}
-
-function sumPendienteDeCobrar(bookings) {
-  return bookings
-    .filter((b) => {
-      if (isExcludedFromMoney(b) || b.pago_liberado_at != null) return false;
-      const estado = getBookingEstado(b);
-      return estado === "confirmada" || estado === "en_curso";
-    })
-    .reduce((sum, b) => sum + getNetIncome(b.precio_total), 0);
 }
 
 function formatEuro(value) {
@@ -215,6 +223,7 @@ export default function EstadisticasPage() {
   const [bookings, setBookings] = useState([]);
   const [services, setServices] = useState([]);
   const [reviews, setReviews] = useState([]);
+  const [sinComisionProveedor, setSinComisionProveedor] = useState(false);
 
   useEffect(() => {
     async function loadStats() {
@@ -230,7 +239,7 @@ export default function EstadisticasPage() {
 
       const { data: profile } = await supabase
         .from("profiles")
-        .select("role")
+        .select("role, reservas_sin_comision_proveedor, reservas_sin_comision")
         .eq("id", user.id)
         .single();
 
@@ -238,6 +247,8 @@ export default function EstadisticasPage() {
         router.replace("/dashboard");
         return;
       }
+
+      setSinComisionProveedor(getReservasSinComisionProveedor(profile) > 0);
 
       const { data: servicesData } = await supabase
         .from("services")
@@ -252,7 +263,7 @@ export default function EstadisticasPage() {
         const { data: bookingsData } = await supabase
           .from("bookings")
           .select(
-            "id, service_id, precio_total, estado, created_at, pago_liberado_at, importe_transferido",
+            "id, service_id, precio_total, precio_base, cliente_sin_comision, proveedor_sin_comision, estado, created_at, pago_liberado_at, importe_transferido",
           )
           .in("service_id", serviceIds);
 
@@ -304,7 +315,10 @@ export default function EstadisticasPage() {
     const ingresosNetos = sumCobrado(periodBookings);
     const prevIngresosNetos = sumCobrado(prevPeriodBookings);
 
-    const pendienteDeCobrar = sumPendienteDeCobrar(periodBookings);
+    const pendienteDeCobrar = sumPendienteDeCobrar(
+      periodBookings,
+      sinComisionProveedor,
+    );
 
     const cobrado = ingresosNetos;
     const totalEstimado = cobrado + pendienteDeCobrar;
@@ -355,7 +369,7 @@ export default function EstadisticasPage() {
       porcentajeCobrado,
       reviewCount: periodReviews.length,
     };
-  }, [periodBookings, prevPeriodBookings, periodReviews, prevPeriodReviews]);
+  }, [periodBookings, prevPeriodBookings, periodReviews, prevPeriodReviews, sinComisionProveedor]);
 
   const trends = useMemo(() => {
     const showTrend = period !== "todo";

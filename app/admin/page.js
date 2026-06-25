@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Navbar from "@/app/components/Navbar";
 import { BRAND, SERIF } from "@/app/components/brand";
 import { articulosIniciales, slugify } from "@/app/lib/blog-seed";
-import { getIngresoProveedor } from "@/app/lib/ingresos-proveedor";
+import { getIngresoProveedorFromBooking } from "@/app/lib/ingresos-proveedor";
 import { supabase } from "@/app/lib/supabase";
 
 const TABS = [
@@ -203,13 +203,16 @@ function ProviderDocuments({ provider }) {
   );
 }
 
-function getTransferidoProveedor(precioTotal) {
-  return getIngresoProveedor(precioTotal);
+function getTransferidoProveedorFromBooking(booking) {
+  if (booking.importe_transferido != null && booking.importe_transferido !== "") {
+    return Number(booking.importe_transferido) || 0;
+  }
+  return getIngresoProveedorFromBooking(booking);
 }
 
-function getComisionHH(precioTotal) {
-  const precio = Number(precioTotal) || 0;
-  return precio - getTransferidoProveedor(precio);
+function getComisionHHFromBooking(booking) {
+  const precio = Number(booking.precio_total) || 0;
+  return precio - getTransferidoProveedorFromBooking(booking);
 }
 
 function formatEuroAdmin(amount) {
@@ -349,6 +352,10 @@ export default function AdminPage() {
         `
         id,
         precio_total,
+        precio_base,
+        cliente_sin_comision,
+        proveedor_sin_comision,
+        importe_transferido,
         fecha_inicio,
         created_at,
         cliente_id,
@@ -450,7 +457,7 @@ export default function AdminPage() {
     for (const booking of completedBookings) {
       const precio = Number(booking.precio_total) || 0;
       totalCobrado += precio;
-      totalTransferido += getTransferidoProveedor(precio);
+      totalTransferido += getTransferidoProveedorFromBooking(booking);
     }
 
     return {
@@ -1378,8 +1385,8 @@ export default function AdminPage() {
                   <tbody>
                     {latestCompletedBookings.map((booking) => {
                       const precio = Number(booking.precio_total) || 0;
-                      const transferido = getTransferidoProveedor(precio);
-                      const comision = getComisionHH(precio);
+                      const transferido = getTransferidoProveedorFromBooking(booking);
+                      const comision = getComisionHHFromBooking(booking);
                       const cliente = booking.profiles_public;
                       const clienteNombre = cliente
                         ? [cliente.nombre, cliente.apellido].filter(Boolean).join(" ")
