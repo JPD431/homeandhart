@@ -125,6 +125,13 @@ function SectionLabel({ children }) {
   );
 }
 
+function getReservasSinComisionCliente(perfil) {
+  if (perfil?.reservas_sin_comision_cliente != null) {
+    return Number(perfil.reservas_sin_comision_cliente) || 0;
+  }
+  return Number(perfil?.reservas_sin_comision) || 0;
+}
+
 export default function Navbar() {
   const router = useRouter();
   const { lang } = useLang();
@@ -144,7 +151,7 @@ export default function Navbar() {
 
   const isProveedor = perfil?.role === "proveedor";
   const porcentajePerfil = calcPorcentajePerfil(perfil, servicesCount);
-  const sinComision = Number(perfil?.reservas_sin_comision) || 0;
+  const sinComision = getReservasSinComisionCliente(perfil);
 
   const closeDropdown = useCallback(() => setDropdownOpen(false), []);
   const closeMobileMenu = useCallback(() => setMobileMenuOpen(false), []);
@@ -185,7 +192,7 @@ export default function Navbar() {
       const { data: profileData } = await supabase
         .from("profiles")
         .select(
-          "nombre, apellido, role, descripcion, idiomas, foto_perfil, reservas_sin_comision",
+          "nombre, apellido, role, descripcion, idiomas, foto_perfil, reservas_sin_comision_cliente, reservas_sin_comision",
         )
         .eq("id", authUser.id)
         .single();

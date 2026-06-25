@@ -15,6 +15,20 @@ const BRAND = {
   dark: '#2a3a4a'
 };
 
+function getReservasSinComisionCliente(perfil) {
+  if (perfil?.reservas_sin_comision_cliente != null) {
+    return Number(perfil.reservas_sin_comision_cliente) || 0;
+  }
+  return Number(perfil?.reservas_sin_comision) || 0;
+}
+
+function getReservasSinComisionProveedor(perfil) {
+  if (perfil?.reservas_sin_comision_proveedor != null) {
+    return Number(perfil.reservas_sin_comision_proveedor) || 0;
+  }
+  return Number(perfil?.reservas_sin_comision) || 0;
+}
+
 function DashboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -314,7 +328,11 @@ function TabCliente({ perfil, reservas, favoritos, viajes, router, BRAND, copiar
           </div>
           <div style={{display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 10}}>
             {perfil?.codigo_referido && <span style={{fontSize: 8, padding: '2px 7px', borderRadius: 8, background: '#e8f0fb', color: '#163a6b'}}>{perfil.codigo_referido}</span>}
-            {perfil?.reservas_sin_comision > 0 && <span style={{fontSize: 8, padding: '2px 7px', borderRadius: 8, background: '#e6f4f0', color: '#085041'}}>{perfil.reservas_sin_comision} sin comisión 🎁</span>}
+            {getReservasSinComisionCliente(perfil) > 0 && (
+              <span style={{fontSize: 8, padding: '2px 7px', borderRadius: 8, background: '#e6f4f0', color: '#085041'}}>
+                {getReservasSinComisionCliente(perfil)} sin comisión 🎁
+              </span>
+            )}
           </div>
           {creditoDisponible > 0 && (
             <p style={{ fontSize: 11, color: BRAND.green, fontWeight: 500, marginBottom: 10 }}>
@@ -388,7 +406,7 @@ function TabCliente({ perfil, reservas, favoritos, viajes, router, BRAND, copiar
             <button onClick={() => copiarLink(perfil?.codigo_referido)} style={{ minHeight: 44, fontSize: 10, color: BRAND.blue, border: `0.5px solid ${BRAND.blue}`, padding: '8px 12px', borderRadius: 4, background: '#fff', cursor: 'pointer', whiteSpace: 'nowrap' }}>Copiar link</button>
           </div>
           <p style={{fontSize: 10, color: '#888', lineHeight: 1.5}}>Por cada amigo que reserve recibirás 1 reserva extra sin comisión.</p>
-          <div style={{marginTop: 8, fontSize: 11, color: '#666', display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '0.5px solid #f5f3f0'}}><span>Reservas sin comisión</span><span style={{fontWeight: 500, color: '#0e7a5c'}}>{perfil?.reservas_sin_comision || 0} 🎁</span></div>
+          <div style={{marginTop: 8, fontSize: 11, color: '#666', display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '0.5px solid #f5f3f0'}}><span>Reservas sin comisión</span><span style={{fontWeight: 500, color: '#0e7a5c'}}>{getReservasSinComisionCliente(perfil)} 🎁</span></div>
         </div>
       </div>
     </div>
@@ -484,7 +502,7 @@ function TabProveedor({ perfil, router, BRAND }) {
       <div style={{ textAlign: 'center', padding: '24px 0 16px' }}>
         <div style={{ background: '#e6f4f0', borderRadius: 8, padding: '12px 16px', marginBottom: 16 }}>
           <div style={{ fontSize: 11, color: '#888', marginBottom: 4 }}>Reservas sin comisión</div>
-          <div style={{ fontSize: 20, fontWeight: 600, color: '#0e7a5c' }}>{perfil?.reservas_sin_comision || 0} 🎁</div>
+          <div style={{ fontSize: 20, fontWeight: 600, color: '#0e7a5c' }}>{getReservasSinComisionProveedor(perfil)} 🎁</div>
           <div style={{ fontSize: 10, color: '#666', marginTop: 4 }}>Recibirás el 100% del pago en estas reservas</div>
         </div>
 
@@ -636,13 +654,6 @@ function EstadoBadge({ estado }) {
       {meta.label}
     </span>
   );
-}
-
-function getReservasSinComisionProveedor(perfil) {
-  if (perfil?.reservas_sin_comision_proveedor != null) {
-    return Number(perfil.reservas_sin_comision_proveedor) || 0;
-  }
-  return Number(perfil?.reservas_sin_comision) || 0;
 }
 
 function formatImporteReservaRecibida(booking, sinComisionProveedor) {
@@ -1134,7 +1145,7 @@ function TabReferidos({ perfil, BRAND, copiarLink }) {
         <p style={{fontSize: 12, color: '#888', lineHeight: 1.7, marginBottom: 16}}>Comparte tu código con amigos. Cada vez que alguien se registre con tu código y complete su primera reserva, recibirás 1 reserva extra sin comisión.</p>
         <div style={{background: '#e6f4f0', borderRadius: 6, padding: 12, marginBottom: 14}}>
           <div style={{fontSize: 11, color: '#085041', fontWeight: 500, marginBottom: 4}}>Tus reservas sin comisión</div>
-          <div style={{fontSize: 28, fontWeight: 200, color: '#0e7a5c'}}>{perfil?.reservas_sin_comision || 0}</div>
+          <div style={{fontSize: 28, fontWeight: 200, color: '#0e7a5c'}}>{getReservasSinComisionCliente(perfil)}</div>
         </div>
         <button onClick={() => copiarLink(perfil?.codigo_referido)} style={{ width: '100%', minHeight: 44, background: BRAND.blue, color: '#fff', border: 'none', padding: 12, borderRadius: 5, fontSize: 12, cursor: 'pointer', fontWeight: 500 }}>Copiar link de invitación</button>
       </div>
