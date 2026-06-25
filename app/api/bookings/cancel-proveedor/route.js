@@ -2,6 +2,7 @@ import { createClient as createServiceClient } from "@supabase/supabase-js";
 import Stripe from "stripe";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { getBookingPrecioBase } from "@/app/lib/ingresos-proveedor";
 
 const supabaseAdmin = createServiceClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -76,15 +77,12 @@ async function handleStripeForCancellation(paymentIntentId) {
   };
 }
 
-const PLATFORM_MULTIPLIER = 1.14;
-
 function roundMoney(amount) {
   return Math.round(Number(amount) * 100) / 100;
 }
 
-function calcularRepartoIndemnizacion(fechaInicio, precioTotal) {
-  const precio = Number(precioTotal) || 0;
-  const base_indemnizacion = roundMoney(precio / PLATFORM_MULTIPLIER);
+function calcularRepartoIndemnizacion(fechaInicio, booking) {
+  const base_indemnizacion = getBookingPrecioBase(booking);
 
   let totalRate;
   let clientRate;
@@ -126,10 +124,7 @@ function calcularRepartoIndemnizacion(fechaInicio, precioTotal) {
 }
 
 async function aplicarPenalizacionProveedor(proveedorId, booking) {
-  const reparto = calcularRepartoIndemnizacion(
-    booking.fecha_inicio,
-    booking.precio_total,
-  );
+  const reparto = calcularRepartoIndemnizacion(booking.fecha_inicio, booking);
   const {
     base_indemnizacion,
     indemnizacion_total,
@@ -310,7 +305,7 @@ export async function POST(request) {
   const { data: booking, error: bookingError } = await supabaseAdmin
     .from("bookings")
     .select(
-      "id, service_id, cliente_id, payment_intent_id, estado, precio_total, fecha_inicio, fecha_fin",
+      "id, service_id, cliente_id, payment_intent_id, estado, precio_total, precio_base, cliente_sin_comision, fecha_inicio, fecha_fin",
     )
     .eq("id", bookingId)
     .maybeSingle();
