@@ -126,10 +126,7 @@ function SectionLabel({ children }) {
 }
 
 function getReservasSinComisionCliente(perfil) {
-  if (perfil?.reservas_sin_comision_cliente != null) {
-    return Number(perfil.reservas_sin_comision_cliente) || 0;
-  }
-  return Number(perfil?.reservas_sin_comision) || 0;
+  return Number(perfil?.reservas_sin_comision_cliente) || 0;
 }
 
 export default function Navbar() {
@@ -192,7 +189,7 @@ export default function Navbar() {
       const { data: profileData } = await supabase
         .from("profiles")
         .select(
-          "nombre, apellido, role, descripcion, idiomas, foto_perfil, reservas_sin_comision_cliente, reservas_sin_comision",
+          "nombre, apellido, role, descripcion, idiomas, foto_perfil, reservas_sin_comision_cliente",
         )
         .eq("id", authUser.id)
         .single();

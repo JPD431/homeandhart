@@ -18,17 +18,11 @@ import { rewardReferidorPrimeraReserva } from "@/app/lib/referidos";
 const MAX_CREDITO_PORCENTAJE = 0.6;
 
 function getReservasSinComisionCliente(perfil) {
-  if (perfil?.reservas_sin_comision_cliente != null) {
-    return Number(perfil.reservas_sin_comision_cliente) || 0;
-  }
-  return Number(perfil?.reservas_sin_comision) || 0;
+  return Number(perfil?.reservas_sin_comision_cliente) || 0;
 }
 
 function getReservasSinComisionProveedor(perfil) {
-  if (perfil?.reservas_sin_comision_proveedor != null) {
-    return Number(perfil.reservas_sin_comision_proveedor) || 0;
-  }
-  return Number(perfil?.reservas_sin_comision) || 0;
+  return Number(perfil?.reservas_sin_comision_proveedor) || 0;
 }
 
 function buildProveedorIngresoEmailFields(booking, proveedorProfile) {
@@ -50,7 +44,6 @@ async function decrementReservasSinComisionCliente(userId, perfilCliente) {
     .from("profiles")
     .update({
       reservas_sin_comision_cliente: nuevo,
-      reservas_sin_comision: nuevo,
     })
     .eq("id", userId);
 
@@ -337,7 +330,7 @@ async function sendPostCompleteBookingEmails({
       await supabaseAdmin
         .from("profiles")
         .select(
-          "id, nombre, apellido, telefono, reservas_sin_comision_proveedor, reservas_sin_comision",
+          "id, nombre, apellido, telefono, reservas_sin_comision_proveedor",
         )
         .in("id", proveedorIds);
 
@@ -893,7 +886,7 @@ async function completePerServicePayments(userId, body) {
 
   const { data: perfilCliente, error: perfilError } = await supabaseAdmin
     .from("profiles")
-    .select("reservas_sin_comision_cliente, reservas_sin_comision, credito_disponible, nombre")
+    .select("reservas_sin_comision_cliente, credito_disponible, nombre")
     .eq("id", userId)
     .maybeSingle();
 
@@ -1254,7 +1247,7 @@ export async function POST(request) {
 
     const { data: perfilCliente, error: perfilError } = await supabaseAdmin
       .from("profiles")
-      .select("reservas_sin_comision_cliente, reservas_sin_comision, credito_disponible, nombre")
+      .select("reservas_sin_comision_cliente, credito_disponible, nombre")
       .eq("id", userId)
       .maybeSingle();
 

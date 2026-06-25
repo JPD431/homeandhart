@@ -16,17 +16,11 @@ const BRAND = {
 };
 
 function getReservasSinComisionCliente(perfil) {
-  if (perfil?.reservas_sin_comision_cliente != null) {
-    return Number(perfil.reservas_sin_comision_cliente) || 0;
-  }
-  return Number(perfil?.reservas_sin_comision) || 0;
+  return Number(perfil?.reservas_sin_comision_cliente) || 0;
 }
 
 function getReservasSinComisionProveedor(perfil) {
-  if (perfil?.reservas_sin_comision_proveedor != null) {
-    return Number(perfil.reservas_sin_comision_proveedor) || 0;
-  }
-  return Number(perfil?.reservas_sin_comision) || 0;
+  return Number(perfil?.reservas_sin_comision_proveedor) || 0;
 }
 
 function DashboardContent() {

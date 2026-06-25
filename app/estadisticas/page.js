@@ -34,10 +34,7 @@ const PERIOD_TABS = [
 ];
 
 function getReservasSinComisionProveedor(perfil) {
-  if (perfil?.reservas_sin_comision_proveedor != null) {
-    return Number(perfil.reservas_sin_comision_proveedor) || 0;
-  }
-  return Number(perfil?.reservas_sin_comision) || 0;
+  return Number(perfil?.reservas_sin_comision_proveedor) || 0;
 }
 
 function getBookingEstado(booking) {
@@ -239,7 +236,7 @@ export default function EstadisticasPage() {
 
       const { data: profile } = await supabase
         .from("profiles")
-        .select("role, reservas_sin_comision_proveedor, reservas_sin_comision")
+        .select("role, reservas_sin_comision_proveedor")
         .eq("id", user.id)
         .single();
 

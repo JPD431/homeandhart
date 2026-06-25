@@ -93,7 +93,6 @@ async function runPostVerificationSideEffects(user) {
           apellido,
           role,
           codigo_referido: codigoReferidoPropio,
-          reservas_sin_comision: 3,
           reservas_sin_comision_cliente: 3,
           reservas_sin_comision_proveedor: 3,
         },

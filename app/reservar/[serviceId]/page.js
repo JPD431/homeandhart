@@ -38,10 +38,7 @@ const stripePromise = loadStripe(
 );
 
 function getReservasSinComisionCliente(perfil) {
-  if (perfil?.reservas_sin_comision_cliente != null) {
-    return Number(perfil.reservas_sin_comision_cliente) || 0;
-  }
-  return Number(perfil?.reservas_sin_comision) || 0;
+  return Number(perfil?.reservas_sin_comision_cliente) || 0;
 }
 
 const CANCEL_POLICIES = {
@@ -1631,7 +1628,7 @@ export default function ReservarPage() {
       const { data: perfilClienteData } = await supabase
         .from("profiles")
         .select(
-          "nombre, apellido, stripe_customer_id, reservas_sin_comision_cliente, reservas_sin_comision, credito_disponible",
+          "nombre, apellido, stripe_customer_id, reservas_sin_comision_cliente, credito_disponible",
         )
         .eq("id", user.id)
         .single();

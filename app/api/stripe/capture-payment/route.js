@@ -16,10 +16,7 @@ const supabase = createClient(
 const STRIPE_MIN_TRANSFER_EUR = 0.5;
 
 function getReservasSinComisionProveedor(profile) {
-  if (profile?.reservas_sin_comision_proveedor != null) {
-    return Number(profile.reservas_sin_comision_proveedor) || 0;
-  }
-  return Number(profile?.reservas_sin_comision) || 0;
+  return Number(profile?.reservas_sin_comision_proveedor) || 0;
 }
 
 function roundMoney(amount) {
@@ -95,7 +92,6 @@ async function buildTransfersForPayment(paymentIntentId) {
         id,
         stripe_account_id,
         reservas_sin_comision_proveedor,
-        reservas_sin_comision,
         deuda_pendiente,
         saldo_pendiente_transferir
       )

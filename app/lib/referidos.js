@@ -1,4 +1,5 @@
-// -- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS reservas_sin_comision integer DEFAULT 3;
+// -- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS reservas_sin_comision_cliente integer DEFAULT 3;
+// -- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS reservas_sin_comision_proveedor integer DEFAULT 3;
 // -- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS codigo_referido text UNIQUE;
 // -- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS referido_por text;
 // -- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS referidos_count integer DEFAULT 0;

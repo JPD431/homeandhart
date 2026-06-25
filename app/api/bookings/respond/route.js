@@ -9,10 +9,7 @@ const supabaseAdmin = createServiceClient(
 );
 
 function getReservasSinComisionProveedor(perfil) {
-  if (perfil?.reservas_sin_comision_proveedor != null) {
-    return Number(perfil.reservas_sin_comision_proveedor) || 0;
-  }
-  return Number(perfil?.reservas_sin_comision) || 0;
+  return Number(perfil?.reservas_sin_comision_proveedor) || 0;
 }
 
 function buildProveedorIngresoEmailFields(booking, proveedorProfile) {
@@ -281,7 +278,7 @@ export async function POST(request) {
               ? supabaseAdmin
                   .from("profiles")
                   .select(
-                    "nombre, apellido, telefono, reservas_sin_comision_proveedor, reservas_sin_comision",
+                    "nombre, apellido, telefono, reservas_sin_comision_proveedor",
                   )
                   .eq("id", proveedorId)
                   .maybeSingle()
