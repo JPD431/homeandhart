@@ -3,7 +3,7 @@ import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Navbar from '@/app/components/Navbar';
-import { getIngresoProveedor } from '@/app/lib/ingresos-proveedor';
+import { getIngresoProveedorFromBooking } from '@/app/lib/ingresos-proveedor';
 import { supabase } from '@/app/lib/supabase';
 
 const BRAND = {
@@ -638,7 +638,14 @@ function EstadoBadge({ estado }) {
   );
 }
 
-function formatImporteReservaRecibida(booking) {
+function getReservasSinComisionProveedor(perfil) {
+  if (perfil?.reservas_sin_comision_proveedor != null) {
+    return Number(perfil.reservas_sin_comision_proveedor) || 0;
+  }
+  return Number(perfil?.reservas_sin_comision) || 0;
+}
+
+function formatImporteReservaRecibida(booking, sinComisionProveedor) {
   if (booking.pago_liberado_at != null) {
     if (booking.importe_transferido != null) {
       return {
@@ -650,7 +657,7 @@ function formatImporteReservaRecibida(booking) {
   }
   return {
     label: 'Cobras (estimado):',
-    amount: `${getIngresoProveedor(booking.precio_total).toFixed(2)}€`,
+    amount: `${getIngresoProveedorFromBooking(booking, { sinComisionProveedor }).toFixed(2)}€`,
   };
 }
 
@@ -658,6 +665,7 @@ function ReservaRecibidaCard({
   booking,
   serviceTitulo,
   clienteNombre,
+  sinComisionProveedor,
   onRespond,
   responding,
   onCancelProvider,
@@ -665,7 +673,7 @@ function ReservaRecibidaCard({
 }) {
   const isPendiente = booking.estado === 'pendiente';
   const isConfirmada = booking.estado === 'confirmada';
-  const importeReserva = formatImporteReservaRecibida(booking);
+  const importeReserva = formatImporteReservaRecibida(booking, sinComisionProveedor);
 
   return (
     <div
@@ -823,7 +831,7 @@ function ReservasRecibidas({ perfil, BRAND }) {
 
       const { data: bookingsData, error: bookingsError } = await supabase
         .from('bookings')
-        .select('id, cliente_id, service_id, fecha_inicio, fecha_fin, hora, precio_total, estado, mensaje, created_at, pago_liberado_at, importe_transferido')
+        .select('id, cliente_id, service_id, fecha_inicio, fecha_fin, hora, precio_total, precio_base, cliente_sin_comision, proveedor_sin_comision, estado, mensaje, created_at, pago_liberado_at, importe_transferido')
         .in('service_id', serviceIds)
         .order('created_at', { ascending: false });
 
@@ -941,6 +949,7 @@ function ReservasRecibidas({ perfil, BRAND }) {
 
   const pendientes = bookings.filter((b) => b.estado === 'pendiente');
   const resto = bookings.filter((b) => b.estado !== 'pendiente');
+  const sinComisionProveedor = getReservasSinComisionProveedor(perfil) > 0;
 
   return (
     <div style={{ marginTop: 8, paddingBottom: 32 }}>
@@ -1057,6 +1066,7 @@ function ReservasRecibidas({ perfil, BRAND }) {
                   booking={booking}
                   serviceTitulo={serviceMap[booking.service_id] || 'Servicio'}
                   clienteNombre={clientNames[booking.cliente_id] || 'Cliente'}
+                  sinComisionProveedor={sinComisionProveedor}
                   onRespond={handleRespond}
                   responding={respondingId === booking.id}
                   onCancelProvider={handleCancelProvider}
@@ -1088,6 +1098,7 @@ function ReservasRecibidas({ perfil, BRAND }) {
                   booking={booking}
                   serviceTitulo={serviceMap[booking.service_id] || 'Servicio'}
                   clienteNombre={clientNames[booking.cliente_id] || 'Cliente'}
+                  sinComisionProveedor={sinComisionProveedor}
                   onRespond={handleRespond}
                   responding={respondingId === booking.id}
                   onCancelProvider={handleCancelProvider}

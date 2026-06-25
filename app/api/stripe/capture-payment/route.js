@@ -1,8 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 import Stripe from "stripe";
 import {
+  getBookingPrecioBase,
   getIngresoProveedorDesdeBase,
-  getPrecioBaseProveedor,
 } from "@/app/lib/ingresos-proveedor";
 import { verificarTokenConfirmacion } from "@/app/lib/confirmar-token";
 
@@ -14,6 +14,13 @@ const supabase = createClient(
 );
 
 const STRIPE_MIN_TRANSFER_EUR = 0.5;
+
+function getReservasSinComisionProveedor(profile) {
+  if (profile?.reservas_sin_comision_proveedor != null) {
+    return Number(profile.reservas_sin_comision_proveedor) || 0;
+  }
+  return Number(profile?.reservas_sin_comision) || 0;
+}
 
 function roundMoney(amount) {
   return Math.round(Number(amount) * 100) / 100;
@@ -28,7 +35,7 @@ function splitTransferAmount(amountFinal, bookings) {
 
   const bases = bookings.map((b) => ({
     id: b.id,
-    base: getPrecioBaseProveedor(b.precio_total),
+    base: getBookingPrecioBase(b),
   }));
   const totalBase = bases.reduce((sum, b) => sum + b.base, 0);
   if (totalBase <= 0) {
@@ -102,7 +109,9 @@ async function buildTransfersForPayment(paymentIntentId) {
 
   const { data: bookings, error: bookingsError } = await supabase
     .from("bookings")
-    .select("id, service_id, precio_total, credito_aplicado")
+    .select(
+      "id, service_id, precio_total, precio_base, cliente_sin_comision, credito_aplicado",
+    )
     .eq("payment_intent_id", paymentIntentId);
 
   if (bookingsError || !bookings?.length) return empty;
@@ -127,6 +136,7 @@ async function buildTransfersForPayment(paymentIntentId) {
       profiles!proveedor_id (
         id,
         stripe_account_id,
+        reservas_sin_comision_proveedor,
         reservas_sin_comision,
         referido_por,
         deuda_pendiente,
@@ -151,7 +161,7 @@ async function buildTransfersForPayment(paymentIntentId) {
       proveedorMap.set(proveedorId, {
         proveedorId,
         stripe_account_id: profile.stripe_account_id,
-        reservas_sin_comision: Number(profile.reservas_sin_comision) || 0,
+        reservas_sin_comision_proveedor: getReservasSinComisionProveedor(profile),
         referido_por: profile.referido_por,
         profile,
         serviceIds: new Set(),
@@ -167,9 +177,9 @@ async function buildTransfersForPayment(paymentIntentId) {
   for (const booking of bookings) {
     for (const entry of proveedorMap.values()) {
       if (!entry.serviceIds.has(booking.service_id)) continue;
-      entry.amount += getPrecioBaseProveedor(booking.precio_total);
+      entry.amount += getBookingPrecioBase(booking);
       entry.bookingIds.push(booking.id);
-      entry.bookings.push({ id: booking.id, precio_total: booking.precio_total });
+      entry.bookings.push(booking);
     }
   }
 
@@ -178,9 +188,9 @@ async function buildTransfersForPayment(paymentIntentId) {
   for (const entry of proveedorMap.values()) {
     if (entry.amount <= 0) continue;
 
-    const sinComision = entry.reservas_sin_comision > 0;
+    const proveedorSinComision = entry.reservas_sin_comision_proveedor > 0;
     const amountBruto = getIngresoProveedorDesdeBase(entry.amount, {
-      sinComision,
+      sinComision: proveedorSinComision,
     });
     plans.push({
       proveedorId: entry.proveedorId,
@@ -189,7 +199,8 @@ async function buildTransfersForPayment(paymentIntentId) {
       amount_bruto: amountBruto,
       deuda_actual: Number(entry.profile?.deuda_pendiente) || 0,
       profile: entry.profile,
-      decrementSinComision: sinComision,
+      proveedorSinComision,
+      decrementSinComision: proveedorSinComision,
       bookingIds: entry.bookingIds,
       bookings: entry.bookings,
     });
@@ -426,7 +437,10 @@ export async function POST(request) {
             for (const { bookingId: splitBookingId, amount } of splits) {
               const { error: importeError } = await supabase
                 .from("bookings")
-                .update({ importe_transferido: amount })
+                .update({
+                  importe_transferido: amount,
+                  proveedor_sin_comision: plan.proveedorSinComision,
+                })
                 .eq("id", splitBookingId);
 
               if (importeError) {
@@ -442,10 +456,12 @@ export async function POST(request) {
           }
 
           if (plan.decrementSinComision) {
-            const current = Number(plan.profile.reservas_sin_comision) || 0;
+            const current = getReservasSinComisionProveedor(plan.profile);
             await supabase
               .from("profiles")
-              .update({ reservas_sin_comision: Math.max(0, current - 1) })
+              .update({
+                reservas_sin_comision_proveedor: Math.max(0, current - 1),
+              })
               .eq("id", plan.proveedorId);
           }
 

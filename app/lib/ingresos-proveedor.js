@@ -16,6 +16,38 @@ export function getPrecioBaseProveedor(precioTotal) {
 }
 
 /**
+ * Base canónica de una reserva (precio_base si existe; inferencia para filas antiguas).
+ * @param {{ precio_base?: number|null, precio_total?: number|string, cliente_sin_comision?: boolean }} booking
+ */
+export function getBookingPrecioBase(booking) {
+  if (booking?.precio_base != null && booking.precio_base !== "") {
+    return roundMoney(Number(booking.precio_base));
+  }
+
+  const total = Number(booking?.precio_total) || 0;
+  if (booking?.cliente_sin_comision === true) {
+    return roundMoney(total);
+  }
+
+  return roundMoney(total / PLATFORM_MULTIPLIER);
+}
+
+/**
+ * Ingreso neto del proveedor a partir de un booking.
+ * @param {{ precio_base?: number|null, precio_total?: number|string, cliente_sin_comision?: boolean, proveedor_sin_comision?: boolean }} booking
+ * @param {{ sinComisionProveedor?: boolean }} options
+ */
+export function getIngresoProveedorFromBooking(booking, { sinComisionProveedor } = {}) {
+  const base = getBookingPrecioBase(booking);
+  const sinComision =
+    sinComisionProveedor !== undefined
+      ? sinComisionProveedor
+      : booking?.proveedor_sin_comision === true;
+
+  return roundMoney(getIngresoProveedorDesdeBase(base, { sinComision }));
+}
+
+/**
  * Ingreso neto del proveedor para una reserva (precio_total de un booking).
  * @param {number|string} precioTotal Precio pagado por el cliente (con comisión cliente).
  * @param {{ sinComision?: boolean }} options true = reserva sin comisión del proveedor (100 % base).
