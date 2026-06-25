@@ -177,33 +177,27 @@ async function calcularYAplicarReembolso(booking, service) {
 
   if (reembolsoTarjeta > 0 && booking.payment_intent_id) {
     try {
-      const { data: grupoBookings, error: grupoError } = await supabaseAdmin
-        .from("bookings")
-        .select("id")
-        .eq("payment_intent_id", booking.payment_intent_id);
-
-      if (grupoError) {
+      let bookingsEnGrupo = 1;
+      try {
+        bookingsEnGrupo = await contarBookingsPorPaymentIntent(
+          booking.payment_intent_id,
+        );
+      } catch (grupoError) {
         stripe_ok = false;
         stripe_error = grupoError.message;
         console.error(
-          "[bookings/cancelar-cliente] Error leyendo grupo del PI:",
+          "[bookings/cancelar-cliente] Error contando bookings del PI:",
           grupoError,
           { bookingId: booking.id },
         );
-      } else if ((grupoBookings?.length ?? 0) > 1) {
-        stripe_ok = false;
-        stripe_error =
-          "Reembolso Stripe en bundle multi-booking pendiente de implementación";
-        console.warn(
-          "[bookings/cancelar-cliente] TODO: reembolso Stripe bundle multi-booking — no se movió dinero en Stripe",
-          {
-            bookingId: booking.id,
-            payment_intent_id: booking.payment_intent_id,
-            reembolsoTarjeta,
-            bookingsEnGrupo: grupoBookings.length,
-          },
+      }
+
+      if (stripe_ok) {
+        warnLegacySharedPaymentIntent(
+          booking.id,
+          booking.payment_intent_id,
+          bookingsEnGrupo,
         );
-      } else {
         const stripeResult = await aplicarReembolsoStripeSingleBooking(
           booking.payment_intent_id,
           reembolsoTarjeta,
@@ -249,6 +243,20 @@ async function contarBookingsPorPaymentIntent(paymentIntentId) {
   }
 
   return data?.length ?? 0;
+}
+
+/** Salvaguarda legacy: 1 PI por booking en reservas nuevas; si count > 1, solo avisar. */
+function warnLegacySharedPaymentIntent(bookingId, paymentIntentId, bookingsEnGrupo) {
+  if (bookingsEnGrupo <= 1) return;
+
+  console.warn(
+    "[bookings/cancelar-cliente] PI compartido detectado, caso legacy — se aplica flujo individual sobre este booking",
+    {
+      bookingId,
+      payment_intent_id: paymentIntentId,
+      bookingsEnGrupo,
+    },
+  );
 }
 
 /**
@@ -352,9 +360,11 @@ async function aplicarCompensacionProveedorCancelacionCliente(
     };
   }
 
-  if (bookingsEnGrupo > 1) {
-    return { ...sinCompensacion, motivo: "bundle_multi_booking" };
-  }
+  warnLegacySharedPaymentIntent(
+    booking.id,
+    booking.payment_intent_id,
+    bookingsEnGrupo,
+  );
 
   if (!reembolso.stripe_ok) {
     return {
@@ -545,14 +555,8 @@ async function aplicarCompensacionProveedorCancelacionCliente(
   };
 }
 
-/** Solo reservas individuales: en bundle el reembolso Stripe no es fiable aún. */
-async function enviarEmailReservaCanceladaCliente(
-  booking,
-  service,
-  reembolso,
-  esBundle,
-) {
-  if (esBundle || !service) return;
+async function enviarEmailReservaCanceladaCliente(booking, service, reembolso) {
+  if (!service) return;
 
   const baseUrl = process.env.NEXT_PUBLIC_URL;
   if (!baseUrl) {
@@ -607,10 +611,8 @@ async function enviarEmailReservaCanceladaCliente(
   }
 }
 
-/** Persiste el desglose de reembolso al cliente (historial). Solo reservas individuales. */
-async function guardarReembolsoClienteEnBooking(bookingId, reembolso, esBundle) {
-  if (esBundle) return;
-
+/** Persiste el desglose de reembolso al cliente (historial). */
+async function guardarReembolsoClienteEnBooking(bookingId, reembolso) {
   const { error } = await supabaseAdmin
     .from("bookings")
     .update({
@@ -746,19 +748,7 @@ export async function POST(request) {
 
   const reembolso = await calcularYAplicarReembolso(booking, service);
 
-  let esBundle = false;
-  try {
-    esBundle =
-      (await contarBookingsPorPaymentIntent(booking.payment_intent_id)) > 1;
-  } catch (err) {
-    console.error(
-      "[bookings/cancelar-cliente] Error comprobando bundle:",
-      err,
-      { bookingId },
-    );
-  }
-
-  await guardarReembolsoClienteEnBooking(bookingId, reembolso, esBundle);
+  await guardarReembolsoClienteEnBooking(bookingId, reembolso);
 
   const compensacion =
     await aplicarCompensacionProveedorCancelacionCliente(
@@ -767,12 +757,7 @@ export async function POST(request) {
       reembolso,
     );
 
-  await enviarEmailReservaCanceladaCliente(
-    booking,
-    service,
-    reembolso,
-    esBundle,
-  );
+  await enviarEmailReservaCanceladaCliente(booking, service, reembolso);
 
   return NextResponse.json({
     ok: true,
