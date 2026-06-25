@@ -98,6 +98,18 @@ function roundMoney(amount) {
   return Math.round(amount * 100) / 100;
 }
 
+function buildServicePricing(calcBase, clienteSinComision) {
+  const precioBase = roundMoney(calcBase);
+  const precioTotal = clienteSinComision
+    ? precioBase
+    : applyClientPrice(precioBase);
+
+  return {
+    precio_base: precioBase,
+    precio_total: roundMoney(precioTotal),
+  };
+}
+
 /** Reparte creditoAplicado del grupo entre servicios según precio_total. */
 function splitCreditoPorServicio(preciosPorServicio, creditoAplicado, totalGrupo) {
   const creditoMap = new Map();
@@ -420,7 +432,9 @@ function buildBookingRow({
   hora,
   duracionHoras,
   mensaje,
+  precioBase,
   precioTotal,
+  clienteSinComision = false,
   creditoAplicado = 0,
   grupoReserva,
   paymentIntentId,
@@ -440,7 +454,10 @@ function buildBookingRow({
     hora: v === "ninos" ? hora || null : null,
     duracion_horas: v === "ninos" ? Number(duracionHoras) || null : null,
     mensaje: mensaje?.trim() || null,
+    precio_base: precioBase,
     precio_total: precioTotal,
+    cliente_sin_comision: clienteSinComision,
+    proveedor_sin_comision: false,
     credito_aplicado: creditoAplicado,
     estado: isImmediate ? "confirmada" : "pendiente",
     grupo_reserva: grupoReserva,
@@ -897,13 +914,15 @@ async function completePerServicePayments(userId, body) {
 
     subtotalGrupo += calc.base;
 
-    const precioTotal = clienteSinComision
-      ? calc.base
-      : applyClientPrice(calc.base);
+    const { precio_base, precio_total } = buildServicePricing(
+      calc.base,
+      clienteSinComision,
+    );
 
     preciosPorServicio.push({
       service_id: serviceId,
-      precio_total: roundMoney(precioTotal),
+      precio_base,
+      precio_total,
     });
   }
 
@@ -919,6 +938,9 @@ async function completePerServicePayments(userId, body) {
 
   const precioPorServicioMap = new Map(
     preciosPorServicio.map((p) => [p.service_id, p.precio_total]),
+  );
+  const precioBasePorServicioMap = new Map(
+    preciosPorServicio.map((p) => [p.service_id, p.precio_base]),
   );
 
   const creditoPorServicioMap = splitCreditoPorServicio(
@@ -1024,7 +1046,9 @@ async function completePerServicePayments(userId, body) {
       hora,
       duracionHoras: duracion_horas,
       mensaje,
+      precioBase: precioBasePorServicioMap.get(serviceId),
       precioTotal: precioPorServicioMap.get(serviceId),
+      clienteSinComision,
       creditoAplicado: creditoPorServicioMap.get(serviceId) ?? 0,
       grupoReserva: grupo_reserva,
       paymentIntentId: paymentsByService.get(serviceId),
@@ -1249,13 +1273,15 @@ export async function POST(request) {
 
       subtotalGrupo += calc.base;
 
-      const precioTotal = clienteSinComision
-        ? calc.base
-        : applyClientPrice(calc.base);
+      const { precio_base, precio_total } = buildServicePricing(
+        calc.base,
+        clienteSinComision,
+      );
 
       preciosPorServicio.push({
         service_id: serviceId,
-        precio_total: roundMoney(precioTotal),
+        precio_base,
+        precio_total,
       });
     }
 
@@ -1352,6 +1378,9 @@ export async function POST(request) {
     const precioPorServicioMap = new Map(
       preciosPorServicio.map((p) => [p.service_id, p.precio_total]),
     );
+    const precioBasePorServicioMap = new Map(
+      preciosPorServicio.map((p) => [p.service_id, p.precio_base]),
+    );
 
     const creditoPorServicioMap = splitCreditoPorServicio(
       preciosPorServicio,
@@ -1398,7 +1427,9 @@ export async function POST(request) {
         hora,
         duracionHoras: duracion_horas,
         mensaje,
+        precioBase: precioBasePorServicioMap.get(serviceId),
         precioTotal: precioPorServicioMap.get(serviceId),
+        clienteSinComision,
         creditoAplicado: creditoPorServicioMap.get(serviceId) ?? 0,
         grupoReserva: grupo_reserva,
         paymentIntentId: payment_intent_id,
