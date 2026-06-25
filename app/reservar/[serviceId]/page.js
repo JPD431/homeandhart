@@ -37,6 +37,13 @@ const stripePromise = loadStripe(
   process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
 );
 
+function getReservasSinComisionCliente(perfil) {
+  if (perfil?.reservas_sin_comision_cliente != null) {
+    return Number(perfil.reservas_sin_comision_cliente) || 0;
+  }
+  return Number(perfil?.reservas_sin_comision) || 0;
+}
+
 const CANCEL_POLICIES = {
   flexible: {
     name: "Flexible",
@@ -1624,7 +1631,7 @@ export default function ReservarPage() {
       const { data: perfilClienteData } = await supabase
         .from("profiles")
         .select(
-          "nombre, apellido, stripe_customer_id, reservas_sin_comision, credito_disponible",
+          "nombre, apellido, stripe_customer_id, reservas_sin_comision_cliente, reservas_sin_comision, credito_disponible",
         )
         .eq("id", user.id)
         .single();
@@ -1983,7 +1990,7 @@ export default function ReservarPage() {
     }
 
     const dateContext = { fechaInicio, fechaFin, duracionHoras, mainVertical: vertical };
-    const clienteSinComision = (perfilCliente?.reservas_sin_comision || 0) > 0;
+    const clienteSinComision = getReservasSinComisionCliente(perfilCliente) > 0;
     const lines = selectedServices.map((svc) => {
       const unitOverride =
         svc.id === service.id ? precioEspecialChat : null;
@@ -2078,7 +2085,7 @@ export default function ReservarPage() {
     tarifasPorServicio,
   ]);
 
-  const clienteSinComision = (perfilCliente?.reservas_sin_comision || 0) > 0;
+  const clienteSinComision = getReservasSinComisionCliente(perfilCliente) > 0;
 
   const precioListo =
     priceSummary.ready &&
@@ -3414,7 +3421,7 @@ export default function ReservarPage() {
                   {clienteSinComision && (
                     <div style={{ fontSize: 10, color: "#0e7a5c", marginTop: 4 }}>
                       🎁 Sin gastos de gestión - te quedan{" "}
-                      {perfilCliente.reservas_sin_comision} reservas gratis
+                      {getReservasSinComisionCliente(perfilCliente)} reservas gratis
                     </div>
                   )}
                 </>

@@ -16,6 +16,32 @@ import {
 
 const MAX_CREDITO_PORCENTAJE = 0.6;
 
+function getReservasSinComisionCliente(perfil) {
+  if (perfil?.reservas_sin_comision_cliente != null) {
+    return Number(perfil.reservas_sin_comision_cliente) || 0;
+  }
+  return Number(perfil?.reservas_sin_comision) || 0;
+}
+
+async function decrementReservasSinComisionCliente(userId, perfilCliente) {
+  const actual = getReservasSinComisionCliente(perfilCliente);
+  const nuevo = Math.max(0, actual - 1);
+  const { error: sinComisionError } = await supabaseAdmin
+    .from("profiles")
+    .update({
+      reservas_sin_comision_cliente: nuevo,
+      reservas_sin_comision: nuevo,
+    })
+    .eq("id", userId);
+
+  if (sinComisionError) {
+    console.error(
+      "[bookings/complete] No se pudo restar reservas_sin_comision_cliente:",
+      sinComisionError,
+    );
+  }
+}
+
 const supabaseAdmin = createServiceClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY,
@@ -681,20 +707,10 @@ async function finalizeInsertedBookings({
 
   if (clienteSinComision) {
     try {
-      const actual = Number(perfilCliente?.reservas_sin_comision) || 0;
-      const { error: sinComisionError } = await supabaseAdmin
-        .from("profiles")
-        .update({ reservas_sin_comision: Math.max(0, actual - 1) })
-        .eq("id", userId);
-      if (sinComisionError) {
-        console.error(
-          "[bookings/complete] No se pudo restar reservas_sin_comision:",
-          sinComisionError,
-        );
-      }
+      await decrementReservasSinComisionCliente(userId, perfilCliente);
     } catch (err) {
       console.error(
-        "[bookings/complete] No se pudo restar reservas_sin_comision:",
+        "[bookings/complete] No se pudo restar reservas_sin_comision_cliente:",
         err,
       );
     }
@@ -815,7 +831,7 @@ async function completePerServicePayments(userId, body) {
 
   const { data: perfilCliente, error: perfilError } = await supabaseAdmin
     .from("profiles")
-    .select("reservas_sin_comision, credito_disponible, nombre")
+    .select("reservas_sin_comision_cliente, reservas_sin_comision, credito_disponible, nombre")
     .eq("id", userId)
     .maybeSingle();
 
@@ -836,8 +852,7 @@ async function completePerServicePayments(userId, body) {
     valida_hasta,
   );
 
-  const clienteSinComision =
-    (Number(perfilCliente?.reservas_sin_comision) || 0) > 0;
+  const clienteSinComision = getReservasSinComisionCliente(perfilCliente) > 0;
 
   let tarifasPorServicio;
   try {
@@ -1168,7 +1183,7 @@ export async function POST(request) {
 
     const { data: perfilCliente, error: perfilError } = await supabaseAdmin
       .from("profiles")
-      .select("reservas_sin_comision, credito_disponible, nombre")
+      .select("reservas_sin_comision_cliente, reservas_sin_comision, credito_disponible, nombre")
       .eq("id", userId)
       .maybeSingle();
 
@@ -1189,8 +1204,7 @@ export async function POST(request) {
       valida_hasta,
     );
 
-    const clienteSinComision =
-      (Number(perfilCliente?.reservas_sin_comision) || 0) > 0;
+    const clienteSinComision = getReservasSinComisionCliente(perfilCliente) > 0;
 
     let tarifasPorServicio;
     try {
@@ -1443,20 +1457,10 @@ export async function POST(request) {
 
     if (clienteSinComision) {
       try {
-        const actual = Number(perfilCliente?.reservas_sin_comision) || 0;
-        const { error: sinComisionError } = await supabaseAdmin
-          .from("profiles")
-          .update({ reservas_sin_comision: Math.max(0, actual - 1) })
-          .eq("id", userId);
-        if (sinComisionError) {
-          console.error(
-            "[bookings/complete] No se pudo restar reservas_sin_comision:",
-            sinComisionError,
-          );
-        }
+        await decrementReservasSinComisionCliente(userId, perfilCliente);
       } catch (err) {
         console.error(
-          "[bookings/complete] No se pudo restar reservas_sin_comision:",
+          "[bookings/complete] No se pudo restar reservas_sin_comision_cliente:",
           err,
         );
       }
