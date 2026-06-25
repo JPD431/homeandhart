@@ -323,24 +323,48 @@ async function dispatchEvent(event) {
   return { handled: true };
 }
 
+function getWebhookSecrets() {
+  const secrets = [];
+  const primary = process.env.STRIPE_WEBHOOK_SECRET;
+  const secondary = process.env.STRIPE_WEBHOOK_SECRET_2;
+
+  if (primary) secrets.push(primary);
+  if (secondary) secrets.push(secondary);
+
+  return secrets;
+}
+
+/**
+ * Verifica la firma probando cada signing secret configurado en orden.
+ * @returns {import("stripe").Stripe.Event | null}
+ */
+function verifyStripeWebhookEvent(rawBody, signature) {
+  for (const secret of getWebhookSecrets()) {
+    try {
+      return stripe.webhooks.constructEvent(rawBody, signature, secret);
+    } catch {
+      // Probar el siguiente secret (p. ej. Connect vs cuenta plataforma).
+    }
+  }
+  return null;
+}
+
 export async function POST(request) {
   const signature = request.headers.get("stripe-signature");
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  const webhookSecrets = getWebhookSecrets();
 
-  if (!signature || !webhookSecret) {
+  if (!signature || webhookSecrets.length === 0) {
     return NextResponse.json(
       { error: "Firma o secreto de webhook no configurados" },
       { status: 400 },
     );
   }
 
-  let event;
+  const rawBody = await request.text();
+  const event = verifyStripeWebhookEvent(rawBody, signature);
 
-  try {
-    const rawBody = await request.text();
-    event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
-  } catch (err) {
-    console.error("[stripe/webhook] Firma inválida:", err.message);
+  if (!event) {
+    console.error("[stripe/webhook] Firma inválida con todos los secrets");
     return NextResponse.json({ error: "Firma inválida" }, { status: 400 });
   }
 
