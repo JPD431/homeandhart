@@ -1,11 +1,30 @@
 import { createClient } from "@supabase/supabase-js";
+import { createServerClient } from "@supabase/ssr";
 import { NextResponse } from "next/server";
-import { supabase } from "@/app/lib/supabase";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY,
 );
+
+function createAuthRouteClient(request, response) {
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            response.cookies.set(name, value, options);
+          });
+        },
+      },
+    },
+  );
+}
 
 async function sendWelcomeEmail(user) {
   const { data: profile } = await supabaseAdmin
@@ -41,135 +60,139 @@ async function sendWelcomeEmail(user) {
   });
 }
 
+async function runPostVerificationSideEffects(user) {
+  if (!user?.email_confirmed_at || !user.email) {
+    return;
+  }
+
+  const { data: existingProfile } = await supabaseAdmin
+    .from("profiles")
+    .select("id")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (!existingProfile) {
+    const nombre = user.user_metadata?.nombre || user.email.split("@")[0];
+    const apellido = user.user_metadata?.apellido || "";
+    const role = user.user_metadata?.role || "cliente";
+    const codigoReferidoPropio =
+      "HH-" +
+      nombre
+        .toUpperCase()
+        .replace(/[^A-Z]/g, "")
+        .slice(0, 4)
+        .padEnd(4, "X") +
+      Math.floor(Math.random() * 9000 + 1000);
+
+    const { error: profileError } = await supabaseAdmin
+      .from("profiles")
+      .upsert(
+        {
+          id: user.id,
+          nombre,
+          apellido,
+          role,
+          codigo_referido: codigoReferidoPropio,
+          reservas_sin_comision: 3,
+          reservas_sin_comision_cliente: 3,
+          reservas_sin_comision_proveedor: 3,
+        },
+        { onConflict: "id" },
+      );
+
+    if (profileError) {
+      console.error("Error creando perfil:", profileError);
+    } else {
+      console.log("Perfil creado correctamente para:", user.email);
+    }
+  }
+
+  const codigoReferido = user.user_metadata?.codigo_referido;
+
+  if (codigoReferido) {
+    const { data: perfilActual } = await supabaseAdmin
+      .from("profiles")
+      .select("referido_aplicado")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (perfilActual && !perfilActual.referido_aplicado) {
+      const { data: referidor } = await supabaseAdmin
+        .from("profiles")
+        .select(
+          "id, reservas_sin_comision_cliente, reservas_sin_comision, referidos_count",
+        )
+        .eq("codigo_referido", codigoReferido)
+        .maybeSingle();
+
+      if (referidor) {
+        await supabaseAdmin
+          .from("profiles")
+          .update({
+            reservas_sin_comision_cliente: 4,
+            reservas_sin_comision: 4,
+            referido_aplicado: true,
+          })
+          .eq("id", user.id);
+
+        const referidorClienteActual =
+          Number(referidor.reservas_sin_comision_cliente) ||
+          Number(referidor.reservas_sin_comision) ||
+          0;
+        const referidorClienteNuevo = referidorClienteActual + 1;
+
+        await supabaseAdmin
+          .from("profiles")
+          .update({
+            reservas_sin_comision_cliente: referidorClienteNuevo,
+            reservas_sin_comision: referidorClienteNuevo,
+            referidos_count: (Number(referidor.referidos_count) || 0) + 1,
+          })
+          .eq("id", referidor.id);
+      }
+    }
+  }
+
+  try {
+    await sendWelcomeEmail(user);
+  } catch {
+    /* no bloquear redirect si falla el email */
+  }
+}
+
 export async function GET(request) {
   const { searchParams, origin } = new URL(request.url);
-  console.log("CALLBACK URL:", request.url);
-  console.log("searchParams:", Object.fromEntries(searchParams));
-
   const code = searchParams.get("code");
   const tokenHash = searchParams.get("token_hash");
-  const type = searchParams.get("type");
 
-  console.log("code:", code);
-  console.log("tokenHash:", tokenHash);
-  console.log("type:", type);
+  const verificadoUrl = new URL("/verificado", request.url);
+  let response = NextResponse.redirect(verificadoUrl);
+  const supabase = createAuthRouteClient(request, response);
 
   let user = null;
+  let authError = null;
 
   if (code) {
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-    if (error) {
-      return NextResponse.redirect(`${origin}/registro?error=verificacion`);
-    }
-    user = data.user;
-  } else if (tokenHash && type) {
+    authError = error;
+    user = data?.user ?? null;
+  } else if (tokenHash) {
     const { data, error } = await supabase.auth.verifyOtp({
       token_hash: tokenHash,
-      type,
+      type: "signup",
     });
-    if (error) {
-      return NextResponse.redirect(`${origin}/registro?error=verificacion`);
-    }
-    user = data.user;
+    authError = error;
+    user = data?.user ?? null;
   } else {
     return NextResponse.redirect(`${origin}/registro`);
   }
 
-  if (user?.email_confirmed_at && user.email) {
-    const { data: existingProfile } = await supabaseAdmin
-      .from("profiles")
-      .select("id")
-      .eq("id", user.id)
-      .maybeSingle();
-
-    if (!existingProfile) {
-      const nombre = user.user_metadata?.nombre || user.email.split("@")[0];
-      const apellido = user.user_metadata?.apellido || "";
-      const role = user.user_metadata?.role || "cliente";
-      const codigoReferidoPropio =
-        "HH-" +
-        nombre
-          .toUpperCase()
-          .replace(/[^A-Z]/g, "")
-          .slice(0, 4)
-          .padEnd(4, "X") +
-        Math.floor(Math.random() * 9000 + 1000);
-
-      const { error: profileError } = await supabaseAdmin
-        .from("profiles")
-        .upsert(
-          {
-            id: user.id,
-            nombre,
-            apellido,
-            role,
-            codigo_referido: codigoReferidoPropio,
-            reservas_sin_comision: 3,
-            reservas_sin_comision_cliente: 3,
-            reservas_sin_comision_proveedor: 3,
-          },
-          { onConflict: "id" },
-        );
-
-      if (profileError) {
-        console.error("Error creando perfil:", profileError);
-      } else {
-        console.log("Perfil creado correctamente para:", user.email);
-      }
-    }
-
-    const codigoReferido = user.user_metadata?.codigo_referido;
-
-    if (codigoReferido) {
-      const { data: perfilActual } = await supabaseAdmin
-        .from("profiles")
-        .select("referido_aplicado")
-        .eq("id", user.id)
-        .maybeSingle();
-
-      if (perfilActual && !perfilActual.referido_aplicado) {
-        const { data: referidor } = await supabaseAdmin
-          .from("profiles")
-          .select(
-            "id, reservas_sin_comision_cliente, reservas_sin_comision, referidos_count",
-          )
-          .eq("codigo_referido", codigoReferido)
-          .maybeSingle();
-
-        if (referidor) {
-          await supabaseAdmin
-            .from("profiles")
-            .update({
-              reservas_sin_comision_cliente: 4,
-              reservas_sin_comision: 4,
-              referido_aplicado: true,
-            })
-            .eq("id", user.id);
-
-          const referidorClienteActual =
-            Number(referidor.reservas_sin_comision_cliente) ||
-            Number(referidor.reservas_sin_comision) ||
-            0;
-          const referidorClienteNuevo = referidorClienteActual + 1;
-
-          await supabaseAdmin
-            .from("profiles")
-            .update({
-              reservas_sin_comision_cliente: referidorClienteNuevo,
-              reservas_sin_comision: referidorClienteNuevo,
-              referidos_count: (Number(referidor.referidos_count) || 0) + 1,
-            })
-            .eq("id", referidor.id);
-        }
-      }
-    }
-
-    try {
-      await sendWelcomeEmail(user);
-    } catch {
-      /* no bloquear redirect si falla el email */
-    }
+  if (authError) {
+    console.error("[auth/callback] Error verificando email:", authError.message);
+    return NextResponse.redirect(`${origin}/registro?error=verificacion`);
   }
 
-  return NextResponse.redirect(new URL("/verificado", request.url));
+  await runPostVerificationSideEffects(user);
+
+  return response;
 }

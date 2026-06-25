@@ -301,10 +301,13 @@ function RegistroForm() {
 
     console.log("Datos registro:", { nombre, apellido, role, email });
 
+    const emailRedirectTo = `${window.location.origin}/api/auth/callback`;
+
     const { data, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
       options: {
+        emailRedirectTo,
         data: {
           nombre,
           apellido,
@@ -335,9 +338,14 @@ function RegistroForm() {
     setResendMessage("");
     setError("");
 
+    const emailRedirectTo = `${window.location.origin}/api/auth/callback`;
+
     const { error: resendError } = await supabase.auth.resend({
       type: "signup",
       email,
+      options: {
+        emailRedirectTo,
+      },
     });
 
     setResendLoading(false);
