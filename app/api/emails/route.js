@@ -468,6 +468,56 @@ function clienteContactBlock(data) {
   </div>`;
 }
 
+function formatEurEmail(amount) {
+  const n = Number(amount);
+  if (!Number.isFinite(n)) return "0,00 €";
+  return `${n.toFixed(2).replace(".", ",")} €`;
+}
+
+const CLIENT_PRICE_LABELS = new Set([
+  "Total",
+  "Total reserva",
+  "Crédito aplicado",
+  "Total a pagar",
+]);
+
+function clientPriceRows(precio_total, credito_aplicado) {
+  const total = Number(precio_total);
+  if (precio_total == null || precio_total === "" || !Number.isFinite(total)) {
+    return [];
+  }
+
+  const credito = Number(credito_aplicado) || 0;
+  if (credito <= 0) {
+    return [
+      [
+        "Total",
+        `${typeof precio_total === "string" ? precio_total : total.toFixed(2)} € (gastos de gestión incluidos)`,
+      ],
+    ];
+  }
+
+  const aPagar = Math.max(0, Math.round((total - credito) * 100) / 100);
+  const rows = [
+    ["Total reserva", formatEurEmail(total)],
+    ["Crédito aplicado", `−${formatEurEmail(credito)}`],
+  ];
+
+  if (aPagar <= 0) {
+    rows.push([
+      "Total a pagar",
+      `${formatEurEmail(0)}<span style="display:block;margin-top:4px;font-size:11px;color:#888;font-weight:400;">Cubierto con tu crédito Home&Heart</span>`,
+    ]);
+  } else {
+    rows.push([
+      "Total a pagar",
+      `${formatEurEmail(aPagar)} (gastos de gestión incluidos)`,
+    ]);
+  }
+
+  return rows;
+}
+
 function bundleDetailsBlock(data) {
   const servicios = Array.isArray(data.servicios) ? data.servicios : [];
   const rowsHtml = servicios
@@ -482,41 +532,50 @@ function bundleDetailsBlock(data) {
     )
     .join("");
 
-  const total =
-    data.precio_total != null && data.precio_total !== ""
-      ? `${data.precio_total} € (gastos de gestión incluidos)`
-      : null;
+  const priceRowsHtml = clientPriceRows(
+    data.precio_total,
+    data.credito_aplicado,
+  )
+    .map(
+      ([label, value]) =>
+        `<tr><td style="padding:8px 0;font-size:12px;color:#888;">${label}</td><td style="padding:8px 0;font-size:12px;color:#888;text-align:right;">${value}</td></tr>`,
+    )
+    .join("");
 
   return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:20px 0 0;background-color:${BRAND_LIGHT};border-radius:8px;padding:16px 20px;">
     <tr>
       <td colspan="2" style="padding:0 0 8px;font-size:12px;font-weight:600;color:${BRAND_PRIMARY};text-transform:uppercase;letter-spacing:0.05em;">Servicios reservados</td>
     </tr>
     ${rowsHtml}
-    ${total ? `<tr><td style="padding:8px 0;font-size:12px;color:#888;">Total</td><td style="padding:8px 0;font-size:12px;color:#888;text-align:right;">${total}</td></tr>` : ""}
+    ${priceRowsHtml}
     <tr>
       <td colspan="2" style="padding:8px 0 0;font-size:12px;color:#888;">Fechas: ${data.fecha_inicio}${data.fecha_fin && data.fecha_fin !== data.fecha_inicio ? ` — ${data.fecha_fin}` : ""}</td>
     </tr>
   </table>`;
 }
 
-function detailsBlock({ servicio_titulo, fecha_inicio, fecha_fin, precio_total }) {
+function detailsBlock({
+  servicio_titulo,
+  fecha_inicio,
+  fecha_fin,
+  precio_total,
+  credito_aplicado,
+}) {
   const rows = [
     ["Servicio", servicio_titulo],
     ["Fecha de inicio", fecha_inicio],
     fecha_fin ? ["Fecha de fin", fecha_fin] : null,
-    precio_total != null && precio_total !== ""
-      ? ["Total", `${precio_total} € (gastos de gestión incluidos)`]
-      : null,
+    ...clientPriceRows(precio_total, credito_aplicado),
   ].filter(Boolean);
 
   const rowsHtml = rows
     .map(
       ([label, value]) => {
-        const isTotal = label === "Total";
-        const labelStyle = isTotal
+        const isPriceRow = CLIENT_PRICE_LABELS.has(label);
+        const labelStyle = isPriceRow
           ? "padding:8px 0;font-size:12px;color:#888;width:140px;vertical-align:top;"
           : "padding:8px 0;font-size:14px;color:#666;width:140px;vertical-align:top;";
-        const valueStyle = isTotal
+        const valueStyle = isPriceRow
           ? "padding:8px 0;font-size:12px;color:#888;"
           : "padding:8px 0;font-size:14px;color:#222;font-weight:600;";
         return `
@@ -741,12 +800,6 @@ function reservaNuevaEmailHtml(data) {
         </a>
       </p>`,
   });
-}
-
-function formatEurEmail(amount) {
-  const n = Number(amount);
-  if (!Number.isFinite(n)) return "0,00 €";
-  return `${n.toFixed(2).replace(".", ",")} €`;
 }
 
 function formatFechaReservaEmail(fechaInicio, fechaFin) {

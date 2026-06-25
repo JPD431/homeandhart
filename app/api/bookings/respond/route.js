@@ -235,6 +235,7 @@ export async function POST(request) {
           fecha_inicio,
           fecha_fin,
           precio_total,
+          credito_aplicado,
           precio_base,
           cliente_sin_comision,
           proveedor_sin_comision,
@@ -321,6 +322,7 @@ export async function POST(request) {
           const finEmail =
             bookingFull.fecha_fin || bookingFull.fecha_inicio;
           const precioTotal = Number(bookingFull.precio_total || 0).toFixed(2);
+          const creditoAplicado = Number(bookingFull.credito_aplicado) || 0;
           const mensaje = bookingFull.mensaje || "";
 
           await postBookingEmail(baseUrl, {
@@ -333,6 +335,7 @@ export async function POST(request) {
             fecha_inicio: bookingFull.fecha_inicio,
             fecha_fin: finEmail,
             precio_total: precioTotal,
+            credito_aplicado: creditoAplicado,
             mensaje,
             direccion_exacta: svc.direccion_exacta,
             telefono_proveedor:

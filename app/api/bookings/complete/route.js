@@ -269,6 +269,7 @@ async function sendContactEmailsForConfirmedBooking(
   const clienteNombre = formatProfileName(clienteProfile, "Cliente");
   const finEmail = booking.fecha_fin || booking.fecha_inicio;
   const precioTotal = Number(booking.precio_total || 0).toFixed(2);
+  const creditoAplicado = Number(booking.credito_aplicado) || 0;
   const mensaje = booking.mensaje?.trim?.() || booking.mensaje || "";
 
   await sendBookingEmail({
@@ -281,6 +282,7 @@ async function sendContactEmailsForConfirmedBooking(
     fecha_inicio: booking.fecha_inicio,
     fecha_fin: finEmail,
     precio_total: precioTotal,
+    credito_aplicado: creditoAplicado,
     mensaje,
     direccion_exacta: svc.direccion_exacta,
     telefono_proveedor: resolveTelefonoProveedor(svc, proveedorProfile),
@@ -317,6 +319,8 @@ async function sendPostCompleteBookingEmails({
   subtotalGrupo,
   comision,
   mensaje,
+  creditoAplicado = 0,
+  creditoPorServicioMap = new Map(),
 }) {
   const finEmail = fechaFin || fechaInicio;
   const clienteProfile = await loadClienteProfileForEmails(userId, perfilCliente);
@@ -373,6 +377,7 @@ async function sendPostCompleteBookingEmails({
       precio_base: precioBasePorServicioMap.get(serviceId),
       cliente_sin_comision: clienteSinComision,
       proveedor_sin_comision: false,
+      credito_aplicado: creditoPorServicioMap.get(serviceId) ?? 0,
       mensaje: mensaje?.trim() || "",
     };
 
@@ -414,6 +419,7 @@ async function sendPostCompleteBookingEmails({
     fecha_inicio: fechaInicio,
     fecha_fin: finEmail,
     precio_total: totalGrupo.toFixed(2),
+    credito_aplicado: creditoAplicado,
     subtotal: subtotalGrupo.toFixed(2),
     comision: comision.toFixed(2),
     mensaje: mensaje?.trim() || "",
@@ -693,6 +699,7 @@ async function finalizeInsertedBookings({
   clienteSinComision,
   creditoDisponible,
   creditoAplicado,
+  creditoPorServicioMap,
   insertedBookings,
   insertedBookingIds,
   rollbackPaymentIntentId,
@@ -805,6 +812,8 @@ async function finalizeInsertedBookings({
     subtotalGrupo,
     comision,
     mensaje,
+    creditoAplicado,
+    creditoPorServicioMap,
   });
 
   return NextResponse.json({
@@ -1111,6 +1120,7 @@ async function completePerServicePayments(userId, body) {
     clienteSinComision,
     creditoDisponible,
     creditoAplicado,
+    creditoPorServicioMap,
     insertedBookings,
     insertedBookingIds,
     rollbackPaymentIntentId,
@@ -1578,6 +1588,8 @@ export async function POST(request) {
       subtotalGrupo,
       comision,
       mensaje,
+      creditoAplicado,
+      creditoPorServicioMap,
     });
 
     return NextResponse.json({
