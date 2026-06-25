@@ -107,48 +107,35 @@ async function runPostVerificationSideEffects(user) {
     }
   }
 
-  const codigoReferido = user.user_metadata?.codigo_referido;
+  const codigoReferido =
+    typeof user.user_metadata?.codigo_referido === "string"
+      ? user.user_metadata.codigo_referido.trim()
+      : "";
 
   if (codigoReferido) {
-    const { data: perfilActual } = await supabaseAdmin
+    const { data: perfilActual, error: perfilError } = await supabaseAdmin
       .from("profiles")
-      .select("referido_aplicado")
+      .select("referido_por")
       .eq("id", user.id)
       .maybeSingle();
 
-    if (perfilActual && !perfilActual.referido_aplicado) {
-      const { data: referidor } = await supabaseAdmin
+    if (!perfilError && perfilActual && !perfilActual.referido_por) {
+      const { data: referidor, error: referidorError } = await supabaseAdmin
         .from("profiles")
-        .select(
-          "id, reservas_sin_comision_cliente, reservas_sin_comision, referidos_count",
-        )
+        .select("id")
         .eq("codigo_referido", codigoReferido)
         .maybeSingle();
 
-      if (referidor) {
-        await supabaseAdmin
+      if (!referidorError && referidor && referidor.id !== user.id) {
+        const { error: linkError } = await supabaseAdmin
           .from("profiles")
-          .update({
-            reservas_sin_comision_cliente: 4,
-            reservas_sin_comision: 4,
-            referido_aplicado: true,
-          })
-          .eq("id", user.id);
+          .update({ referido_por: referidor.id })
+          .eq("id", user.id)
+          .is("referido_por", null);
 
-        const referidorClienteActual =
-          Number(referidor.reservas_sin_comision_cliente) ||
-          Number(referidor.reservas_sin_comision) ||
-          0;
-        const referidorClienteNuevo = referidorClienteActual + 1;
-
-        await supabaseAdmin
-          .from("profiles")
-          .update({
-            reservas_sin_comision_cliente: referidorClienteNuevo,
-            reservas_sin_comision: referidorClienteNuevo,
-            referidos_count: (Number(referidor.referidos_count) || 0) + 1,
-          })
-          .eq("id", referidor.id);
+        if (linkError) {
+          console.error("[auth/callback] Error guardando referido_por:", linkError);
+        }
       }
     }
   }

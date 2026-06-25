@@ -13,6 +13,7 @@ import {
   COBROS_INACTIVE_MSG,
   getProveedorFromService,
 } from "@/app/lib/service-bookable";
+import { rewardReferidorPrimeraReserva } from "@/app/lib/referidos";
 
 const MAX_CREDITO_PORCENTAJE = 0.6;
 
@@ -720,6 +721,12 @@ async function finalizeInsertedBookings({
       { error: disponibilidadError.message },
       { status: 500 },
     );
+  }
+
+  try {
+    await rewardReferidorPrimeraReserva(userId, supabaseAdmin);
+  } catch (err) {
+    console.error("[bookings/complete] rewardReferidorPrimeraReserva:", err);
   }
 
   if (clienteSinComision) {
@@ -1484,6 +1491,12 @@ export async function POST(request) {
         { error: disponibilidadError.message },
         { status: 500 },
       );
+    }
+
+    try {
+      await rewardReferidorPrimeraReserva(userId, supabaseAdmin);
+    } catch (err) {
+      console.error("[bookings/complete] rewardReferidorPrimeraReserva:", err);
     }
 
     if (clienteSinComision) {

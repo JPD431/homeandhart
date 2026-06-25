@@ -62,48 +62,6 @@ function splitTransferAmount(amountFinal, bookings) {
   return parts;
 }
 
-async function isProviderFirstCompletion(proveedorId, paymentIntentId) {
-  const { data: services } = await supabase
-    .from("services")
-    .select("id")
-    .eq("proveedor_id", proveedorId);
-
-  const serviceIds = (services ?? []).map((s) => s.id);
-  if (serviceIds.length === 0) return false;
-
-  const { count } = await supabase
-    .from("bookings")
-    .select("id", { count: "exact", head: true })
-    .in("service_id", serviceIds)
-    .eq("estado", "completada")
-    .neq("payment_intent_id", paymentIntentId);
-
-  return (count ?? 0) === 0;
-}
-
-async function rewardReferrerIfFirstCompletion(proveedorId, proveedorProfile, paymentIntentId) {
-  if (!proveedorProfile?.referido_por) return;
-
-  const isFirst = await isProviderFirstCompletion(proveedorId, paymentIntentId);
-  if (!isFirst) return;
-
-  const { data: referrer } = await supabase
-    .from("profiles")
-    .select("id, reservas_sin_comision, referidos_count")
-    .eq("codigo_referido", proveedorProfile.referido_por)
-    .maybeSingle();
-
-  if (!referrer) return;
-
-  await supabase
-    .from("profiles")
-    .update({
-      reservas_sin_comision: (Number(referrer.reservas_sin_comision) || 0) + 1,
-      referidos_count: (Number(referrer.referidos_count) || 0) + 1,
-    })
-    .eq("id", referrer.id);
-}
-
 async function buildTransfersForPayment(paymentIntentId) {
   const empty = { plans: [], creditoGrupo: 0, grupoUsaCredito: false };
 
@@ -138,7 +96,6 @@ async function buildTransfersForPayment(paymentIntentId) {
         stripe_account_id,
         reservas_sin_comision_proveedor,
         reservas_sin_comision,
-        referido_por,
         deuda_pendiente,
         saldo_pendiente_transferir
       )
@@ -162,7 +119,6 @@ async function buildTransfersForPayment(paymentIntentId) {
         proveedorId,
         stripe_account_id: profile.stripe_account_id,
         reservas_sin_comision_proveedor: getReservasSinComisionProveedor(profile),
-        referido_por: profile.referido_por,
         profile,
         serviceIds: new Set(),
         amount: 0,
@@ -464,12 +420,6 @@ export async function POST(request) {
               })
               .eq("id", plan.proveedorId);
           }
-
-          await rewardReferrerIfFirstCompletion(
-            plan.proveedorId,
-            plan.profile,
-            resolvedPaymentIntentId,
-          );
 
           summary.success = true;
           bookingIdsLiberados.push(...plan.bookingIds);
