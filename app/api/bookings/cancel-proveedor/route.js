@@ -19,6 +19,39 @@ const CANCELABLE_PI_STATUSES = new Set([
   "processing",
 ]);
 
+async function contarBookingsPorPaymentIntent(paymentIntentId) {
+  if (!paymentIntentId) return 1;
+
+  const { data, error } = await supabaseAdmin
+    .from("bookings")
+    .select("id")
+    .eq("payment_intent_id", paymentIntentId);
+
+  if (error) {
+    throw error;
+  }
+
+  return data?.length ?? 0;
+}
+
+/** Salvaguarda legacy: 1 PI por booking en reservas nuevas; si count > 1, solo avisar. */
+function warnLegacySharedPaymentIntentCancelProveedor(
+  bookingId,
+  paymentIntentId,
+  bookingsEnGrupo,
+) {
+  if (bookingsEnGrupo <= 1) return;
+
+  console.warn(
+    "[bookings/cancel-proveedor] PI compartido detectado en cancel-proveedor — el cancel/refund afectará a varios bookings",
+    {
+      bookingId,
+      payment_intent_id: paymentIntentId,
+      bookingsEnGrupo,
+    },
+  );
+}
+
 async function handleStripeForCancellation(paymentIntentId) {
   const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
   const { status } = paymentIntent;
@@ -316,6 +349,23 @@ export async function POST(request) {
 
   if (booking.payment_intent_id) {
     try {
+      try {
+        const bookingsEnGrupo = await contarBookingsPorPaymentIntent(
+          booking.payment_intent_id,
+        );
+        warnLegacySharedPaymentIntentCancelProveedor(
+          booking.id,
+          booking.payment_intent_id,
+          bookingsEnGrupo,
+        );
+      } catch (countErr) {
+        console.error(
+          "[bookings/cancel-proveedor] Error contando bookings del PI:",
+          countErr,
+          { bookingId: booking.id },
+        );
+      }
+
       const stripeResult = await handleStripeForCancellation(
         booking.payment_intent_id,
       );
