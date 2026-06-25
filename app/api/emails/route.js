@@ -1517,10 +1517,12 @@ export async function POST(request) {
       const alternativas = Array.isArray(data.alternativas)
         ? data.alternativas.slice(0, 3)
         : [];
+      const tieneAlternativas = alternativas.length > 0;
       const precioOriginal =
         data.precio_original != null
           ? `${Number(data.precio_original).toFixed(2)} €`
           : "tu reserva original";
+      const clienteNombre = data.cliente_nombre ?? "Cliente";
 
       const cardsHtml = alternativas
         .map(
@@ -1551,6 +1553,25 @@ export async function POST(request) {
         )
         .join("");
 
+      const introHtml = tieneAlternativas
+        ? `<p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#444;">
+              Hola ${clienteNombre}, tu proveedor ha cancelado esta reserva. Hemos activado la <strong>Garantía Home&Heart</strong> para ayudarte y te proponemos estas alternativas:
+            </p>`
+        : `<p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#444;">
+              Hola ${clienteNombre}, tu proveedor ha cancelado esta reserva. Lo sentimos mucho. Hemos activado la <strong>Garantía Home&Heart</strong>: no hemos encontrado alternativas disponibles para tus fechas en este momento.
+            </p>
+            <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#444;">
+              El importe que abonaste con tarjeta se devolverá a tu método de pago (suele reflejarse en el extracto en unos días). Además, hemos añadido un <strong>crédito de indemnización</strong> a tu cuenta Home&amp;Heart para que puedas usarlo en tu próxima reserva.
+            </p>`;
+
+      const footerHtml = tieneAlternativas
+        ? `<p style="margin:20px 0 0;font-size:13px;color:#888;font-style:italic;">
+              Tu reserva original costaba ${precioOriginal}. Te ofrecemos estas alternativas; si alguna tiene un precio distinto, se ajustará al reservar.
+            </p>`
+        : `<p style="margin:20px 0 0;font-size:13px;color:#888;font-style:italic;">
+              Tu reserva original era de ${precioOriginal}. Si necesitas ayuda para encontrar otro proveedor, puedes responder a este correo.
+            </p>`;
+
       const result = await resend.emails.send({
         from: FROM,
         to: data.cliente_email,
@@ -1559,13 +1580,9 @@ export async function POST(request) {
           title: "Garantía Home&Heart",
           bodyHtml: `
             <h1 style="margin:0 0 16px;font-size:20px;color:${BRAND_PRIMARY};">🛡️ Tu reserva fue cancelada</h1>
-            <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#444;">
-              Hola ${data.cliente_nombre ?? "Cliente"}, tu proveedor ha cancelado esta reserva. Hemos activado la <strong>Garantía Home&Heart</strong> para ayudarte y te proponemos estas alternativas:
-            </p>
-            ${cardsHtml || "<p style='font-size:14px;color:#666;'>No hay alternativas disponibles en este momento.</p>"}
-            <p style="margin:20px 0 0;font-size:13px;color:#888;font-style:italic;">
-              Tu reserva original costaba ${precioOriginal}. Te ofrecemos estas alternativas; si alguna tiene un precio distinto, se ajustará al reservar.
-            </p>
+            ${introHtml}
+            ${tieneAlternativas ? cardsHtml : ""}
+            ${footerHtml}
           `,
         }),
       });
