@@ -79,6 +79,27 @@ function getCancelPolicy(policyKey) {
   return CANCEL_POLICIES[key];
 }
 
+function parseInheritedSearchDate(value) {
+  if (!value || typeof value !== "string") return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+
+  const [y, m, d] = value.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+  if (
+    date.getFullYear() !== y ||
+    date.getMonth() !== m - 1 ||
+    date.getDate() !== d
+  ) {
+    return null;
+  }
+
+  const hoy = new Date();
+  const hoyStr = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}-${String(hoy.getDate()).padStart(2, "0")}`;
+  if (value < hoyStr) return null;
+
+  return value;
+}
+
 function validateBookingDates(vertical, fechaInicio, hora) {
   if (!fechaInicio) return null;
 
@@ -1593,13 +1614,18 @@ export default function ReservarPage() {
   const [providerReviewCount, setProviderReviewCount] = useState(0);
   const [tabReviewsMap, setTabReviewsMap] = useState({});
   const [filteredComplementary, setFilteredComplementary] = useState([]);
+  const bundleDatesAppliedRef = useRef(false);
+
   useEffect(() => {
     const savedState = sessionStorage.getItem("bundle_state");
     if (!savedState) return;
 
     try {
       const state = JSON.parse(savedState);
-      if (state.fechaInicio) setFechaInicio(state.fechaInicio);
+      if (state.fechaInicio) {
+        setFechaInicio(state.fechaInicio);
+        bundleDatesAppliedRef.current = true;
+      }
       if (state.fechaFin) setFechaFin(state.fechaFin);
       if (state.hora) setHora(state.hora);
       if (state.duracionHoras) setDuracionHoras(state.duracionHoras);
@@ -1609,6 +1635,19 @@ export default function ReservarPage() {
     }
     sessionStorage.removeItem("bundle_state");
   }, []);
+
+  useEffect(() => {
+    if (bundleDatesAppliedRef.current) return;
+
+    const parsedDesde = parseInheritedSearchDate(searchParams.get("desde"));
+    if (!parsedDesde) return;
+
+    const parsedHasta = parseInheritedSearchDate(searchParams.get("hasta"));
+    setFechaInicio(parsedDesde);
+    if (parsedHasta && parsedHasta >= parsedDesde) {
+      setFechaFin(parsedHasta);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     async function load() {

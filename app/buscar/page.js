@@ -263,6 +263,14 @@ function hasSearchCriteriaApplied({
   );
 }
 
+function buildReservarHref(serviceId, desde, hasta) {
+  const params = new URLSearchParams();
+  if (desde) params.set("desde", desde);
+  if (hasta) params.set("hasta", hasta);
+  const query = params.toString();
+  return query ? `/reservar/${serviceId}?${query}` : `/reservar/${serviceId}`;
+}
+
 function hasDocuments(profile) {
   return profile?.documentos_completos === true;
 }
@@ -593,6 +601,8 @@ function ServiceCard({
   comparando,
   onToggleComparar,
   favoritos,
+  fechaBusquedaDesde,
+  fechaBusquedaHasta,
 }) {
   const router = useRouter();
   const profile = service.profiles_public ?? {};
@@ -816,7 +826,11 @@ function ServiceCard({
                 Ver perfil →
               </Link>
               <Link
-                href={`/reservar/${service.id}`}
+                href={buildReservarHref(
+                  service.id,
+                  fechaBusquedaDesde,
+                  fechaBusquedaHasta,
+                )}
                 onClick={(e) => e.stopPropagation()}
                 className="block w-full rounded py-2 text-center text-[11px] font-semibold text-white no-underline transition-opacity hover:opacity-90"
                 style={{ backgroundColor: theme.color }}
@@ -1907,6 +1921,8 @@ function BuscarContent() {
                   comparando={comparando}
                   onToggleComparar={toggleComparar}
                   favoritos={favoritos}
+                  fechaBusquedaDesde={fechaBusquedaInicioParam}
+                  fechaBusquedaHasta={fechaBusquedaFinParam}
                 />
               ))}
             </ul>
