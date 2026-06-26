@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import CalendarioRangoFechas from "@/app/components/CalendarioRangoFechas";
+import CiudadAutocompleteInput from "@/app/components/CiudadAutocompleteInput";
 import Navbar from "@/app/components/Navbar";
 import { formatShortDate } from "@/app/components/calendario-shared";
 import { useLang } from "@/app/lib/LangContext";
@@ -120,7 +121,7 @@ function SearchField({ label, children, onClick }) {
       >
         {label}
       </span>
-      <div className="mt-0.5 min-h-[20px]">{children}</div>
+      <div className="mt-0.5 min-h-[20px] overflow-visible">{children}</div>
     </div>
   );
 }
@@ -403,14 +404,13 @@ export default function Hero() {
         >
           <div className="mx-auto flex max-w-6xl flex-col md:flex-row md:items-stretch">
             <SearchField label={extra.ciudad}>
-              <input
+              <CiudadAutocompleteInput
                 id="hero-ciudad"
-                type="text"
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
+                onChange={setQuery}
                 placeholder={t.hero.placeholder}
-                className="w-full bg-transparent text-[13px] outline-none placeholder:text-[#bbb]"
-                style={{ color: "#2a3a4a" }}
+                className="w-full"
+                inputClassName="w-full bg-transparent text-[13px] outline-none placeholder:text-[#bbb]"
               />
             </SearchField>
 

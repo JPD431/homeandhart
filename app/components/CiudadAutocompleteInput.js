@@ -140,7 +140,7 @@ export default function CiudadAutocompleteInput({
         <ul
           id={listboxId}
           role="listbox"
-          className="absolute left-0 right-0 top-full z-30 mt-1 max-h-56 overflow-y-auto border bg-white py-1 shadow-lg"
+          className="absolute left-0 right-0 top-full z-50 mt-1 max-h-56 overflow-y-auto border bg-white py-1 shadow-lg"
           style={{ borderColor: BRAND.border, borderRadius: 6 }}
         >
           {suggestions.map((suggestion, index) => {
