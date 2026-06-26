@@ -1164,7 +1164,12 @@ function BuscarContent() {
   }, [rawResults, appliedFilters, ordenarPor, ratingsByProveedor, bookingsByService]);
 
   function handleVerticalChange(vertical) {
-    replaceSearchParams({ vertical });
+    replaceSearchParams({
+      vertical,
+      ciudad: ciudadParam,
+      desde: fechaBusquedaInicioParam,
+      hasta: fechaBusquedaFinParam,
+    });
   }
 
   function handleBuscarSubmit(e) {
@@ -1374,19 +1379,13 @@ function BuscarContent() {
             className="flex min-w-[160px] flex-1 items-center gap-2 border px-3 py-2"
             style={{ backgroundColor: "#fff", borderColor: "#e8e4de", borderRadius: 6, maxWidth: 220 }}
           >
-            <button
-              type="submit"
-              style={{
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                padding: 4,
-                display: "flex",
-                alignItems: "center",
-              }}
+            <span
+              className="flex shrink-0 items-center"
+              style={{ padding: 4 }}
+              aria-hidden
             >
-              <SearchIcon className="h-3.5 w-3.5 shrink-0 text-[#bbb]" />
-            </button>
+              <SearchIcon className="h-3.5 w-3.5 text-[#bbb]" />
+            </span>
             <input
               type="text"
               value={ciudadInput}
@@ -1426,9 +1425,8 @@ function BuscarContent() {
 
           <button
             type="submit"
-            className="sr-only"
-            tabIndex={-1}
-            aria-hidden
+            className="min-h-[40px] shrink-0 px-4 py-2 text-[12px] font-semibold text-white transition-opacity hover:opacity-90 md:px-5 md:text-[13px]"
+            style={{ backgroundColor: PRIMARY, borderRadius: 6 }}
           >
             {t.hero.buscar}
           </button>
