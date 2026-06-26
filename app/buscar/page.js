@@ -9,7 +9,7 @@ import { formatShortDate } from "@/app/components/calendario-shared";
 import { useLang } from "@/app/lib/LangContext";
 import { useTranslation } from "@/app/lib/i18n";
 import { BRAND, SERIF } from "@/app/components/brand";
-import { getCapacidadPersonas } from "@/app/lib/capacidad";
+import { serviceMeetsCapacidadMin } from "@/app/lib/capacidad";
 import { supabase } from "@/app/lib/supabase";
 
 const RealMap = dynamic(() => import("./MapComponent"), {
@@ -298,9 +298,8 @@ function matchesClientFilters(service, filters, avgRating) {
     if (!hasPetFriendlyInDescription(service)) return false;
   }
 
-  if (filters.capacidadMin > 1 && service.vertical === "alojamiento") {
-    const cap = getCapacidadPersonas(service);
-    if (cap != null && cap < filters.capacidadMin) return false;
+  if (!serviceMeetsCapacidadMin(service, filters.capacidadMin)) {
+    return false;
   }
 
   if (filters.disponibleViajar && service.vertical === "ninos") {

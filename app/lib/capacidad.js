@@ -45,10 +45,42 @@ export function parseCapacidadFromDb(row) {
   };
 }
 
-export function getCapacidadPersonas(service) {
-  const fromJson = service?.capacidad?.personas;
-  if (fromJson != null && fromJson !== "") {
-    return Number(fromJson);
+function readCapacidadObject(service) {
+  let capData = service?.capacidad;
+  if (capData == null || capData === "") return null;
+  if (typeof capData === "string") {
+    try {
+      capData = JSON.parse(capData);
+    } catch {
+      return null;
+    }
   }
-  return null;
+  if (typeof capData !== "object" || capData === null || Array.isArray(capData)) {
+    return null;
+  }
+  return capData;
+}
+
+export function getCapacidadPersonas(service) {
+  const capData = readCapacidadObject(service);
+  if (!capData) return null;
+
+  const fromJson = capData.personas;
+  if (fromJson == null || fromJson === "") return null;
+
+  const n = Number(fromJson);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** true si el servicio cumple el mínimo de personas (o no aplica / sin dato). */
+export function serviceMeetsCapacidadMin(service, capacidadMin) {
+  const min = Number(capacidadMin);
+  if (!Number.isFinite(min) || min <= 1 || service?.vertical !== "alojamiento") {
+    return true;
+  }
+
+  const cap = getCapacidadPersonas(service);
+  if (cap === null) return true;
+
+  return cap >= min;
 }
