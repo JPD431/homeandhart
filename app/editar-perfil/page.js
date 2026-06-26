@@ -7,6 +7,11 @@ import ProveedorEmergenciaToggle from "@/app/components/ProveedorEmergenciaToggl
 import CalendarioTarifas from "@/app/components/CalendarioTarifas";
 import { BRAND, SERIF } from "@/app/components/brand";
 import {
+  DEFAULT_CAPACIDAD_ALOJAMIENTO,
+  parseCapacidadFromDb,
+  serializeCapacidad,
+} from "@/app/lib/capacidad";
+import {
   normalizeDescuentosDuracion,
   serializeDescuentosDuracionForDb,
 } from "@/app/lib/descuentosDuracion";
@@ -139,6 +144,7 @@ function emptyServiceDetails() {
     proveedor_emergencia: false,
     amenities: [],
     foto_url: "",
+    capacidad: { ...DEFAULT_CAPACIDAD_ALOJAMIENTO },
   };
 }
 
@@ -182,6 +188,7 @@ function mapServiceFromDb(row) {
       proveedor_emergencia: row.proveedor_emergencia === true,
       amenities: row.amenities || [],
       foto_url: row.foto_url || "",
+      capacidad: parseCapacidadFromDb(row),
       direccion_exacta: row.direccion_exacta || "",
       telefono_contacto: row.telefono_contacto || "",
     },
@@ -330,6 +337,7 @@ function buildServicePayload(details, vertical, ciudad, proveedorId, disponible)
     proveedor_emergencia: details.proveedor_emergencia === true,
     amenities: details.amenities || [],
     foto_url: details.foto_url || null,
+    capacidad: serializeCapacidad(details, vertical),
   };
 }
 
@@ -374,6 +382,33 @@ function SectionLabel({ number, title }) {
     >
       {number} · {title}
     </p>
+  );
+}
+
+function CounterField({ label, value, onChange, min = 0 }) {
+  return (
+    <div className="rounded-xl border p-3 text-center" style={{ borderColor: BRAND.border }}>
+      <p className="text-xs text-[#666]">{label}</p>
+      <div className="mt-2 flex items-center justify-center gap-3">
+        <button
+          type="button"
+          onClick={() => onChange(Math.max(min, value - 1))}
+          className="flex h-8 w-8 items-center justify-center rounded-full border text-lg"
+          style={{ borderColor: BRAND.border }}
+        >
+          −
+        </button>
+        <span className="w-6 text-center text-lg font-semibold">{value}</span>
+        <button
+          type="button"
+          onClick={() => onChange(value + 1)}
+          className="flex h-8 w-8 items-center justify-center rounded-full border text-lg"
+          style={{ borderColor: BRAND.border }}
+        >
+          +
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -709,6 +744,9 @@ function ServiceEditForm({ vertical, details, onChange, userId }) {
     Array.isArray(details.dias_disponibles) && details.dias_disponibles.length > 0
       ? details.dias_disponibles
       : DIAS_DISPONIBLES_DEFAULT;
+  const capacidad = details.capacidad ?? { ...DEFAULT_CAPACIDAD_ALOJAMIENTO };
+  const updCap = (key, val) =>
+    onChange({ ...details, capacidad: { ...capacidad, [key]: val } });
 
   return (
     <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -818,6 +856,35 @@ function ServiceEditForm({ vertical, details, onChange, userId }) {
       <DireccionContactoFields d={details} upd={update} vertical={vertical} />
       {vertical === "alojamiento" && (
         <>
+          <div className="sm:col-span-2">
+            <p className="mb-3 text-xs font-medium text-[#444]">Capacidad</p>
+            <div className="grid grid-cols-4 gap-3">
+              <CounterField
+                label="Personas"
+                value={capacidad.personas}
+                onChange={(v) => updCap("personas", v)}
+                min={1}
+              />
+              <CounterField
+                label="Habitaciones"
+                value={capacidad.habitaciones}
+                onChange={(v) => updCap("habitaciones", v)}
+                min={1}
+              />
+              <CounterField
+                label="Camas"
+                value={capacidad.camas}
+                onChange={(v) => updCap("camas", v)}
+                min={1}
+              />
+              <CounterField
+                label="Baños"
+                value={capacidad.banos}
+                onChange={(v) => updCap("banos", v)}
+                min={1}
+              />
+            </div>
+          </div>
           {AMENITIES_GROUPS.map((group) => (
             <div key={group.title} className="sm:col-span-2">
               <p className="mb-3 text-xs font-semibold text-[#444]">{group.title}</p>

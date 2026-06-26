@@ -9,6 +9,7 @@ import { formatShortDate } from "@/app/components/calendario-shared";
 import { useLang } from "@/app/lib/LangContext";
 import { useTranslation } from "@/app/lib/i18n";
 import { BRAND, SERIF } from "@/app/components/brand";
+import { getCapacidadPersonas } from "@/app/lib/capacidad";
 import { supabase } from "@/app/lib/supabase";
 
 const RealMap = dynamic(() => import("./MapComponent"), {
@@ -243,6 +244,24 @@ function countActiveFilters(filters, vertical) {
   return n;
 }
 
+function hasSearchCriteriaApplied({
+  vertical,
+  ciudad,
+  desde,
+  hasta,
+  orden,
+  filters,
+}) {
+  return (
+    vertical !== "todo" ||
+    ciudad.trim() !== "" ||
+    desde !== "" ||
+    hasta !== "" ||
+    orden !== "relevancia" ||
+    countActiveFilters(filters, vertical) > 0
+  );
+}
+
 function hasDocuments(profile) {
   return profile?.documentos_completos === true;
 }
@@ -280,8 +299,8 @@ function matchesClientFilters(service, filters, avgRating) {
   }
 
   if (filters.capacidadMin > 1 && service.vertical === "alojamiento") {
-    const cap = service.capacidad?.personas ?? service.capacidad_personas;
-    if (cap != null && Number(cap) < filters.capacidadMin) return false;
+    const cap = getCapacidadPersonas(service);
+    if (cap != null && cap < filters.capacidadMin) return false;
   }
 
   if (filters.disponibleViajar && service.vertical === "ninos") {
@@ -1015,6 +1034,7 @@ function BuscarContent() {
           oferta_descuento,
           oferta_valida_hasta,
           disponible_para_viajar,
+          capacidad,
           profiles_public!inner (
             nombre,
             apellido,
@@ -1243,6 +1263,30 @@ function BuscarContent() {
     });
   }
 
+  function handleClearFechas(e) {
+    e?.preventDefault?.();
+    e?.stopPropagation?.();
+    setFechaDesdeInput("");
+    setFechaHastaInput("");
+  }
+
+  function handleClearAll() {
+    const defaults = getDefaultFilters();
+    setCiudadInput("");
+    setFechaDesdeInput("");
+    setFechaHastaInput("");
+    setDraftFilters(defaults);
+    setAdvancedOpen(false);
+    replaceSearchParams({
+      vertical: "todo",
+      ciudad: "",
+      desde: "",
+      hasta: "",
+      filters: defaults,
+      ordenar: "relevancia",
+    });
+  }
+
   function handleApplyFilters() {
     replaceSearchParams({ filters: { ...draftFilters } });
     setAdvancedOpen(false);
@@ -1255,6 +1299,21 @@ function BuscarContent() {
   }
 
   const activeFilterCount = countActiveFilters(appliedFilters, verticalParam);
+
+  const showClearAll =
+    hasSearchCriteriaApplied({
+      vertical: verticalParam,
+      ciudad: ciudadParam,
+      desde: fechaBusquedaInicioParam,
+      hasta: fechaBusquedaFinParam,
+      orden: ordenarPor,
+      filters: appliedFilters,
+    }) ||
+    ciudadInput.trim() !== "" ||
+    fechaDesdeInput !== "" ||
+    fechaHastaInput !== "";
+
+  const hasFechasDraft = Boolean(fechaDesdeInput || fechaHastaInput);
 
   const resultCount = results.length;
 
@@ -1397,16 +1456,35 @@ function BuscarContent() {
           </div>
 
           <div ref={calendarRef} className="relative">
-            <button
-              type="button"
-              onClick={() => setCalendarOpen((o) => !o)}
-              className="flex min-w-[160px] items-center border px-3 py-2 text-left"
+            <div
+              className="flex min-w-[160px] items-center border"
               style={{ backgroundColor: "#fff", borderColor: "#e8e4de", borderRadius: 6 }}
             >
-              <span className="text-[12px]" style={{ color: fechaDesdeInput ? "#2a3a4a" : "#bbb" }}>
-                {fechasDisplay}
-              </span>
-            </button>
+              <button
+                type="button"
+                onClick={() => setCalendarOpen((o) => !o)}
+                className="min-w-0 flex-1 px-3 py-2 text-left"
+              >
+                <span
+                  className="text-[12px]"
+                  style={{ color: fechaDesdeInput ? "#2a3a4a" : "#bbb" }}
+                >
+                  {fechasDisplay}
+                </span>
+              </button>
+              {hasFechasDraft && (
+                <button
+                  type="button"
+                  onClick={handleClearFechas}
+                  className="mr-2 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[14px] leading-none transition-colors hover:bg-[#f7f5f2]"
+                  style={{ color: "#888" }}
+                  aria-label={lang === "en" ? "Clear dates" : "Borrar fechas"}
+                  title={lang === "en" ? "Clear dates" : "Borrar fechas"}
+                >
+                  ×
+                </button>
+              )}
+            </div>
 
             {calendarOpen && (
               <div
@@ -1418,6 +1496,8 @@ function BuscarContent() {
                   fechaFin={fechaHastaInput}
                   onChange={handleRangeChange}
                   onRangeComplete={() => setCalendarOpen(false)}
+                  onClear={handleClearFechas}
+                  clearLabel={lang === "en" ? "Clear dates" : "Borrar fechas"}
                 />
               </div>
             )}
@@ -1430,6 +1510,17 @@ function BuscarContent() {
           >
             {t.hero.buscar}
           </button>
+
+          {showClearAll && (
+            <button
+              type="button"
+              onClick={handleClearAll}
+              className="min-h-[40px] shrink-0 border px-3 py-2 text-[12px] font-medium transition-colors hover:bg-[#f7f5f2] md:px-4"
+              style={{ borderColor: BORDER, borderRadius: 6, color: "#666" }}
+            >
+              {lang === "en" ? "Clear" : "Limpiar"}
+            </button>
+          )}
 
           <div
             className="hidden h-6 w-px shrink-0 md:block"

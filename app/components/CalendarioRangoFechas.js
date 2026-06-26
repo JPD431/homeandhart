@@ -113,6 +113,8 @@ export default function CalendarioRangoFechas({
   fechaFin,
   onChange,
   onRangeComplete,
+  onClear,
+  clearLabel = "Borrar fechas",
   fechasOcupadas = [],
 }) {
   const hoy = new Date();
@@ -194,6 +196,19 @@ export default function CalendarioRangoFechas({
           />
         </div>
       </div>
+
+      {(fechaInicio || fechaFin) && onClear && (
+        <div className="mt-3 flex justify-end border-t pt-3" style={{ borderColor: BRAND.border }}>
+          <button
+            type="button"
+            onClick={onClear}
+            className="text-xs font-medium transition-opacity hover:opacity-80"
+            style={{ color: "#666" }}
+          >
+            {clearLabel}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

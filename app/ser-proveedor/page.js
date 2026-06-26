@@ -4,6 +4,7 @@ import { useRef, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
 import { BRAND, SERIF } from "@/app/components/brand";
+import { serializeCapacidad } from "@/app/lib/capacidad";
 import { serializeDescuentosDuracionForDb } from "@/app/lib/descuentosDuracion";
 import { AMENITIES_GROUPS } from "@/app/lib/amenities";
 
@@ -1011,6 +1012,7 @@ export default function SerProveedorPage() {
               : serviceDetails.mascotas;
 
         const locationFields = await getServiceLocationFields(servicioData, vertical);
+        const capacidad = serializeCapacidad(servicioData, vertical);
 
         const { data: nuevoServicio, error: serviceError } = await supabase
           .from("services")
@@ -1023,6 +1025,7 @@ export default function SerProveedorPage() {
             ciudad: ciudad.trim(),
             disponible: false,
             amenities: servicioData.amenities || [],
+            ...(capacidad ? { capacidad } : {}),
             ...locationFields,
           })
           .select("id")
