@@ -1197,6 +1197,7 @@ function BuscarContent() {
       ciudad: ciudadInput,
       desde: fechaDesdeInput,
       hasta: fechaHastaInput,
+      filters: draftFilters,
     });
   }
 
