@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CalendarioRangoFechas from "@/app/components/CalendarioRangoFechas";
+import CiudadAutocompleteInput from "@/app/components/CiudadAutocompleteInput";
 import { formatShortDate } from "@/app/components/calendario-shared";
 import { useLang } from "@/app/lib/LangContext";
 import { useTranslation } from "@/app/lib/i18n";
@@ -1445,13 +1446,12 @@ function BuscarContent() {
             >
               <SearchIcon className="h-3.5 w-3.5 text-[#bbb]" />
             </span>
-            <input
-              type="text"
+            <CiudadAutocompleteInput
               value={ciudadInput}
-              onChange={(e) => setCiudadInput(e.target.value)}
+              onChange={setCiudadInput}
               placeholder={t.hero.placeholder}
-              className="min-w-0 flex-1 bg-transparent text-[12px] outline-none placeholder:text-[#bbb]"
-              style={{ color: "#2a3a4a" }}
+              className="min-w-0 flex-1"
+              inputClassName="w-full bg-transparent text-[12px] outline-none placeholder:text-[#bbb]"
             />
           </div>
 
