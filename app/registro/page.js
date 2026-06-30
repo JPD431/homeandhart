@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
-import { getPostAuthRedirect } from "@/app/lib/onboarding";
+import { fetchPostLoginRedirect } from "@/app/lib/post-login-redirect";
 import { supabase } from "@/app/lib/supabase";
 
 const PRIMARY = "#1d4f91";
@@ -332,7 +332,7 @@ function RegistroForm() {
     }
 
     if (data.user) {
-      const redirectTo = await getPostAuthRedirect(supabase, data.user.id);
+      const redirectTo = await fetchPostLoginRedirect();
       router.push(redirectTo);
       return;
     }

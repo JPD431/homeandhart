@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { getPostAuthRedirect } from "@/app/lib/onboarding";
+import { fetchPostLoginRedirect } from "@/app/lib/post-login-redirect";
 import { supabase } from "@/app/lib/supabase";
 
 export default function VerificadoPage() {
@@ -27,7 +27,7 @@ export default function VerificadoPage() {
         return;
       }
 
-      const path = await getPostAuthRedirect(supabase, user.id);
+      const path = await fetchPostLoginRedirect();
       if (!cancelled) {
         setRedirectTo(path);
         setReady(true);

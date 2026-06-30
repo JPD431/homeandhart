@@ -4,10 +4,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
-  clientePerfilCompleto,
   ONBOARDING_PROFILE_SELECT,
-  resolvePostAuthRedirect,
 } from "@/app/lib/onboarding";
+import { fetchPostLoginRedirect } from "@/app/lib/post-login-redirect";
 import { supabase } from "@/app/lib/supabase";
 import { BRAND, SERIF } from "@/app/components/brand";
 
@@ -171,6 +170,14 @@ export default function CompletarPerfilPage() {
         return;
       }
 
+      const redirectTo = await fetchPostLoginRedirect();
+      if (cancelled) return;
+
+      if (redirectTo !== "/completar-perfil") {
+        router.replace(redirectTo);
+        return;
+      }
+
       const { data: profile } = await supabase
         .from("profiles")
         .select(ONBOARDING_PROFILE_SELECT)
@@ -178,16 +185,6 @@ export default function CompletarPerfilPage() {
         .maybeSingle();
 
       if (cancelled) return;
-
-      if (profile?.role === "proveedor") {
-        router.replace(resolvePostAuthRedirect(profile));
-        return;
-      }
-
-      if (clientePerfilCompleto(profile)) {
-        router.replace("/buscar");
-        return;
-      }
 
       if (profile?.nombre) setNombre(profile.nombre);
       if (profile?.apellido) setApellido(profile.apellido);

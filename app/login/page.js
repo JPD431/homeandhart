@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { getPostAuthRedirect } from "@/app/lib/onboarding";
+import { fetchPostLoginRedirect } from "@/app/lib/post-login-redirect";
 import { supabase } from "@/app/lib/supabase";
 
 const PRIMARY = "#1d4f91";
@@ -285,7 +285,7 @@ export default function LoginPage() {
     }
 
     const redirectTo = signInData.user
-      ? await getPostAuthRedirect(supabase, signInData.user.id)
+      ? await fetchPostLoginRedirect()
       : "/dashboard";
 
     setLoading(false);

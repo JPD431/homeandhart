@@ -1,17 +1,7 @@
 import { redirect } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
+import { isAdminUserId } from "@/lib/auth/admin";
 import { createClient } from "@/lib/supabase/server";
-
-function getAdminUserIds(): string[] {
-  return (process.env.ADMIN_USER_IDS || "")
-    .split(",")
-    .map((id) => id.trim())
-    .filter(Boolean);
-}
-
-function isAdminUserId(userId: string): boolean {
-  return getAdminUserIds().includes(userId);
-}
 
 export async function getAdminUser(): Promise<User | null> {
   const supabase = await createClient();
