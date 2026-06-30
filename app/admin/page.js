@@ -12,6 +12,7 @@ import {
   REVISION_EN_REVISION,
   REVISION_RECHAZADO,
 } from "@/app/lib/onboarding-persist";
+import { supabase } from "@/app/lib/supabase";
 
 const TABS = [
   { id: "pendientes", label: "Pendientes de verificar" },
@@ -295,84 +296,95 @@ export default function AdminPage() {
   const loadData = useCallback(async () => {
     setErrorMessage("");
 
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
+    try {
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
 
-    if (userError || !user) {
-      router.replace("/login");
-      return;
-    }
-
-    // -- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS rechazado boolean DEFAULT false;
-    // -- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS email_contacto text;
-    // -- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS fecha_registro timestamp with time zone DEFAULT now();
-    // -- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS motivo_rechazo text;
-    // -- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS doc_dni_url text;
-    // -- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS doc_antecedentes_url text;
-    // -- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS doc_antecedentes_sexuales_url text;
-    // -- CREATE TABLE blog_posts (
-    // --   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-    // --   slug text UNIQUE NOT NULL,
-    // --   titulo text NOT NULL,
-    // --   subtitulo text,
-    // --   contenido text NOT NULL,
-    // --   imagen_url text,
-    // --   categoria text CHECK (categoria IN ('familias', 'mascotas', 'alojamiento', 'nineras', 'viajes', 'consejos')),
-    // --   tags text[],
-    // --   autor text DEFAULT 'Home&Heart',
-    // --   publicado boolean DEFAULT false,
-    // --   featured boolean DEFAULT false,
-    // --   created_at timestamp with time zone DEFAULT now(),
-    // --   updated_at timestamp with time zone DEFAULT now()
-    // -- );
-    // -- ALTER TABLE blog_posts ENABLE ROW LEVEL SECURITY;
-    // -- CREATE POLICY "Lectura publica posts publicados" ON blog_posts FOR SELECT USING (publicado = true);
-    // -- CREATE POLICY "Admin gestiona posts" ON blog_posts FOR ALL USING (true);
-    // -- CREATE TABLE email_logs (
-    // --   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-    // --   user_id uuid REFERENCES profiles(id),
-    // --   tipo text NOT NULL,
-    // --   enviado_at timestamp with time zone DEFAULT now()
-    // -- );
-    const res = await fetch("/api/admin/providers");
-    const { providers: profiles, error: profilesError } = await res.json();
-
-    if (profilesError) {
-      setErrorMessage(profilesError.message);
-      setLoading(false);
-      return;
-    }
-
-    const providerList = profiles ?? [];
-    setProviders(providerList);
-
-    if (providerList.length > 0) {
-      const providerIds = providerList.map((p) => p.id);
-      const { data: services, error: servicesError } = await supabase
-        .from("services")
-        .select("id, proveedor_id, vertical, titulo, precio, ciudad, revision_estado, disponible")
-        .in("proveedor_id", providerIds);
-
-      if (servicesError) {
-        setErrorMessage(servicesError.message);
-      } else {
-        const grouped = {};
-        for (const svc of services ?? []) {
-          if (!grouped[svc.proveedor_id]) grouped[svc.proveedor_id] = [];
-          grouped[svc.proveedor_id].push(svc);
-        }
-        setServicesByProvider(grouped);
+      if (userError || !user) {
+        router.replace("/login");
+        return;
       }
-    } else {
-      setServicesByProvider({});
-    }
 
-    const { data: bookingsData, error: bookingsError } = await supabase
-      .from("bookings")
-      .select(
-        `
+      // -- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS rechazado boolean DEFAULT false;
+      // -- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS email_contacto text;
+      // -- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS fecha_registro timestamp with time zone DEFAULT now();
+      // -- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS motivo_rechazo text;
+      // -- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS doc_dni_url text;
+      // -- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS doc_antecedentes_url text;
+      // -- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS doc_antecedentes_sexuales_url text;
+      // -- CREATE TABLE blog_posts (
+      // --   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+      // --   slug text UNIQUE NOT NULL,
+      // --   titulo text NOT NULL,
+      // --   subtitulo text,
+      // --   contenido text NOT NULL,
+      // --   imagen_url text,
+      // --   categoria text CHECK (categoria IN ('familias', 'mascotas', 'alojamiento', 'nineras', 'viajes', 'consejos')),
+      // --   tags text[],
+      // --   autor text DEFAULT 'Home&Heart',
+      // --   publicado boolean DEFAULT false,
+      // --   featured boolean DEFAULT false,
+      // --   created_at timestamp with time zone DEFAULT now(),
+      // --   updated_at timestamp with time zone DEFAULT now()
+      // -- );
+      // -- ALTER TABLE blog_posts ENABLE ROW LEVEL SECURITY;
+      // -- CREATE POLICY "Lectura publica posts publicados" ON blog_posts FOR SELECT USING (publicado = true);
+      // -- CREATE POLICY "Admin gestiona posts" ON blog_posts FOR ALL USING (true);
+      // -- CREATE TABLE email_logs (
+      // --   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+      // --   user_id uuid REFERENCES profiles(id),
+      // --   tipo text NOT NULL,
+      // --   enviado_at timestamp with time zone DEFAULT now()
+      // -- );
+      const res = await fetch("/api/admin/providers");
+      const { providers: profiles, error: profilesError } = await res.json();
+
+      if (providersError) {
+        setErrorMessage(
+          typeof providersError === "string"
+            ? providersError
+            : providersError.message || "Error al cargar proveedores",
+        );
+        return;
+      }
+
+      if (!res.ok) {
+        setErrorMessage("Error al cargar proveedores");
+        return;
+      }
+
+      const providerList = profiles ?? [];
+      setProviders(providerList);
+
+      if (providerList.length > 0) {
+        const providerIds = providerList.map((p) => p.id);
+        const { data: services, error: servicesError } = await supabase
+          .from("services")
+          .select(
+            "id, proveedor_id, vertical, titulo, precio, ciudad, revision_estado, disponible",
+          )
+          .in("proveedor_id", providerIds);
+
+        if (servicesError) {
+          setErrorMessage(servicesError.message);
+        } else {
+          const grouped = {};
+          for (const svc of services ?? []) {
+            if (!grouped[svc.proveedor_id]) grouped[svc.proveedor_id] = [];
+            grouped[svc.proveedor_id].push(svc);
+          }
+          setServicesByProvider(grouped);
+        }
+      } else {
+        setServicesByProvider({});
+      }
+
+      const { data: bookingsData, error: bookingsError } = await supabase
+        .from("bookings")
+        .select(
+          `
         id,
         precio_total,
         precio_base,
@@ -391,59 +403,66 @@ export default function AdminPage() {
           titulo
         )
       `,
-      )
-      .eq("estado", "completada")
-      .order("created_at", { ascending: false });
+        )
+        .eq("estado", "completada")
+        .order("created_at", { ascending: false });
 
-    if (bookingsError) {
-      setErrorMessage(bookingsError.message);
-    } else {
-      setCompletedBookings(bookingsData ?? []);
-    }
+      if (bookingsError) {
+        setErrorMessage(bookingsError.message);
+      } else {
+        setCompletedBookings(bookingsData ?? []);
+      }
 
-    const { data: reportsData, error: reportsError } = await supabase
-      .from("reports")
-      .select(
-        `
+      const { data: reportsData, error: reportsError } = await supabase
+        .from("reports")
+        .select(
+          `
         *,
         reporter:profiles_public!reporter_id (nombre, apellido),
         reported:profiles_public!reported_id (nombre, apellido)
       `,
-      )
-      .order("created_at", { ascending: false });
+        )
+        .order("created_at", { ascending: false });
 
-    if (reportsError) {
-      setErrorMessage(reportsError.message);
-    } else {
-      setReports(reportsData ?? []);
-    }
-
-    const garantiaRes = await fetch("/api/admin/garantia/cancelaciones-tardias");
-    const garantiaData = await garantiaRes.json().catch(() => ({}));
-
-    if (!garantiaRes.ok) {
-      setErrorMessage(
-        garantiaData.error || "Error al cargar cancelaciones tardías",
-      );
-    } else {
-      setLateCancellations(garantiaData.cancelaciones ?? []);
-    }
-
-    const { data: blogData, error: blogError } = await supabase
-      .from("blog_posts")
-      .select("*")
-      .order("created_at", { ascending: false });
-
-    if (blogError) {
-      if (!blogError.message.includes("does not exist")) {
-        setErrorMessage(blogError.message);
+      if (reportsError) {
+        setErrorMessage(reportsError.message);
+      } else {
+        setReports(reportsData ?? []);
       }
-      setBlogPosts([]);
-    } else {
-      setBlogPosts(blogData ?? []);
-    }
 
-    setLoading(false);
+      const garantiaRes = await fetch("/api/admin/garantia/cancelaciones-tardias");
+      const garantiaData = await garantiaRes.json().catch(() => ({}));
+
+      if (!garantiaRes.ok) {
+        setErrorMessage(
+          garantiaData.error || "Error al cargar cancelaciones tardías",
+        );
+      } else {
+        setLateCancellations(garantiaData.cancelaciones ?? []);
+      }
+
+      const { data: blogData, error: blogError } = await supabase
+        .from("blog_posts")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (blogError) {
+        if (!blogError.message.includes("does not exist")) {
+          setErrorMessage(blogError.message);
+        }
+        setBlogPosts([]);
+      } else {
+        setBlogPosts(blogData ?? []);
+      }
+    } catch (err) {
+      setErrorMessage(
+        err instanceof Error
+          ? err.message
+          : "Error al cargar el panel de administración",
+      );
+    } finally {
+      setLoading(false);
+    }
   }, [router]);
 
   useEffect(() => {
