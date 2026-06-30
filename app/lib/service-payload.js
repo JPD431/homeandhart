@@ -87,6 +87,8 @@ export function buildServicePayload(details, vertical, ciudad, proveedorId, disp
     modalidad: vertical === "alojamiento" ? null : details.modalidad || null,
     tipo_alojamiento:
       vertical === "alojamiento" ? details.tipo_alojamiento || null : null,
+    nru:
+      vertical === "alojamiento" ? details.nru?.trim() || null : null,
     oferta_titulo: details.oferta_activa
       ? details.oferta_titulo?.trim() || null
       : null,

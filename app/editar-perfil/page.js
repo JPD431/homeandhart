@@ -26,10 +26,14 @@ import {
 } from "@/app/lib/service-payload";
 import { supabase } from "@/app/lib/supabase";
 
-const DARK_BLUE = "#163a6b";
-const STORAGE_BUCKET = "Documentos";
+import {
+  uploadDocumentToStorage,
+  uploadProfilePhoto,
+  uploadServicePhoto,
+} from "@/app/lib/provider-uploads";
 
 const PRIMARY = "#1d4f91";
+const DARK_BLUE = "#163a6b";
 const SERVICE_ACTIVE_GREEN = "#0e7a5c";
 
 const COBROS_REQUERIDOS_MSG =
@@ -209,39 +213,6 @@ function DireccionContactoFields({ d, upd, vertical }) {
       </div>
     </>
   );
-}
-
-async function uploadProfilePhoto(userId, file) {
-  const ext = file.name.includes(".") ? file.name.split(".").pop() : "jpg";
-  const filePath = `${userId}/foto-perfil-${Date.now()}.${ext}`;
-  const { error } = await supabase.storage
-    .from(STORAGE_BUCKET)
-    .upload(filePath, file, { upsert: true, contentType: file.type });
-  if (error) throw error;
-  const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(filePath);
-  return data.publicUrl;
-}
-
-async function uploadDocumentToStorage(userId, docKey, file) {
-  const ext = file.name.includes(".") ? file.name.split(".").pop() : "pdf";
-  const filePath = `${userId}/${docKey}-${Date.now()}.${ext}`;
-  const { error } = await supabase.storage
-    .from(STORAGE_BUCKET)
-    .upload(filePath, file, { upsert: true, contentType: file.type });
-  if (error) throw error;
-  const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(filePath);
-  return data.publicUrl;
-}
-
-async function uploadServicePhoto(userId, vertical, file, index) {
-  const ext = file.name.includes(".") ? file.name.split(".").pop() : "jpg";
-  const filePath = `${userId}/service-${vertical}-${index}-${Date.now()}.${ext}`;
-  const { error } = await supabase.storage
-    .from(STORAGE_BUCKET)
-    .upload(filePath, file, { upsert: true, contentType: file.type });
-  if (error) throw error;
-  const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(filePath);
-  return data.publicUrl;
 }
 
 function SectionLabel({ number, title }) {

@@ -1063,6 +1063,7 @@ function BuscarContent() {
         `,
         )
         .eq("disponible", true)
+        .or("revision_estado.is.null,revision_estado.neq.borrador")
         .eq("profiles_public.verificado", true);
 
       if (verticalParam && verticalParam !== "todo") {

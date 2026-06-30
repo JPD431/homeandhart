@@ -1,16 +1,27 @@
 "use client";
 
-import { useRef, useState, useMemo } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
 import { BRAND, SERIF } from "@/app/components/brand";
 import ServiceOperationalFields from "@/app/components/ServiceOperationalFields";
-import {
-  buildServicePayload,
-  getServiceLocationFields,
-  needsDireccionFields,
-} from "@/app/lib/service-payload";
+import { needsDireccionFields } from "@/app/lib/service-payload";
 import { AMENITIES_GROUPS } from "@/app/lib/amenities";
+import {
+  DOC_ID_TO_PROFILE_FIELD,
+  getProfileFieldForDocId,
+  persistWizardDocument,
+} from "@/app/lib/provider-uploads";
+import {
+  finalizeOnboarding,
+  loadOnboardingState,
+  mapDraftRowToServiceDetails,
+  parseProfileBio,
+  saveOnboardingStep,
+  saveProfileStep,
+  saveVerticalesStep,
+  upsertDraftService,
+} from "@/app/lib/onboarding-persist";
 
 const PRIMARY = "#1d4f91";
 const DARK_BLUE = "#163a6b";
@@ -155,14 +166,7 @@ const DOCUMENT_CATALOG = {
   certificaciones: { title: "Certificaciones", required: false },
 };
 
-const DOC_PROFILE_FIELDS = {
-  dni_propietario: "doc_dni_url",
-  dni_nie: "doc_dni_url",
-  certificado_antecedentes: "doc_antecedentes_url",
-  certificado_delitos_sexuales: "doc_antecedentes_sexuales_url",
-};
-
-const STORAGE_BUCKET = "Documentos";
+const DOC_PROFILE_FIELDS = DOC_ID_TO_PROFILE_FIELD;
 
 const EMPTY_SERVICE_DETAILS = {
   alojamiento: {
@@ -382,39 +386,6 @@ async function geocodeLocationZonesForServices(selectedIds, detailsByService, ci
   return result;
 }
 
-async function uploadDocumentToStorage(userId, docId, file) {
-  const ext = file.name.includes(".") ? file.name.split(".").pop() : "pdf";
-  const filePath = `${userId}/${docId}-${Date.now()}.${ext}`;
-  const { error } = await supabase.storage
-    .from(STORAGE_BUCKET)
-    .upload(filePath, file, { upsert: true, contentType: file.type });
-  if (error) throw error;
-  const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(filePath);
-  return data.publicUrl;
-}
-
-async function uploadProfilePhoto(userId, file) {
-  const ext = file.name.includes(".") ? file.name.split(".").pop() : "jpg";
-  const filePath = `profiles/foto/${userId}-${Date.now()}.${ext}`;
-  const { error } = await supabase.storage
-    .from(STORAGE_BUCKET)
-    .upload(filePath, file, { upsert: true, contentType: file.type });
-  if (error) throw error;
-  const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(filePath);
-  return data.publicUrl;
-}
-
-async function uploadServicePhoto(userId, vertical, file, index) {
-  const ext = file.name.includes(".") ? file.name.split(".").pop() : "jpg";
-  const filePath = `${userId}/service-${vertical}-${index}-${Date.now()}.${ext}`;
-  const { error } = await supabase.storage
-    .from(STORAGE_BUCKET)
-    .upload(filePath, file, { upsert: true, contentType: file.type });
-  if (error) throw error;
-  const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(filePath);
-  return data.publicUrl;
-}
-
 const inputClass =
   "w-full rounded-xl border px-4 py-3 text-sm text-[#1a1a1a] outline-none focus:ring-2 focus:ring-[#1d4f91]/30";
 
@@ -517,7 +488,8 @@ function StepBar({ steps, pasoActual }) {
   );
 }
 
-function DocUploadRow({ docId, title, required, file, onUpload }) {
+function DocUploadRow({ docId, title, required, file, uploaded, uploading, onUpload }) {
+  const ok = !!(file || uploaded);
   return (
     <div
       className="flex items-center justify-between gap-3 rounded-xl border p-3"
@@ -530,17 +502,18 @@ function DocUploadRow({ docId, title, required, file, onUpload }) {
             <span className="ml-1 text-xs font-normal text-[#888]">(opcional)</span>
           )}
         </p>
-        <p className="text-xs" style={{ color: file ? GREEN : required ? ORANGE : "#888" }}>
-          {file ? "✓ Subido" : required ? "⚠️ Pendiente" : "Opcional"}
+        <p className="text-xs" style={{ color: ok ? GREEN : required ? ORANGE : "#888" }}>
+          {uploading ? "Subiendo…" : ok ? "✓ Subido" : required ? "⚠️ Pendiente" : "Opcional"}
         </p>
       </div>
       <button
         type="button"
         onClick={() => onUpload(docId)}
-        className="shrink-0 rounded-lg border px-3 py-1.5 text-xs font-semibold"
+        disabled={uploading}
+        className="shrink-0 rounded-lg border px-3 py-1.5 text-xs font-semibold disabled:opacity-60"
         style={{ borderColor: PRIMARY, color: PRIMARY }}
       >
-        {file ? "Cambiar" : "Subir"}
+        {uploading ? "…" : ok ? "Cambiar" : "Subir"}
       </button>
     </div>
   );
@@ -659,7 +632,17 @@ function PreviewPanel({
   );
 }
 
-function calcCompletion(verticales, fields, documentFiles) {
+function docIsUploaded(docId, documentFiles, savedDocUrls) {
+  if (docId === "dni_nie") {
+    if (documentFiles.dni_nie || documentFiles.dni_propietario) return true;
+    return !!savedDocUrls.doc_dni_url;
+  }
+  if (documentFiles[docId]) return true;
+  const field = DOC_ID_TO_PROFILE_FIELD[docId];
+  return field ? !!savedDocUrls[field] : false;
+}
+
+function calcCompletion(verticales, fields, documentFiles, savedDocUrls) {
   let total = 0;
   let done = 0;
   const check = (ok) => {
@@ -684,11 +667,7 @@ function calcCompletion(verticales, fields, documentFiles) {
   getRequiredDocuments(verticales)
     .filter((d) => d.required)
     .forEach((d) => {
-      if (d.id === "dni_nie") {
-        check(!!documentFiles.dni_nie || !!documentFiles.dni_propietario);
-      } else {
-        check(!!documentFiles[d.id]);
-      }
+      check(docIsUploaded(d.id, documentFiles, savedDocUrls));
     });
   return total > 0 ? Math.round((done / total) * 100) : 0;
 }
@@ -722,7 +701,22 @@ export default function SerProveedorPage() {
     mascotas: [],
   });
   const [documentFiles, setDocumentFiles] = useState({});
+  const [savedDocUrls, setSavedDocUrls] = useState({
+    doc_dni_url: null,
+    doc_antecedentes_url: null,
+    doc_antecedentes_sexuales_url: null,
+  });
+  const [uploadingDocId, setUploadingDocId] = useState(null);
   const [activeDocumentId, setActiveDocumentId] = useState(null);
+  const [userId, setUserId] = useState(null);
+  const [fotoPerfilUrl, setFotoPerfilUrl] = useState(null);
+  const [draftServiceIds, setDraftServiceIds] = useState({
+    alojamiento: null,
+    ninos: null,
+    mascotas: null,
+  });
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [savingStep, setSavingStep] = useState(false);
   const [loading, setLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
@@ -747,9 +741,204 @@ export default function SerProveedorPage() {
     ciudad,
     sobreTi,
     serviceDetails,
-  }, documentFiles);
+  }, documentFiles, savedDocUrls);
 
   const allIdiomas = [...IDIOMAS_DEFAULT, ...customIdiomas];
+
+  function hasUploadedDoc(docId) {
+    if (docId === "dni_nie") {
+      if (documentFiles.dni_nie || documentFiles.dni_propietario) return true;
+      return !!savedDocUrls.doc_dni_url;
+    }
+    if (documentFiles[docId]) return true;
+    const field = getProfileFieldForDocId(docId);
+    return field ? !!savedDocUrls[field] : false;
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function resumeOnboarding() {
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser();
+
+      if (cancelled) return;
+
+      if (authError || !user) {
+        router.replace("/login?next=/ser-proveedor");
+        return;
+      }
+
+      try {
+        const { profile, drafts } = await loadOnboardingState(user.id);
+
+        if (cancelled) return;
+
+        if (profile?.onboarding_completed_at) {
+          router.replace("/dashboard?tab=proveedor");
+          return;
+        }
+
+        setUserId(user.id);
+
+        if (profile) {
+          setNombre(profile.nombre || "");
+          setApellido(profile.apellido || "");
+          setCiudad(profile.ciudad || "");
+          const bio = parseProfileBio(profile.descripcion);
+          setSobreTi(bio.sobreTi);
+          setPersonalidad(bio.personalidad);
+          setMotivacion(bio.motivacion);
+          setAnosExperiencia(
+            profile.anos_experiencia != null
+              ? String(profile.anos_experiencia)
+              : bio.anosExperiencia,
+          );
+          setIdiomas(Array.isArray(profile.idiomas) ? profile.idiomas : []);
+          if (profile.foto_perfil) {
+            setFotoPerfilUrl(profile.foto_perfil);
+            setProfilePhotoPreview(profile.foto_perfil);
+          }
+          setSavedDocUrls({
+            doc_dni_url: profile.doc_dni_url || null,
+            doc_antecedentes_url: profile.doc_antecedentes_url || null,
+            doc_antecedentes_sexuales_url: profile.doc_antecedentes_sexuales_url || null,
+          });
+          if (Array.isArray(profile.onboarding_verticales) && profile.onboarding_verticales.length > 0) {
+            setVerticalesSeleccionados(profile.onboarding_verticales);
+          }
+          if (profile.onboarding_step) {
+            const stepNum = Number(profile.onboarding_step);
+            if (stepNum >= 1 && stepNum <= 7) setPasoActual(stepNum);
+          }
+        }
+
+        if (drafts.length > 0) {
+          const nextDetails = { ...EMPTY_SERVICE_DETAILS };
+          const nextDraftIds = { alojamiento: null, ninos: null, mascotas: null };
+          const nextPreviews = { alojamiento: [], ninos: [], mascotas: [] };
+
+          for (const row of drafts) {
+            const vertical = row.vertical;
+            if (!vertical || !nextDetails[vertical]) continue;
+            nextDetails[vertical] = {
+              ...nextDetails[vertical],
+              ...mapDraftRowToServiceDetails(row),
+            };
+            nextDraftIds[vertical] = row.id;
+            if (row.foto_url) {
+              nextPreviews[vertical] = [row.foto_url];
+            }
+          }
+
+          setServiceDetails(nextDetails);
+          setDraftServiceIds(nextDraftIds);
+          setServicePhotoPreviews(nextPreviews);
+        }
+      } catch (err) {
+        console.error("[ser-proveedor] Error cargando borrador:", err);
+        if (!cancelled) {
+          setErrorMessage("No se pudo cargar tu progreso. Puedes continuar desde aquí.");
+          setUserId(user.id);
+        }
+      } finally {
+        if (!cancelled) setInitialLoading(false);
+      }
+    }
+
+    resumeOnboarding();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
+
+  async function persistStepData(stepId) {
+    if (!userId) throw new Error("No hay sesión activa.");
+
+    if (stepId === 1) {
+      await saveVerticalesStep(userId, verticalesSeleccionados, stepId);
+      return;
+    }
+
+    if (stepId === 2) {
+      const newFotoUrl = await saveProfileStep(userId, {
+        nombre,
+        apellido,
+        ciudad,
+        sobreTi,
+        personalidad,
+        motivacion,
+        anosExperiencia,
+        idiomas,
+        fotoPerfilUrl,
+        profilePhotoFile: profilePhoto,
+      }, stepId);
+      if (newFotoUrl) {
+        setFotoPerfilUrl(newFotoUrl);
+        setProfilePhotoPreview(newFotoUrl);
+        setProfilePhoto(null);
+      }
+      return;
+    }
+
+    if (stepId === 3 && verticalesSeleccionados.includes("alojamiento")) {
+      const id = await upsertDraftService(
+        userId,
+        "alojamiento",
+        ciudad,
+        serviceDetails.alojamiento,
+        draftServiceIds.alojamiento,
+        servicePhotos.alojamiento,
+      );
+      setDraftServiceIds((prev) => ({ ...prev, alojamiento: id }));
+      if (servicePhotos.alojamiento.length > 0) {
+        setServicePhotos((prev) => ({ ...prev, alojamiento: [] }));
+      }
+      await saveOnboardingStep(userId, stepId);
+      return;
+    }
+
+    if (stepId === 4 && verticalesSeleccionados.includes("ninos")) {
+      const id = await upsertDraftService(
+        userId,
+        "ninos",
+        ciudad,
+        serviceDetails.ninos,
+        draftServiceIds.ninos,
+        servicePhotos.ninos,
+      );
+      setDraftServiceIds((prev) => ({ ...prev, ninos: id }));
+      if (servicePhotos.ninos.length > 0) {
+        setServicePhotos((prev) => ({ ...prev, ninos: [] }));
+      }
+      await saveOnboardingStep(userId, stepId);
+      return;
+    }
+
+    if (stepId === 5 && verticalesSeleccionados.includes("mascotas")) {
+      const id = await upsertDraftService(
+        userId,
+        "mascotas",
+        ciudad,
+        serviceDetails.mascotas,
+        draftServiceIds.mascotas,
+        servicePhotos.mascotas,
+      );
+      setDraftServiceIds((prev) => ({ ...prev, mascotas: id }));
+      if (servicePhotos.mascotas.length > 0) {
+        setServicePhotos((prev) => ({ ...prev, mascotas: [] }));
+      }
+      await saveOnboardingStep(userId, stepId);
+      return;
+    }
+
+    if (stepId === 6 || stepId === 7) {
+      await saveOnboardingStep(userId, stepId);
+    }
+  }
 
   function toggleVertical(id) {
     setVerticalesSeleccionados((prev) =>
@@ -845,9 +1034,35 @@ export default function SerProveedorPage() {
 
   function handleDocumentFile(e) {
     const file = e.target.files?.[0];
-    if (!file || !activeDocumentId) return;
-    setDocumentFiles((prev) => ({ ...prev, [activeDocumentId]: file }));
+    const docId = activeDocumentId;
+    if (!file || !docId || !userId) return;
     e.target.value = "";
+
+    const profileField = getProfileFieldForDocId(docId);
+    if (!profileField) {
+      setDocumentFiles((prev) => ({ ...prev, [docId]: file }));
+      setActiveDocumentId(null);
+      return;
+    }
+
+    setUploadingDocId(docId);
+    setErrorMessage("");
+    persistWizardDocument(userId, docId, file)
+      .then(({ profileField: field, url }) => {
+        setSavedDocUrls((prev) => ({ ...prev, [field]: url }));
+        setDocumentFiles((prev) => {
+          const next = { ...prev };
+          delete next[docId];
+          return next;
+        });
+      })
+      .catch((err) => {
+        setErrorMessage(err.message || "Error al subir el documento.");
+      })
+      .finally(() => {
+        setUploadingDocId(null);
+        setActiveDocumentId(null);
+      });
   }
 
   function validateStep(stepId) {
@@ -896,10 +1111,7 @@ export default function SerProveedorPage() {
     if (stepId === 6) {
       const missing = requiredDocuments.filter((d) => {
         if (!d.required) return false;
-        if (d.id === "dni_nie") {
-          return !documentFiles.dni_nie && !documentFiles.dni_propietario;
-        }
-        return !documentFiles[d.id];
+        return !hasUploadedDoc(d.id);
       });
       if (missing.length > 0) {
         setErrorMessage(`Faltan documentos obligatorios: ${missing.map((d) => d.title).join(", ")}`);
@@ -909,10 +1121,23 @@ export default function SerProveedorPage() {
     return true;
   }
 
-  function goNext() {
+  async function goNext() {
     if (!validateStep(pasoActual)) return;
-    const idx = visibleSteps.findIndex((s) => s.id === pasoActual);
-    if (idx < visibleSteps.length - 1) setPasoActual(visibleSteps[idx + 1].id);
+    setSavingStep(true);
+    setErrorMessage("");
+    try {
+      await persistStepData(pasoActual);
+      const idx = visibleSteps.findIndex((s) => s.id === pasoActual);
+      if (idx < visibleSteps.length - 1) {
+        const nextId = visibleSteps[idx + 1].id;
+        setPasoActual(nextId);
+        if (userId) await saveOnboardingStep(userId, nextId);
+      }
+    } catch (err) {
+      setErrorMessage(err.message || "Error al guardar. Inténtalo de nuevo.");
+    } finally {
+      setSavingStep(false);
+    }
   }
 
   function goBack() {
@@ -933,31 +1158,24 @@ export default function SerProveedorPage() {
         setLoading(false);
         return;
       }
-      console.log("Usuario:", user.id);
 
-      const descripcionParts = [sobreTi.trim()];
-      if (personalidad.trim()) descripcionParts.push(`Personalidad: ${personalidad.trim()}`);
-      if (motivacion.trim()) descripcionParts.push(`Motivación: ${motivacion.trim()}`);
-      if (anosExperiencia.trim())
-        descripcionParts.push(`Experiencia: ${anosExperiencia.trim()} años`);
+      const uid = user.id;
+      setUserId(uid);
 
-      const { error: profileError } = await supabase.from("profiles").upsert({
-        id: user.id,
-        nombre: nombre.trim(),
-        apellido: apellido.trim(),
-        ciudad: ciudad.trim(),
-        descripcion: descripcionParts.join("\n\n"),
+      await saveProfileStep(uid, {
+        nombre,
+        apellido,
+        ciudad,
+        sobreTi,
+        personalidad,
+        motivacion,
+        anosExperiencia,
         idiomas,
-        role: "proveedor",
-      });
+        fotoPerfilUrl,
+        profilePhotoFile: profilePhoto,
+      }, 7);
 
-      if (profileError) {
-        console.error("Error perfil:", profileError);
-        setErrorMessage("Error al guardar perfil: " + profileError.message);
-        setLoading(false);
-        return;
-      }
-      console.log("Perfil guardado");
+      const finalDraftIds = { ...draftServiceIds };
 
       for (const vertical of verticalesSeleccionados) {
         const servicioData =
@@ -967,53 +1185,20 @@ export default function SerProveedorPage() {
               ? serviceDetails.ninos
               : serviceDetails.mascotas;
 
-        const locationFields = await getServiceLocationFields(servicioData, vertical);
-        const payload = {
-          ...buildServicePayload(
-            servicioData,
-            vertical,
-            ciudad,
-            user.id,
-            false,
-          ),
-          ...locationFields,
-        };
-
-        const { data: nuevoServicio, error: serviceError } = await supabase
-          .from("services")
-          .insert(payload)
-          .select("id")
-          .single();
-
-        if (serviceError) {
-          console.error("Error servicio:", serviceError);
-          setErrorMessage("Error al guardar servicio: " + serviceError.message);
-          setLoading(false);
-          return;
-        }
-
-        const photos = servicePhotos[vertical];
-        if (photos?.length > 0) {
-          let firstPhotoUrl = null;
-          for (let i = 0; i < photos.length; i++) {
-            const photoUrl = await uploadServicePhoto(
-              user.id,
-              vertical,
-              photos[i],
-              i,
-            );
-            if (i === 0) firstPhotoUrl = photoUrl;
-          }
-          if (firstPhotoUrl) {
-            await supabase
-              .from("services")
-              .update({ foto_url: firstPhotoUrl })
-              .eq("id", nuevoServicio.id);
-          }
-        }
-
-        console.log("Servicio guardado:", vertical);
+        const id = await upsertDraftService(
+          uid,
+          vertical,
+          ciudad,
+          servicioData,
+          finalDraftIds[vertical],
+          servicePhotos[vertical],
+        );
+        finalDraftIds[vertical] = id;
       }
+
+      setDraftServiceIds(finalDraftIds);
+
+      await finalizeOnboarding(uid, verticalesSeleccionados, finalDraftIds);
 
       await fetch("/api/emails", {
         method: "POST",
@@ -1338,6 +1523,8 @@ export default function SerProveedorPage() {
                 title={DOCUMENT_CATALOG[docId].title}
                 required={DOCUMENT_CATALOG[docId].required}
                 file={documentFiles[docId]}
+                uploaded={hasUploadedDoc(docId)}
+                uploading={uploadingDocId === docId}
                 onUpload={openDocumentUpload}
               />
             ))}
@@ -1460,6 +1647,8 @@ export default function SerProveedorPage() {
                 title={DOCUMENT_CATALOG[docId].title}
                 required={DOCUMENT_CATALOG[docId].required}
                 file={documentFiles[docId]}
+                uploaded={hasUploadedDoc(docId)}
+                uploading={uploadingDocId === docId}
                 onUpload={openDocumentUpload}
               />
             ))}
@@ -1577,6 +1766,8 @@ export default function SerProveedorPage() {
                 title={DOCUMENT_CATALOG[docId].title}
                 required={DOCUMENT_CATALOG[docId].required}
                 file={documentFiles[docId]}
+                uploaded={hasUploadedDoc(docId)}
+                uploading={uploadingDocId === docId}
                 onUpload={openDocumentUpload}
               />
             ))}
@@ -1610,6 +1801,8 @@ export default function SerProveedorPage() {
                 title="DNI / NIE / Pasaporte"
                 required
                 file={documentFiles.dni_nie || documentFiles.dni_propietario}
+                uploaded={hasUploadedDoc("dni_nie")}
+                uploading={uploadingDocId === "dni_nie"}
                 onUpload={openDocumentUpload}
               />
             </div>
@@ -1623,19 +1816,20 @@ export default function SerProveedorPage() {
                   {docs.map((docId) => (
                     <div key={docId} className="flex items-center justify-between text-sm">
                       <span className="flex items-center gap-2">
-                        <span style={{ color: documentFiles[docId] ? GREEN : DOCUMENT_CATALOG[docId].required ? ORANGE : "#888" }}>
-                          {documentFiles[docId] ? "✓" : DOCUMENT_CATALOG[docId].required ? "⚠️" : "○"}
+                        <span style={{ color: hasUploadedDoc(docId) ? GREEN : DOCUMENT_CATALOG[docId].required ? ORANGE : "#888" }}>
+                          {hasUploadedDoc(docId) ? "✓" : DOCUMENT_CATALOG[docId].required ? "⚠️" : "○"}
                         </span>
                         {DOCUMENT_CATALOG[docId].title}
                       </span>
-                      {!documentFiles[docId] && (
+                      {!hasUploadedDoc(docId) && (
                         <button
                           type="button"
                           onClick={() => openDocumentUpload(docId)}
-                          className="text-xs font-semibold"
+                          disabled={uploadingDocId === docId}
+                          className="text-xs font-semibold disabled:opacity-60"
                           style={{ color: PRIMARY }}
                         >
-                          Subir
+                          {uploadingDocId === docId ? "Subiendo…" : "Subir"}
                         </button>
                       )}
                     </div>
@@ -1654,6 +1848,8 @@ export default function SerProveedorPage() {
                   title={doc.title}
                   required={doc.required}
                   file={documentFiles[doc.id]}
+                  uploaded={hasUploadedDoc(doc.id)}
+                  uploading={uploadingDocId === doc.id}
                   onUpload={openDocumentUpload}
                 />
               ))}
@@ -1680,10 +1876,7 @@ export default function SerProveedorPage() {
           .filter((d) => d.required)
           .map((d) => ({
             label: d.title,
-            ok:
-              d.id === "dni_nie"
-                ? !!(documentFiles.dni_nie || documentFiles.dni_propietario)
-                : !!documentFiles[d.id],
+            ok: hasUploadedDoc(d.id),
           })),
       ];
 
@@ -1858,6 +2051,17 @@ export default function SerProveedorPage() {
   const isLastStep = pasoActual === 7;
   const isFirstStep = pasoActual === 1;
 
+  if (initialLoading) {
+    return (
+      <div
+        className="flex min-h-screen items-center justify-center font-sans"
+        style={{ backgroundColor: BRAND.warm }}
+      >
+        <p className="text-sm text-[#888]">Cargando tu progreso…</p>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen font-sans" style={{ backgroundColor: BRAND.warm, color: "#1a1a1a" }}>
       <header className="sticky top-0 z-50 bg-white shadow-sm">
@@ -1897,10 +2101,11 @@ export default function SerProveedorPage() {
                   <button
                     type="button"
                     onClick={goNext}
-                    className="rounded-xl px-6 py-3 text-sm font-semibold text-white"
+                    disabled={savingStep}
+                    className="rounded-xl px-6 py-3 text-sm font-semibold text-white disabled:opacity-60"
                     style={{ backgroundColor: PRIMARY }}
                   >
-                    Siguiente →
+                    {savingStep ? "Guardando…" : "Siguiente →"}
                   </button>
                 </div>
               )}
