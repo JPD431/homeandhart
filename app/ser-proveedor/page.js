@@ -4,8 +4,12 @@ import { useRef, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
 import { BRAND, SERIF } from "@/app/components/brand";
-import { serializeCapacidad } from "@/app/lib/capacidad";
-import { serializeDescuentosDuracionForDb } from "@/app/lib/descuentosDuracion";
+import ServiceOperationalFields from "@/app/components/ServiceOperationalFields";
+import {
+  buildServicePayload,
+  getServiceLocationFields,
+  needsDireccionFields,
+} from "@/app/lib/service-payload";
 import { AMENITIES_GROUPS } from "@/app/lib/amenities";
 
 const PRIMARY = "#1d4f91";
@@ -163,14 +167,13 @@ const STORAGE_BUCKET = "Documentos";
 const EMPTY_SERVICE_DETAILS = {
   alojamiento: {
     titulo: "",
-    descripcion_anuncio: "",
     descripcion: "",
     location_zone: "",
     location_lat: null,
     location_lng: null,
     tipo_alojamiento: "",
     precio: "",
-    estancia_minima: "",
+    estancia_minima: "1",
     estancia_maxima: "",
     nru: "",
     cancelacion: "moderada",
@@ -191,7 +194,6 @@ const EMPTY_SERVICE_DETAILS = {
   },
   ninos: {
     titulo: "",
-    descripcion_anuncio: "",
     descripcion: "",
     anos_experiencia: "",
     location_zone: "",
@@ -211,7 +213,7 @@ const EMPTY_SERVICE_DETAILS = {
     cancelacion: "moderada",
     reserva_inmediata: false,
     antelacion_minima: 24,
-    estancia_minima: "",
+    estancia_minima: "1",
     estancia_maxima: "",
     proveedor_emergencia: false,
     descuentos_duracion_activa: false,
@@ -219,7 +221,6 @@ const EMPTY_SERVICE_DETAILS = {
   },
   mascotas: {
     titulo: "",
-    descripcion_anuncio: "",
     descripcion: "",
     anos_experiencia: "",
     location_zone: "",
@@ -240,7 +241,7 @@ const EMPTY_SERVICE_DETAILS = {
     cancelacion: "moderada",
     reserva_inmediata: false,
     antelacion_minima: 24,
-    estancia_minima: "",
+    estancia_minima: "1",
     estancia_maxima: "",
     proveedor_emergencia: false,
     descuentos_duracion_activa: false,
@@ -314,51 +315,6 @@ async function geocodeBarrio(barrio, ciudad) {
     return { lat, lng };
   }
   return null;
-}
-
-async function geocodificarDireccion(direccion) {
-  const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
-  const res = await fetch(
-    `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(direccion)}.json?access_token=${token}&limit=1`,
-  );
-  const data = await res.json();
-  if (data.features?.[0]) {
-    return {
-      lat: data.features[0].center[1],
-      lng: data.features[0].center[0],
-    };
-  }
-  return null;
-}
-
-function needsDireccionFields(vertical, modalidad) {
-  if (vertical === "alojamiento") return true;
-  if (vertical === "ninos" && modalidad === "domicilio_proveedor") return true;
-  if (vertical === "mascotas" && modalidad === "domicilio_proveedor") return true;
-  return false;
-}
-
-async function getServiceLocationFields(details, vertical) {
-  if (!needsDireccionFields(vertical, details.modalidad)) {
-    return {
-      direccion_exacta: null,
-      telefono_contacto: null,
-      location_lat: null,
-      location_lng: null,
-    };
-  }
-  const direccion_exacta = details.direccion_exacta?.trim() || null;
-  const telefono_contacto = details.telefono_contacto?.trim() || null;
-  let location_lat = null;
-  let location_lng = null;
-  if (direccion_exacta) {
-    const coords = await geocodificarDireccion(direccion_exacta);
-    if (coords) {
-      location_lat = coords.lat;
-      location_lng = coords.lng;
-    }
-  }
-  return { direccion_exacta, telefono_contacto, location_lat, location_lng };
 }
 
 function DireccionContactoFields({ d, upd, vertical }) {
@@ -1012,22 +968,20 @@ export default function SerProveedorPage() {
               : serviceDetails.mascotas;
 
         const locationFields = await getServiceLocationFields(servicioData, vertical);
-        const capacidad = serializeCapacidad(servicioData, vertical);
+        const payload = {
+          ...buildServicePayload(
+            servicioData,
+            vertical,
+            ciudad,
+            user.id,
+            false,
+          ),
+          ...locationFields,
+        };
 
         const { data: nuevoServicio, error: serviceError } = await supabase
           .from("services")
-          .insert({
-            proveedor_id: user.id,
-            vertical,
-            titulo: servicioData.titulo || `Servicio de ${vertical}`,
-            descripcion_anuncio: servicioData.descripcion_anuncio?.trim() || null,
-            precio: Number(servicioData.precio) || 0,
-            ciudad: ciudad.trim(),
-            disponible: false,
-            amenities: servicioData.amenities || [],
-            ...(capacidad ? { capacidad } : {}),
-            ...locationFields,
-          })
+          .insert(payload)
           .select("id")
           .single();
 
@@ -1038,13 +992,14 @@ export default function SerProveedorPage() {
           return;
         }
 
-        if (vertical === "alojamiento" && servicePhotos.alojamiento?.length > 0) {
+        const photos = servicePhotos[vertical];
+        if (photos?.length > 0) {
           let firstPhotoUrl = null;
-          for (let i = 0; i < servicePhotos.alojamiento.length; i++) {
+          for (let i = 0; i < photos.length; i++) {
             const photoUrl = await uploadServicePhoto(
               user.id,
-              "alojamiento",
-              servicePhotos.alojamiento[i],
+              vertical,
+              photos[i],
               i,
             );
             if (i === 0) firstPhotoUrl = photoUrl;
@@ -1282,18 +1237,15 @@ export default function SerProveedorPage() {
               <input value={d.titulo} onChange={(e) => upd("titulo", e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
             </div>
             <div className="sm:col-span-2">
-              <label className="mb-1.5 block text-xs font-medium text-[#444]">Descripción del anuncio</label>
+              <label className="mb-1.5 block text-xs font-medium text-[#444]">Descripción del servicio</label>
               <textarea
-                value={d.descripcion_anuncio || ""}
-                onChange={(e) => upd("descripcion_anuncio", e.target.value)}
-                placeholder="Describe tu anuncio: qué ofreces, qué lo hace especial..."
-                rows={3}
-                style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #e8e4de", fontSize: 13 }}
+                value={d.descripcion || ""}
+                onChange={(e) => upd("descripcion", e.target.value)}
+                placeholder="Describe tu servicio: qué ofreces, qué lo hace especial..."
+                rows={4}
+                className={inputClass}
+                style={{ borderColor: BRAND.border }}
               />
-            </div>
-            <div className="sm:col-span-2">
-              <label className="mb-1.5 block text-xs font-medium text-[#444]">Descripción</label>
-              <textarea rows={4} value={d.descripcion} onChange={(e) => upd("descripcion", e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
             </div>
             <div>
               <label className="mb-1.5 block text-xs font-medium text-[#444]">Precio / noche (€)</label>
@@ -1369,16 +1321,14 @@ export default function SerProveedorPage() {
                 <label className="mb-1.5 block text-xs font-medium text-[#444]">Check-out</label>
                 <input type="time" value={d.check_out} onChange={(e) => upd("check_out", e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
               </div>
-              <div>
-                <label className="mb-1.5 block text-xs font-medium text-[#444]">Estancia mínima (noches)</label>
-                <input type="number" min="1" value={d.estancia_minima} onChange={(e) => upd("estancia_minima", e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-xs font-medium text-[#444]">Estancia máxima (noches)</label>
-                <input type="number" min="1" value={d.estancia_maxima} onChange={(e) => upd("estancia_maxima", e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
-              </div>
             </div>
           </div>
+          <ServiceOperationalFields
+            vertical="alojamiento"
+            details={d}
+            onChange={(next) => updateServiceDetails("alojamiento", next)}
+            collapsible
+          />
           <div className="mt-6 space-y-2">
             <p className="text-xs font-semibold text-[#444]">Documentos</p>
             {alojDocs.map((docId) => (
@@ -1424,13 +1374,14 @@ export default function SerProveedorPage() {
               <input value={d.titulo} onChange={(e) => upd("titulo", e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
             </div>
             <div className="sm:col-span-2">
-              <label className="mb-1.5 block text-xs font-medium text-[#444]">Descripción del anuncio</label>
+              <label className="mb-1.5 block text-xs font-medium text-[#444]">Descripción del servicio</label>
               <textarea
-                value={d.descripcion_anuncio || ""}
-                onChange={(e) => upd("descripcion_anuncio", e.target.value)}
-                placeholder="Describe tu anuncio: qué ofreces, qué lo hace especial..."
-                rows={3}
-                style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #e8e4de", fontSize: 13 }}
+                value={d.descripcion || ""}
+                onChange={(e) => upd("descripcion", e.target.value)}
+                placeholder="Describe tu servicio: qué ofreces, qué lo hace especial..."
+                rows={4}
+                className={inputClass}
+                style={{ borderColor: BRAND.border }}
               />
             </div>
             <div>
@@ -1469,10 +1420,6 @@ export default function SerProveedorPage() {
             </div>
           </div>
           <div className="mt-4">
-            <label className="mb-1.5 block text-xs font-medium text-[#444]">Descripción del servicio</label>
-            <textarea rows={4} value={d.descripcion} onChange={(e) => upd("descripcion", e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
-          </div>
-          <div className="mt-4">
             <p className="mb-2 text-xs font-medium text-[#444]">Actividades</p>
             <div className="flex flex-wrap gap-2">
               {allActividades.map((tag) => (
@@ -1481,24 +1428,12 @@ export default function SerProveedorPage() {
               <TagPill label="+ Otro" selected={false} onClick={() => addCustomTag("ninos", "actividadesTags", "actividades")} color="#666" />
             </div>
           </div>
-          <div className="mt-4">
-            <p className="mb-2 text-xs font-medium text-[#444]">Días disponibles</p>
-            <div className="flex flex-wrap gap-2">
-              {DIAS_SEMANA.map((dia) => (
-                <TagPill
-                  key={dia.id}
-                  label={dia.label}
-                  selected={(d.dias_disponibles || []).includes(dia.id)}
-                  onClick={() => {
-                    const arr = d.dias_disponibles || [];
-                    const next = arr.includes(dia.id) ? arr.filter((x) => x !== dia.id) : [...arr, dia.id];
-                    upd("dias_disponibles", next.length ? next : []);
-                  }}
-                  color={GREEN}
-                />
-              ))}
-            </div>
-          </div>
+          <ServiceOperationalFields
+            vertical="ninos"
+            details={d}
+            onChange={(next) => updateServiceDetails("ninos", next)}
+            collapsible
+          />
           <div className="mt-4 rounded-xl border p-4" style={{ borderColor: BRAND.border }}>
             <ToggleRow label="Disponible para viajar" checked={d.disponible_para_viajar} onChange={(v) => upd("disponible_para_viajar", v)} />
             <ToggleRow label="Noches y fines de semana" checked={d.nochesFinde} onChange={(v) => upd("nochesFinde", v)} />
@@ -1560,13 +1495,14 @@ export default function SerProveedorPage() {
               <input value={d.titulo} onChange={(e) => upd("titulo", e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
             </div>
             <div className="sm:col-span-2">
-              <label className="mb-1.5 block text-xs font-medium text-[#444]">Descripción del anuncio</label>
+              <label className="mb-1.5 block text-xs font-medium text-[#444]">Descripción del servicio</label>
               <textarea
-                value={d.descripcion_anuncio || ""}
-                onChange={(e) => upd("descripcion_anuncio", e.target.value)}
-                placeholder="Describe tu anuncio: qué ofreces, qué lo hace especial..."
-                rows={3}
-                style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #e8e4de", fontSize: 13 }}
+                value={d.descripcion || ""}
+                onChange={(e) => upd("descripcion", e.target.value)}
+                placeholder="Describe tu servicio: qué ofreces, qué lo hace especial..."
+                rows={4}
+                className={inputClass}
+                style={{ borderColor: BRAND.border }}
               />
             </div>
             <div>
@@ -1594,10 +1530,6 @@ export default function SerProveedorPage() {
             <DireccionContactoFields d={d} upd={upd} vertical="mascotas" />
           </div>
           <div className="mt-4">
-            <label className="mb-1.5 block text-xs font-medium text-[#444]">Descripción</label>
-            <textarea rows={4} value={d.descripcion} onChange={(e) => upd("descripcion", e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
-          </div>
-          <div className="mt-4">
             <p className="mb-2 text-xs font-medium text-[#444]">Animales</p>
             <div className="flex flex-wrap gap-2">
               {allAnimales.map((tag) => (
@@ -1621,6 +1553,12 @@ export default function SerProveedorPage() {
             <ToggleRow label="Cerca de veterinario" checked={d.cercaVeterinario} onChange={(v) => upd("cercaVeterinario", v)} />
             <ToggleRow label="Disponible para viajar" checked={d.disponible_para_viajar} onChange={(v) => upd("disponible_para_viajar", v)} />
           </div>
+          <ServiceOperationalFields
+            vertical="mascotas"
+            details={d}
+            onChange={(next) => updateServiceDetails("mascotas", next)}
+            collapsible
+          />
           <div className="mt-4">
             <p className="mb-2 text-xs font-medium text-[#444]">Certificaciones</p>
             <div className="flex flex-wrap gap-2">

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import ProveedorEmergenciaToggle from "@/app/components/ProveedorEmergenciaToggle";
 import CalendarioTarifas from "@/app/components/CalendarioTarifas";
+import ServiceOperationalFields from "@/app/components/ServiceOperationalFields";
 import { BRAND, SERIF } from "@/app/components/brand";
 import {
   DEFAULT_CAPACIDAD_ALOJAMIENTO,
@@ -17,6 +18,12 @@ import {
 } from "@/app/lib/descuentosDuracion";
 import { AMENITIES_GROUPS } from "@/app/lib/amenities";
 import { RELACION_OPTIONS } from "@/app/lib/referencias";
+import {
+  buildServicePayload,
+  DIAS_DISPONIBLES_DEFAULT,
+  getServiceLocationFields,
+  needsDireccionFields,
+} from "@/app/lib/service-payload";
 import { supabase } from "@/app/lib/supabase";
 
 const DARK_BLUE = "#163a6b";
@@ -58,36 +65,6 @@ const DOC_FIELDS = [
   },
 ];
 
-const CANCEL_POLICIES = [
-  { value: "flexible", label: "Flexible" },
-  { value: "moderada", label: "Moderada" },
-  { value: "estricta", label: "Estricta" },
-];
-
-const DIAS_SEMANA = [
-  { id: "lun", label: "Lun" },
-  { id: "mar", label: "Mar" },
-  { id: "mie", label: "Mié" },
-  { id: "jue", label: "Jue" },
-  { id: "vie", label: "Vie" },
-  { id: "sab", label: "Sáb" },
-  { id: "dom", label: "Dom" },
-];
-
-const DIAS_DISPONIBLES_DEFAULT = DIAS_SEMANA.map((d) => d.id);
-
-const ANTELACION_OPTIONS = [
-  { value: 0, label: "Sin restricción" },
-  { value: 1, label: "Al menos 1 hora antes" },
-  { value: 3, label: "Al menos 3 horas antes" },
-  { value: 6, label: "Al menos 6 horas antes" },
-  { value: 12, label: "Al menos 12 horas antes" },
-  { value: 24, label: "Al menos 24 horas antes" },
-  { value: 48, label: "Al menos 48 horas antes" },
-  { value: 72, label: "Al menos 3 días antes" },
-  { value: 168, label: "Al menos 7 días antes" },
-];
-
 const TIPO_ALOJAMIENTO_OPTIONS = [
   { value: "completo", label: "Alojamiento completo — piso o casa entera" },
   { value: "habitacion_privada", label: "Habitación privada" },
@@ -95,12 +72,6 @@ const TIPO_ALOJAMIENTO_OPTIONS = [
   { value: "habitacion_hotel", label: "Habitación de hotel" },
   { value: "otros", label: "Otros" },
 ];
-
-const ESTANCIA_PLACEHOLDERS = {
-  alojamiento: { min: "Mínimo de noches", max: "Máximo de noches" },
-  ninos: { min: "Mínimo de horas", max: "Máximo de horas" },
-  mascotas: { min: "Mínimo de días", max: "Máximo de días" },
-};
 
 const MODALIDAD_NINOS_OPTIONS = [
   { value: "domicilio_cliente", label: "En domicilio del cliente" },
@@ -121,13 +92,13 @@ const inputClass =
 function emptyServiceDetails() {
   return {
     titulo: "",
-    descripcion_anuncio: "",
+    descripcion: "",
     precio: "",
     tipo_alojamiento: "",
     modalidad: "domicilio_cliente",
     direccion_exacta: "",
     telefono_contacto: "",
-    estancia_minima: "",
+    estancia_minima: "1",
     estancia_maxima: "",
     antelacion_minima: 24,
     dias_disponibles: [...DIAS_DISPONIBLES_DEFAULT],
@@ -158,7 +129,7 @@ function mapServiceFromDb(row) {
     details: {
       ...emptyServiceDetails(),
       titulo: row.titulo || "",
-      descripcion_anuncio: row.descripcion_anuncio || "",
+      descripcion: row.descripcion || row.descripcion_anuncio || "",
       precio: row.precio ?? "",
       tipo_alojamiento: row.tipo_alojamiento || "",
       modalidad: row.modalidad || "domicilio_cliente",
@@ -193,51 +164,6 @@ function mapServiceFromDb(row) {
       telefono_contacto: row.telefono_contacto || "",
     },
   };
-}
-
-async function geocodificarDireccion(direccion) {
-  const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
-  const res = await fetch(
-    `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(direccion)}.json?access_token=${token}&limit=1`,
-  );
-  const data = await res.json();
-  if (data.features?.[0]) {
-    return {
-      lat: data.features[0].center[1],
-      lng: data.features[0].center[0],
-    };
-  }
-  return null;
-}
-
-function needsDireccionFields(vertical, modalidad) {
-  if (vertical === "alojamiento") return true;
-  if (vertical === "ninos" && modalidad === "domicilio_proveedor") return true;
-  if (vertical === "mascotas" && modalidad === "domicilio_proveedor") return true;
-  return false;
-}
-
-async function getServiceLocationFields(details, vertical) {
-  if (!needsDireccionFields(vertical, details.modalidad)) {
-    return {
-      direccion_exacta: null,
-      telefono_contacto: null,
-      location_lat: null,
-      location_lng: null,
-    };
-  }
-  const direccion_exacta = details.direccion_exacta?.trim() || null;
-  const telefono_contacto = details.telefono_contacto?.trim() || null;
-  let location_lat = null;
-  let location_lng = null;
-  if (direccion_exacta) {
-    const coords = await geocodificarDireccion(direccion_exacta);
-    if (coords) {
-      location_lat = coords.lat;
-      location_lng = coords.lng;
-    }
-  }
-  return { direccion_exacta, telefono_contacto, location_lat, location_lng };
 }
 
 function DireccionContactoFields({ d, upd, vertical }) {
@@ -283,62 +209,6 @@ function DireccionContactoFields({ d, upd, vertical }) {
       </div>
     </>
   );
-}
-
-function buildServicePayload(details, vertical, ciudad, proveedorId, disponible) {
-  return {
-    proveedor_id: proveedorId,
-    vertical,
-    titulo: details.titulo.trim(),
-    descripcion_anuncio: details.descripcion_anuncio?.trim() || null,
-    precio: details.precio ? Number(details.precio) : null,
-    estancia_minima: details.estancia_minima
-      ? Number(details.estancia_minima)
-      : null,
-    estancia_maxima: details.estancia_maxima
-      ? Number(details.estancia_maxima)
-      : null,
-    antelacion_minima:
-      details.antelacion_minima != null && details.antelacion_minima !== ""
-        ? Number(details.antelacion_minima)
-        : 24,
-    dias_disponibles:
-      Array.isArray(details.dias_disponibles) &&
-      details.dias_disponibles.length > 0
-        ? details.dias_disponibles
-        : DIAS_DISPONIBLES_DEFAULT,
-    cancellation_policy: details.cancelacion,
-    ciudad: ciudad.trim(),
-    disponible,
-    reserva_inmediata: details.reserva_inmediata === true,
-    modalidad: vertical === "alojamiento" ? null : details.modalidad || null,
-    tipo_alojamiento:
-      vertical === "alojamiento" ? details.tipo_alojamiento || null : null,
-    oferta_titulo: details.oferta_activa
-      ? details.oferta_titulo?.trim() || null
-      : null,
-    oferta_descuento:
-      details.oferta_activa && details.oferta_descuento
-        ? Math.min(90, Math.max(1, Number(details.oferta_descuento)))
-        : null,
-    oferta_valida_hasta:
-      details.oferta_activa && details.oferta_valida_hasta
-        ? details.oferta_valida_hasta
-        : null,
-    oferta_descripcion: details.oferta_activa
-      ? details.oferta_descripcion?.trim() || null
-      : null,
-    disponible_para_viajar:
-      details.oferta_activa &&
-      (vertical === "ninos" || vertical === "mascotas") &&
-      details.disponible_para_viajar === true,
-    descuentos_duracion: serializeDescuentosDuracionForDb(details),
-    // -- ALTER TABLE services ADD COLUMN IF NOT EXISTS proveedor_emergencia boolean DEFAULT false;
-    proveedor_emergencia: details.proveedor_emergencia === true,
-    amenities: details.amenities || [],
-    foto_url: details.foto_url || null,
-    capacidad: serializeCapacidad(details, vertical),
-  };
 }
 
 async function uploadProfilePhoto(userId, file) {
@@ -739,11 +609,6 @@ function ServiceEditForm({ vertical, details, onChange, userId }) {
     }
   }
 
-  const placeholders = ESTANCIA_PLACEHOLDERS[vertical];
-  const dias =
-    Array.isArray(details.dias_disponibles) && details.dias_disponibles.length > 0
-      ? details.dias_disponibles
-      : DIAS_DISPONIBLES_DEFAULT;
   const capacidad = details.capacidad ?? { ...DEFAULT_CAPACIDAD_ALOJAMIENTO };
   const updCap = (key, val) =>
     onChange({ ...details, capacidad: { ...capacidad, [key]: val } });
@@ -765,13 +630,13 @@ function ServiceEditForm({ vertical, details, onChange, userId }) {
       </div>
       <div className="sm:col-span-2">
         <label className="mb-1.5 block text-xs font-medium text-[#444]">
-          Descripción del anuncio
+          Descripción del servicio
         </label>
         <textarea
-          value={details.descripcion_anuncio || ""}
-          onChange={(e) => update("descripcion_anuncio", e.target.value)}
-          placeholder="Describe tu anuncio: qué ofreces, qué lo hace especial..."
-          rows={3}
+          value={details.descripcion || ""}
+          onChange={(e) => update("descripcion", e.target.value)}
+          placeholder="Describe tu servicio: qué ofreces, qué lo hace especial..."
+          rows={4}
           style={{
             width: "100%",
             padding: 10,
@@ -948,79 +813,11 @@ function ServiceEditForm({ vertical, details, onChange, userId }) {
           </div>
         </>
       )}
-      <div>
-        <label className="mb-1.5 block text-xs font-medium text-[#444]">
-          Estancia mínima
-        </label>
-        <input
-          type="number"
-          min="1"
-          placeholder={placeholders.min}
-          value={details.estancia_minima}
-          onChange={(e) => update("estancia_minima", e.target.value)}
-          className={inputClass}
-          style={{ borderColor: BRAND.border }}
-        />
-      </div>
-      <div>
-        <label className="mb-1.5 block text-xs font-medium text-[#444]">
-          Estancia máxima
-        </label>
-        <input
-          type="number"
-          min="1"
-          placeholder={placeholders.max}
-          value={details.estancia_maxima}
-          onChange={(e) => update("estancia_maxima", e.target.value)}
-          className={inputClass}
-          style={{ borderColor: BRAND.border }}
-        />
-      </div>
-      <div className="sm:col-span-2">
-        <label className="mb-1.5 block text-xs font-medium text-[#444]">
-          Antelación mínima para reservar
-        </label>
-        <select
-          value={String(details.antelacion_minima ?? 24)}
-          onChange={(e) => update("antelacion_minima", Number(e.target.value))}
-          className={inputClass}
-          style={{ borderColor: BRAND.border }}
-        >
-          {ANTELACION_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div className="sm:col-span-2">
-        <p className="mb-2 text-xs font-medium text-[#444]">Días disponibles</p>
-        <div className="flex flex-wrap gap-2">
-          {DIAS_SEMANA.map((dia) => {
-            const isSelected = dias.includes(dia.id);
-            return (
-              <button
-                key={dia.id}
-                type="button"
-                onClick={() => {
-                  const next = isSelected
-                    ? dias.filter((d) => d !== dia.id)
-                    : [...dias, dia.id];
-                  update("dias_disponibles", next.length > 0 ? next : []);
-                }}
-                className="rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors"
-                style={{
-                  borderColor: isSelected ? BRAND.primary : BRAND.border,
-                  backgroundColor: isSelected ? BRAND.light : "#fff",
-                  color: isSelected ? DARK_BLUE : "#666",
-                }}
-              >
-                {dia.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
+      <ServiceOperationalFields
+        vertical={vertical}
+        details={details}
+        onChange={onChange}
+      />
       {vertical === "ninos" && (
         <div
           className="sm:col-span-2 rounded-xl border p-4"
@@ -1054,51 +851,6 @@ function ServiceEditForm({ vertical, details, onChange, userId }) {
           </div>
         </div>
       )}
-      <div className="sm:col-span-2">
-        <label className="mb-1.5 block text-xs font-medium text-[#444]">
-          Política de cancelación
-        </label>
-        <select
-          value={details.cancelacion}
-          onChange={(e) => update("cancelacion", e.target.value)}
-          className={inputClass}
-          style={{ borderColor: BRAND.border }}
-        >
-          {CANCEL_POLICIES.map((policy) => (
-            <option key={policy.value} value={policy.value}>
-              {policy.label}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div className="sm:col-span-2">
-        <p className="mb-2 text-xs font-medium text-[#444]">Tipo de reserva</p>
-        <div className="flex flex-col gap-2">
-          {[
-            { value: false, title: "Con confirmación", sub: "Tú aceptas o rechazas" },
-            { value: true, title: "Reserva inmediata", sub: "Reserva directa" },
-          ].map((option) => {
-            const selected = details.reserva_inmediata === option.value;
-            return (
-              <button
-                key={String(option.value)}
-                type="button"
-                onClick={() => update("reserva_inmediata", option.value)}
-                className="rounded-xl border p-3 text-left transition-colors"
-                style={{
-                  borderColor: selected ? BRAND.primary : BRAND.border,
-                  backgroundColor: selected ? BRAND.light : "#fff",
-                }}
-              >
-                <span className="text-sm font-semibold text-[#1a1a1a]">
-                  {option.title}
-                </span>
-                <span className="mt-0.5 block text-xs text-[#666]">{option.sub}</span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
       <div className="sm:col-span-2">
         <OfertaEspecialFields
           serviceId={vertical}
