@@ -2,24 +2,61 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { getPostAuthRedirect } from "@/app/lib/onboarding";
+import { supabase } from "@/app/lib/supabase";
 
 export default function VerificadoPage() {
   const router = useRouter();
   const [countdown, setCountdown] = useState(5);
+  const [redirectTo, setRedirectTo] = useState("/completar-perfil");
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
+
+    async function resolveDestination() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (cancelled) return;
+
+      if (!user) {
+        setRedirectTo("/login");
+        setReady(true);
+        return;
+      }
+
+      const path = await getPostAuthRedirect(supabase, user.id);
+      if (!cancelled) {
+        setRedirectTo(path);
+        setReady(true);
+      }
+    }
+
+    resolveDestination();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!ready) return;
+
     const timer = setInterval(() => {
       setCountdown((prev) => {
         if (prev <= 1) {
           clearInterval(timer);
-          router.push("/dashboard");
+          router.push(redirectTo);
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
+
     return () => clearInterval(timer);
-  }, [router]);
+  }, [ready, redirectTo, router]);
 
   return (
     <div
@@ -91,7 +128,8 @@ export default function VerificadoPage() {
 
         <button
           type="button"
-          onClick={() => router.push("/dashboard")}
+          onClick={() => router.push(redirectTo)}
+          disabled={!ready}
           style={{
             width: "100%",
             background: "#1d4f91",
@@ -100,16 +138,19 @@ export default function VerificadoPage() {
             padding: "13px",
             borderRadius: 6,
             fontSize: 14,
-            cursor: "pointer",
+            cursor: ready ? "pointer" : "wait",
             fontWeight: 500,
             marginBottom: 12,
+            opacity: ready ? 1 : 0.7,
           }}
         >
-          Empezar a explorar →
+          {ready ? "Continuar →" : "Preparando tu cuenta…"}
         </button>
 
         <p style={{ fontSize: 11, color: "#bbb" }}>
-          Redirigiendo automáticamente en {countdown} segundos...
+          {ready
+            ? `Redirigiendo automáticamente en ${countdown} segundos...`
+            : "Un momento…"}
         </p>
       </div>
     </div>

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { getPostAuthRedirect } from "@/app/lib/onboarding";
 import { supabase } from "@/app/lib/supabase";
 
 const PRIMARY = "#1d4f91";
@@ -271,19 +272,24 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
 
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    setLoading(false);
+    const { data: signInData, error: signInError } =
+      await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
     if (signInError) {
+      setLoading(false);
       setError(signInError.message);
       return;
     }
 
-    router.push("/dashboard");
+    const redirectTo = signInData.user
+      ? await getPostAuthRedirect(supabase, signInData.user.id)
+      : "/dashboard";
+
+    setLoading(false);
+    router.push(redirectTo);
   }
 
   return (

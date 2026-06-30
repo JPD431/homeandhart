@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
+import { getPostAuthRedirect } from "@/app/lib/onboarding";
 import { supabase } from "@/app/lib/supabase";
 
 const PRIMARY = "#1d4f91";
@@ -327,6 +328,12 @@ function RegistroForm() {
 
     if (data.user && !data.user.email_confirmed_at) {
       setMensajeVerificacion(true);
+      return;
+    }
+
+    if (data.user) {
+      const redirectTo = await getPostAuthRedirect(supabase, data.user.id);
+      router.push(redirectTo);
       return;
     }
 

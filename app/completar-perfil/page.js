@@ -2,7 +2,12 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import {
+  clientePerfilCompleto,
+  ONBOARDING_PROFILE_SELECT,
+  resolvePostAuthRedirect,
+} from "@/app/lib/onboarding";
 import { supabase } from "@/app/lib/supabase";
 import { BRAND, SERIF } from "@/app/components/brand";
 
@@ -148,6 +153,58 @@ export default function CompletarPerfilPage() {
   const [ciudad, setCiudad] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [checkingProfile, setCheckingProfile] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadExistingProfile() {
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (cancelled) return;
+
+      if (userError || !user) {
+        router.replace("/login");
+        return;
+      }
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select(ONBOARDING_PROFILE_SELECT)
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (cancelled) return;
+
+      if (profile?.role === "proveedor") {
+        router.replace(resolvePostAuthRedirect(profile));
+        return;
+      }
+
+      if (clientePerfilCompleto(profile)) {
+        router.replace("/buscar");
+        return;
+      }
+
+      if (profile?.nombre) setNombre(profile.nombre);
+      if (profile?.apellido) setApellido(profile.apellido);
+      if (profile?.ciudad) setCiudad(profile.ciudad);
+      if (Array.isArray(profile?.necesidades) && profile.necesidades.length > 0) {
+        setSelectedNeeds(profile.necesidades);
+      }
+
+      setCheckingProfile(false);
+    }
+
+    loadExistingProfile();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
 
   function toggleNeed(id) {
     setSelectedNeeds((prev) =>
@@ -207,6 +264,17 @@ export default function CompletarPerfilPage() {
 
   function handleBack() {
     if (step > 0) setStep((s) => s - 1);
+  }
+
+  if (checkingProfile) {
+    return (
+      <div
+        className="flex min-h-screen items-center justify-center font-sans"
+        style={{ backgroundColor: BRAND.warm }}
+      >
+        <p className="text-sm text-[#888]">Cargando…</p>
+      </div>
+    );
   }
 
   return (

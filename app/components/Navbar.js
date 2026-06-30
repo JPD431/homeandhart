@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLang } from "@/app/lib/LangContext";
 import { useTranslation } from "@/app/lib/i18n";
 import { getBookingEstado } from "@/app/lib/viajes";
 import { BRAND } from "./brand";
+import { needsProviderOnboarding } from "@/app/lib/onboarding";
 import { supabase } from "@/app/lib/supabase";
 
 const PRIMARY = "#1d4f91";
@@ -147,20 +148,31 @@ export default function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const isProveedor = perfil?.role === "proveedor";
+  const onboardingIncompleto = needsProviderOnboarding(perfil);
   const porcentajePerfil = calcPorcentajePerfil(perfil, servicesCount);
   const sinComision = getReservasSinComisionCliente(perfil);
 
   const closeDropdown = useCallback(() => setDropdownOpen(false), []);
   const closeMobileMenu = useCallback(() => setMobileMenuOpen(false), []);
 
-  const navLinks = [
-    { href: "/", label: t.navbar.inicio, primary: true },
-    { href: "/buscar", label: t.navbar.servicios },
-    { href: "/blog", label: "Blog" },
-    { href: "/garantia", label: t.navbar.garantia },
-    { href: "/#como-funciona", label: t.navbar.comoFunciona },
-    { href: "/ser-proveedor", label: t.navbar.serProveedor },
-  ];
+  const navLinks = useMemo(() => {
+    const base = [
+      { href: "/", label: t.navbar.inicio, primary: true },
+      { href: "/buscar", label: t.navbar.servicios },
+      { href: "/blog", label: "Blog" },
+      { href: "/garantia", label: t.navbar.garantia },
+      { href: "/#como-funciona", label: t.navbar.comoFunciona },
+      {
+        href: "/ser-proveedor",
+        label:
+          user && isProveedor && onboardingIncompleto
+            ? "Continuar registro"
+            : t.navbar.serProveedor,
+        primary: !!(user && isProveedor && onboardingIncompleto),
+      },
+    ];
+    return base;
+  }, [t, user, isProveedor, onboardingIncompleto]);
 
   const loadMensajesSinLeer = useCallback(async (userId) => {
     const { data: conversations } = await supabase
@@ -189,7 +201,7 @@ export default function Navbar() {
       const { data: profileData } = await supabase
         .from("profiles")
         .select(
-          "nombre, apellido, role, descripcion, idiomas, foto_perfil, reservas_sin_comision_cliente",
+          "nombre, apellido, role, descripcion, idiomas, foto_perfil, reservas_sin_comision_cliente, onboarding_completed_at",
         )
         .eq("id", authUser.id)
         .single();
