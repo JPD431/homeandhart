@@ -6,7 +6,12 @@ import Navbar from "@/app/components/Navbar";
 import { BRAND, SERIF } from "@/app/components/brand";
 import { articulosIniciales, slugify } from "@/app/lib/blog-seed";
 import { getIngresoProveedorFromBooking } from "@/app/lib/ingresos-proveedor";
-import { supabase } from "@/app/lib/supabase";
+import {
+  REVISION_APROBADO,
+  REVISION_BORRADOR,
+  REVISION_EN_REVISION,
+  REVISION_RECHAZADO,
+} from "@/app/lib/onboarding-persist";
 
 const TABS = [
   { id: "pendientes", label: "Pendientes de verificar" },
@@ -240,6 +245,24 @@ function getProviderStatus(profile) {
   return "pendientes";
 }
 
+function getRevisionEstadoBadge(revisionEstado) {
+  if (revisionEstado == null) {
+    return { label: "Aprobado", bg: "#e6f4f0", color: "#085041" };
+  }
+  switch (revisionEstado) {
+    case REVISION_EN_REVISION:
+      return { label: "En revisión", bg: "#fdf4e7", color: "#92400e" };
+    case REVISION_APROBADO:
+      return { label: "Aprobado", bg: "#e6f4f0", color: "#085041" };
+    case REVISION_RECHAZADO:
+      return { label: "Rechazado", bg: "#fef2f2", color: "#b91c1c" };
+    case REVISION_BORRADOR:
+      return { label: "Borrador", bg: "#f3f4f6", color: "#666" };
+    default:
+      return { label: revisionEstado, bg: "#f3f4f6", color: "#666" };
+  }
+}
+
 function fullName(profile) {
   return [profile.nombre, profile.apellido].filter(Boolean).join(" ") || "Sin nombre";
 }
@@ -329,7 +352,7 @@ export default function AdminPage() {
       const providerIds = providerList.map((p) => p.id);
       const { data: services, error: servicesError } = await supabase
         .from("services")
-        .select("id, proveedor_id, vertical, titulo, precio, ciudad")
+        .select("id, proveedor_id, vertical, titulo, precio, ciudad, revision_estado, disponible")
         .in("proveedor_id", providerIds);
 
       if (servicesError) {
@@ -1467,6 +1490,28 @@ export default function AdminPage() {
                       <h2 className="text-lg font-semibold text-[#1a1a1a]">
                         {fullName(provider)}
                       </h2>
+                      <div className="mt-1.5 flex flex-wrap gap-1.5">
+                        <span
+                          className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                          style={{
+                            backgroundColor: provider.cobros_activos
+                              ? "#e6f4f0"
+                              : "#fdf4e7",
+                            color: provider.cobros_activos ? "#085041" : "#92400e",
+                          }}
+                        >
+                          Cobros: {provider.cobros_activos ? "activos ✓" : "pendientes"}
+                        </span>
+                        <span
+                          className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                          style={{
+                            backgroundColor: provider.verificado ? "#e8f0fb" : "#fdf4e7",
+                            color: provider.verificado ? "#163a6b" : "#92400e",
+                          }}
+                        >
+                          {provider.verificado ? "Verificado ✓" : "Pendiente de verificar"}
+                        </span>
+                      </div>
                       {provider.email_contacto && (
                         <p className="mt-0.5 text-sm text-[#666]">
                           {provider.email_contacto}
@@ -1498,6 +1543,9 @@ export default function AdminPage() {
                         {services.map((svc) => {
                           const verticalConfig =
                             VERTICALS[svc.vertical] ?? VERTICALS.alojamiento;
+                          const revisionBadge = getRevisionEstadoBadge(
+                            svc.revision_estado,
+                          );
                           return (
                             <li
                               key={svc.id}
@@ -1518,6 +1566,20 @@ export default function AdminPage() {
                               <span className="font-semibold" style={{ color: BRAND.primary }}>
                                 {formatPrice(svc.precio, svc.vertical)}
                               </span>
+                              <span
+                                className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                                style={{
+                                  backgroundColor: revisionBadge.bg,
+                                  color: revisionBadge.color,
+                                }}
+                              >
+                                {revisionBadge.label}
+                              </span>
+                              {svc.disponible && (
+                                <span className="text-[10px] font-medium text-[#0e7a5c]">
+                                  · Activo
+                                </span>
+                              )}
                             </li>
                           );
                         })}

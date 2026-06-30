@@ -407,6 +407,67 @@ function TabCliente({ perfil, reservas, favoritos, viajes, router, BRAND, copiar
   );
 }
 
+function ProviderStatusBanner({ perfil, BRAND }) {
+  if (perfil?.role !== "proveedor") return null;
+
+  const verificado = perfil?.verificado === true;
+  const cobrosActivos = perfil?.cobros_activos === true;
+
+  let message;
+  let borderColor;
+  let background;
+  let textColor;
+
+  if (!verificado) {
+    message =
+      "Tus servicios están en revisión. Te avisaremos en menos de 24h.";
+    borderColor = BRAND.amber;
+    background = "#fdf4e7";
+    textColor = "#5c4a32";
+  } else if (!cobrosActivos) {
+    message =
+      "¡Aprobado! Configura tus cobros para activar tus servicios.";
+    borderColor = BRAND.blue;
+    background = "#e8f0fb";
+    textColor = "#2a3a4a";
+  } else {
+    message = "Todo listo. Activa tus servicios cuando quieras.";
+    borderColor = BRAND.green;
+    background = "#e6f4f0";
+    textColor = "#085041";
+  }
+
+  return (
+    <div
+      style={{
+        marginTop: 16,
+        padding: "14px 16px",
+        borderRadius: 10,
+        border: `1px solid ${borderColor}`,
+        background,
+      }}
+    >
+      <p style={{ fontSize: 13, fontWeight: 600, color: textColor, margin: 0 }}>
+        {message}
+      </p>
+      {verificado && cobrosActivos && (
+        <Link
+          href="/editar-perfil"
+          style={{
+            display: "inline-block",
+            marginTop: 8,
+            fontSize: 12,
+            fontWeight: 600,
+            color: BRAND.blue,
+          }}
+        >
+          Ir a activar servicios →
+        </Link>
+      )}
+    </div>
+  );
+}
+
 function TabProveedor({ perfil, router, BRAND }) {
   const deudaPendiente = Number(perfil?.deuda_pendiente) || 0;
   const saldoPendienteTransferir =
@@ -439,6 +500,7 @@ function TabProveedor({ perfil, router, BRAND }) {
 
   return (
     <div style={{ maxWidth: 720, margin: '0 auto' }}>
+      <ProviderStatusBanner perfil={perfil} BRAND={BRAND} />
       {deudaPendiente > 0 && (
         <div
           style={{

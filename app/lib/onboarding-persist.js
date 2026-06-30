@@ -10,6 +10,8 @@ import { supabase } from "@/app/lib/supabase";
 
 export const REVISION_BORRADOR = "borrador";
 export const REVISION_EN_REVISION = "en_revision";
+export const REVISION_APROBADO = "aprobado";
+export const REVISION_RECHAZADO = "rechazado";
 
 export const ONBOARDING_PROFILE_FIELDS =
   "id, nombre, apellido, ciudad, descripcion, idiomas, foto_perfil, role, onboarding_step, onboarding_completed_at, onboarding_verticales, doc_dni_url, doc_antecedentes_url, doc_antecedentes_sexuales_url, anos_experiencia";

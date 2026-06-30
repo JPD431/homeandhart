@@ -1,6 +1,11 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { getAdminUser } from "@/lib/auth/requireAdmin";
+import {
+  REVISION_APROBADO,
+  REVISION_EN_REVISION,
+} from "@/app/lib/onboarding-persist";
+import { servicioRevisionAprobada } from "@/app/lib/provider-publicacion";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -44,21 +49,50 @@ export async function POST(_request, { params }) {
     return NextResponse.json({ error: profileError.message }, { status: 500 });
   }
 
+  const { error: revisionError } = await supabaseAdmin
+    .from("services")
+    .update({ revision_estado: REVISION_APROBADO })
+    .eq("proveedor_id", id)
+    .eq("revision_estado", REVISION_EN_REVISION);
+
+  if (revisionError) {
+    console.error(
+      "[approve] No se pudo marcar servicios como aprobados:",
+      revisionError,
+    );
+  }
+
   let serviciosActivados = false;
 
   if (proveedor?.cobros_activos === true) {
-    const { error: servicesError } = await supabaseAdmin
+    const { data: services, error: fetchError } = await supabaseAdmin
       .from("services")
-      .update({ disponible: true })
+      .select("id, revision_estado")
       .eq("proveedor_id", id);
 
-    if (servicesError) {
-      console.error(
-        "[approve] No se pudieron activar los servicios del proveedor:",
-        servicesError,
-      );
+    if (fetchError) {
+      console.error("[approve] No se pudieron leer servicios:", fetchError);
     } else {
-      serviciosActivados = true;
+      const activables = (services ?? []).filter((s) =>
+        servicioRevisionAprobada(s.revision_estado),
+      );
+      const ids = activables.map((s) => s.id);
+
+      if (ids.length > 0) {
+        const { error: servicesError } = await supabaseAdmin
+          .from("services")
+          .update({ disponible: true })
+          .in("id", ids);
+
+        if (servicesError) {
+          console.error(
+            "[approve] No se pudieron activar los servicios del proveedor:",
+            servicesError,
+          );
+        } else {
+          serviciosActivados = true;
+        }
+      }
     }
   } else {
     const { error: servicesError } = await supabaseAdmin

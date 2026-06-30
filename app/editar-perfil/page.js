@@ -31,17 +31,17 @@ import {
   uploadProfilePhoto,
   uploadServicePhoto,
 } from "@/app/lib/provider-uploads";
+import {
+  COBROS_REQUERIDOS_MSG,
+  getActivacionBloqueoMensaje,
+  getServiceVisibilidadEstado,
+  proveedorPuedePublicar,
+  REVISION_PENDIENTE_MSG,
+} from "@/app/lib/provider-publicacion";
 
 const PRIMARY = "#1d4f91";
 const DARK_BLUE = "#163a6b";
 const SERVICE_ACTIVE_GREEN = "#0e7a5c";
-
-const COBROS_REQUERIDOS_MSG =
-  "Configura tus cobros antes de activar un servicio. Ve a tu panel de proveedor y pulsa «Configurar cobros».";
-
-function proveedorPuedePublicar(perfil) {
-  return perfil?.cobros_activos === true;
-}
 
 const VERTICALS = [
   { id: "alojamiento", label: "Alojamiento", color: PRIMARY, emoji: "🏠" },
@@ -253,9 +253,11 @@ function CounterField({ label, value, onChange, min = 0 }) {
   );
 }
 
-function ServiceDisponibleRow({ service, puedePublicar, onToggle, compact = false }) {
+function ServiceDisponibleRow({ service, perfil, onToggle, compact = false }) {
   const activo = service.disponible;
+  const puedePublicar = proveedorPuedePublicar(perfil);
   const switchBlocked = !activo && !puedePublicar;
+  const visibilidad = getServiceVisibilidadEstado(perfil, activo);
 
   const switchControl = (
     <button
@@ -286,9 +288,9 @@ function ServiceDisponibleRow({ service, puedePublicar, onToggle, compact = fals
       <div className="flex shrink-0 items-center gap-2">
         <span
           className="text-xs font-semibold"
-          style={{ color: activo ? SERVICE_ACTIVE_GREEN : "#666" }}
+          style={{ color: visibilidad.color }}
         >
-          {activo ? "Activo" : "En pausa"}
+          {visibilidad.label}
         </span>
         {switchControl}
       </div>
@@ -303,13 +305,11 @@ function ServiceDisponibleRow({ service, puedePublicar, onToggle, compact = fals
       <div>
         <p
           className="text-sm font-semibold"
-          style={{ color: activo ? SERVICE_ACTIVE_GREEN : "#666" }}
+          style={{ color: visibilidad.color }}
         >
-          {activo ? "Servicio activo" : "Servicio en pausa"}
+          {visibilidad.label}
         </p>
-        <p className="text-xs text-[#888]">
-          {activo ? "Visible en búsqueda" : "No visible para clientes"}
-        </p>
+        <p className="text-xs text-[#888]">{visibilidad.subtitle}</p>
       </div>
       {switchControl}
     </div>
@@ -1083,7 +1083,7 @@ export default function EditarPerfilPage() {
   function toggleServiceDisponible(serviceId) {
     const target = services.find((s) => s.id === serviceId);
     if (target && !target.disponible && !proveedorPuedePublicar(perfil)) {
-      setErrorMessage(COBROS_REQUERIDOS_MSG);
+      setErrorMessage(getActivacionBloqueoMensaje(perfil));
       return;
     }
 
@@ -1250,7 +1250,7 @@ export default function EditarPerfilPage() {
           (addingService && newServiceDetails.titulo.trim()))
       ) {
         if (services.some((s) => s.disponible)) {
-          throw new Error(COBROS_REQUERIDOS_MSG);
+          throw new Error(getActivacionBloqueoMensaje(perfil));
         }
       }
 
@@ -1566,7 +1566,7 @@ export default function EditarPerfilPage() {
           </Card>
 
           <Card title="Mis servicios">
-            {!puedePublicarServicios && perfil?.role === "proveedor" && (
+            {perfil?.role === "proveedor" && !puedePublicarServicios && (
               <div
                 className="mb-4 rounded-lg border px-3 py-2.5 text-xs leading-relaxed"
                 style={{
@@ -1575,14 +1575,20 @@ export default function EditarPerfilPage() {
                   color: "#5c4a32",
                 }}
               >
-                {COBROS_REQUERIDOS_MSG}{" "}
-                <Link
-                  href="/dashboard"
-                  className="font-semibold underline"
-                  style={{ color: PRIMARY }}
-                >
-                  Ir a configurar cobros
-                </Link>
+                {perfil?.verificado !== true ? (
+                  REVISION_PENDIENTE_MSG
+                ) : (
+                  <>
+                    {COBROS_REQUERIDOS_MSG}{" "}
+                    <Link
+                      href="/dashboard?tab=proveedor"
+                      className="font-semibold underline"
+                      style={{ color: PRIMARY }}
+                    >
+                      Ir a configurar cobros
+                    </Link>
+                  </>
+                )}
               </div>
             )}
             <ul className="flex flex-col gap-3">
@@ -1607,7 +1613,7 @@ export default function EditarPerfilPage() {
                     </div>
                     <ServiceDisponibleRow
                       service={service}
-                      puedePublicar={puedePublicarServicios}
+                      perfil={perfil}
                       onToggle={toggleServiceDisponible}
                     />
                     {isEditing && (
@@ -1705,7 +1711,7 @@ export default function EditarPerfilPage() {
               <ServiceDisponibleRow
                 compact
                 service={service}
-                puedePublicar={puedePublicarServicios}
+                perfil={perfil}
                 onToggle={toggleServiceDisponible}
               />
             }

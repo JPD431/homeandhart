@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { getAdminUser } from "@/lib/auth/requireAdmin";
+import { REVISION_RECHAZADO } from "@/app/lib/onboarding-persist";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -42,7 +43,7 @@ export async function POST(request, { params }) {
 
   const { error: servicesError } = await supabaseAdmin
     .from("services")
-    .update({ disponible: false })
+    .update({ disponible: false, revision_estado: REVISION_RECHAZADO })
     .eq("proveedor_id", id);
 
   if (servicesError) {

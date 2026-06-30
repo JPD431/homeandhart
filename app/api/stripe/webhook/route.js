@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import Stripe from "stripe";
 import { NextResponse } from "next/server";
+import { servicioRevisionAprobada } from "@/app/lib/provider-publicacion";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
@@ -202,7 +203,7 @@ async function handleAccountUpdated(account) {
 
   const { data: profile, error: findError } = await supabase
     .from("profiles")
-    .select("id")
+    .select("id, verificado")
     .eq("stripe_account_id", account.id)
     .maybeSingle();
 
@@ -227,6 +228,40 @@ async function handleAccountUpdated(account) {
   if (updateError) {
     console.error("[stripe/webhook] Error actualizando cobros_activos:", updateError.message);
     throw updateError;
+  }
+
+  if (lista && profile.verificado === true) {
+    const { data: services, error: servicesFetchError } = await supabase
+      .from("services")
+      .select("id, revision_estado")
+      .eq("proveedor_id", profile.id);
+
+    if (servicesFetchError) {
+      console.error(
+        "[stripe/webhook] Error leyendo servicios para activar:",
+        servicesFetchError.message,
+      );
+      return;
+    }
+
+    const activables = (services ?? []).filter((s) =>
+      servicioRevisionAprobada(s.revision_estado),
+    );
+    const ids = activables.map((s) => s.id);
+
+    if (ids.length > 0) {
+      const { error: activateError } = await supabase
+        .from("services")
+        .update({ disponible: true })
+        .in("id", ids);
+
+      if (activateError) {
+        console.error(
+          "[stripe/webhook] Error activando servicios tras cobros:",
+          activateError.message,
+        );
+      }
+    }
   }
 }
 
