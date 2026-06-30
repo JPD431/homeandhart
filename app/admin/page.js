@@ -339,23 +339,25 @@ export default function AdminPage() {
       // --   enviado_at timestamp with time zone DEFAULT now()
       // -- );
       const res = await fetch("/api/admin/providers");
-      const { providers: profiles, error: profilesError } = await res.json();
+      const providersPayload = await res.json().catch(() => ({}));
 
-      if (providersError) {
+      if (!res.ok) {
         setErrorMessage(
-          typeof providersError === "string"
-            ? providersError
-            : providersError.message || "Error al cargar proveedores",
+          providersPayload.error || "Error al cargar proveedores",
         );
         return;
       }
 
-      if (!res.ok) {
-        setErrorMessage("Error al cargar proveedores");
+      if (providersPayload.error) {
+        setErrorMessage(
+          typeof providersPayload.error === "string"
+            ? providersPayload.error
+            : providersPayload.error.message || "Error al cargar proveedores",
+        );
         return;
       }
 
-      const providerList = profiles ?? [];
+      const providerList = providersPayload.providers ?? [];
       setProviders(providerList);
 
       if (providerList.length > 0) {
