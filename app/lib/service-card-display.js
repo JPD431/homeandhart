@@ -154,3 +154,11 @@ export function buildReservarHref(serviceId, desde, hasta) {
   const query = params.toString();
   return query ? `/reservar/${serviceId}?${query}` : `/reservar/${serviceId}`;
 }
+
+export function buildAnuncioHref(serviceId, desde, hasta) {
+  const params = new URLSearchParams();
+  if (desde) params.set("desde", desde);
+  if (hasta) params.set("hasta", hasta);
+  const query = params.toString();
+  return query ? `/anuncio/${serviceId}?${query}` : `/anuncio/${serviceId}`;
+}

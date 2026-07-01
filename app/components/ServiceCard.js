@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabase } from "@/app/lib/supabase";
 import {
+  buildAnuncioHref,
   buildReservarHref,
   formatServiceCardPrice,
   formatServiceCardShortName,
@@ -89,6 +90,12 @@ export default function ServiceCard({
   if (!service) return null;
 
   const primaryPhoto = getServicePhotos(service)[0] ?? null;
+  const anuncioHref = buildAnuncioHref(
+    service.id,
+    fechaBusquedaDesde,
+    fechaBusquedaHasta,
+  );
+  const showAnuncioLinks = !isPreview && !bundleMode;
 
   const toggleFavorito = async (e) => {
     e.stopPropagation();
@@ -143,6 +150,26 @@ export default function ServiceCard({
               />
             )}
           </div>
+        ) : showAnuncioLinks ? (
+          <Link
+            href={anuncioHref}
+            onClick={(e) => e.stopPropagation()}
+            className="block h-full w-full"
+          >
+            {primaryPhoto ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={primaryPhoto}
+                alt=""
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <div
+                className="h-full w-full"
+                style={{ background: theme.gradient }}
+              />
+            )}
+          </Link>
         ) : (
           <Link
             href={`/proveedor/${profile.id}`}
@@ -277,9 +304,20 @@ export default function ServiceCard({
           )}
         </div>
 
-        {service.titulo && (
-          <p className="mt-0.5 truncate text-[10px] text-[#aaa]">{service.titulo}</p>
-        )}
+        {service.titulo &&
+          (showAnuncioLinks ? (
+            <Link
+              href={anuncioHref}
+              onClick={(e) => e.stopPropagation()}
+              className="mt-0.5 block truncate text-[10px] text-[#aaa] no-underline transition-colors hover:text-[#666]"
+            >
+              {service.titulo}
+            </Link>
+          ) : (
+            <p className="mt-0.5 truncate text-[10px] text-[#aaa]">
+              {service.titulo}
+            </p>
+          ))}
 
         {(tags.length > 0 ||
           (!isPreview &&
@@ -330,16 +368,23 @@ export default function ServiceCard({
           ) : (
             <>
               <Link
+                href={anuncioHref}
+                onClick={(e) => e.stopPropagation()}
+                className="mt-2 block w-full rounded py-2 text-center text-[11px] font-semibold text-white no-underline transition-opacity hover:opacity-90"
+                style={{ backgroundColor: theme.color }}
+              >
+                Ver anuncio
+              </Link>
+              <Link
                 href={`/proveedor/${profile.id}`}
                 onClick={(e) => e.stopPropagation()}
-                className="mt-2 block w-full rounded border py-2 text-center text-[11px] font-semibold no-underline transition-colors hover:bg-[#f0f5fc]"
+                className="mt-1.5 block w-full rounded border py-2 text-center text-[11px] font-medium no-underline transition-colors hover:bg-[#f7f5f2]"
                 style={{
-                  borderColor: "#1d4f91",
-                  color: "#1d4f91",
-                  marginBottom: 4,
+                  borderColor: "#e8e4de",
+                  color: "#666",
                 }}
               >
-                Ver perfil →
+                Ver perfil
               </Link>
               <Link
                 href={buildReservarHref(
@@ -348,7 +393,7 @@ export default function ServiceCard({
                   fechaBusquedaHasta,
                 )}
                 onClick={(e) => e.stopPropagation()}
-                className="block w-full rounded py-2 text-center text-[11px] font-semibold text-white no-underline transition-opacity hover:opacity-90"
+                className="mt-1.5 block w-full rounded py-2 text-center text-[11px] font-semibold text-white no-underline transition-opacity hover:opacity-90"
                 style={{ backgroundColor: theme.color }}
               >
                 {typeof extra?.reservar === "function"
