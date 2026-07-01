@@ -11,6 +11,11 @@ import { useLang } from "@/app/lib/LangContext";
 import { useTranslation } from "@/app/lib/i18n";
 import { BRAND, SERIF } from "@/app/components/brand";
 import { serviceMeetsCapacidadMin } from "@/app/lib/capacidad";
+import ServiceCard from "@/app/components/ServiceCard";
+import {
+  formatServiceCardShortName,
+  serviceDescriptionIsPetFriendly,
+} from "@/app/lib/service-card-display";
 import { supabase } from "@/app/lib/supabase";
 
 const RealMap = dynamic(() => import("./MapComponent"), {
@@ -45,36 +50,6 @@ const getColor = (vertical) =>
 
 const getLightColor = (vertical) =>
   vertical === "alojamiento" ? "#e8f0fb" : vertical === "ninos" ? "#e6f4f0" : "#fdf3e3";
-
-const VERTICAL_THEME = {
-  alojamiento: {
-    label: "Alojamiento",
-    color: "#1d4f91",
-    light: "#e8f0fb",
-    priceSuffix: "/ noche",
-    priceShort: "n",
-    gradient: "linear-gradient(160deg, #c5d9ee, #4a85c0)",
-    Icon: HomeIcon,
-  },
-  ninos: {
-    label: "Cuidado de niños",
-    color: "#0e7a5c",
-    light: "#e6f4f0",
-    priceSuffix: "/ hora",
-    priceShort: "h",
-    gradient: "linear-gradient(160deg, #a8d5c2, #3d9b86)",
-    Icon: PersonIcon,
-  },
-  mascotas: {
-    label: "Cuidado de mascotas",
-    color: "#c47d1a",
-    light: "#fdf3e3",
-    priceSuffix: "/ día",
-    priceShort: "d",
-    gradient: "linear-gradient(160deg, #e8c99a, #b8843a)",
-    Icon: PetIcon,
-  },
-};
 
 const TIPO_ALOJAMIENTO_LABELS = {
   completo: "Alojamiento completo",
@@ -263,14 +238,6 @@ function hasSearchCriteriaApplied({
   );
 }
 
-function buildReservarHref(serviceId, desde, hasta) {
-  const params = new URLSearchParams();
-  if (desde) params.set("desde", desde);
-  if (hasta) params.set("hasta", hasta);
-  const query = params.toString();
-  return query ? `/reservar/${serviceId}?${query}` : `/reservar/${serviceId}`;
-}
-
 function hasDocuments(profile) {
   return profile?.documentos_completos === true;
 }
@@ -304,7 +271,7 @@ function matchesClientFilters(service, filters, avgRating) {
   }
 
   if (filters.petFriendly && service.vertical === "alojamiento") {
-    if (!hasPetFriendlyInDescription(service)) return false;
+    if (!serviceDescriptionIsPetFriendly(service)) return false;
   }
 
   if (!serviceMeetsCapacidadMin(service, filters.capacidadMin)) {
@@ -443,90 +410,6 @@ function SearchIcon({ className }) {
   );
 }
 
-function getInitials(nombre, apellido) {
-  const first = nombre?.trim()?.[0] ?? "";
-  const last = apellido?.trim()?.[0] ?? "";
-  return (first + last).toUpperCase() || "?";
-}
-
-function formatShortName(nombre, apellido) {
-  const first = nombre?.trim() || "";
-  const lastInitial = apellido?.trim()?.[0] ? `${apellido.trim()[0]}.` : "";
-  return [first, lastInitial].filter(Boolean).join(" ");
-}
-
-function formatPrice(precio, suffix) {
-  if (precio == null || precio === "") return "Consultar";
-  return `${Number(precio)}€${suffix}`;
-}
-
-function formatPinPrice(precio, priceShort) {
-  if (precio == null || precio === "") return "—";
-  return `${Number(precio)}€/${priceShort}`;
-}
-
-function getServiceZone(service, profile) {
-  return (
-    service.location_zone ||
-    profile?.location_zone ||
-    service.ciudad ||
-    profile?.ciudad ||
-    "Zona"
-  );
-}
-
-function getSubtypeLabel(service) {
-  if (service.vertical === "alojamiento" && service.tipo_alojamiento) {
-    return TIPO_ALOJAMIENTO_LABELS[service.tipo_alojamiento] || service.tipo_alojamiento;
-  }
-  if (service.modalidad) {
-    return MODALIDAD_LABELS[service.modalidad] || service.modalidad;
-  }
-  return null;
-}
-
-function hasPetFriendlyInDescription(service) {
-  const desc = (service.descripcion || "").toLowerCase();
-  return /pet[-_\s]?friendly/i.test(desc);
-}
-
-function getServiceTags(service, profile, lang) {
-  const tags = [];
-
-  if (service.reserva_inmediata === true) {
-    tags.push({ text: "Reserva inmediata ⚡", light: "#fdf3e3", color: "#92400e" });
-  } else {
-    tags.push({ text: "Reserva con confirmación 🕐", light: "#f7f5f2", color: "#888" });
-  }
-
-  if (profile?.verificado === true) {
-    tags.push({ text: "Verificado ✓", light: "#e8f0fb", color: "#163a6b" });
-  }
-
-  if (
-    service.vertical === "alojamiento" &&
-    (service.disponible_para_viajar || hasPetFriendlyInDescription(service))
-  ) {
-    tags.push({ text: "Pet-friendly 🐾", light: "#e6f4f0", color: "#085041" });
-  }
-
-  const languages = Array.isArray(profile?.idiomas) ? profile.idiomas : [];
-  if (languages[0]) {
-    tags.push({ text: languages[0], light: "#f3f3f3", color: "#666" });
-  }
-
-  const avalesCount = Number(service.avales_count) || 0;
-  if (avalesCount > 0) {
-    const avalesLabel =
-      lang === "en"
-        ? `${avalesCount} endorsement${avalesCount !== 1 ? "s" : ""}`
-        : `${avalesCount} aval${avalesCount !== 1 ? "es" : ""}`;
-    tags.push({ text: avalesLabel, light: "#f7f5f2", color: "#888" });
-  }
-
-  return tags;
-}
-
 function BuscarNavbar({ user, t, extra }) {
   return (
     <header
@@ -582,269 +465,6 @@ function BuscarNavbar({ user, t, extra }) {
         </div>
       </div>
     </header>
-  );
-}
-
-function ServiceCard({
-  service,
-  index,
-  isActive,
-  onHover,
-  onLeave,
-  onSelect,
-  extra,
-  t,
-  lang,
-  bundleMode,
-  onBundleAdd,
-  ratingsByProveedor,
-  comparando,
-  onToggleComparar,
-  favoritos,
-  fechaBusquedaDesde,
-  fechaBusquedaHasta,
-}) {
-  const router = useRouter();
-  const profile = service.profiles_public ?? {};
-  const theme = VERTICAL_THEME[service.vertical] ?? VERTICAL_THEME.alojamiento;
-  const zone = getServiceZone(service, profile);
-  const tags = getServiceTags(service, profile, lang);
-  const priceLabel = formatPrice(service.precio, theme.priceSuffix);
-  const rating = ratingsByProveedor?.[service.proveedor_id];
-  const valoracionMedia =
-    rating?.count > 0 ? (rating.sum / rating.count).toFixed(1) : null;
-  const numReviews = rating?.count || 0;
-  const isComparing = comparando.some((s) => s.id === service.id);
-  const compareFull = comparando.length >= 3 && !isComparing;
-  const [esFavorito, setEsFavorito] = useState(
-    favoritos?.includes(service.proveedor_id) || false,
-  );
-
-  useEffect(() => {
-    setEsFavorito(favoritos?.includes(service.proveedor_id) || false);
-  }, [favoritos, service.proveedor_id]);
-
-  const toggleFavorito = async (e) => {
-    e.stopPropagation();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
-      router.push("/login");
-      return;
-    }
-
-    if (esFavorito) {
-      await supabase
-        .from("favoritos")
-        .delete()
-        .eq("cliente_id", user.id)
-        .eq("proveedor_id", service.proveedor_id);
-    } else {
-      await supabase.from("favoritos").insert({
-        cliente_id: user.id,
-        proveedor_id: service.proveedor_id,
-      });
-    }
-    setEsFavorito(!esFavorito);
-  };
-
-  return (
-    <li>
-      <button
-        type="button"
-        onClick={() => onSelect(index)}
-        onMouseEnter={() => onHover(index)}
-        onMouseLeave={onLeave}
-        className="w-full overflow-hidden border-b text-left transition-colors"
-        style={{
-          borderColor: "#e8e4de",
-          borderLeft: isActive ? "2px solid #1d4f91" : "2px solid transparent",
-          backgroundColor: isActive ? "#fafaf9" : "#fff",
-        }}
-      >
-        <div className="relative h-[160px] w-full overflow-hidden" style={{ position: "relative" }}>
-          <Link
-            href={`/proveedor/${profile.id}`}
-            onClick={(e) => e.stopPropagation()}
-            className="block h-full w-full"
-          >
-            {service.foto_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={service.foto_url} alt="" className="h-full w-full object-cover" />
-            ) : (
-              <div className="h-full w-full" style={{ background: theme.gradient }} />
-            )}
-          </Link>
-          <button
-            type="button"
-            onClick={toggleFavorito}
-            style={{
-              position: "absolute",
-              top: 8,
-              right: 8,
-              background: "rgba(255,255,255,.9)",
-              border: "none",
-              borderRadius: "50%",
-              width: 32,
-              height: 32,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              cursor: "pointer",
-              fontSize: 14,
-              zIndex: 2,
-            }}
-          >
-            {esFavorito ? "❤️" : "🤍"}
-          </button>
-          <div
-            className="pointer-events-none absolute inset-0"
-            style={{
-              background:
-                "linear-gradient(to bottom, transparent 40%, rgba(0,0,0,.55) 100%)",
-            }}
-            aria-hidden
-          />
-          <span
-            className="absolute right-2.5 top-2.5 px-2.5 py-1 text-[10px] font-semibold"
-            style={{
-              backgroundColor: "rgba(255,255,255,.92)",
-              borderRadius: 14,
-              color: "#2a3a4a",
-            }}
-          >
-            {priceLabel}
-          </span>
-          <span
-            className="absolute bottom-2 left-2.5 flex h-[22px] w-[22px] items-center justify-center rounded-full text-[8px] font-bold text-white"
-            style={{
-              backgroundColor: theme.color,
-              border: "1.5px solid rgba(255,255,255,.7)",
-            }}
-          >
-            {getInitials(profile.nombre, profile.apellido)}
-          </span>
-          {!bundleMode && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                if (!compareFull) onToggleComparar(service);
-              }}
-              className="absolute bottom-2 right-2 rounded px-2 py-1 text-[9px] font-semibold text-white transition-opacity hover:opacity-90"
-              style={{
-                backgroundColor: isComparing ? theme.color : "rgba(0,0,0,.55)",
-                opacity: compareFull ? 0.5 : 1,
-                cursor: compareFull ? "default" : "pointer",
-              }}
-            >
-              {isComparing ? "✓ Añadido" : "＋ Comparar"}
-            </button>
-          )}
-        </div>
-
-        <div className="px-3 py-2.5">
-          <div className="flex items-center justify-between gap-2">
-            <p className="min-w-0 truncate text-[12px] font-semibold text-[#1a1a1a]">
-              <Link
-                href={`/proveedor/${profile.id}`}
-                onClick={(e) => e.stopPropagation()}
-                style={{ color: "#2a3a4a", textDecoration: "none", fontWeight: 500 }}
-              >
-                {formatShortName(profile.nombre, profile.apellido) || "Proveedor"}
-              </Link>
-              <span className="font-normal text-[#888]"> · {zone}</span>
-            </p>
-            {valoracionMedia ? (
-              <span className="shrink-0 text-[10px] text-[#c47d1a]">
-                ★ {valoracionMedia} ({numReviews})
-              </span>
-            ) : (
-              <span className="shrink-0 text-[10px]" style={{ color: "#bbb" }}>
-                {lang === "en" ? "No reviews" : "Sin valoraciones"}
-              </span>
-            )}
-          </div>
-
-          {service.titulo && (
-            <p className="mt-0.5 truncate text-[10px] text-[#aaa]">{service.titulo}</p>
-          )}
-
-          {(tags.length > 0 ||
-            profile.badge_respuesta === "rapido" ||
-            profile.badge_respuesta === "pocas_horas") && (
-            <div className="mt-1.5 flex flex-wrap gap-1">
-              {tags.map((tag) => (
-                <span
-                  key={tag.text}
-                  className="rounded-full px-2 py-0.5 text-[9px] font-semibold"
-                  style={{ backgroundColor: tag.light, color: tag.color }}
-                >
-                  {tag.text}
-                </span>
-              ))}
-              {profile.badge_respuesta === "rapido" && (
-                <span
-                  className="rct rounded-full px-2 py-0.5 text-[9px] font-semibold"
-                  style={{ background: "#e6f4f0", color: "#085041" }}
-                >
-                  ⚡ Responde rápido
-                </span>
-              )}
-              {profile.badge_respuesta === "pocas_horas" && (
-                <span
-                  className="rct n rounded-full px-2 py-0.5 text-[9px] font-semibold"
-                  style={{ background: "#fdf3e3", color: "#92400e" }}
-                >
-                  🕐 Responde en pocas horas
-                </span>
-              )}
-            </div>
-          )}
-
-          {bundleMode ? (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onBundleAdd(service.id);
-              }}
-              className="mt-2 block w-full rounded py-2 text-center text-[11px] font-semibold text-white transition-opacity hover:opacity-90"
-              style={{ backgroundColor: theme.color }}
-            >
-              + Añadir a mi reserva
-            </button>
-          ) : (
-            <>
-              <Link
-                href={`/proveedor/${profile.id}`}
-                onClick={(e) => e.stopPropagation()}
-                className="mt-2 block w-full rounded border py-2 text-center text-[11px] font-semibold no-underline transition-colors hover:bg-[#f0f5fc]"
-                style={{ borderColor: "#1d4f91", color: "#1d4f91", marginBottom: 4 }}
-              >
-                Ver perfil →
-              </Link>
-              <Link
-                href={buildReservarHref(
-                  service.id,
-                  fechaBusquedaDesde,
-                  fechaBusquedaHasta,
-                )}
-                onClick={(e) => e.stopPropagation()}
-                className="block w-full rounded py-2 text-center text-[11px] font-semibold text-white no-underline transition-opacity hover:opacity-90"
-                style={{ backgroundColor: theme.color }}
-              >
-                {extra.reservar(
-                  service.precio != null && service.precio !== "" ? `${Number(service.precio)}€` : "—",
-                  theme.priceSuffix,
-                )}
-              </Link>
-            </>
-          )}
-        </div>
-      </button>
-    </li>
   );
 }
 
@@ -1239,7 +859,7 @@ function BuscarContent() {
           id: service.id,
           titulo:
             service.titulo ||
-            formatShortName(profile.nombre, profile.apellido) ||
+            formatServiceCardShortName(profile.nombre, profile.apellido) ||
             "Servicio",
           vertical: service.vertical,
         },
@@ -1354,7 +974,7 @@ function BuscarContent() {
 
   const origenLabel = origenService
     ? origenService.titulo ||
-      formatShortName(
+      formatServiceCardShortName(
         origenService.profiles_public?.nombre,
         origenService.profiles_public?.apellido,
       ) ||

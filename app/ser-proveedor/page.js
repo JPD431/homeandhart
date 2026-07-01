@@ -39,6 +39,12 @@ import DireccionContactoFields from "@/app/components/provider/DireccionContacto
 import CounterField from "@/app/components/provider/CounterField";
 import TagPill from "@/app/components/provider/TagPill";
 import ProviderDocumentsSection from "@/app/components/provider/ProviderDocumentsSection";
+import ServiceCard from "@/app/components/ServiceCard";
+import {
+  buildWizardPreviewServices,
+  getWizardPreviewSummary,
+  getWizardPreviewVerticalHeading,
+} from "@/app/lib/wizard-preview-adapter";
 import {
   CONFIRMACION_LABELS,
   DOCUMENT_LABELS,
@@ -375,86 +381,6 @@ function PhotoUploadGrid({ previews, onAdd, onRemove, multiple = true, label }) 
   );
 }
 
-function PreviewPanel({
-  profilePhotoPreview,
-  nombre,
-  apellido,
-  ciudad,
-  verticales,
-  serviceDetails,
-  idiomas,
-}) {
-  const displayName = [nombre, apellido].filter(Boolean).join(" ") || "Tu nombre";
-  const badges = VERTICALES_CARDS.filter((v) => verticales.includes(v.id));
-  const firstPrice = verticales.includes("alojamiento")
-    ? serviceDetails.alojamiento.precio
-    : verticales.includes("ninos")
-      ? serviceDetails.ninos.precio
-      : verticales.includes("mascotas")
-        ? serviceDetails.mascotas.precio
-        : null;
-  const priceUnit = verticales.includes("alojamiento")
-    ? "/noche"
-    : verticales.includes("ninos")
-      ? "/hora"
-      : "/día";
-
-  return (
-    <div
-      className="rounded-2xl border bg-white p-4 shadow-sm"
-      style={{ borderColor: BRAND.border }}
-    >
-      <p className="mb-3 text-[10px] font-semibold uppercase tracking-widest text-[#888]">
-        Vista previa
-      </p>
-      <div className="overflow-hidden rounded-xl border" style={{ borderColor: BRAND.border }}>
-        <div className="flex h-32 items-center justify-center bg-[#f5f3ef]">
-          {profilePhotoPreview ? (
-            <img src={profilePhotoPreview} alt="" className="h-full w-full object-cover" />
-          ) : (
-            <span className="text-4xl text-[#ccc]">👤</span>
-          )}
-        </div>
-        <div className="p-3">
-          <h3 className="font-semibold text-[#1a1a1a]" style={{ fontFamily: SERIF }}>
-            {displayName}
-          </h3>
-          {ciudad && <p className="text-xs text-[#666]">{ciudad}</p>}
-          {badges.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-1">
-              {badges.map((b) => (
-                <span
-                  key={b.id}
-                  className="rounded-full px-2 py-0.5 text-[10px] font-semibold text-white"
-                  style={{ backgroundColor: b.color }}
-                >
-                  {b.nombre}
-                </span>
-              ))}
-            </div>
-          )}
-          {idiomas.length > 0 && (
-            <p className="mt-2 text-xs text-[#888]">{idiomas.slice(0, 3).join(" · ")}</p>
-          )}
-          {firstPrice && (
-            <p className="mt-2 text-lg font-bold" style={{ color: PRIMARY }}>
-              {firstPrice}€
-              <span className="text-sm font-normal text-[#666]">{priceUnit}</span>
-            </p>
-          )}
-          <button
-            type="button"
-            className="mt-3 w-full rounded-xl py-2.5 text-sm font-semibold text-white"
-            style={{ backgroundColor: PRIMARY }}
-          >
-            Reservar
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function docIsUploaded(docId, documentContext, verticales) {
   return getDocumentStatus(docId, documentContext, verticales).uploaded;
 }
@@ -566,6 +492,28 @@ export default function SerProveedorPage() {
       verticalesSeleccionados,
       serviceDetails,
       documentFiles,
+    ],
+  );
+  const previewServices = useMemo(
+    () =>
+      buildWizardPreviewServices(verticalesSeleccionados, {
+        serviceDetails,
+        servicePhotoPreviews,
+        nombre,
+        apellido,
+        ciudad,
+        idiomas,
+        userId,
+      }),
+    [
+      verticalesSeleccionados,
+      serviceDetails,
+      servicePhotoPreviews,
+      nombre,
+      apellido,
+      ciudad,
+      idiomas,
+      userId,
     ],
   );
   const completionPct = calcCompletion(verticalesSeleccionados, {
@@ -1660,21 +1608,60 @@ export default function SerProveedorPage() {
       return (
         <div>
           <h2 className="text-2xl text-[#1a1a1a]" style={{ fontFamily: SERIF }}>
-            Vista previa
+            Así te verán las familias
           </h2>
           <p className="mt-1 text-sm text-[#666]">
-            Así verán tu perfil las familias en Home&Heart
+            Revisa que todo esté bien antes de enviar. Cada servicio aparece como un
+            anuncio.
           </p>
-          <div className="mt-6 max-w-sm">
-            <PreviewPanel
-              profilePhotoPreview={profilePhotoPreview}
-              nombre={nombre}
-              apellido={apellido}
-              ciudad={ciudad}
-              verticales={verticalesSeleccionados}
-              serviceDetails={serviceDetails}
-              idiomas={idiomas}
-            />
+
+          <div className="mt-8 space-y-10">
+            {verticalesSeleccionados.map((vertical) => {
+              const service = previewServices.find((s) => s.vertical === vertical);
+              if (!service) return null;
+              const color = getVerticalColor(vertical);
+              const summary = getWizardPreviewSummary(
+                vertical,
+                serviceDetails[vertical],
+              );
+
+              return (
+                <section key={vertical}>
+                  <p
+                    className="mb-3 text-sm font-semibold"
+                    style={{ color }}
+                  >
+                    {getWizardPreviewVerticalHeading(vertical)}
+                  </p>
+                  <div
+                    className="max-w-md overflow-hidden rounded-lg border bg-white shadow-sm"
+                    style={{
+                      borderColor: BRAND.border,
+                      borderLeftWidth: 4,
+                      borderLeftColor: color,
+                    }}
+                  >
+                    <ServiceCard service={service} isPreview lang="es" />
+                  </div>
+                  <dl className="mt-4 grid max-w-md gap-2 sm:grid-cols-2">
+                    {summary.map((item) => (
+                      <div
+                        key={item.label}
+                        className="rounded-lg border px-3 py-2"
+                        style={{ borderColor: BRAND.border, backgroundColor: "#fafaf9" }}
+                      >
+                        <dt className="text-[10px] font-medium uppercase tracking-wide text-[#888]">
+                          {item.label}
+                        </dt>
+                        <dd className="mt-0.5 text-sm font-medium text-[#1a1a1a]">
+                          {item.value}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                </section>
+              );
+            })}
           </div>
         </div>
       );
