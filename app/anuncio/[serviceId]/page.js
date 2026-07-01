@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import AnuncioBookingPanel from "@/app/components/AnuncioBookingPanel";
+import AnuncioProveedorBlock from "@/app/components/AnuncioProveedorBlock";
 import ServiceAnuncioContent, {
   ServicePhotoGallery,
 } from "@/app/components/ServiceAnuncioContent";
@@ -10,6 +11,7 @@ import {
   getVerticalColor,
   VERTICAL_DOC_LABELS,
 } from "@/app/lib/provider-verticals";
+import { loadProveedorRating } from "@/app/lib/reviews";
 import {
   buildCalendarioServiceEntry,
   loadPublicServiceById,
@@ -86,7 +88,10 @@ export default async function AnuncioPage({ params, searchParams }) {
     notFound();
   }
 
-  const bloqueosCalendario = await loadServiceBloqueos(serviceId);
+  const [bloqueosCalendario, proveedorRating] = await Promise.all([
+    loadServiceBloqueos(serviceId),
+    loadProveedorRating(service.proveedor_id),
+  ]);
 
   const profile = normalizeServiceProfile(service);
   const theme = getServiceCardTheme(service.vertical);
@@ -178,6 +183,13 @@ export default async function AnuncioPage({ params, searchParams }) {
             style={{ borderColor: "#e8e4de" }}
           >
             <ServiceAnuncioContent service={service} showGallery={false} />
+            <AnuncioProveedorBlock
+              profile={profile}
+              proveedorId={service.proveedor_id}
+              rating={proveedorRating}
+              accentColor={accent}
+              vertical={service.vertical}
+            />
           </div>
 
           <AnuncioBookingPanel

@@ -4,7 +4,7 @@ import CalendarioDisponibilidad from "@/app/components/CalendarioDisponibilidad"
 import FavoritoButton from "@/app/components/FavoritoButton";
 import ReportarPerfilButton from "@/app/components/ReportarPerfilButton";
 import ServiceAnuncioContentTranslated from "@/app/components/ServiceAnuncioContentTranslated";
-import ProveedorPreguntarButton from "./ProveedorPreguntarButton";
+import ProveedorPreguntarButton from "@/app/components/ProveedorPreguntarButton";
 import { SERIF } from "@/app/components/brand";
 import {
   ProveedorBioText,

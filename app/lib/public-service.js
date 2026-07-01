@@ -7,6 +7,8 @@ const SERVICE_PUBLIC_SELECT = `
     nombre,
     apellido,
     foto_perfil,
+    foto_url,
+    descripcion,
     ciudad,
     location_zone,
     verificado,
