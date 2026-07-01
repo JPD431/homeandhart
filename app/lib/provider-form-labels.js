@@ -69,12 +69,14 @@ export const DIRECCION_LABELS = {
 export const DOCUMENT_LABELS = {
   title: "Tus documentos",
   subtitle: "Solo te pedimos lo necesario. Si ya lo subiste, no hace falta otra vez.",
+  yaLoTenemos: "✓ Ya lo tenemos",
   listo: "Listo",
   faltaSubir: "Falta subir",
   opcional: "Opcional",
   subiendo: "Subiendo…",
   subir: "Subir",
   cambiar: "Cambiar",
+  pendientePublicar: "Pendiente para publicar",
 };
 
 export const NAV_LABELS = {
