@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import ProveedorEmergenciaToggle from "@/app/components/ProveedorEmergenciaToggle";
 import CalendarioTarifas from "@/app/components/CalendarioTarifas";
 import ServiceOperationalFields from "@/app/components/ServiceOperationalFields";
@@ -10,6 +10,7 @@ import ServiceStepHeader from "@/app/components/provider/ServiceStepHeader";
 import DireccionContactoFields from "@/app/components/provider/DireccionContactoFields";
 import CounterField from "@/app/components/provider/CounterField";
 import TagPill from "@/app/components/provider/TagPill";
+import ProviderDocumentsSection from "@/app/components/provider/ProviderDocumentsSection";
 import { BRAND, SERIF } from "@/app/components/brand";
 import {
   DOCUMENT_LABELS,
@@ -45,7 +46,8 @@ import {
 import { supabase } from "@/app/lib/supabase";
 
 import {
-  uploadDocumentToStorage,
+  loadProviderDocuments,
+  persistProviderDocument,
   uploadProfilePhoto,
   uploadServicePhoto,
 } from "@/app/lib/provider-uploads";
@@ -67,16 +69,6 @@ const IDIOMAS_DEFAULT = [
   "Italiano",
   "Português",
   "中文",
-];
-
-const DOC_FIELDS = [
-  { key: "doc_dni_url", label: "DNI / NIE / Pasaporte", required: true },
-  { key: "doc_antecedentes_url", label: "Antecedentes penales", required: true },
-  {
-    key: "doc_antecedentes_sexuales_url",
-    label: "Antecedentes sexuales",
-    required: false,
-  },
 ];
 
 const TIPO_ALOJAMIENTO_OPTIONS = [
@@ -175,6 +167,7 @@ function mapServiceFromDb(row) {
       capacidad: parseCapacidadFromDb(row),
       direccion_exacta: row.direccion_exacta || "",
       telefono_contacto: row.telefono_contacto || "",
+      nru: row.nru || "",
     },
   };
 }
@@ -909,8 +902,9 @@ export default function EditarPerfilPage() {
   const [refSending, setRefSending] = useState(false);
   const [refMessage, setRefMessage] = useState("");
   const [refError, setRefError] = useState("");
-  const [activeDocumentKey, setActiveDocumentKey] = useState(null);
+  const [activeDocumentId, setActiveDocumentId] = useState(null);
   const [uploadingDoc, setUploadingDoc] = useState(null);
+  const [providerDocuments, setProviderDocuments] = useState([]);
 
   useEffect(() => {
     async function load() {
@@ -978,6 +972,13 @@ export default function EditarPerfilPage() {
         if (refsRes.ok) {
           setReferencias(refsData.referencias ?? []);
         }
+
+        try {
+          const docs = await loadProviderDocuments(user.id);
+          setProviderDocuments(docs);
+        } catch (docsErr) {
+          console.error("[editar-perfil] Error cargando documentos:", docsErr);
+        }
       }
 
       setLoading(false);
@@ -1023,6 +1024,24 @@ export default function EditarPerfilPage() {
   const puedePublicarServicios = proveedorPuedePublicar(perfil);
 
   const verticalsActivos = [...new Set(services.map((s) => s.vertical))];
+  const documentContext = useMemo(
+    () => ({
+      profile: perfil
+        ? {
+            doc_dni_url: perfil.doc_dni_url,
+            doc_antecedentes_url: perfil.doc_antecedentes_url,
+            doc_antecedentes_sexuales_url: perfil.doc_antecedentes_sexuales_url,
+          }
+        : {},
+      providerDocuments,
+      services: services.map((s) => ({
+        vertical: s.vertical,
+        nru: s.details?.nru,
+        details: s.details,
+      })),
+    }),
+    [perfil, providerDocuments, services],
+  );
   const esClienteSinServicios = perfil?.role === "cliente" && services.length === 0;
   const tieneServicios = services.length > 0;
   const tabs = [
@@ -1056,31 +1075,45 @@ export default function EditarPerfilPage() {
     setFotoPreview(URL.createObjectURL(file));
   }
 
-  function openDocumentUpload(docKey) {
-    setActiveDocumentKey(docKey);
+  function openDocumentUpload(docId) {
+    setActiveDocumentId(docId);
     documentInputRef.current?.click();
   }
 
   async function handleDocumentFile(e) {
     const file = e.target.files?.[0];
-    if (!file || !activeDocumentKey || !userId) return;
+    if (!file || !activeDocumentId || !userId) return;
     e.target.value = "";
-    setUploadingDoc(activeDocumentKey);
+    setUploadingDoc(activeDocumentId);
     setErrorMessage("");
     try {
-      const url = await uploadDocumentToStorage(userId, activeDocumentKey, file);
-      const { error } = await supabase
-        .from("profiles")
-        .update({ [activeDocumentKey]: url })
-        .eq("id", userId);
-      if (error) throw error;
-      setPerfil((prev) => ({ ...prev, [activeDocumentKey]: url }));
+      const result = await persistProviderDocument(userId, activeDocumentId, file);
+      if (result.storage === "profile" && result.profileField) {
+        setPerfil((prev) => ({
+          ...prev,
+          [result.profileField]: result.url,
+        }));
+      } else if (result.storage === "tabla") {
+        setProviderDocuments((prev) => {
+          const next = prev.filter((r) => r.tipo !== result.tipo);
+          return [
+            ...next,
+            {
+              proveedor_id: userId,
+              tipo: result.tipo,
+              url: result.url,
+              vertical: result.row?.vertical ?? null,
+              id: result.row?.id,
+            },
+          ];
+        });
+      }
       setSuccessMessage("Documento subido correctamente ✓");
     } catch (err) {
       setErrorMessage(err.message || "Error al subir el documento.");
     } finally {
       setUploadingDoc(null);
-      setActiveDocumentKey(null);
+      setActiveDocumentId(null);
     }
   }
 
@@ -1656,29 +1689,20 @@ export default function EditarPerfilPage() {
     if (activeTab === "documentos") {
       return (
         <Card title={DOCUMENT_LABELS.title}>
-          <input ref={documentInputRef} type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={handleDocumentFile} />
-          <ul className="flex flex-col gap-3">
-            {DOC_FIELDS.map((doc) => {
-              const url = perfil?.[doc.key];
-              const ok = !!url;
-              const isUploading = uploadingDoc === doc.key;
-              return (
-                <li key={doc.key} className="flex items-center justify-between rounded-xl border p-3" style={{ borderColor: BRAND.border }}>
-                  <div>
-                    <p className="text-sm font-medium">{doc.label}</p>
-                    <p className="text-xs" style={{ color: ok ? "#0e7a5c" : "#c47d1a" }}>
-                      {ok ? DOCUMENT_LABELS.listo : DOCUMENT_LABELS.faltaSubir}
-                    </p>
-                  </div>
-                  {!ok && (
-                    <button type="button" onClick={() => openDocumentUpload(doc.key)} disabled={isUploading} className="text-xs font-semibold disabled:opacity-60" style={{ color: PRIMARY }}>
-                      {isUploading ? DOCUMENT_LABELS.subiendo : DOCUMENT_LABELS.subir}
-                    </button>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
+          <input
+            ref={documentInputRef}
+            type="file"
+            accept=".pdf,.jpg,.jpeg,.png"
+            className="hidden"
+            onChange={handleDocumentFile}
+          />
+          <ProviderDocumentsSection
+            verticales={verticalsActivos}
+            context={documentContext}
+            uploadingDocId={uploadingDoc}
+            onUpload={openDocumentUpload}
+            showHeader={false}
+          />
         </Card>
       );
     }

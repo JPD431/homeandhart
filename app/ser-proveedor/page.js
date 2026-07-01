@@ -7,10 +7,16 @@ import { BRAND, SERIF } from "@/app/components/brand";
 import ServiceOperationalFields from "@/app/components/ServiceOperationalFields";
 import { AMENITIES_GROUPS } from "@/app/lib/amenities";
 import {
-  DOC_ID_TO_PROFILE_FIELD,
-  getProfileFieldForDocId,
-  persistWizardDocument,
+  loadProviderDocuments,
+  persistProviderDocument,
 } from "@/app/lib/provider-uploads";
+import {
+  getApplicableDocuments,
+  getDocumentDefinition,
+  getDocumentStatus,
+  getMissingRequiredDocuments,
+  normalizeDocumentId,
+} from "@/app/lib/provider-documents";
 import {
   finalizeOnboarding,
   loadOnboardingState,
@@ -32,6 +38,7 @@ import ServiceStepHeader from "@/app/components/provider/ServiceStepHeader";
 import DireccionContactoFields from "@/app/components/provider/DireccionContactoFields";
 import CounterField from "@/app/components/provider/CounterField";
 import TagPill from "@/app/components/provider/TagPill";
+import ProviderDocumentsSection from "@/app/components/provider/ProviderDocumentsSection";
 import {
   CONFIRMACION_LABELS,
   DOCUMENT_LABELS,
@@ -49,7 +56,6 @@ import {
   GREEN,
   ORANGE,
   PRIMARY,
-  VERTICAL_DOC_LABELS,
   VERTICALES_CARDS,
   getServiceHeaderTitle,
   getVerticalColor,
@@ -138,22 +144,25 @@ const MODALIDAD_OPTIONS = {
   ],
 };
 
-const DOCUMENT_CATALOG = {
-  dni_propietario: { title: "DNI o pasaporte", required: true },
-  nru: { title: "NRU", required: true },
-  dni_nie: { title: "DNI / NIE / Pasaporte", required: true },
-  certificado_antecedentes: { title: "Antecedentes penales", required: true },
-  certificado_delitos_sexuales: {
-    title: "Antecedentes sexuales",
-    required: true,
-  },
-  seguro_hogar: { title: "Seguro del hogar", required: false },
-  primeros_auxilios: { title: "Primeros auxilios", required: false },
-  titulaciones: { title: "Titulaciones", required: false },
-  certificaciones: { title: "Certificaciones", required: false },
-};
+function getDocsForVertical(vertical) {
+  if (vertical === "alojamiento") return ["nru", "seguro_hogar"];
+  if (vertical === "ninos")
+    return [
+      "certificado_antecedentes",
+      "certificado_delitos_sexuales",
+      "primeros_auxilios",
+      "titulaciones",
+    ];
+  if (vertical === "mascotas")
+    return ["certificado_antecedentes", "certificaciones"];
+  return [];
+}
 
-const DOC_PROFILE_FIELDS = DOC_ID_TO_PROFILE_FIELD;
+function inlineDocMeta(docId) {
+  const def = getDocumentDefinition(normalizeDocumentId(docId));
+  if (def) return { title: def.label, required: def.required };
+  return { title: docId, required: false };
+}
 
 const EMPTY_SERVICE_DETAILS = {
   alojamiento: {
@@ -239,45 +248,6 @@ const EMPTY_SERVICE_DETAILS = {
     descuentos_duracion: [{ minDias: "", descuento: "" }],
   },
 };
-
-function getDocsForVertical(vertical) {
-  if (vertical === "alojamiento") return ["nru", "seguro_hogar"];
-  if (vertical === "ninos")
-    return [
-      "certificado_antecedentes",
-      "certificado_delitos_sexuales",
-      "primeros_auxilios",
-      "titulaciones",
-    ];
-  if (vertical === "mascotas")
-    return ["certificado_antecedentes", "certificaciones"];
-  return [];
-}
-
-function getRequiredDocuments(verticales) {
-  const docs = [];
-  const added = new Set();
-  const add = (id) => {
-    if (!added.has(id) && DOCUMENT_CATALOG[id]) {
-      added.add(id);
-      docs.push({ id, ...DOCUMENT_CATALOG[id] });
-    }
-  };
-  if (verticales.length > 0) add("dni_nie");
-  if (verticales.includes("alojamiento")) add("nru");
-  if (verticales.includes("ninos")) {
-    add("certificado_antecedentes");
-    add("certificado_delitos_sexuales");
-    add("primeros_auxilios");
-    add("titulaciones");
-  }
-  if (verticales.includes("mascotas")) {
-    add("certificado_antecedentes");
-    add("certificaciones");
-  }
-  if (verticales.includes("alojamiento")) add("seguro_hogar");
-  return docs;
-}
 
 async function geocodeBarrio(barrio, ciudad) {
   const query = `${barrio}, ${ciudad}, España`;
@@ -485,17 +455,11 @@ function PreviewPanel({
   );
 }
 
-function docIsUploaded(docId, documentFiles, savedDocUrls) {
-  if (docId === "dni_nie") {
-    if (documentFiles.dni_nie || documentFiles.dni_propietario) return true;
-    return !!savedDocUrls.doc_dni_url;
-  }
-  if (documentFiles[docId]) return true;
-  const field = DOC_ID_TO_PROFILE_FIELD[docId];
-  return field ? !!savedDocUrls[field] : false;
+function docIsUploaded(docId, documentContext, verticales) {
+  return getDocumentStatus(docId, documentContext, verticales).uploaded;
 }
 
-function calcCompletion(verticales, fields, documentFiles, savedDocUrls) {
+function calcCompletion(verticales, fields, documentContext) {
   let total = 0;
   let done = 0;
   const check = (ok) => {
@@ -517,10 +481,10 @@ function calcCompletion(verticales, fields, documentFiles, savedDocUrls) {
     const d = fields.serviceDetails.mascotas;
     check(d.titulo.trim() && d.precio);
   }
-  getRequiredDocuments(verticales)
+  getApplicableDocuments(verticales)
     .filter((d) => d.required)
     .forEach((d) => {
-      check(docIsUploaded(d.id, documentFiles, savedDocUrls));
+      check(docIsUploaded(d.id, documentContext, verticales));
     });
   return total > 0 ? Math.round((done / total) * 100) : 0;
 }
@@ -559,6 +523,7 @@ export default function SerProveedorPage() {
     doc_antecedentes_url: null,
     doc_antecedentes_sexuales_url: null,
   });
+  const [providerDocuments, setProviderDocuments] = useState([]);
   const [uploadingDocId, setUploadingDocId] = useState(null);
   const [activeDocumentId, setActiveDocumentId] = useState(null);
   const [userId, setUserId] = useState(null);
@@ -584,9 +549,24 @@ export default function SerProveedorPage() {
     () => buildVisibleSteps(verticalesSeleccionados),
     [verticalesSeleccionados],
   );
-  const requiredDocuments = useMemo(
-    () => getRequiredDocuments(verticalesSeleccionados),
-    [verticalesSeleccionados],
+  const documentContext = useMemo(
+    () => ({
+      profile: savedDocUrls,
+      providerDocuments,
+      services: verticalesSeleccionados.map((v) => ({
+        vertical: v,
+        nru: serviceDetails[v]?.nru,
+        details: serviceDetails[v],
+      })),
+      sessionFiles: documentFiles,
+    }),
+    [
+      savedDocUrls,
+      providerDocuments,
+      verticalesSeleccionados,
+      serviceDetails,
+      documentFiles,
+    ],
   );
   const completionPct = calcCompletion(verticalesSeleccionados, {
     nombre,
@@ -594,18 +574,13 @@ export default function SerProveedorPage() {
     ciudad,
     sobreTi,
     serviceDetails,
-  }, documentFiles, savedDocUrls);
+  }, documentContext);
 
   const allIdiomas = [...IDIOMAS_DEFAULT, ...customIdiomas];
 
   function hasUploadedDoc(docId) {
-    if (docId === "dni_nie") {
-      if (documentFiles.dni_nie || documentFiles.dni_propietario) return true;
-      return !!savedDocUrls.doc_dni_url;
-    }
-    if (documentFiles[docId]) return true;
-    const field = getProfileFieldForDocId(docId);
-    return field ? !!savedDocUrls[field] : false;
+    return getDocumentStatus(docId, documentContext, verticalesSeleccionados)
+      .uploaded;
   }
 
   useEffect(() => {
@@ -659,6 +634,8 @@ export default function SerProveedorPage() {
             doc_antecedentes_url: profile.doc_antecedentes_url || null,
             doc_antecedentes_sexuales_url: profile.doc_antecedentes_sexuales_url || null,
           });
+          const providerDocs = await loadProviderDocuments(user.id);
+          if (!cancelled) setProviderDocuments(providerDocs);
           if (Array.isArray(profile.onboarding_verticales) && profile.onboarding_verticales.length > 0) {
             setVerticalesSeleccionados(profile.onboarding_verticales);
           }
@@ -916,21 +893,34 @@ export default function SerProveedorPage() {
     if (!file || !docId || !userId) return;
     e.target.value = "";
 
-    const profileField = getProfileFieldForDocId(docId);
-    if (!profileField) {
-      setDocumentFiles((prev) => ({ ...prev, [docId]: file }));
-      setActiveDocumentId(null);
-      return;
-    }
-
     setUploadingDocId(docId);
     setErrorMessage("");
-    persistWizardDocument(userId, docId, file)
-      .then(({ profileField: field, url }) => {
-        setSavedDocUrls((prev) => ({ ...prev, [field]: url }));
+    persistProviderDocument(userId, docId, file)
+      .then((result) => {
+        if (result.storage === "profile" && result.profileField) {
+          setSavedDocUrls((prev) => ({
+            ...prev,
+            [result.profileField]: result.url,
+          }));
+        } else if (result.storage === "tabla") {
+          setProviderDocuments((prev) => {
+            const next = prev.filter((r) => r.tipo !== result.tipo);
+            return [
+              ...next,
+              {
+                proveedor_id: userId,
+                tipo: result.tipo,
+                url: result.url,
+                vertical: result.row?.vertical ?? null,
+                id: result.row?.id,
+              },
+            ];
+          });
+        }
         setDocumentFiles((prev) => {
           const next = { ...prev };
           delete next[docId];
+          delete next[normalizeDocumentId(docId)];
           return next;
         });
       })
@@ -987,12 +977,14 @@ export default function SerProveedorPage() {
       }
     }
     if (stepKey === STEP_KEY.DOCUMENTOS) {
-      const missing = requiredDocuments.filter((d) => {
-        if (!d.required) return false;
-        return !hasUploadedDoc(d.id);
-      });
+      const missing = getMissingRequiredDocuments(
+        verticalesSeleccionados,
+        documentContext,
+      );
       if (missing.length > 0) {
-        setErrorMessage(`Faltan documentos obligatorios: ${missing.map((d) => d.title).join(", ")}`);
+        setErrorMessage(
+          `Faltan documentos obligatorios: ${missing.map((d) => d.label).join(", ")}`,
+        );
         return false;
       }
     }
@@ -1396,8 +1388,8 @@ export default function SerProveedorPage() {
               <DocUploadRow
                 key={docId}
                 docId={docId}
-                title={DOCUMENT_CATALOG[docId].title}
-                required={DOCUMENT_CATALOG[docId].required}
+                title={inlineDocMeta(docId).title}
+                required={inlineDocMeta(docId).required}
                 file={documentFiles[docId]}
                 uploaded={hasUploadedDoc(docId)}
                 uploading={uploadingDocId === docId}
@@ -1520,8 +1512,8 @@ export default function SerProveedorPage() {
               <DocUploadRow
                 key={docId}
                 docId={docId}
-                title={DOCUMENT_CATALOG[docId].title}
-                required={DOCUMENT_CATALOG[docId].required}
+                title={inlineDocMeta(docId).title}
+                required={inlineDocMeta(docId).required}
                 file={documentFiles[docId]}
                 uploaded={hasUploadedDoc(docId)}
                 uploading={uploadingDocId === docId}
@@ -1639,8 +1631,8 @@ export default function SerProveedorPage() {
               <DocUploadRow
                 key={docId}
                 docId={docId}
-                title={DOCUMENT_CATALOG[docId].title}
-                required={DOCUMENT_CATALOG[docId].required}
+                title={inlineDocMeta(docId).title}
+                required={inlineDocMeta(docId).required}
                 file={documentFiles[docId]}
                 uploaded={hasUploadedDoc(docId)}
                 uploading={uploadingDocId === docId}
@@ -1654,79 +1646,13 @@ export default function SerProveedorPage() {
 
 
     if (currentStepKey === STEP_KEY.DOCUMENTOS) {
-      const verticalLabels = VERTICAL_DOC_LABELS;
-
       return (
-        <div>
-          <h2 className="text-2xl text-[#1a1a1a]" style={{ fontFamily: SERIF }}>
-            {DOCUMENT_LABELS.title}
-          </h2>
-          <p className="mt-1 text-sm text-[#666]">
-            {DOCUMENT_LABELS.subtitle}
-          </p>
-          <div className="mt-6 rounded-xl border p-4" style={{ borderColor: BRAND.border }}>
-            <p className="text-sm font-semibold">DNI / NIE / Pasaporte</p>
-            <p className="mt-0.5 text-xs text-[#666]">Obligatorio para todos los servicios</p>
-            <div className="mt-3">
-              <DocUploadRow
-                docId="dni_nie"
-                title="DNI / NIE / Pasaporte"
-                required
-                file={documentFiles.dni_nie || documentFiles.dni_propietario}
-                uploaded={hasUploadedDoc("dni_nie")}
-                uploading={uploadingDocId === "dni_nie"}
-                onUpload={openDocumentUpload}
-              />
-            </div>
-          </div>
-          {verticalesSeleccionados.map((v) => {
-            const docs = getDocsForVertical(v);
-            return (
-              <div key={v} className="mt-4 rounded-xl border p-4" style={{ borderColor: BRAND.border }}>
-                <p className="text-sm font-semibold">{verticalLabels[v]}</p>
-                <div className="mt-2 space-y-1">
-                  {docs.map((docId) => (
-                    <div key={docId} className="flex items-center justify-between text-sm">
-                      <span className="flex items-center gap-2">
-                        <span style={{ color: hasUploadedDoc(docId) ? GREEN : DOCUMENT_CATALOG[docId].required ? ORANGE : "#888" }}>
-                          {hasUploadedDoc(docId) ? DOCUMENT_LABELS.listo : DOCUMENT_CATALOG[docId].required ? DOCUMENT_LABELS.faltaSubir : DOCUMENT_LABELS.opcional}
-                        </span>
-                        {DOCUMENT_CATALOG[docId].title}
-                      </span>
-                      {!hasUploadedDoc(docId) && (
-                        <button
-                          type="button"
-                          onClick={() => openDocumentUpload(docId)}
-                          disabled={uploadingDocId === docId}
-                          className="text-xs font-semibold disabled:opacity-60"
-                          style={{ color: PRIMARY }}
-                        >
-                          {uploadingDocId === docId ? "Subiendo…" : "Subir"}
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-          <div className="mt-6 space-y-2">
-            {requiredDocuments
-              .filter((doc) => doc.id !== "dni_nie")
-              .map((doc) => (
-                <DocUploadRow
-                  key={doc.id}
-                  docId={doc.id}
-                  title={doc.title}
-                  required={doc.required}
-                  file={documentFiles[doc.id]}
-                  uploaded={hasUploadedDoc(doc.id)}
-                  uploading={uploadingDocId === doc.id}
-                  onUpload={openDocumentUpload}
-                />
-              ))}
-          </div>
-        </div>
+        <ProviderDocumentsSection
+          verticales={verticalesSeleccionados}
+          context={documentContext}
+          uploadingDocId={uploadingDocId}
+          onUpload={openDocumentUpload}
+        />
       );
     }
 
@@ -1768,11 +1694,12 @@ export default function SerProveedorPage() {
         ...(verticalesSeleccionados.includes("mascotas")
           ? [{ label: "Mascotas", ok: serviceDetails.mascotas.titulo.trim() && serviceDetails.mascotas.precio }]
           : []),
-        ...requiredDocuments
+        ...getApplicableDocuments(verticalesSeleccionados)
           .filter((d) => d.required)
           .map((d) => ({
-            label: d.title,
-            ok: hasUploadedDoc(d.id),
+            label: d.label,
+            ok: getDocumentStatus(d.id, documentContext, verticalesSeleccionados)
+              .uploaded,
           })),
       ];
 
