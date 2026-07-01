@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { BRAND, SERIF } from "@/app/components/brand";
 import {
   ChevronIcon,
@@ -133,7 +133,16 @@ function MonthCalendar({
   );
 }
 
-export default function CalendarioDisponibilidad({ services, bloqueos }) {
+export default function CalendarioDisponibilidad({
+  services,
+  bloqueos,
+  initialDesde = "",
+  initialHasta = "",
+  embedded = false,
+  singleMonth = false,
+  showReservaLink = true,
+  onDatesChange,
+}) {
   const hoy = new Date();
   const hoyStr = getHoyStr();
 
@@ -143,8 +152,17 @@ export default function CalendarioDisponibilidad({ services, bloqueos }) {
   const [selectedServiceId, setSelectedServiceId] = useState(
     services[0]?.id ?? "",
   );
-  const [fechaInicio, setFechaInicio] = useState("");
-  const [fechaFin, setFechaFin] = useState("");
+  const [fechaInicio, setFechaInicio] = useState(initialDesde);
+  const [fechaFin, setFechaFin] = useState(initialHasta);
+
+  useEffect(() => {
+    setFechaInicio(initialDesde);
+    setFechaFin(initialHasta);
+  }, [initialDesde, initialHasta]);
+
+  useEffect(() => {
+    onDatesChange?.({ desde: fechaInicio, hasta: fechaFin });
+  }, [fechaInicio, fechaFin, onDatesChange]);
 
   const selectedService = useMemo(
     () => services.find((s) => s.id === selectedServiceId) ?? services[0],
@@ -195,20 +213,33 @@ export default function CalendarioDisponibilidad({ services, bloqueos }) {
 
   if (!services.length) return null;
 
+  const sectionClass = embedded
+    ? ""
+    : "mt-8 rounded-2xl border bg-white p-6 sm:p-8";
+
+  const sectionStyle = embedded ? undefined : { borderColor: BRAND.border };
+
   return (
-    <section
-      className="mt-8 rounded-2xl border bg-white p-6 sm:p-8"
-      style={{ borderColor: BRAND.border }}
-    >
-      <h2
-        className="text-xl font-bold text-[#1a1a1a] sm:text-2xl"
-        style={{ fontFamily: SERIF }}
-      >
-        Disponibilidad
-      </h2>
-      <p className="mt-1 text-sm text-[#666]">
-        Elige tus fechas en el calendario y reserva directamente.
-      </p>
+    <section className={sectionClass} style={sectionStyle}>
+      {!embedded && (
+        <>
+          <h2
+            className="text-xl font-bold text-[#1a1a1a] sm:text-2xl"
+            style={{ fontFamily: SERIF }}
+          >
+            Disponibilidad
+          </h2>
+          <p className="mt-1 text-sm text-[#666]">
+            Elige tus fechas en el calendario y reserva directamente.
+          </p>
+        </>
+      )}
+
+      {embedded && (
+        <p className="mb-3 text-[11px] font-medium text-[#666]">
+          Elige tus fechas
+        </p>
+      )}
 
       {services.length > 1 && (
         <div className="mt-5">
@@ -269,7 +300,9 @@ export default function CalendarioDisponibilidad({ services, bloqueos }) {
         </button>
       </div>
 
-      <div className="mt-4 flex flex-col gap-6 lg:flex-row lg:gap-8">
+      <div
+        className={`flex flex-col gap-6 ${embedded ? "mt-0" : "mt-4"} ${singleMonth ? "" : "lg:flex-row lg:gap-8"}`}
+      >
         <MonthCalendar
           viewDate={viewMonth}
           bloqueos={serviceBloqueos}
@@ -279,20 +312,24 @@ export default function CalendarioDisponibilidad({ services, bloqueos }) {
           hoyStr={hoyStr}
           onDayClick={handleDayClick}
         />
-        <div className="hidden min-w-0 flex-1 lg:block">
-          <MonthCalendar
-            viewDate={nextMonth}
-            bloqueos={serviceBloqueos}
-            diasDisponibles={diasDisponibles}
-            fechaInicio={fechaInicio}
-            fechaFin={fechaFin}
-            hoyStr={hoyStr}
-            onDayClick={handleDayClick}
-          />
-        </div>
+        {!singleMonth && (
+          <div className="hidden min-w-0 flex-1 lg:block">
+            <MonthCalendar
+              viewDate={nextMonth}
+              bloqueos={serviceBloqueos}
+              diasDisponibles={diasDisponibles}
+              fechaInicio={fechaInicio}
+              fechaFin={fechaFin}
+              hoyStr={hoyStr}
+              onDayClick={handleDayClick}
+            />
+          </div>
+        )}
       </div>
 
-      <div className="mt-5 flex flex-wrap gap-3 text-xs text-[#666]">
+      <div
+        className={`flex flex-wrap gap-3 text-xs text-[#666] ${embedded ? "mt-3" : "mt-5"}`}
+      >
         <span className="inline-flex items-center gap-1.5">
           <span className="h-3 w-3 rounded bg-[#dcfce7]" /> Disponible
         </span>
@@ -311,7 +348,7 @@ export default function CalendarioDisponibilidad({ services, bloqueos }) {
         </span>
       </div>
 
-      {reservaHref && (
+      {showReservaLink && reservaHref && (
         <Link
           href={reservaHref}
           className="mt-6 block w-full rounded-xl py-3.5 text-center text-sm font-semibold text-white no-underline transition-opacity hover:opacity-90"

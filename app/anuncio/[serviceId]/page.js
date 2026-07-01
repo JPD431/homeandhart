@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import AnuncioBookingPanel from "@/app/components/AnuncioBookingPanel";
 import ServiceAnuncioContent, {
   ServicePhotoGallery,
 } from "@/app/components/ServiceAnuncioContent";
@@ -10,6 +11,7 @@ import {
   VERTICAL_DOC_LABELS,
 } from "@/app/lib/provider-verticals";
 import {
+  buildCalendarioServiceEntry,
   loadPublicServiceById,
   loadServiceBloqueos,
 } from "@/app/lib/public-service";
@@ -72,8 +74,12 @@ export async function generateMetadata({ params }) {
   };
 }
 
-export default async function AnuncioPage({ params }) {
+export default async function AnuncioPage({ params, searchParams }) {
   const { serviceId } = await params;
+  const sp = await searchParams;
+  const initialDesde = typeof sp?.desde === "string" ? sp.desde : "";
+  const initialHasta = typeof sp?.hasta === "string" ? sp.hasta : "";
+
   const service = await loadPublicServiceById(serviceId);
 
   if (!service) {
@@ -81,7 +87,6 @@ export default async function AnuncioPage({ params }) {
   }
 
   const bloqueosCalendario = await loadServiceBloqueos(serviceId);
-  void bloqueosCalendario;
 
   const profile = normalizeServiceProfile(service);
   const theme = getServiceCardTheme(service.vertical);
@@ -95,6 +100,11 @@ export default async function AnuncioPage({ params }) {
     "Servicio";
   const tags = getListingTags(service, profile);
 
+  const serviceCalendario = buildCalendarioServiceEntry(service, {
+    titulo,
+    label: VERTICAL_DOC_LABELS[service.vertical] || theme.label,
+  });
+
   return (
     <div
       className="min-h-screen font-sans"
@@ -104,7 +114,7 @@ export default async function AnuncioPage({ params }) {
         className="border-b"
         style={{ backgroundColor: "#f7f5f2", borderColor: "#e8e4de" }}
       >
-        <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-5 py-4">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-4">
           <Link href="/" className="shrink-0 no-underline">
             <p className="text-[18px] leading-none text-[#111]" style={{ fontFamily: SERIF }}>
               Home<span className="italic" style={{ color: accent }}>&</span>
@@ -130,7 +140,7 @@ export default async function AnuncioPage({ params }) {
         />
       </div>
 
-      <main className="mx-auto max-w-3xl px-5 py-8">
+      <main className="mx-auto max-w-6xl px-5 py-8">
         <p
           className="text-[11px] font-semibold uppercase tracking-wide"
           style={{ color: accent }}
@@ -162,11 +172,22 @@ export default async function AnuncioPage({ params }) {
           </div>
         )}
 
-        <div
-          className="mt-8 rounded-xl border bg-white p-5 sm:p-6"
-          style={{ borderColor: "#e8e4de" }}
-        >
-          <ServiceAnuncioContent service={service} showGallery={false} />
+        <div className="mt-8 grid grid-cols-1 items-start gap-8 lg:grid-cols-[1fr_minmax(300px,380px)]">
+          <div
+            className="rounded-xl border bg-white p-5 sm:p-6"
+            style={{ borderColor: "#e8e4de" }}
+          >
+            <ServiceAnuncioContent service={service} showGallery={false} />
+          </div>
+
+          <AnuncioBookingPanel
+            service={service}
+            serviceCalendario={serviceCalendario}
+            bloqueos={bloqueosCalendario}
+            accentColor={accent}
+            initialDesde={initialDesde}
+            initialHasta={initialHasta}
+          />
         </div>
       </main>
     </div>

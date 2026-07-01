@@ -46,3 +46,21 @@ export async function loadServiceBloqueos(serviceId) {
 
   return data ?? [];
 }
+
+const DIAS_SEMANA_DEFAULT = ["lun", "mar", "mie", "jue", "vie", "sab", "dom"];
+
+/** Entrada mínima para CalendarioDisponibilidad (un solo servicio). */
+export function buildCalendarioServiceEntry(service, { titulo, label }) {
+  const dias =
+    Array.isArray(service?.dias_disponibles) &&
+    service.dias_disponibles.length > 0
+      ? service.dias_disponibles
+      : DIAS_SEMANA_DEFAULT;
+
+  return {
+    id: service.id,
+    titulo: titulo || label || "Servicio",
+    label: label || "Servicio",
+    dias_disponibles: dias,
+  };
+}
