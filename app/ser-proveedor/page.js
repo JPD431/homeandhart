@@ -22,6 +22,13 @@ import {
   saveVerticalesStep,
   upsertDraftService,
 } from "@/app/lib/onboarding-persist";
+import {
+  buildVisibleSteps,
+  getStepIndex,
+  migrateLegacyOnboardingStep,
+  STEP_KEY,
+} from "@/app/ser-proveedor/onboarding-steps";
+import WizardLayout from "@/app/ser-proveedor/WizardLayout";
 
 const PRIMARY = "#1d4f91";
 const DARK_BLUE = "#163a6b";
@@ -253,22 +260,6 @@ const EMPTY_SERVICE_DETAILS = {
   },
 };
 
-function getVisibleSteps(verticales) {
-  const steps = [
-    { id: 1, key: "servicios", label: "Servicios" },
-    { id: 2, key: "perfil", label: "Tu perfil" },
-  ];
-  if (verticales.includes("alojamiento"))
-    steps.push({ id: 3, key: "alojamiento", label: "🏠 Alojamiento" });
-  if (verticales.includes("ninos"))
-    steps.push({ id: 4, key: "ninos", label: "🧒 Niñera" });
-  if (verticales.includes("mascotas"))
-    steps.push({ id: 5, key: "mascotas", label: "🐾 Mascotas" });
-  steps.push({ id: 6, key: "documentos", label: "Documentos" });
-  steps.push({ id: 7, key: "revision", label: "Revisión" });
-  return steps;
-}
-
 function getDocsForVertical(vertical) {
   if (vertical === "alojamiento") return ["nru", "seguro_hogar"];
   if (vertical === "ninos")
@@ -455,39 +446,6 @@ function CounterField({ label, value, onChange, min = 0 }) {
   );
 }
 
-function StepBar({ steps, pasoActual }) {
-  const currentIdx = steps.findIndex((s) => s.id === pasoActual);
-  return (
-    <div
-      className="flex gap-0 overflow-x-auto border-b"
-      style={{ borderColor: BRAND.border }}
-    >
-      {steps.map((step, idx) => {
-        const isActive = step.id === pasoActual;
-        const isCompleted = idx < currentIdx;
-        return (
-          <div
-            key={step.id}
-            className="flex shrink-0 items-center gap-1.5 px-4 py-3 text-xs font-semibold whitespace-nowrap"
-            style={{
-              borderBottom: isActive || isCompleted ? `2px solid ${PRIMARY}` : "2px solid transparent",
-              color: PRIMARY,
-              opacity: isActive ? 1 : isCompleted ? 0.7 : 0.45,
-            }}
-          >
-            {isCompleted && (
-              <span className="text-green-600" aria-hidden>
-                ✓
-              </span>
-            )}
-            {step.label}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 function DocUploadRow({ docId, title, required, file, uploaded, uploading, onUpload }) {
   const ok = !!(file || uploaded);
   return (
@@ -578,7 +536,7 @@ function PreviewPanel({
 
   return (
     <div
-      className="sticky top-4 rounded-2xl border bg-white p-4 shadow-sm"
+      className="rounded-2xl border bg-white p-4 shadow-sm"
       style={{ borderColor: BRAND.border }}
     >
       <p className="mb-3 text-[10px] font-semibold uppercase tracking-widest text-[#888]">
@@ -680,7 +638,7 @@ export default function SerProveedorPage() {
   const documentInputRef = useRef(null);
   const activePhotoVerticalRef = useRef(null);
 
-  const [pasoActual, setPasoActual] = useState(1);
+  const [currentStepKey, setCurrentStepKey] = useState(STEP_KEY.PERFIL);
   const [verticalesSeleccionados, setVerticalesSeleccionados] = useState([]);
   const [profilePhoto, setProfilePhoto] = useState(null);
   const [profilePhotoPreview, setProfilePhotoPreview] = useState(null);
@@ -728,7 +686,7 @@ export default function SerProveedorPage() {
   });
 
   const visibleSteps = useMemo(
-    () => getVisibleSteps(verticalesSeleccionados),
+    () => buildVisibleSteps(verticalesSeleccionados),
     [verticalesSeleccionados],
   );
   const requiredDocuments = useMemo(
@@ -810,8 +768,16 @@ export default function SerProveedorPage() {
             setVerticalesSeleccionados(profile.onboarding_verticales);
           }
           if (profile.onboarding_step) {
-            const stepNum = Number(profile.onboarding_step);
-            if (stepNum >= 1 && stepNum <= 7) setPasoActual(stepNum);
+            const verts =
+              Array.isArray(profile.onboarding_verticales) &&
+              profile.onboarding_verticales.length > 0
+                ? profile.onboarding_verticales
+                : verticalesSeleccionados;
+            const stepKey = migrateLegacyOnboardingStep(
+              profile.onboarding_step,
+              verts,
+            );
+            setCurrentStepKey(stepKey);
           }
         }
 
@@ -855,27 +821,31 @@ export default function SerProveedorPage() {
     };
   }, [router]);
 
-  async function persistStepData(stepId) {
+  async function persistStepData(stepKey) {
     if (!userId) throw new Error("No hay sesión activa.");
 
-    if (stepId === 1) {
-      await saveVerticalesStep(userId, verticalesSeleccionados, stepId);
+    if (stepKey === STEP_KEY.VERTICALES) {
+      await saveVerticalesStep(userId, verticalesSeleccionados, stepKey);
       return;
     }
 
-    if (stepId === 2) {
-      const newFotoUrl = await saveProfileStep(userId, {
-        nombre,
-        apellido,
-        ciudad,
-        sobreTi,
-        personalidad,
-        motivacion,
-        anosExperiencia,
-        idiomas,
-        fotoPerfilUrl,
-        profilePhotoFile: profilePhoto,
-      }, stepId);
+    if (stepKey === STEP_KEY.PERFIL) {
+      const newFotoUrl = await saveProfileStep(
+        userId,
+        {
+          nombre,
+          apellido,
+          ciudad,
+          sobreTi,
+          personalidad,
+          motivacion,
+          anosExperiencia,
+          idiomas,
+          fotoPerfilUrl,
+          profilePhotoFile: profilePhoto,
+        },
+        stepKey,
+      );
       if (newFotoUrl) {
         setFotoPerfilUrl(newFotoUrl);
         setProfilePhotoPreview(newFotoUrl);
@@ -884,7 +854,10 @@ export default function SerProveedorPage() {
       return;
     }
 
-    if (stepId === 3 && verticalesSeleccionados.includes("alojamiento")) {
+    if (
+      stepKey === STEP_KEY.SERVICIO_ALOJAMIENTO &&
+      verticalesSeleccionados.includes("alojamiento")
+    ) {
       const id = await upsertDraftService(
         userId,
         "alojamiento",
@@ -897,11 +870,14 @@ export default function SerProveedorPage() {
       if (servicePhotos.alojamiento.length > 0) {
         setServicePhotos((prev) => ({ ...prev, alojamiento: [] }));
       }
-      await saveOnboardingStep(userId, stepId);
+      await saveOnboardingStep(userId, stepKey);
       return;
     }
 
-    if (stepId === 4 && verticalesSeleccionados.includes("ninos")) {
+    if (
+      stepKey === STEP_KEY.SERVICIO_NINOS &&
+      verticalesSeleccionados.includes("ninos")
+    ) {
       const id = await upsertDraftService(
         userId,
         "ninos",
@@ -914,11 +890,14 @@ export default function SerProveedorPage() {
       if (servicePhotos.ninos.length > 0) {
         setServicePhotos((prev) => ({ ...prev, ninos: [] }));
       }
-      await saveOnboardingStep(userId, stepId);
+      await saveOnboardingStep(userId, stepKey);
       return;
     }
 
-    if (stepId === 5 && verticalesSeleccionados.includes("mascotas")) {
+    if (
+      stepKey === STEP_KEY.SERVICIO_MASCOTAS &&
+      verticalesSeleccionados.includes("mascotas")
+    ) {
       const id = await upsertDraftService(
         userId,
         "mascotas",
@@ -931,12 +910,16 @@ export default function SerProveedorPage() {
       if (servicePhotos.mascotas.length > 0) {
         setServicePhotos((prev) => ({ ...prev, mascotas: [] }));
       }
-      await saveOnboardingStep(userId, stepId);
+      await saveOnboardingStep(userId, stepKey);
       return;
     }
 
-    if (stepId === 6 || stepId === 7) {
-      await saveOnboardingStep(userId, stepId);
+    if (
+      stepKey === STEP_KEY.DOCUMENTOS ||
+      stepKey === STEP_KEY.PREVIEW ||
+      stepKey === STEP_KEY.RESUMEN
+    ) {
+      await saveOnboardingStep(userId, stepKey);
     }
   }
 
@@ -1065,15 +1048,15 @@ export default function SerProveedorPage() {
       });
   }
 
-  function validateStep(stepId) {
+  function validateStep(stepKey) {
     setErrorMessage("");
-    if (stepId === 1) {
+    if (stepKey === STEP_KEY.VERTICALES) {
       if (verticalesSeleccionados.length === 0) {
         setErrorMessage("Selecciona al menos un servicio.");
         return false;
       }
     }
-    if (stepId === 2) {
+    if (stepKey === STEP_KEY.PERFIL) {
       if (!nombre.trim() || !apellido.trim() || !ciudad.trim()) {
         setErrorMessage("Completa nombre, apellidos y ciudad.");
         return false;
@@ -1083,7 +1066,7 @@ export default function SerProveedorPage() {
         return false;
       }
     }
-    if (stepId === 3) {
+    if (stepKey === STEP_KEY.SERVICIO_ALOJAMIENTO) {
       const d = serviceDetails.alojamiento;
       if (!d.titulo.trim() || !d.precio || !d.tipo_alojamiento) {
         setErrorMessage("Completa título, precio y tipo de alojamiento.");
@@ -1094,21 +1077,21 @@ export default function SerProveedorPage() {
         return false;
       }
     }
-    if (stepId === 4) {
+    if (stepKey === STEP_KEY.SERVICIO_NINOS) {
       const d = serviceDetails.ninos;
       if (!d.titulo.trim() || !d.precio) {
         setErrorMessage("Completa título y precio del servicio de niñera.");
         return false;
       }
     }
-    if (stepId === 5) {
+    if (stepKey === STEP_KEY.SERVICIO_MASCOTAS) {
       const d = serviceDetails.mascotas;
       if (!d.titulo.trim() || !d.precio) {
         setErrorMessage("Completa título y precio del servicio de mascotas.");
         return false;
       }
     }
-    if (stepId === 6) {
+    if (stepKey === STEP_KEY.DOCUMENTOS) {
       const missing = requiredDocuments.filter((d) => {
         if (!d.required) return false;
         return !hasUploadedDoc(d.id);
@@ -1122,16 +1105,16 @@ export default function SerProveedorPage() {
   }
 
   async function goNext() {
-    if (!validateStep(pasoActual)) return;
+    if (!validateStep(currentStepKey)) return;
     setSavingStep(true);
     setErrorMessage("");
     try {
-      await persistStepData(pasoActual);
-      const idx = visibleSteps.findIndex((s) => s.id === pasoActual);
+      await persistStepData(currentStepKey);
+      const idx = getStepIndex(visibleSteps, currentStepKey);
       if (idx < visibleSteps.length - 1) {
-        const nextId = visibleSteps[idx + 1].id;
-        setPasoActual(nextId);
-        if (userId) await saveOnboardingStep(userId, nextId);
+        const nextKey = visibleSteps[idx + 1].key;
+        setCurrentStepKey(nextKey);
+        if (userId) await saveOnboardingStep(userId, nextKey);
       }
     } catch (err) {
       setErrorMessage(err.message || "Error al guardar. Inténtalo de nuevo.");
@@ -1141,8 +1124,8 @@ export default function SerProveedorPage() {
   }
 
   function goBack() {
-    const idx = visibleSteps.findIndex((s) => s.id === pasoActual);
-    if (idx > 0) setPasoActual(visibleSteps[idx - 1].id);
+    const idx = getStepIndex(visibleSteps, currentStepKey);
+    if (idx > 0) setCurrentStepKey(visibleSteps[idx - 1].key);
   }
 
   async function handleSubmit() {
@@ -1162,18 +1145,22 @@ export default function SerProveedorPage() {
       const uid = user.id;
       setUserId(uid);
 
-      await saveProfileStep(uid, {
-        nombre,
-        apellido,
-        ciudad,
-        sobreTi,
-        personalidad,
-        motivacion,
-        anosExperiencia,
-        idiomas,
-        fotoPerfilUrl,
-        profilePhotoFile: profilePhoto,
-      }, 7);
+      await saveProfileStep(
+        uid,
+        {
+          nombre,
+          apellido,
+          ciudad,
+          sobreTi,
+          personalidad,
+          motivacion,
+          anosExperiencia,
+          idiomas,
+          fotoPerfilUrl,
+          profilePhotoFile: profilePhoto,
+        },
+        STEP_KEY.RESUMEN,
+      );
 
       const finalDraftIds = { ...draftServiceIds };
 
@@ -1211,7 +1198,7 @@ export default function SerProveedorPage() {
         }),
       });
 
-      setPasoActual(8);
+      setCurrentStepKey(STEP_KEY.CONFIRMACION);
     } catch (err) {
       console.error("Error inesperado:", err);
       setErrorMessage("Error inesperado: " + err.message);
@@ -1222,7 +1209,7 @@ export default function SerProveedorPage() {
 
 
   const renderStep = () => {
-    if (pasoActual === 1) {
+    if (currentStepKey === STEP_KEY.VERTICALES) {
       return (
         <div>
           <div
@@ -1314,7 +1301,7 @@ export default function SerProveedorPage() {
       );
     }
 
-    if (pasoActual === 2) {
+    if (currentStepKey === STEP_KEY.PERFIL) {
       return (
         <div>
           <h2 className="text-2xl text-[#1a1a1a]" style={{ fontFamily: SERIF }}>
@@ -1390,7 +1377,7 @@ export default function SerProveedorPage() {
       );
     }
 
-    if (pasoActual === 3) {
+    if (currentStepKey === STEP_KEY.SERVICIO_ALOJAMIENTO) {
       const d = serviceDetails.alojamiento;
       const upd = (field, val) => updateServiceDetails("alojamiento", { ...d, [field]: val });
       const updCap = (key, val) =>
@@ -1534,7 +1521,7 @@ export default function SerProveedorPage() {
     }
 
 
-    if (pasoActual === 4) {
+    if (currentStepKey === STEP_KEY.SERVICIO_NINOS) {
       const d = serviceDetails.ninos;
       const upd = (field, val) => updateServiceDetails("ninos", { ...d, [field]: val });
       const ninosDocs = getDocsForVertical("ninos");
@@ -1657,7 +1644,7 @@ export default function SerProveedorPage() {
       );
     }
 
-    if (pasoActual === 5) {
+    if (currentStepKey === STEP_KEY.SERVICIO_MASCOTAS) {
       const d = serviceDetails.mascotas;
       const upd = (field, val) => updateServiceDetails("mascotas", { ...d, [field]: val });
       const mascotasDocs = getDocsForVertical("mascotas");
@@ -1777,7 +1764,7 @@ export default function SerProveedorPage() {
     }
 
 
-    if (pasoActual === 6) {
+    if (currentStepKey === STEP_KEY.DOCUMENTOS) {
       const verticalLabels = {
         alojamiento: "🏠 Alojamiento",
         ninos: "🧒 Niñera",
@@ -1858,7 +1845,31 @@ export default function SerProveedorPage() {
       );
     }
 
-    if (pasoActual === 7) {
+    if (currentStepKey === STEP_KEY.PREVIEW) {
+      return (
+        <div>
+          <h2 className="text-2xl text-[#1a1a1a]" style={{ fontFamily: SERIF }}>
+            Vista previa
+          </h2>
+          <p className="mt-1 text-sm text-[#666]">
+            Así verán tu perfil las familias en Home&Heart
+          </p>
+          <div className="mt-6 max-w-sm">
+            <PreviewPanel
+              profilePhotoPreview={profilePhotoPreview}
+              nombre={nombre}
+              apellido={apellido}
+              ciudad={ciudad}
+              verticales={verticalesSeleccionados}
+              serviceDetails={serviceDetails}
+              idiomas={idiomas}
+            />
+          </div>
+        </div>
+      );
+    }
+
+    if (currentStepKey === STEP_KEY.RESUMEN) {
       const checklist = [
         { label: "Servicios seleccionados", ok: verticalesSeleccionados.length > 0 },
         { label: "Perfil personal", ok: nombre.trim() && apellido.trim() && sobreTi.trim() },
@@ -1980,7 +1991,7 @@ export default function SerProveedorPage() {
       );
     }
 
-    if (pasoActual === 8) {
+    if (currentStepKey === STEP_KEY.CONFIRMACION) {
       return (
         <div style={{ textAlign: "center", padding: "60px 24px" }}>
           <div style={{ fontSize: 48, marginBottom: 16 }}>🎉</div>
@@ -2047,9 +2058,42 @@ export default function SerProveedorPage() {
     return null;
   };
 
-  const isConfirmStep = pasoActual === 8;
-  const isLastStep = pasoActual === 7;
-  const isFirstStep = pasoActual === 1;
+  const isConfirmStep = currentStepKey === STEP_KEY.CONFIRMACION;
+  const isLastStep = currentStepKey === STEP_KEY.RESUMEN;
+  const isFirstStep = currentStepKey === STEP_KEY.PERFIL;
+
+  const wizardFooter =
+    !isConfirmStep && !isLastStep ? (
+      <div className="flex items-center justify-between gap-4">
+        <button
+          type="button"
+          onClick={goBack}
+          disabled={isFirstStep}
+          className="rounded-xl border px-6 py-3 text-sm font-semibold transition-opacity disabled:opacity-30"
+          style={{ borderColor: "#ccc", color: "#666" }}
+        >
+          ← Volver
+        </button>
+        <button
+          type="button"
+          onClick={goNext}
+          disabled={savingStep}
+          className="rounded-xl px-6 py-3 text-sm font-semibold text-white disabled:opacity-60"
+          style={{ backgroundColor: PRIMARY }}
+        >
+          {savingStep ? "Guardando…" : "Siguiente →"}
+        </button>
+      </div>
+    ) : isLastStep ? (
+      <button
+        type="button"
+        onClick={goBack}
+        className="rounded-xl border px-6 py-3 text-sm font-semibold"
+        style={{ borderColor: "#ccc", color: "#666" }}
+      >
+        ← Volver
+      </button>
+    ) : null;
 
   if (initialLoading) {
     return (
@@ -2063,76 +2107,29 @@ export default function SerProveedorPage() {
   }
 
   return (
-    <div className="min-h-screen font-sans" style={{ backgroundColor: BRAND.warm, color: "#1a1a1a" }}>
-      <header className="sticky top-0 z-50 bg-white shadow-sm">
-        <div className="mx-auto max-w-5xl px-4 py-4 sm:px-6">
-          <h1 className="text-lg font-semibold" style={{ color: PRIMARY, fontFamily: SERIF }}>
-            Crea tu perfil de proveedor
-          </h1>
-        </div>
-        <StepBar steps={visibleSteps} pasoActual={pasoActual} />
-      </header>
+    <>
+      <input
+        ref={documentInputRef}
+        type="file"
+        accept=".pdf,.jpg,.jpeg,.png"
+        className="hidden"
+        onChange={handleDocumentFile}
+      />
 
-      <input ref={documentInputRef} type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={handleDocumentFile} />
-
-      <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
-        {isConfirmStep ? (
-          renderStep()
-        ) : (
-          <div className="grid grid-cols-1 gap-8 lg:grid-cols-[1fr_290px]">
-            <div>
-              {errorMessage && (
-                <p className="mb-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
-                  {errorMessage}
-                </p>
-              )}
-              {renderStep()}
-              {!isLastStep && (
-                <div className="mt-10 flex items-center justify-between gap-4">
-                  <button
-                    type="button"
-                    onClick={goBack}
-                    disabled={isFirstStep}
-                    className="rounded-xl border px-6 py-3 text-sm font-semibold transition-opacity disabled:opacity-30"
-                    style={{ borderColor: "#ccc", color: "#666" }}
-                  >
-                    ← Volver
-                  </button>
-                  <button
-                    type="button"
-                    onClick={goNext}
-                    disabled={savingStep}
-                    className="rounded-xl px-6 py-3 text-sm font-semibold text-white disabled:opacity-60"
-                    style={{ backgroundColor: PRIMARY }}
-                  >
-                    {savingStep ? "Guardando…" : "Siguiente →"}
-                  </button>
-                </div>
-              )}
-              {isLastStep && !isFirstStep && (
-                <button
-                  type="button"
-                  onClick={goBack}
-                  className="mt-6 rounded-xl border px-6 py-3 text-sm font-semibold"
-                  style={{ borderColor: "#ccc", color: "#666" }}
-                >
-                  ← Volver
-                </button>
-              )}
-            </div>
-            <PreviewPanel
-              profilePhotoPreview={profilePhotoPreview}
-              nombre={nombre}
-              apellido={apellido}
-              ciudad={ciudad}
-              verticales={verticalesSeleccionados}
-              serviceDetails={serviceDetails}
-              idiomas={idiomas}
-            />
-          </div>
+      <WizardLayout
+        visibleSteps={visibleSteps}
+        currentStepKey={currentStepKey}
+        verticales={verticalesSeleccionados}
+        footer={wizardFooter}
+      >
+        {errorMessage && !isConfirmStep && (
+          <p className="mb-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
+            {errorMessage}
+          </p>
         )}
-      </div>
-    </div>
+        {renderStep()}
+      </WizardLayout>
+    </>
   );
 }
 

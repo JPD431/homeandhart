@@ -266,7 +266,7 @@ export async function finalizeOnboarding(userId, verticales, draftIdsByVertical)
     .from("profiles")
     .update({
       onboarding_completed_at: new Date().toISOString(),
-      onboarding_step: "8",
+      onboarding_step: "confirmacion",
     })
     .eq("id", userId);
 
