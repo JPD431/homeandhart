@@ -62,6 +62,7 @@ export default function ServiceOperationalFields({
   onChange,
   collapsible = false,
   className = "",
+  sectionSubtitle = "",
 }) {
   const [open, setOpen] = useState(!collapsible);
 
@@ -221,6 +222,9 @@ export default function ServiceOperationalFields({
       >
         <div>
           <p className="text-xs font-semibold text-[#444]">Disponibilidad y reservas</p>
+          {sectionSubtitle ? (
+            <p className="mt-1 text-xs text-[#888]">{sectionSubtitle}</p>
+          ) : null}
           {!open && (
             <p className="mt-1 text-xs text-[#888]">{operationalSummary(details)}</p>
           )}

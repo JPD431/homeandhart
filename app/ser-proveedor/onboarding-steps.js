@@ -46,8 +46,8 @@ const ALL_STEP_KEYS = new Set(Object.values(STEP_KEY));
  */
 export function buildVisibleSteps(verticales = []) {
   const steps = [
-    { key: STEP_KEY.PERFIL, label: "Tu perfil", vertical: null },
-    { key: STEP_KEY.VERTICALES, label: "Servicios", vertical: null },
+    { key: STEP_KEY.PERFIL, label: "Quién eres", vertical: null },
+    { key: STEP_KEY.VERTICALES, label: "Qué ofreces", vertical: null },
   ];
 
   if (verticales.includes("alojamiento")) {
@@ -73,9 +73,9 @@ export function buildVisibleSteps(verticales = []) {
   }
 
   steps.push(
-    { key: STEP_KEY.DOCUMENTOS, label: "Documentos", vertical: null },
+    { key: STEP_KEY.DOCUMENTOS, label: "Tus documentos", vertical: null },
     { key: STEP_KEY.PREVIEW, label: "Vista previa", vertical: null },
-    { key: STEP_KEY.RESUMEN, label: "Revisión", vertical: null },
+    { key: STEP_KEY.RESUMEN, label: "Última revisión", vertical: null },
   );
 
   return steps;
