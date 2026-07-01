@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
 import { BRAND, SERIF } from "@/app/components/brand";
 import ServiceOperationalFields from "@/app/components/ServiceOperationalFields";
-import { needsDireccionFields } from "@/app/lib/service-payload";
 import { AMENITIES_GROUPS } from "@/app/lib/amenities";
 import {
   DOC_ID_TO_PROFILE_FIELD,
@@ -29,11 +28,34 @@ import {
   STEP_KEY,
 } from "@/app/ser-proveedor/onboarding-steps";
 import WizardLayout from "@/app/ser-proveedor/WizardLayout";
+import ServiceStepHeader from "@/app/components/provider/ServiceStepHeader";
+import DireccionContactoFields from "@/app/components/provider/DireccionContactoFields";
+import CounterField from "@/app/components/provider/CounterField";
+import TagPill from "@/app/components/provider/TagPill";
+import {
+  CONFIRMACION_LABELS,
+  DOCUMENT_LABELS,
+  NAV_LABELS,
+  PROFILE_LABELS,
+  PROVIDER_INPUT_CLASS,
+  RESUMEN_LABELS,
+  SERVICE_LABELS,
+  VERTICALES_STEP_LABELS,
+  serviceDescripcionPlaceholder,
+  serviceFotosLabel,
+  servicePrecioLabel,
+} from "@/app/lib/provider-form-labels";
+import {
+  GREEN,
+  ORANGE,
+  PRIMARY,
+  VERTICAL_DOC_LABELS,
+  VERTICALES_CARDS,
+  getServiceHeaderTitle,
+  getVerticalColor,
+} from "@/app/lib/provider-verticals";
 
-const PRIMARY = "#1d4f91";
 const DARK_BLUE = "#163a6b";
-const GREEN = "#0e7a5c";
-const ORANGE = "#c47d1a";
 
 const DIAS_SEMANA = [
   { id: "lun", label: "L" },
@@ -55,48 +77,6 @@ const IDIOMAS_DEFAULT = [
   "Italiano",
   "Português",
   "中文",
-];
-
-const VERTICALES_CARDS = [
-  {
-    id: "alojamiento",
-    nombre: "Alojamiento",
-    color: PRIMARY,
-    icono: "🏠",
-    subtitulo: "Recibe familias en tu espacio",
-    precioRef: "desde 45€/noche",
-    beneficios: [
-      "Tú pones el precio y las normas",
-      "Pagos seguros con Stripe",
-      "Sin comisión los primeros 3 meses",
-    ],
-  },
-  {
-    id: "ninos",
-    nombre: "Niñera",
-    color: GREEN,
-    icono: "🧒",
-    subtitulo: "Cuida niños con confianza",
-    precioRef: "desde 12€/hora",
-    beneficios: [
-      "Horarios flexibles",
-      "Referencias verificadas",
-      "Familias de tu zona",
-    ],
-  },
-  {
-    id: "mascotas",
-    nombre: "Mascotas",
-    color: ORANGE,
-    icono: "🐾",
-    subtitulo: "Cuida mascotas como en casa",
-    precioRef: "desde 18€/día",
-    beneficios: [
-      "Mascotas de todos los tamaños",
-      "Actualizaciones en tiempo real",
-      "Seguro de responsabilidad",
-    ],
-  },
 ];
 
 const TIPO_ALOJAMIENTO_OPTIONS = [
@@ -312,51 +292,6 @@ async function geocodeBarrio(barrio, ciudad) {
   return null;
 }
 
-function DireccionContactoFields({ d, upd, vertical }) {
-  if (!needsDireccionFields(vertical, d.modalidad)) return null;
-  return (
-    <>
-      <div className="sm:col-span-2">
-        <label className="mb-1.5 block text-xs font-medium text-[#444]">Dirección exacta</label>
-        <input
-          type="text"
-          value={d.direccion_exacta || ""}
-          onChange={(e) => upd("direccion_exacta", e.target.value)}
-          placeholder="Calle, número, piso, ciudad, código postal"
-          style={{
-            width: "100%",
-            padding: 10,
-            borderRadius: 8,
-            border: "1px solid #e8e4de",
-            fontSize: 13,
-          }}
-        />
-        <p style={{ fontSize: 10, color: "#aaa", marginTop: 4 }}>
-          Esta dirección solo se compartirá con el cliente tras confirmar la reserva
-        </p>
-      </div>
-      <div className="sm:col-span-2">
-        <label className="mb-1.5 block text-xs font-medium text-[#444]">
-          Teléfono de contacto para este servicio
-        </label>
-        <input
-          type="tel"
-          value={d.telefono_contacto || ""}
-          onChange={(e) => upd("telefono_contacto", e.target.value)}
-          placeholder="+34 600 000 000"
-          style={{
-            width: "100%",
-            padding: 10,
-            borderRadius: 8,
-            border: "1px solid #e8e4de",
-            fontSize: 13,
-          }}
-        />
-      </div>
-    </>
-  );
-}
-
 async function geocodeLocationZonesForServices(selectedIds, detailsByService, ciudad) {
   const result = { ...detailsByService };
   await Promise.all(
@@ -377,26 +312,7 @@ async function geocodeLocationZonesForServices(selectedIds, detailsByService, ci
   return result;
 }
 
-const inputClass =
-  "w-full rounded-xl border px-4 py-3 text-sm text-[#1a1a1a] outline-none focus:ring-2 focus:ring-[#1d4f91]/30";
-
-
-function TagPill({ label, selected, onClick, color = PRIMARY }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors"
-      style={{
-        borderColor: selected ? color : BRAND.border,
-        backgroundColor: selected ? `${color}14` : "#fff",
-        color: selected ? color : "#666",
-      }}
-    >
-      {label}
-    </button>
-  );
-}
+const inputClass = PROVIDER_INPUT_CLASS;
 
 function ToggleRow({ label, checked, onChange }) {
   return (
@@ -419,46 +335,6 @@ function ToggleRow({ label, checked, onChange }) {
   );
 }
 
-function CounterField({ label, value, onChange, min = 0 }) {
-  return (
-    <div className="rounded-xl border p-3 text-center" style={{ borderColor: BRAND.border }}>
-      <p className="text-xs text-[#666]">{label}</p>
-      <div className="mt-2 flex items-center justify-center gap-3">
-        <button
-          type="button"
-          onClick={() => onChange(Math.max(min, value - 1))}
-          className="flex h-8 w-8 items-center justify-center rounded-full border text-lg"
-          style={{ borderColor: BRAND.border }}
-        >
-          −
-        </button>
-        <span className="w-6 text-center text-lg font-semibold">{value}</span>
-        <button
-          type="button"
-          onClick={() => onChange(value + 1)}
-          className="flex h-8 w-8 items-center justify-center rounded-full border text-lg"
-          style={{ borderColor: BRAND.border }}
-        >
-          +
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function ServiceStepHeader({ title, color }) {
-  return (
-    <div
-      className="mb-6 rounded-xl px-5 py-4 text-white"
-      style={{ backgroundColor: color }}
-    >
-      <h2 className="text-2xl font-semibold" style={{ fontFamily: SERIF }}>
-        {title}
-      </h2>
-    </div>
-  );
-}
-
 function DocUploadRow({ docId, title, required, file, uploaded, uploading, onUpload }) {
   const ok = !!(file || uploaded);
   return (
@@ -474,7 +350,13 @@ function DocUploadRow({ docId, title, required, file, uploaded, uploading, onUpl
           )}
         </p>
         <p className="text-xs" style={{ color: ok ? GREEN : required ? ORANGE : "#888" }}>
-          {uploading ? "Subiendo…" : ok ? "Listo" : required ? "Falta subir" : "Opcional"}
+          {uploading
+            ? DOCUMENT_LABELS.subiendo
+            : ok
+              ? DOCUMENT_LABELS.listo
+              : required
+                ? DOCUMENT_LABELS.faltaSubir
+                : DOCUMENT_LABELS.opcional}
         </p>
       </div>
       <button
@@ -1226,10 +1108,10 @@ export default function SerProveedorPage() {
       return (
         <div>
           <h2 className="text-2xl text-[#1a1a1a]" style={{ fontFamily: SERIF }}>
-            ¿Qué quieres ofrecer?
+            {VERTICALES_STEP_LABELS.title}
           </h2>
           <p className="mt-1 text-sm text-[#666]">
-            Elige una o varias. Crearás un anuncio por cada una.
+            {VERTICALES_STEP_LABELS.subtitle}
           </p>
           <div className="mt-6 grid gap-4 sm:grid-cols-3">
             {VERTICALES_CARDS.map((v) => {
@@ -1300,7 +1182,7 @@ export default function SerProveedorPage() {
             })}
           </div>
           <p className="mt-6 text-xs leading-relaxed text-[#666]">
-            El DNI y los antecedentes se piden una sola vez, aunque ofrezcas varias.
+            {VERTICALES_STEP_LABELS.notaDni}
           </p>
         </div>
       );
@@ -1310,10 +1192,10 @@ export default function SerProveedorPage() {
       return (
         <div>
           <h2 className="text-2xl text-[#1a1a1a]" style={{ fontFamily: SERIF }}>
-            Cuéntanos quién eres
+            {PROFILE_LABELS.title}
           </h2>
           <p className="mt-1 text-sm text-[#666]">
-            Esto solo lo haces una vez. Lo verán todas las familias.
+            {PROFILE_LABELS.subtitle}
           </p>
           <input ref={profilePhotoRef} type="file" accept="image/*" className="hidden" onChange={handleProfilePhoto} />
           <button
@@ -1332,47 +1214,47 @@ export default function SerProveedorPage() {
               )}
             </div>
             <span className="text-sm font-semibold" style={{ color: PRIMARY }}>
-              Añade una foto tuya
+              {PROFILE_LABELS.foto}
             </span>
           </button>
           <div className="mt-6 grid gap-4 sm:grid-cols-2">
             <div>
-              <label className="mb-1.5 block text-xs font-medium text-[#444]">¿Cómo te llamas?</label>
+              <label className="mb-1.5 block text-xs font-medium text-[#444]">{PROFILE_LABELS.nombre}</label>
               <input value={nombre} onChange={(e) => setNombre(e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
             </div>
             <div>
-              <label className="mb-1.5 block text-xs font-medium text-[#444]">Apellidos</label>
+              <label className="mb-1.5 block text-xs font-medium text-[#444]">{PROFILE_LABELS.apellidos}</label>
               <input value={apellido} onChange={(e) => setApellido(e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
             </div>
             <div>
-              <label className="mb-1.5 block text-xs font-medium text-[#444]">¿En qué ciudad estás?</label>
+              <label className="mb-1.5 block text-xs font-medium text-[#444]">{PROFILE_LABELS.ciudad}</label>
               <input value={ciudad} onChange={(e) => setCiudad(e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
             </div>
             <div>
-              <label className="mb-1.5 block text-xs font-medium text-[#444]">Años de experiencia</label>
+              <label className="mb-1.5 block text-xs font-medium text-[#444]">{PROFILE_LABELS.anosExperiencia}</label>
               <input type="number" min="0" value={anosExperiencia} onChange={(e) => setAnosExperiencia(e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
             </div>
           </div>
           <div className="mt-4">
             <label className="mb-1.5 block text-xs font-medium text-[#444]">
-              ¿Por qué deberían elegirte? <span className="text-red-500">*</span>
+              {PROFILE_LABELS.bio} <span className="text-red-500">*</span>
             </label>
             <textarea rows={4} value={sobreTi} onChange={(e) => setSobreTi(e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
           </div>
           <div className="mt-4">
             <label className="mb-1.5 block text-xs font-medium text-[#444]">
-              ¿Qué te gusta hacer? Tu personalidad <span className="text-[#888]">(opcional)</span>
+              {PROFILE_LABELS.personalidad} <span className="text-[#888]">{PROFILE_LABELS.opcional}</span>
             </label>
             <textarea rows={3} value={personalidad} onChange={(e) => setPersonalidad(e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
           </div>
           <div className="mt-4">
             <label className="mb-1.5 block text-xs font-medium text-[#444]">
-              ¿Qué te motivó a ofrecer este servicio? <span className="text-[#888]">(opcional)</span>
+              {PROFILE_LABELS.motivacion} <span className="text-[#888]">{PROFILE_LABELS.opcional}</span>
             </label>
             <textarea rows={3} value={motivacion} onChange={(e) => setMotivacion(e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
           </div>
           <div className="mt-4">
-            <p className="mb-2 text-xs font-medium text-[#444]">¿Qué idiomas hablas?</p>
+            <p className="mb-2 text-xs font-medium text-[#444]">{PROFILE_LABELS.idiomas}</p>
             <div className="flex flex-wrap gap-2">
               {allIdiomas.map((lang) => (
                 <TagPill key={lang} label={lang} selected={idiomas.includes(lang)} onClick={() => toggleIdioma(lang)} />
@@ -1399,11 +1281,11 @@ export default function SerProveedorPage() {
 
       return (
         <div>
-          <ServiceStepHeader title="Tu alojamiento" color={PRIMARY} />
+          <ServiceStepHeader title={getServiceHeaderTitle("alojamiento")} color={getVerticalColor("alojamiento")} />
           <input ref={(el) => { servicePhotoRefs.current.alojamiento = el; }} type="file" accept="image/*" multiple className="hidden" onChange={handleServicePhotos} />
           <div className="mt-6">
             <PhotoUploadGrid
-              label="Sube fotos de tu espacio"
+              label={serviceFotosLabel("alojamiento")}
               previews={servicePhotoPreviews.alojamiento}
               onAdd={() => openServicePhotoUpload("alojamiento")}
               onRemove={(i) => removeServicePhoto("alojamiento", i)}
@@ -1411,22 +1293,22 @@ export default function SerProveedorPage() {
           </div>
           <div className="mt-6 grid gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
-              <label className="mb-1.5 block text-xs font-medium text-[#444]">¿Cómo se llama tu servicio?</label>
+              <label className="mb-1.5 block text-xs font-medium text-[#444]">{SERVICE_LABELS.titulo}</label>
               <input value={d.titulo} onChange={(e) => upd("titulo", e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
             </div>
             <div className="sm:col-span-2">
-              <label className="mb-1.5 block text-xs font-medium text-[#444]">Cuéntanos qué ofreces</label>
+              <label className="mb-1.5 block text-xs font-medium text-[#444]">{SERVICE_LABELS.descripcion}</label>
               <textarea
                 value={d.descripcion || ""}
                 onChange={(e) => upd("descripcion", e.target.value)}
-                placeholder="Ej.: piso luminoso cerca del centro, ideal para familias con niños…"
+                placeholder={serviceDescripcionPlaceholder("alojamiento")}
                 rows={4}
                 className={inputClass}
                 style={{ borderColor: BRAND.border }}
               />
             </div>
             <div>
-              <label className="mb-1.5 block text-xs font-medium text-[#444]">¿Cuánto cobras por noche? (€)</label>
+              <label className="mb-1.5 block text-xs font-medium text-[#444]">{servicePrecioLabel("alojamiento")}</label>
               <input type="number" min="0" value={d.precio} onChange={(e) => upd("precio", e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
             </div>
             <div>
@@ -1455,12 +1337,12 @@ export default function SerProveedorPage() {
           <div className="mt-6 grid gap-4 sm:grid-cols-2">
             <DireccionContactoFields d={d} upd={upd} vertical="alojamiento" />
           </div>
-          <p className="mt-6 mb-3 text-xs font-medium text-[#444]">¿Cuántas personas caben?</p>
+          <p className="mt-6 mb-3 text-xs font-medium text-[#444]">{SERVICE_LABELS.capacidad}</p>
           <div className="grid grid-cols-4 gap-3">
-            <CounterField label="Personas" value={d.capacidad.personas} onChange={(v) => updCap("personas", v)} min={1} />
-            <CounterField label="Habitaciones" value={d.capacidad.habitaciones} onChange={(v) => updCap("habitaciones", v)} min={1} />
-            <CounterField label="Camas" value={d.capacidad.camas} onChange={(v) => updCap("camas", v)} min={1} />
-            <CounterField label="Baños" value={d.capacidad.banos} onChange={(v) => updCap("banos", v)} min={1} />
+            <CounterField label={SERVICE_LABELS.capacidadPersonas} value={d.capacidad.personas} onChange={(v) => updCap("personas", v)} min={1} />
+            <CounterField label={SERVICE_LABELS.capacidadHabitaciones} value={d.capacidad.habitaciones} onChange={(v) => updCap("habitaciones", v)} min={1} />
+            <CounterField label={SERVICE_LABELS.capacidadCamas} value={d.capacidad.camas} onChange={(v) => updCap("camas", v)} min={1} />
+            <CounterField label={SERVICE_LABELS.capacidadBanos} value={d.capacidad.banos} onChange={(v) => updCap("banos", v)} min={1} />
           </div>
           {AMENITIES_GROUPS.map((group) => (
             <div key={group.title} className="mt-6">
@@ -1506,7 +1388,7 @@ export default function SerProveedorPage() {
             details={d}
             onChange={(next) => updateServiceDetails("alojamiento", next)}
             collapsible
-            sectionSubtitle="Ya lo dejamos listo con lo más común. Cámbialo si quieres."
+            sectionSubtitle={SERVICE_LABELS.operativo.subtitle}
           />
           <div className="mt-6 space-y-2">
             <p className="text-xs font-semibold text-[#444]">Documentos</p>
@@ -1537,11 +1419,11 @@ export default function SerProveedorPage() {
 
       return (
         <div>
-          <ServiceStepHeader title="Tu servicio de niñera" color={GREEN} />
+          <ServiceStepHeader title={getServiceHeaderTitle("ninos")} color={getVerticalColor("ninos")} />
           <input ref={(el) => { servicePhotoRefs.current.ninos = el; }} type="file" accept="image/*" className="hidden" onChange={handleServicePhotos} />
           <div className="mt-6">
             <PhotoUploadGrid
-              label="Sube una foto de tu servicio"
+              label={serviceFotosLabel("ninos")}
               previews={servicePhotoPreviews.ninos}
               onAdd={() => openServicePhotoUpload("ninos")}
               onRemove={(i) => removeServicePhoto("ninos", i)}
@@ -1550,15 +1432,15 @@ export default function SerProveedorPage() {
           </div>
           <div className="mt-6 grid gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
-              <label className="mb-1.5 block text-xs font-medium text-[#444]">¿Cómo se llama tu servicio?</label>
+              <label className="mb-1.5 block text-xs font-medium text-[#444]">{SERVICE_LABELS.titulo}</label>
               <input value={d.titulo} onChange={(e) => upd("titulo", e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
             </div>
             <div className="sm:col-span-2">
-              <label className="mb-1.5 block text-xs font-medium text-[#444]">Cuéntanos qué ofreces</label>
+              <label className="mb-1.5 block text-xs font-medium text-[#444]">{SERVICE_LABELS.descripcion}</label>
               <textarea
                 value={d.descripcion || ""}
                 onChange={(e) => upd("descripcion", e.target.value)}
-                placeholder="Ej.: niñera con experiencia en bebés, actividades al aire libre…"
+                placeholder={serviceDescripcionPlaceholder("ninos")}
                 rows={4}
                 className={inputClass}
                 style={{ borderColor: BRAND.border }}
@@ -1569,7 +1451,7 @@ export default function SerProveedorPage() {
               <input type="number" min="0" value={d.anos_experiencia} onChange={(e) => upd("anos_experiencia", e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
             </div>
             <div>
-              <label className="mb-1.5 block text-xs font-medium text-[#444]">¿Cuánto cobras por hora? (€)</label>
+              <label className="mb-1.5 block text-xs font-medium text-[#444]">{servicePrecioLabel("ninos")}</label>
               <input type="number" min="0" value={d.precio} onChange={(e) => upd("precio", e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
             </div>
             <div className="sm:col-span-2">
@@ -1613,7 +1495,7 @@ export default function SerProveedorPage() {
             details={d}
             onChange={(next) => updateServiceDetails("ninos", next)}
             collapsible
-            sectionSubtitle="Ya lo dejamos listo con lo más común. Cámbialo si quieres."
+            sectionSubtitle={SERVICE_LABELS.operativo.subtitle}
           />
           <div className="mt-4 rounded-xl border p-4" style={{ borderColor: BRAND.border }}>
             <ToggleRow label="Disponible para viajar" checked={d.disponible_para_viajar} onChange={(v) => upd("disponible_para_viajar", v)} />
@@ -1660,11 +1542,11 @@ export default function SerProveedorPage() {
 
       return (
         <div>
-          <ServiceStepHeader title="Tu servicio de mascotas" color={ORANGE} />
+          <ServiceStepHeader title={getServiceHeaderTitle("mascotas")} color={getVerticalColor("mascotas")} />
           <input ref={(el) => { servicePhotoRefs.current.mascotas = el; }} type="file" accept="image/*" className="hidden" onChange={handleServicePhotos} />
           <div className="mt-6">
             <PhotoUploadGrid
-              label="Sube una foto de tu servicio"
+              label={serviceFotosLabel("mascotas")}
               previews={servicePhotoPreviews.mascotas}
               onAdd={() => openServicePhotoUpload("mascotas")}
               onRemove={(i) => removeServicePhoto("mascotas", i)}
@@ -1673,15 +1555,15 @@ export default function SerProveedorPage() {
           </div>
           <div className="mt-6 grid gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
-              <label className="mb-1.5 block text-xs font-medium text-[#444]">¿Cómo se llama tu servicio?</label>
+              <label className="mb-1.5 block text-xs font-medium text-[#444]">{SERVICE_LABELS.titulo}</label>
               <input value={d.titulo} onChange={(e) => upd("titulo", e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
             </div>
             <div className="sm:col-span-2">
-              <label className="mb-1.5 block text-xs font-medium text-[#444]">Cuéntanos qué ofreces</label>
+              <label className="mb-1.5 block text-xs font-medium text-[#444]">{SERVICE_LABELS.descripcion}</label>
               <textarea
                 value={d.descripcion || ""}
                 onChange={(e) => upd("descripcion", e.target.value)}
-                placeholder="Ej.: cuidado en mi hogar con jardín, paseos diarios y fotos de tu mascota…"
+                placeholder={serviceDescripcionPlaceholder("mascotas")}
                 rows={4}
                 className={inputClass}
                 style={{ borderColor: BRAND.border }}
@@ -1692,7 +1574,7 @@ export default function SerProveedorPage() {
               <input type="number" min="0" value={d.anos_experiencia} onChange={(e) => upd("anos_experiencia", e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
             </div>
             <div>
-              <label className="mb-1.5 block text-xs font-medium text-[#444]">¿Cuánto cobras por día? (€)</label>
+              <label className="mb-1.5 block text-xs font-medium text-[#444]">{servicePrecioLabel("mascotas")}</label>
               <input type="number" min="0" value={d.precio} onChange={(e) => upd("precio", e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
             </div>
             <div className="sm:col-span-2">
@@ -1740,7 +1622,7 @@ export default function SerProveedorPage() {
             details={d}
             onChange={(next) => updateServiceDetails("mascotas", next)}
             collapsible
-            sectionSubtitle="Ya lo dejamos listo con lo más común. Cámbialo si quieres."
+            sectionSubtitle={SERVICE_LABELS.operativo.subtitle}
           />
           <div className="mt-4">
             <p className="mb-2 text-xs font-medium text-[#444]">Certificaciones</p>
@@ -1772,19 +1654,15 @@ export default function SerProveedorPage() {
 
 
     if (currentStepKey === STEP_KEY.DOCUMENTOS) {
-      const verticalLabels = {
-        alojamiento: "🏠 Alojamiento",
-        ninos: "🧒 Niñera",
-        mascotas: "🐾 Mascotas",
-      };
+      const verticalLabels = VERTICAL_DOC_LABELS;
 
       return (
         <div>
           <h2 className="text-2xl text-[#1a1a1a]" style={{ fontFamily: SERIF }}>
-            Tus documentos
+            {DOCUMENT_LABELS.title}
           </h2>
           <p className="mt-1 text-sm text-[#666]">
-            Solo te pedimos lo necesario. Si ya lo subiste, no hace falta otra vez.
+            {DOCUMENT_LABELS.subtitle}
           </p>
           <div className="mt-6 rounded-xl border p-4" style={{ borderColor: BRAND.border }}>
             <p className="text-sm font-semibold">DNI / NIE / Pasaporte</p>
@@ -1811,7 +1689,7 @@ export default function SerProveedorPage() {
                     <div key={docId} className="flex items-center justify-between text-sm">
                       <span className="flex items-center gap-2">
                         <span style={{ color: hasUploadedDoc(docId) ? GREEN : DOCUMENT_CATALOG[docId].required ? ORANGE : "#888" }}>
-                          {hasUploadedDoc(docId) ? "Listo" : DOCUMENT_CATALOG[docId].required ? "Falta subir" : "Opcional"}
+                          {hasUploadedDoc(docId) ? DOCUMENT_LABELS.listo : DOCUMENT_CATALOG[docId].required ? DOCUMENT_LABELS.faltaSubir : DOCUMENT_LABELS.opcional}
                         </span>
                         {DOCUMENT_CATALOG[docId].title}
                       </span>
@@ -1901,10 +1779,10 @@ export default function SerProveedorPage() {
       return (
         <div>
           <h2 className="text-2xl text-[#1a1a1a]" style={{ fontFamily: SERIF }}>
-            Última revisión
+            {RESUMEN_LABELS.title}
           </h2>
           <p className="mt-1 text-sm text-[#666]">
-            Comprueba que todo esté bien antes de enviar.
+            {RESUMEN_LABELS.subtitle}
           </p>
           <div
             className="mt-6 rounded-2xl border bg-white p-5"
@@ -1992,7 +1870,7 @@ export default function SerProveedorPage() {
             className="mt-6 w-full rounded-xl py-3.5 text-sm font-semibold text-white transition-opacity disabled:opacity-60"
             style={{ backgroundColor: PRIMARY }}
           >
-            {loading ? "Enviando…" : "Enviar mi perfil para revisión"}
+            {loading ? RESUMEN_LABELS.enviando : RESUMEN_LABELS.enviar}
           </button>
         </div>
       );
@@ -2011,7 +1889,7 @@ export default function SerProveedorPage() {
               marginBottom: 8,
             }}
           >
-            ¡Listo! Estamos revisando tu perfil
+            {CONFIRMACION_LABELS.title}
           </h2>
           <p
             style={{
@@ -2021,7 +1899,7 @@ export default function SerProveedorPage() {
               lineHeight: 1.7,
             }}
           >
-            Te avisaremos por email en menos de 24h.
+            {CONFIRMACION_LABELS.subtitle}
           </p>
           <div
             style={{
@@ -2077,7 +1955,7 @@ export default function SerProveedorPage() {
           className="rounded-xl border px-6 py-3 text-sm font-semibold transition-opacity disabled:opacity-30"
           style={{ borderColor: "#ccc", color: "#666" }}
         >
-          ← Atrás
+          {NAV_LABELS.atras}
         </button>
         <button
           type="button"
@@ -2086,7 +1964,7 @@ export default function SerProveedorPage() {
           className="rounded-xl px-6 py-3 text-sm font-semibold text-white disabled:opacity-60"
           style={{ backgroundColor: PRIMARY }}
         >
-          {savingStep ? "Guardando tu progreso…" : "Continuar"}
+          {savingStep ? NAV_LABELS.guardando : NAV_LABELS.continuar}
         </button>
       </div>
     ) : isLastStep ? (
@@ -2096,7 +1974,7 @@ export default function SerProveedorPage() {
         className="rounded-xl border px-6 py-3 text-sm font-semibold"
         style={{ borderColor: "#ccc", color: "#666" }}
       >
-        ← Atrás
+        {NAV_LABELS.atras}
       </button>
     ) : null;
 

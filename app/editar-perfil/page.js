@@ -6,7 +6,26 @@ import { useEffect, useRef, useState } from "react";
 import ProveedorEmergenciaToggle from "@/app/components/ProveedorEmergenciaToggle";
 import CalendarioTarifas from "@/app/components/CalendarioTarifas";
 import ServiceOperationalFields from "@/app/components/ServiceOperationalFields";
+import ServiceStepHeader from "@/app/components/provider/ServiceStepHeader";
+import DireccionContactoFields from "@/app/components/provider/DireccionContactoFields";
+import CounterField from "@/app/components/provider/CounterField";
+import TagPill from "@/app/components/provider/TagPill";
 import { BRAND, SERIF } from "@/app/components/brand";
+import {
+  DOCUMENT_LABELS,
+  PROFILE_LABELS,
+  PROVIDER_INPUT_CLASS,
+  SERVICE_LABELS,
+  serviceDescripcionPlaceholder,
+  serviceFotosLabel,
+  servicePrecioLabel,
+} from "@/app/lib/provider-form-labels";
+import {
+  PRIMARY,
+  VERTICALS,
+  getServiceHeaderTitle,
+  getVerticalColor,
+} from "@/app/lib/provider-verticals";
 import {
   DEFAULT_CAPACIDAD_ALOJAMIENTO,
   parseCapacidadFromDb,
@@ -22,7 +41,6 @@ import {
   buildServicePayload,
   DIAS_DISPONIBLES_DEFAULT,
   getServiceLocationFields,
-  needsDireccionFields,
 } from "@/app/lib/service-payload";
 import { supabase } from "@/app/lib/supabase";
 
@@ -39,15 +57,7 @@ import {
   REVISION_PENDIENTE_MSG,
 } from "@/app/lib/provider-publicacion";
 
-const PRIMARY = "#1d4f91";
-const DARK_BLUE = "#163a6b";
 const SERVICE_ACTIVE_GREEN = "#0e7a5c";
-
-const VERTICALS = [
-  { id: "alojamiento", label: "Alojamiento", color: PRIMARY, emoji: "🏠" },
-  { id: "ninos", label: "Niñera", color: "#0e7a5c", emoji: "🧒" },
-  { id: "mascotas", label: "Mascotas", color: "#c47d1a", emoji: "🐾" },
-];
 
 const IDIOMAS_DEFAULT = [
   "Español",
@@ -90,8 +100,7 @@ const MODALIDAD_MASCOTAS_OPTIONS = [
   { value: "todo_incluido", label: "Todo incluido" },
 ];
 
-const inputClass =
-  "w-full rounded-xl border px-4 py-3 text-sm text-[#1a1a1a] outline-none focus:ring-2 focus:ring-[#1d4f91]/30";
+const inputClass = PROVIDER_INPUT_CLASS;
 
 function emptyServiceDetails() {
   return {
@@ -170,51 +179,6 @@ function mapServiceFromDb(row) {
   };
 }
 
-function DireccionContactoFields({ d, upd, vertical }) {
-  if (!needsDireccionFields(vertical, d.modalidad)) return null;
-  return (
-    <>
-      <div className="sm:col-span-2">
-        <label className="mb-1.5 block text-xs font-medium text-[#444]">Dirección exacta</label>
-        <input
-          type="text"
-          value={d.direccion_exacta || ""}
-          onChange={(e) => upd("direccion_exacta", e.target.value)}
-          placeholder="Calle, número, piso, ciudad, código postal"
-          style={{
-            width: "100%",
-            padding: 10,
-            borderRadius: 8,
-            border: "1px solid #e8e4de",
-            fontSize: 13,
-          }}
-        />
-        <p style={{ fontSize: 10, color: "#aaa", marginTop: 4 }}>
-          Esta dirección solo se compartirá con el cliente tras confirmar la reserva
-        </p>
-      </div>
-      <div className="sm:col-span-2">
-        <label className="mb-1.5 block text-xs font-medium text-[#444]">
-          Teléfono de contacto para este servicio
-        </label>
-        <input
-          type="tel"
-          value={d.telefono_contacto || ""}
-          onChange={(e) => upd("telefono_contacto", e.target.value)}
-          placeholder="+34 600 000 000"
-          style={{
-            width: "100%",
-            padding: 10,
-            borderRadius: 8,
-            border: "1px solid #e8e4de",
-            fontSize: 13,
-          }}
-        />
-      </div>
-    </>
-  );
-}
-
 function SectionLabel({ number, title }) {
   return (
     <p
@@ -223,33 +187,6 @@ function SectionLabel({ number, title }) {
     >
       {number} · {title}
     </p>
-  );
-}
-
-function CounterField({ label, value, onChange, min = 0 }) {
-  return (
-    <div className="rounded-xl border p-3 text-center" style={{ borderColor: BRAND.border }}>
-      <p className="text-xs text-[#666]">{label}</p>
-      <div className="mt-2 flex items-center justify-center gap-3">
-        <button
-          type="button"
-          onClick={() => onChange(Math.max(min, value - 1))}
-          className="flex h-8 w-8 items-center justify-center rounded-full border text-lg"
-          style={{ borderColor: BRAND.border }}
-        >
-          −
-        </button>
-        <span className="w-6 text-center text-lg font-semibold">{value}</span>
-        <button
-          type="button"
-          onClick={() => onChange(value + 1)}
-          className="flex h-8 w-8 items-center justify-center rounded-full border text-lg"
-          style={{ borderColor: BRAND.border }}
-        >
-          +
-        </button>
-      </div>
-    </div>
   );
 }
 
@@ -585,10 +522,15 @@ function ServiceEditForm({ vertical, details, onChange, userId }) {
     onChange({ ...details, capacidad: { ...capacidad, [key]: val } });
 
   return (
-    <div className="mt-4 grid gap-4 sm:grid-cols-2">
+    <>
+      <ServiceStepHeader
+        title={getServiceHeaderTitle(vertical)}
+        color={getVerticalColor(vertical)}
+      />
+      <div className="grid gap-4 sm:grid-cols-2">
       <div className="sm:col-span-2">
         <label className="mb-1.5 block text-xs font-medium text-[#444]">
-          Título del servicio
+          {SERVICE_LABELS.titulo}
         </label>
         <input
           type="text"
@@ -601,30 +543,20 @@ function ServiceEditForm({ vertical, details, onChange, userId }) {
       </div>
       <div className="sm:col-span-2">
         <label className="mb-1.5 block text-xs font-medium text-[#444]">
-          Descripción del servicio
+          {SERVICE_LABELS.descripcion}
         </label>
         <textarea
           value={details.descripcion || ""}
           onChange={(e) => update("descripcion", e.target.value)}
-          placeholder="Describe tu servicio: qué ofreces, qué lo hace especial..."
+          placeholder={serviceDescripcionPlaceholder(vertical)}
           rows={4}
-          style={{
-            width: "100%",
-            padding: 10,
-            borderRadius: 8,
-            border: "1px solid #e8e4de",
-            fontSize: 13,
-          }}
+          className={inputClass}
+          style={{ borderColor: BRAND.border }}
         />
       </div>
       <div>
         <label className="mb-1.5 block text-xs font-medium text-[#444]">
-          Precio (€)
-          {vertical === "alojamiento"
-            ? " / noche"
-            : vertical === "ninos"
-              ? " / hora"
-              : " / día"}
+          {servicePrecioLabel(vertical)}
         </label>
         <input
           type="number"
@@ -637,7 +569,7 @@ function ServiceEditForm({ vertical, details, onChange, userId }) {
       </div>
       {vertical === "alojamiento" ? (
         <div className="sm:col-span-2">
-          <p className="mb-2 text-xs font-medium text-[#444]">Tipo de alojamiento</p>
+          <p className="mb-2 text-xs font-medium text-[#444]">{SERVICE_LABELS.tipoAlojamiento}</p>
           <div className="flex flex-col gap-2">
             {TIPO_ALOJAMIENTO_OPTIONS.map((option) => {
               const selected = details.tipo_alojamiento === option.value;
@@ -662,7 +594,7 @@ function ServiceEditForm({ vertical, details, onChange, userId }) {
         </div>
       ) : (
         <div className="sm:col-span-2">
-          <p className="mb-2 text-xs font-medium text-[#444]">Modalidad de servicio</p>
+          <p className="mb-2 text-xs font-medium text-[#444]">{SERVICE_LABELS.modalidad}</p>
           <div className="flex flex-col gap-2">
             {(vertical === "mascotas"
               ? MODALIDAD_MASCOTAS_OPTIONS
@@ -693,28 +625,28 @@ function ServiceEditForm({ vertical, details, onChange, userId }) {
       {vertical === "alojamiento" && (
         <>
           <div className="sm:col-span-2">
-            <p className="mb-3 text-xs font-medium text-[#444]">Capacidad</p>
+            <p className="mb-3 text-xs font-medium text-[#444]">{SERVICE_LABELS.capacidad}</p>
             <div className="grid grid-cols-4 gap-3">
               <CounterField
-                label="Personas"
+                label={SERVICE_LABELS.capacidadPersonas}
                 value={capacidad.personas}
                 onChange={(v) => updCap("personas", v)}
                 min={1}
               />
               <CounterField
-                label="Habitaciones"
+                label={SERVICE_LABELS.capacidadHabitaciones}
                 value={capacidad.habitaciones}
                 onChange={(v) => updCap("habitaciones", v)}
                 min={1}
               />
               <CounterField
-                label="Camas"
+                label={SERVICE_LABELS.capacidadCamas}
                 value={capacidad.camas}
                 onChange={(v) => updCap("camas", v)}
                 min={1}
               />
               <CounterField
-                label="Baños"
+                label={SERVICE_LABELS.capacidadBanos}
                 value={capacidad.banos}
                 onChange={(v) => updCap("banos", v)}
                 min={1}
@@ -748,7 +680,7 @@ function ServiceEditForm({ vertical, details, onChange, userId }) {
             </div>
           ))}
           <div className="sm:col-span-2">
-            <p className="mb-2 text-xs font-medium text-[#444]">Fotos del alojamiento</p>
+            <p className="mb-2 text-xs font-medium text-[#444]">{serviceFotosLabel(vertical, "edit")}</p>
             <input
               ref={servicePhotoInputRef}
               type="file"
@@ -788,6 +720,7 @@ function ServiceEditForm({ vertical, details, onChange, userId }) {
         vertical={vertical}
         details={details}
         onChange={onChange}
+        sectionSubtitle={SERVICE_LABELS.operativo.subtitle}
       />
       {vertical === "ninos" && (
         <div
@@ -842,7 +775,8 @@ function ServiceEditForm({ vertical, details, onChange, userId }) {
           onChange={(value) => update("proveedor_emergencia", value)}
         />
       </div>
-    </div>
+      </div>
+    </>
   );
 }
 
@@ -860,23 +794,6 @@ function Card({ title, headerRight, children }) {
       )}
       {children}
     </div>
-  );
-}
-
-function TagPill({ label, selected, onClick }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors"
-      style={{
-        borderColor: selected ? PRIMARY : BRAND.border,
-        backgroundColor: selected ? "#e8f0fb" : "#fff",
-        color: selected ? PRIMARY : "#666",
-      }}
-    >
-      {label}
-    </button>
   );
 }
 
@@ -1380,7 +1297,7 @@ export default function EditarPerfilPage() {
             <Card title="Sobre ti">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium text-[#444]">Nombre</label>
+                  <label className="mb-1.5 block text-xs font-medium text-[#444]">{PROFILE_LABELS.nombre}</label>
                   <input
                     type="text"
                     value={nombre}
@@ -1393,7 +1310,7 @@ export default function EditarPerfilPage() {
                   />
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium text-[#444]">Apellidos</label>
+                  <label className="mb-1.5 block text-xs font-medium text-[#444]">{PROFILE_LABELS.apellidos}</label>
                   <input
                     type="text"
                     value={apellido}
@@ -1407,7 +1324,7 @@ export default function EditarPerfilPage() {
                 </div>
               </div>
               <div className="mt-4">
-                <label className="mb-1.5 block text-xs font-medium text-[#444]">Ciudad</label>
+                <label className="mb-1.5 block text-xs font-medium text-[#444]">{PROFILE_LABELS.ciudad}</label>
                 <input
                   type="text"
                   value={ciudad}
@@ -1455,7 +1372,7 @@ export default function EditarPerfilPage() {
                 />
               </div>
               <div className="mt-4">
-                <label className="mb-1.5 block text-xs font-medium text-[#444]">Idiomas</label>
+                <label className="mb-1.5 block text-xs font-medium text-[#444]">{PROFILE_LABELS.idiomas}</label>
                 <div className="flex flex-wrap gap-2">
                   {IDIOMAS_DEFAULT.map((lang) => (
                     <TagPill
@@ -1503,7 +1420,7 @@ export default function EditarPerfilPage() {
                 <p className="text-sm font-semibold text-[#1a1a1a]">{[nombre, apellido].filter(Boolean).join(" ") || "Tu nombre"}</p>
                 <p className="text-xs text-[#888]">Subida: {fotoFecha}</p>
                 <button type="button" onClick={() => profilePhotoRef.current?.click()} className="mt-2 text-xs font-semibold" style={{ color: PRIMARY }}>
-                  Cambiar foto
+                  {PROFILE_LABELS.cambiarFoto}
                 </button>
               </div>
             </div>
@@ -1512,15 +1429,15 @@ export default function EditarPerfilPage() {
           <Card title="Información personal">
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label className="mb-1.5 block text-xs font-medium text-[#444]">Nombre</label>
+                <label className="mb-1.5 block text-xs font-medium text-[#444]">{PROFILE_LABELS.nombre}</label>
                 <input type="text" required value={nombre} onChange={(e) => { markDirty(); setNombre(e.target.value); }} className={inputClass} style={{ borderColor: BRAND.border }} />
               </div>
               <div>
-                <label className="mb-1.5 block text-xs font-medium text-[#444]">Apellidos</label>
+                <label className="mb-1.5 block text-xs font-medium text-[#444]">{PROFILE_LABELS.apellidos}</label>
                 <input type="text" required value={apellido} onChange={(e) => { markDirty(); setApellido(e.target.value); }} className={inputClass} style={{ borderColor: BRAND.border }} />
               </div>
               <div>
-                <label className="mb-1.5 block text-xs font-medium text-[#444]">Ciudad</label>
+                <label className="mb-1.5 block text-xs font-medium text-[#444]">{PROFILE_LABELS.ciudad}</label>
                 <input type="text" required value={ciudad} onChange={(e) => { markDirty(); setCiudad(e.target.value); }} className={inputClass} style={{ borderColor: BRAND.border }} />
               </div>
               <div>
@@ -1543,21 +1460,21 @@ export default function EditarPerfilPage() {
                 />
               </div>
               <div>
-                <label className="mb-1.5 block text-xs font-medium text-[#444]">Años de experiencia</label>
+                <label className="mb-1.5 block text-xs font-medium text-[#444]">{PROFILE_LABELS.anosExperiencia}</label>
                 <input type="number" min="0" value={anosExperiencia} onChange={(e) => { markDirty(); setAnosExperiencia(e.target.value); }} className={inputClass} style={{ borderColor: BRAND.border }} />
               </div>
             </div>
             <div className="mt-4">
-              <label className="mb-1.5 block text-xs font-medium text-[#444]">¿Por qué deberían elegirte?</label>
+              <label className="mb-1.5 block text-xs font-medium text-[#444]">{PROFILE_LABELS.bio}</label>
               <textarea rows={4} value={descripcion} onChange={(e) => { markDirty(); setDescripcion(e.target.value); }} className={`${inputClass} resize-y`} style={{ borderColor: BRAND.border }} />
             </div>
             <div className="mt-4">
-              <label className="mb-1.5 block text-xs font-medium text-[#444]">Tu personalidad</label>
+              <label className="mb-1.5 block text-xs font-medium text-[#444]">{PROFILE_LABELS.personalidadEdit}</label>
               <textarea rows={3} value={personalidad} onChange={(e) => { markDirty(); setPersonalidad(e.target.value); }} className={`${inputClass} resize-y`} style={{ borderColor: BRAND.border }} />
             </div>
           </Card>
 
-          <Card title="Idiomas">
+          <Card title={PROFILE_LABELS.idiomas}>
             <div className="flex flex-wrap gap-2">
               {IDIOMAS_DEFAULT.map((lang) => (
                 <TagPill key={lang} label={lang} selected={idiomas.includes(lang)} onClick={() => toggleIdioma(lang)} />
@@ -1706,7 +1623,6 @@ export default function EditarPerfilPage() {
       return (
         <>
           <Card
-            title={`${v?.emoji} ${v?.label}`}
             headerRight={
               <ServiceDisponibleRow
                 compact
@@ -1739,7 +1655,7 @@ export default function EditarPerfilPage() {
 
     if (activeTab === "documentos") {
       return (
-        <Card title="Documentos">
+        <Card title={DOCUMENT_LABELS.title}>
           <input ref={documentInputRef} type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={handleDocumentFile} />
           <ul className="flex flex-col gap-3">
             {DOC_FIELDS.map((doc) => {
@@ -1750,11 +1666,13 @@ export default function EditarPerfilPage() {
                 <li key={doc.key} className="flex items-center justify-between rounded-xl border p-3" style={{ borderColor: BRAND.border }}>
                   <div>
                     <p className="text-sm font-medium">{doc.label}</p>
-                    <p className="text-xs" style={{ color: ok ? "#0e7a5c" : "#c47d1a" }}>{ok ? "✓ Subido" : "⚠️ Pendiente"}</p>
+                    <p className="text-xs" style={{ color: ok ? "#0e7a5c" : "#c47d1a" }}>
+                      {ok ? DOCUMENT_LABELS.listo : DOCUMENT_LABELS.faltaSubir}
+                    </p>
                   </div>
                   {!ok && (
                     <button type="button" onClick={() => openDocumentUpload(doc.key)} disabled={isUploading} className="text-xs font-semibold disabled:opacity-60" style={{ color: PRIMARY }}>
-                      {isUploading ? "Subiendo…" : "Subir"}
+                      {isUploading ? DOCUMENT_LABELS.subiendo : DOCUMENT_LABELS.subir}
                     </button>
                   )}
                 </li>

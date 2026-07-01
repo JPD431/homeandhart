@@ -11,11 +11,7 @@ export const STEP_KEY = {
   CONFIRMACION: "confirmacion",
 };
 
-export const VERTICAL_COLORS = {
-  alojamiento: "#1d4f91",
-  ninos: "#0e7a5c",
-  mascotas: "#c47d1a",
-};
+export { VERTICAL_COLORS } from "@/app/lib/provider-verticals";
 
 /** Orden legacy (Fase 1): 1=verticales, 2=perfil, 3-5=servicios, 6=docs, 7=revisión, 8=confirmación. */
 const LEGACY_NUMERIC_TO_KEY = {

@@ -5,8 +5,8 @@ import {
   getProgressPosition,
   getStepIndex,
   STEP_KEY,
-  VERTICAL_COLORS,
 } from "@/app/ser-proveedor/onboarding-steps";
+import { VERTICAL_COLORS } from "@/app/lib/provider-verticals";
 
 const PRIMARY = "#1d4f91";
 const GREEN = "#0e7a5c";

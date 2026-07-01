@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { BRAND } from "@/app/components/brand";
+import { BRAND, SERIF } from "@/app/components/brand";
+import { SERVICE_LABELS } from "@/app/lib/provider-form-labels";
 import { DIAS_SEMANA, DIAS_DISPONIBLES_DEFAULT } from "@/app/lib/service-payload";
 
 const DARK_BLUE = "#163a6b";
@@ -203,8 +204,11 @@ export default function ServiceOperationalFields({
     return (
       <div className={`sm:col-span-2 ${className}`.trim()}>
         <p className="mb-2 text-xs font-semibold text-[#444]">
-          Disponibilidad y reservas
+          {SERVICE_LABELS.operativo.title}
         </p>
+        {sectionSubtitle ? (
+          <p className="mb-3 text-xs text-[#888]">{sectionSubtitle}</p>
+        ) : null}
         {fields}
       </div>
     );
@@ -221,7 +225,7 @@ export default function ServiceOperationalFields({
         className="flex w-full items-center justify-between gap-3 p-4 text-left"
       >
         <div>
-          <p className="text-xs font-semibold text-[#444]">Disponibilidad y reservas</p>
+          <p className="text-xs font-semibold text-[#444]">{SERVICE_LABELS.operativo.title}</p>
           {sectionSubtitle ? (
             <p className="mt-1 text-xs text-[#888]">{sectionSubtitle}</p>
           ) : null}
