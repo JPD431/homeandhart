@@ -68,8 +68,34 @@ export function normalizeServiceProfile(service) {
   return raw ?? {};
 }
 
+/** Descripción del anuncio: services.descripcion, con fallback a descripcion_anuncio. */
+export function getServiceDescription(service) {
+  if (!service) return "";
+  const primary =
+    typeof service.descripcion === "string" ? service.descripcion.trim() : "";
+  if (primary) return primary;
+  const fallback =
+    typeof service.descripcion_anuncio === "string"
+      ? service.descripcion_anuncio.trim()
+      : "";
+  return fallback;
+}
+
+/**
+ * URLs de fotos del servicio.
+ * Hoy en BD solo persiste services.foto_url (text); el wizard preview puede pasar fotos[].
+ */
+export function getServicePhotos(service) {
+  if (!service) return [];
+  if (Array.isArray(service.fotos)) {
+    return [...new Set(service.fotos.filter(Boolean))];
+  }
+  if (service.foto_url) return [service.foto_url];
+  return [];
+}
+
 function hasPetFriendlyInDescription(service) {
-  const desc = (service.descripcion || "").toLowerCase();
+  const desc = getServiceDescription(service).toLowerCase();
   return /pet[-_\s]?friendly/i.test(desc);
 }
 

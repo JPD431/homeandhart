@@ -12,6 +12,7 @@ import {
   getServiceCardTags,
   getServiceCardTheme,
   getServiceCardZone,
+  getServicePhotos,
   normalizeServiceProfile,
 } from "@/app/lib/service-card-display";
 
@@ -87,6 +88,8 @@ export default function ServiceCard({
 
   if (!service) return null;
 
+  const primaryPhoto = getServicePhotos(service)[0] ?? null;
+
   const toggleFavorito = async (e) => {
     e.stopPropagation();
     const {
@@ -126,10 +129,10 @@ export default function ServiceCard({
       >
         {isPreview ? (
           <div className="block h-full w-full">
-            {service.foto_url ? (
+            {primaryPhoto ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={service.foto_url}
+                src={primaryPhoto}
                 alt=""
                 className="h-full w-full object-cover"
               />
@@ -146,10 +149,10 @@ export default function ServiceCard({
             onClick={(e) => e.stopPropagation()}
             className="block h-full w-full"
           >
-            {service.foto_url ? (
+            {primaryPhoto ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={service.foto_url}
+                src={primaryPhoto}
                 alt=""
                 className="h-full w-full object-cover"
               />

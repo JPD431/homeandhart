@@ -164,7 +164,7 @@ export function mapDraftRowToServiceDetails(row) {
   const tiers = normalizeDescuentosDuracion(row.descuentos_duracion);
   const base = {
     titulo: row.titulo || "",
-    descripcion: row.descripcion || "",
+    descripcion: row.descripcion || row.descripcion_anuncio || "",
     precio: row.precio ?? "",
     location_zone: row.location_zone || "",
     location_lat: row.location_lat ?? null,

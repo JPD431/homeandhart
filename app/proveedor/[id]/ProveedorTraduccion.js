@@ -6,6 +6,8 @@ import { BRAND } from "@/app/components/brand";
 
 const ProveedorTranslateContext = createContext(null);
 
+export { ProveedorTranslateContext };
+
 function normalizeServiceId(serviceId) {
   return String(serviceId);
 }

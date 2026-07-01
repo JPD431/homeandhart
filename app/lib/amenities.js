@@ -39,3 +39,17 @@ export const AMENITIES_GROUPS = [
     ],
   },
 ];
+
+const AMENITIES_BY_ID = new Map(
+  AMENITIES_GROUPS.flatMap((group) =>
+    group.items.map((item) => [item.id, item]),
+  ),
+);
+
+/** Resuelve ids de amenities a { id, label, icon }. Ignora ids desconocidos. */
+export function resolveAmenities(ids) {
+  if (!Array.isArray(ids) || ids.length === 0) return [];
+  return ids
+    .map((id) => AMENITIES_BY_ID.get(id))
+    .filter(Boolean);
+}

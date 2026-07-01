@@ -481,12 +481,19 @@ function BuscarContent() {
   const filtersRef = useRef(null);
   const [headerOffset, setHeaderOffset] = useState(0);
 
-  const verticalParam = searchParams.get("vertical") || "todo";
+  const verticalFromUrl = searchParams.get("vertical") || "todo";
   const ciudadParam = searchParams.get("ciudad") || "";
   const fechaBusquedaInicioParam = searchParams.get("desde") || "";
   const fechaBusquedaFinParam = searchParams.get("hasta") || "";
   const bundleMode = searchParams.get("bundle") === "true";
   const origenParam = searchParams.get("origen") || "";
+
+  const [pendingVertical, setPendingVertical] = useState(null);
+  const activeVertical = pendingVertical ?? verticalFromUrl;
+
+  useEffect(() => {
+    setPendingVertical(null);
+  }, [verticalFromUrl]);
 
   const [user, setUser] = useState(null);
   const [origenService, setOrigenService] = useState(null);
@@ -514,7 +521,7 @@ function BuscarContent() {
 
   const replaceSearchParams = useCallback(
     ({
-      vertical = verticalParam,
+      vertical = verticalFromUrl,
       ciudad = ciudadInput,
       desde = fechaDesdeInput,
       hasta = fechaHastaInput,
@@ -531,7 +538,8 @@ function BuscarContent() {
         bundle: searchParams.get("bundle") === "true",
         origen: searchParams.get("origen") || "",
       });
-      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+      const href = query ? `${pathname}?${query}` : pathname;
+      router.replace(href, { scroll: false });
     },
     [
       appliedFilters,
@@ -542,7 +550,7 @@ function BuscarContent() {
       pathname,
       router,
       searchParams,
-      verticalParam,
+      verticalFromUrl,
     ],
   );
 
@@ -639,6 +647,8 @@ function BuscarContent() {
   }, [calendarOpen]);
 
   useEffect(() => {
+    let cancelled = false;
+
     async function fetchResults() {
       setLoading(true);
       setError("");
@@ -687,8 +697,8 @@ function BuscarContent() {
         .or("revision_estado.is.null,revision_estado.neq.borrador")
         .eq("profiles_public.verificado", true);
 
-      if (verticalParam && verticalParam !== "todo") {
-        query = query.eq("vertical", verticalParam);
+      if (activeVertical && activeVertical !== "todo") {
+        query = query.eq("vertical", activeVertical);
       }
 
       if (ciudadParam.trim()) {
@@ -710,7 +720,7 @@ function BuscarContent() {
       if (f.tipoAlojamiento) {
         query = query.eq("tipo_alojamiento", f.tipoAlojamiento);
       }
-      if (f.disponibleViajar && (verticalParam === "ninos" || verticalParam === "todo")) {
+      if (f.disponibleViajar && (activeVertical === "ninos" || activeVertical === "todo")) {
         query = query.eq("disponible_para_viajar", true);
       }
 
@@ -730,6 +740,8 @@ function BuscarContent() {
       }
 
       const { data, error: fetchError } = await query;
+
+      if (cancelled) return;
 
       if (fetchError) {
         setError(fetchError.message);
@@ -799,12 +811,15 @@ function BuscarContent() {
         );
       }
 
-      setLoading(false);
+      if (!cancelled) setLoading(false);
     }
 
     fetchResults();
+    return () => {
+      cancelled = true;
+    };
   }, [
-    verticalParam,
+    activeVertical,
     ciudadParam,
     fechaBusquedaInicioParam,
     fechaBusquedaFinParam,
@@ -820,6 +835,7 @@ function BuscarContent() {
   }, [rawResults, appliedFilters, ordenarPor, ratingsByProveedor, bookingsByService]);
 
   function handleVerticalChange(vertical) {
+    setPendingVertical(vertical);
     replaceSearchParams({
       vertical,
       ciudad: ciudadParam,
@@ -914,6 +930,7 @@ function BuscarContent() {
     setFechaHastaInput("");
     setDraftFilters(defaults);
     setAdvancedOpen(false);
+    setPendingVertical("todo");
     replaceSearchParams({
       vertical: "todo",
       ciudad: "",
@@ -935,11 +952,11 @@ function BuscarContent() {
     replaceSearchParams({ filters: defaults, ordenar: "relevancia" });
   }
 
-  const activeFilterCount = countActiveFilters(appliedFilters, verticalParam);
+  const activeFilterCount = countActiveFilters(appliedFilters, activeVertical);
 
   const showClearAll =
     hasSearchCriteriaApplied({
-      vertical: verticalParam,
+      vertical: activeVertical,
       ciudad: ciudadParam,
       desde: fechaBusquedaInicioParam,
       hasta: fechaBusquedaFinParam,
@@ -1031,7 +1048,7 @@ function BuscarContent() {
         >
           <div className="flex flex-wrap items-center gap-2">
             {filterTabs.map((tab) => {
-              const isActive = verticalParam === tab.id;
+              const isActive = activeVertical === tab.id;
               return (
                 <button
                   key={tab.id}
@@ -1350,7 +1367,7 @@ function BuscarContent() {
               </section>
 
               {/* Específicos alojamiento */}
-              {(verticalParam === "alojamiento" || verticalParam === "todo") && (
+              {(activeVertical === "alojamiento" || activeVertical === "todo") && (
                 <section className="sm:col-span-2 lg:col-span-3">
                   <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#888]">
                     Alojamiento
@@ -1404,7 +1421,7 @@ function BuscarContent() {
               )}
 
               {/* Específicos niñera */}
-              {(verticalParam === "ninos" || verticalParam === "todo") && (
+              {(activeVertical === "ninos" || activeVertical === "todo") && (
                 <section className="sm:col-span-2 lg:col-span-3">
                   <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#888]">
                     Niñera
@@ -1444,7 +1461,7 @@ function BuscarContent() {
               )}
 
               {/* Específicos mascotas */}
-              {(verticalParam === "mascotas" || verticalParam === "todo") && (
+              {(activeVertical === "mascotas" || activeVertical === "todo") && (
                 <section className="sm:col-span-2 lg:col-span-3">
                   <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#888]">
                     Mascotas

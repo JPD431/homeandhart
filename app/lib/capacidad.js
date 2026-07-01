@@ -72,6 +72,32 @@ export function getCapacidadPersonas(service) {
   return Number.isFinite(n) ? n : null;
 }
 
+/** Capacidad para mostrar al cliente; null si no hay dato en BD. */
+export function getCapacidadForDisplay(service) {
+  const capData = readCapacidadObject(service);
+  if (!capData) return null;
+  return parseCapacidadFromDb(service);
+}
+
+const CAPACIDAD_DISPLAY_ITEMS = [
+  { key: "personas", label: "Personas", icon: "👥" },
+  { key: "habitaciones", label: "Habitaciones", icon: "🛏️" },
+  { key: "camas", label: "Camas", icon: "🛌" },
+  { key: "banos", label: "Baños", icon: "🚿" },
+];
+
+/** Filas { icon, label, value } para la ficha; vacío si no hay capacidad. */
+export function getCapacidadDisplayRows(service) {
+  const cap = getCapacidadForDisplay(service);
+  if (!cap) return [];
+
+  return CAPACIDAD_DISPLAY_ITEMS.map(({ key, label, icon }) => {
+    const value = cap[key];
+    if (value == null || value === "") return null;
+    return { icon, label, value };
+  }).filter(Boolean);
+}
+
 /** true si el servicio cumple el mínimo de personas (o no aplica / sin dato). */
 export function serviceMeetsCapacidadMin(service, capacidadMin) {
   const min = Number(capacidadMin);

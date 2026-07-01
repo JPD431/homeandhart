@@ -1,7 +1,10 @@
+import { resolveAmenities } from "@/app/lib/amenities";
+import { getCapacidadDisplayRows } from "@/app/lib/capacidad";
 import { normalizeCancelPolicy } from "@/app/lib/cancelacion-politica";
 import {
   formatServiceCardPrice,
   getServiceCardTheme,
+  getServiceDescription,
 } from "@/app/lib/service-card-display";
 
 const CANCEL_LABELS = {
@@ -34,7 +37,7 @@ export function buildWizardPreviewService(
   },
 ) {
   const details = serviceDetails?.[vertical] ?? {};
-  const photos = servicePhotoPreviews?.[vertical] ?? [];
+  const photos = (servicePhotoPreviews?.[vertical] ?? []).filter(Boolean);
   const foto_url = photos[0] || null;
 
   return {
@@ -42,9 +45,15 @@ export function buildWizardPreviewService(
     proveedor_id: userId || "preview",
     vertical,
     titulo: details.titulo?.trim() || "",
-    descripcion: details.descripcion?.trim() || "",
+    descripcion: getServiceDescription({
+      descripcion: details.descripcion,
+      descripcion_anuncio: details.descripcion_anuncio,
+    }),
+    descripcion_anuncio: details.descripcion_anuncio?.trim() || "",
     precio: details.precio ?? "",
     foto_url,
+    fotos: photos,
+    amenities: Array.isArray(details.amenities) ? details.amenities : [],
     location_zone: details.location_zone?.trim() || "",
     ciudad: ciudad?.trim() || "",
     reserva_inmediata: details.reserva_inmediata === true,
@@ -52,7 +61,7 @@ export function buildWizardPreviewService(
     tipo_alojamiento: details.tipo_alojamiento || "",
     modalidad: details.modalidad || "",
     cancellation_policy: details.cancelacion || "moderada",
-    capacidad: details.capacidad,
+    capacidad: details.capacidad ?? null,
     profiles_public: {
       id: userId || "preview",
       nombre: nombre?.trim() || "",
@@ -93,15 +102,23 @@ export function getWizardPreviewSummary(vertical, details = {}) {
     value: formatServiceCardPrice(details.precio, theme.priceSuffix),
   });
 
-  if (vertical === "alojamiento" && details.capacidad) {
-    const c = details.capacidad;
-    const parts = [];
-    if (c.personas != null) parts.push(`${c.personas} pers.`);
-    if (c.habitaciones != null) parts.push(`${c.habitaciones} hab.`);
-    if (c.camas != null) parts.push(`${c.camas} camas`);
-    if (c.banos != null) parts.push(`${c.banos} baños`);
-    if (parts.length > 0) {
-      items.push({ label: "Capacidad", value: parts.join(" · ") });
+  if (vertical === "alojamiento") {
+    const capRows = getCapacidadDisplayRows({ capacidad: details.capacidad });
+    if (capRows.length > 0) {
+      items.push({
+        label: "Capacidad",
+        value: capRows
+          .map((row) => `${row.value} ${row.label.toLowerCase()}`)
+          .join(" · "),
+      });
+    }
+
+    const amenityLabels = resolveAmenities(details.amenities).map((a) => a.label);
+    if (amenityLabels.length > 0) {
+      items.push({
+        label: "Comodidades",
+        value: amenityLabels.slice(0, 4).join(", ") + (amenityLabels.length > 4 ? "…" : ""),
+      });
     }
   }
 

@@ -3,13 +3,13 @@ import { notFound } from "next/navigation";
 import CalendarioDisponibilidad from "@/app/components/CalendarioDisponibilidad";
 import FavoritoButton from "@/app/components/FavoritoButton";
 import ReportarPerfilButton from "@/app/components/ReportarPerfilButton";
+import ServiceAnuncioContentTranslated from "@/app/components/ServiceAnuncioContentTranslated";
 import ProveedorPreguntarButton from "./ProveedorPreguntarButton";
 import { SERIF } from "@/app/components/brand";
 import {
   ProveedorBioText,
   ProveedorTranslateButton,
   ProveedorTranslateProvider,
-  ServicioDescripcionText,
   ServicioTituloText,
 } from "./ProveedorTraduccion";
 import {
@@ -18,6 +18,7 @@ import {
 } from "@/app/lib/ofertas";
 import { normalizeCancelPolicy } from "@/app/lib/cancelacion-politica";
 import { getReferenteInitial } from "@/app/lib/referencias";
+import { getServiceDescription } from "@/app/lib/service-card-display";
 import { supabase } from "@/app/lib/supabase";
 
 const VERTICAL_THEME = {
@@ -99,7 +100,7 @@ function normalizeDiasDisponiblesProveedor(dias) {
 }
 
 function hasPetFriendly(service) {
-  const desc = (service.descripcion || "").toLowerCase();
+  const desc = getServiceDescription(service).toLowerCase();
   return /pet[-_\s]?friendly/i.test(desc);
 }
 
@@ -356,7 +357,7 @@ export default async function ProveedorPage({ params }) {
     return {
       id: service.id,
       titulo: service.titulo || vertical.label,
-      descripcion: service.descripcion || "",
+      descripcion: getServiceDescription(service),
       oferta_descripcion: service.oferta_descripcion || "",
       oferta_titulo: service.oferta_titulo || "",
     };
@@ -585,13 +586,6 @@ export default async function ProveedorPage({ params }) {
                         </p>
                       </div>
 
-                      <div className="proveedor-servicio-desc">
-                        <ServicioDescripcionText
-                          serviceId={service.id}
-                          descripcion={service.descripcion || ""}
-                        />
-                      </div>
-
                       {tags.length > 0 && (
                         <div className="mt-2 flex flex-wrap gap-1">
                           {tags.map((tag) => (
@@ -601,6 +595,8 @@ export default async function ProveedorPage({ params }) {
                           ))}
                         </div>
                       )}
+
+                      <ServiceAnuncioContentTranslated service={service} />
                     </li>
                   );
                 })}

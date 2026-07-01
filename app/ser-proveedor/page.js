@@ -40,6 +40,7 @@ import CounterField from "@/app/components/provider/CounterField";
 import TagPill from "@/app/components/provider/TagPill";
 import ProviderDocumentsSection from "@/app/components/provider/ProviderDocumentsSection";
 import ServiceCard from "@/app/components/ServiceCard";
+import ServiceAnuncioContent from "@/app/components/ServiceAnuncioContent";
 import {
   buildWizardPreviewServices,
   getWizardPreviewSummary,
@@ -1645,6 +1646,12 @@ export default function SerProveedorPage() {
                     }}
                   >
                     <ServiceCard service={service} isPreview lang="es" />
+                    <div className="border-t px-4 pb-4" style={{ borderColor: BRAND.border }}>
+                      <ServiceAnuncioContent
+                        service={service}
+                        showGallery={(service.fotos?.length ?? 0) > 1}
+                      />
+                    </div>
                   </div>
                   <dl className="mt-4 grid max-w-md gap-2 sm:grid-cols-2">
                     {summary.map((item) => (

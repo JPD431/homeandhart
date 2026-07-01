@@ -43,6 +43,7 @@ import {
   DIAS_DISPONIBLES_DEFAULT,
   getServiceLocationFields,
 } from "@/app/lib/service-payload";
+import { getServiceDescription } from "@/app/lib/service-card-display";
 import { supabase } from "@/app/lib/supabase";
 
 import {
@@ -134,7 +135,7 @@ function mapServiceFromDb(row) {
     details: {
       ...emptyServiceDetails(),
       titulo: row.titulo || "",
-      descripcion: row.descripcion || row.descripcion_anuncio || "",
+      descripcion: getServiceDescription(row),
       precio: row.precio ?? "",
       tipo_alojamiento: row.tipo_alojamiento || "",
       modalidad: row.modalidad || "domicilio_cliente",
