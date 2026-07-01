@@ -585,7 +585,7 @@ export default function SerProveedorPage() {
           const providerDocs = await loadProviderDocuments(user.id);
           if (!cancelled) setProviderDocuments(providerDocs);
           if (Array.isArray(profile.onboarding_verticales) && profile.onboarding_verticales.length > 0) {
-            setVerticalesSeleccionados(profile.onboarding_verticales);
+            setVerticalesSeleccionados([...new Set(profile.onboarding_verticales)]);
           }
           if (profile.onboarding_step) {
             const verts =
@@ -744,9 +744,12 @@ export default function SerProveedorPage() {
   }
 
   function toggleVertical(id) {
-    setVerticalesSeleccionados((prev) =>
-      prev.includes(id) ? prev.filter((v) => v !== id) : [...prev, id],
-    );
+    setVerticalesSeleccionados((prev) => {
+      const next = prev.includes(id)
+        ? prev.filter((v) => v !== id)
+        : [...prev, id];
+      return [...new Set(next)];
+    });
   }
 
   function toggleIdioma(lang) {
@@ -1616,7 +1619,7 @@ export default function SerProveedorPage() {
           </p>
 
           <div className="mt-8 space-y-10">
-            {verticalesSeleccionados.map((vertical) => {
+            {[...new Set(verticalesSeleccionados)].map((vertical) => {
               const service = previewServices.find((s) => s.vertical === vertical);
               if (!service) return null;
               const color = getVerticalColor(vertical);

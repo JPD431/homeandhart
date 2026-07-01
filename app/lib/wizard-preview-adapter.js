@@ -72,7 +72,8 @@ export function buildWizardPreviewService(
  * @returns {ReturnType<typeof buildWizardPreviewService>[]}
  */
 export function buildWizardPreviewServices(verticales, wizardState) {
-  return verticales.map((vertical) =>
+  const unique = [...new Set(verticales)];
+  return unique.map((vertical) =>
     buildWizardPreviewService(vertical, wizardState),
   );
 }

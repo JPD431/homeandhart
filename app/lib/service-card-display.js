@@ -60,6 +60,14 @@ export function getServiceCardZone(service, profile) {
   );
 }
 
+/** Supabase puede devolver profiles_public como objeto o array según la relación. */
+export function normalizeServiceProfile(service) {
+  if (!service) return {};
+  const raw = service.profiles_public;
+  if (Array.isArray(raw)) return raw[0] ?? {};
+  return raw ?? {};
+}
+
 function hasPetFriendlyInDescription(service) {
   const desc = (service.descripcion || "").toLowerCase();
   return /pet[-_\s]?friendly/i.test(desc);

@@ -54,12 +54,13 @@ export async function saveOnboardingStep(userId, stepId) {
 }
 
 export async function saveVerticalesStep(userId, verticales, stepId) {
+  const uniqueVerticales = [...new Set(verticales)];
   const { error } = await supabase
     .from("profiles")
     .upsert({
       id: userId,
       role: "proveedor",
-      onboarding_verticales: verticales,
+      onboarding_verticales: uniqueVerticales,
       onboarding_step: String(stepId),
     });
   if (error) throw error;

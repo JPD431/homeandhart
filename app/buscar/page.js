@@ -14,6 +14,7 @@ import { serviceMeetsCapacidadMin } from "@/app/lib/capacidad";
 import ServiceCard from "@/app/components/ServiceCard";
 import {
   formatServiceCardShortName,
+  normalizeServiceProfile,
   serviceDescriptionIsPetFriendly,
 } from "@/app/lib/service-card-display";
 import { supabase } from "@/app/lib/supabase";
@@ -257,7 +258,7 @@ function matchesEdadNinos(descripcion, ranges) {
 }
 
 function matchesClientFilters(service, filters, avgRating) {
-  const profile = service.profiles_public ?? {};
+  const profile = normalizeServiceProfile(service);
 
   if (filters.soloConDocumentos && !hasDocuments(profile)) return false;
 
@@ -852,7 +853,7 @@ function BuscarContent() {
       const exists = prev.find((s) => s.id === service.id);
       if (exists) return prev.filter((s) => s.id !== service.id);
       if (prev.length >= 3) return prev;
-      const profile = service.profiles_public ?? {};
+      const profile = normalizeServiceProfile(service);
       return [
         ...prev,
         {

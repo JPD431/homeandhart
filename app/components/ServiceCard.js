@@ -12,6 +12,7 @@ import {
   getServiceCardTags,
   getServiceCardTheme,
   getServiceCardZone,
+  normalizeServiceProfile,
 } from "@/app/lib/service-card-display";
 
 /**
@@ -58,25 +59,33 @@ export default function ServiceCard({
   fechaBusquedaHasta = "",
 }) {
   const router = useRouter();
-  const profile = service.profiles_public ?? {};
-  const theme = getServiceCardTheme(service.vertical);
-  const zone = getServiceCardZone(service, profile);
-  const tags = getServiceCardTags(service, profile, lang, { isPreview });
-  const priceLabel = formatServiceCardPrice(service.precio, theme.priceSuffix);
-  const rating = ratingsByProveedor?.[service.proveedor_id];
+  const profile = service ? normalizeServiceProfile(service) : {};
+  const theme = getServiceCardTheme(service?.vertical);
+  const zone = service ? getServiceCardZone(service, profile) : "";
+  const tags = service
+    ? getServiceCardTags(service, profile, lang, { isPreview })
+    : [];
+  const priceLabel = formatServiceCardPrice(service?.precio, theme.priceSuffix);
+  const rating = service
+    ? ratingsByProveedor?.[service.proveedor_id]
+    : undefined;
   const valoracionMedia =
     rating?.count > 0 ? (rating.sum / rating.count).toFixed(1) : null;
   const numReviews = rating?.count || 0;
-  const isComparing = comparando.some((s) => s.id === service.id);
+  const isComparing = service
+    ? comparando.some((s) => s.id === service.id)
+    : false;
   const compareFull = comparando.length >= 3 && !isComparing;
   const [esFavorito, setEsFavorito] = useState(
-    favoritos?.includes(service.proveedor_id) || false,
+    service && favoritos?.includes(service.proveedor_id),
   );
 
   useEffect(() => {
-    if (isPreview) return;
+    if (isPreview || !service) return;
     setEsFavorito(favoritos?.includes(service.proveedor_id) || false);
-  }, [favoritos, service.proveedor_id, isPreview]);
+  }, [favoritos, service, isPreview]);
+
+  if (!service) return null;
 
   const toggleFavorito = async (e) => {
     e.stopPropagation();
@@ -339,12 +348,14 @@ export default function ServiceCard({
                 className="block w-full rounded py-2 text-center text-[11px] font-semibold text-white no-underline transition-opacity hover:opacity-90"
                 style={{ backgroundColor: theme.color }}
               >
-                {extra?.reservar(
-                  service.precio != null && service.precio !== ""
-                    ? `${Number(service.precio)}€`
-                    : "—",
-                  theme.priceSuffix,
-                )}
+                {typeof extra?.reservar === "function"
+                  ? extra.reservar(
+                      service.precio != null && service.precio !== ""
+                        ? `${Number(service.precio)}€`
+                        : "—",
+                      theme.priceSuffix,
+                    )
+                  : `Reservar · ${priceLabel}`}
               </Link>
             </>
           ))}
@@ -365,12 +376,19 @@ export default function ServiceCard({
 
   return (
     <li>
-      <button
-        type="button"
+      <div
+        role="button"
+        tabIndex={0}
         onClick={() => onSelect?.(index)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onSelect?.(index);
+          }
+        }}
         onMouseEnter={() => onHover?.(index)}
         onMouseLeave={() => onLeave?.()}
-        className="w-full overflow-hidden border-b text-left transition-colors"
+        className="w-full cursor-pointer overflow-hidden border-b text-left transition-colors"
         style={{
           borderColor: "#e8e4de",
           borderLeft: isActive ? "2px solid #1d4f91" : "2px solid transparent",
@@ -378,7 +396,7 @@ export default function ServiceCard({
         }}
       >
         {cardBody}
-      </button>
+      </div>
     </li>
   );
 }
