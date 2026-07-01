@@ -6,16 +6,16 @@ import {
   getServicePhotos,
 } from "@/app/lib/service-card-display";
 
-function ServicePhotoGallery({ photos, vertical, className = "" }) {
+function ServicePhotoGallery({ photos, vertical, className = "", hero = false }) {
   const theme = getServiceCardTheme(vertical);
 
   if (!photos?.length) {
     return (
       <div
-        className={`overflow-hidden rounded-lg ${className}`}
+        className={`overflow-hidden ${hero ? "rounded-none" : "rounded-lg"} ${className}`}
         style={{
           background: theme.gradient,
-          minHeight: 180,
+          minHeight: hero ? 280 : 180,
         }}
         aria-hidden
       />
@@ -24,12 +24,18 @@ function ServicePhotoGallery({ photos, vertical, className = "" }) {
 
   if (photos.length === 1) {
     return (
-      <div className={`overflow-hidden rounded-lg ${className}`}>
+      <div
+        className={`overflow-hidden ${hero ? "rounded-none" : "rounded-lg"} ${className}`}
+      >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={photos[0]}
           alt=""
-          className="h-full max-h-[320px] w-full object-cover"
+          className={
+            hero
+              ? "h-full max-h-[min(480px,55vh)] w-full object-cover"
+              : "h-full max-h-[320px] w-full object-cover"
+          }
         />
       </div>
     );
