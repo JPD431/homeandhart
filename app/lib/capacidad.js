@@ -1,14 +1,25 @@
+export const BANO_TIPO_PRIVADO = "privado";
+export const BANO_TIPO_COMPARTIDO = "compartido";
+
 export const DEFAULT_CAPACIDAD_ALOJAMIENTO = {
   personas: 2,
   habitaciones: 1,
   camas: 1,
   banos: 1,
+  bano_tipo: null,
 };
 
 function clampCapacidadValue(value, min = 1) {
   const num = Number(value);
   if (!Number.isFinite(num)) return min;
   return Math.max(min, Math.floor(num));
+}
+
+function normalizeBanoTipo(value) {
+  if (value === BANO_TIPO_PRIVADO || value === BANO_TIPO_COMPARTIDO) {
+    return value;
+  }
+  return null;
 }
 
 export function serializeCapacidad(details, vertical) {
@@ -24,6 +35,7 @@ export function serializeCapacidad(details, vertical) {
     ),
     camas: clampCapacidadValue(cap.camas ?? DEFAULT_CAPACIDAD_ALOJAMIENTO.camas),
     banos: clampCapacidadValue(cap.banos ?? DEFAULT_CAPACIDAD_ALOJAMIENTO.banos),
+    bano_tipo: normalizeBanoTipo(cap.bano_tipo),
   };
 }
 
@@ -42,6 +54,7 @@ export function parseCapacidadFromDb(row) {
     ),
     camas: clampCapacidadValue(cap.camas ?? DEFAULT_CAPACIDAD_ALOJAMIENTO.camas),
     banos: clampCapacidadValue(cap.banos ?? DEFAULT_CAPACIDAD_ALOJAMIENTO.banos),
+    bano_tipo: normalizeBanoTipo(cap.bano_tipo),
   };
 }
 
@@ -86,16 +99,35 @@ const CAPACIDAD_DISPLAY_ITEMS = [
   { key: "banos", label: "Baños", icon: "🚿" },
 ];
 
+const BANO_TIPO_DISPLAY = {
+  [BANO_TIPO_PRIVADO]: { icon: "🔒", label: "Baño", value: "Privado", banoTipo: true },
+  [BANO_TIPO_COMPARTIDO]: { icon: "🚿", label: "Baño", value: "Compartido", banoTipo: true },
+};
+
+/** Texto legible de una fila de capacidad (anuncio / ficha). */
+export function formatCapacidadDisplayRow(row) {
+  if (row?.banoTipo) {
+    return `${row.label} ${String(row.value).toLowerCase()}`;
+  }
+  return `${row.value} ${row.label.toLowerCase()}`;
+}
+
 /** Filas { icon, label, value } para la ficha; vacío si no hay capacidad. */
 export function getCapacidadDisplayRows(service) {
   const cap = getCapacidadForDisplay(service);
   if (!cap) return [];
 
-  return CAPACIDAD_DISPLAY_ITEMS.map(({ key, label, icon }) => {
+  const rows = CAPACIDAD_DISPLAY_ITEMS.map(({ key, label, icon }) => {
     const value = cap[key];
     if (value == null || value === "") return null;
     return { icon, label, value };
   }).filter(Boolean);
+
+  if (cap.bano_tipo && BANO_TIPO_DISPLAY[cap.bano_tipo]) {
+    rows.push(BANO_TIPO_DISPLAY[cap.bano_tipo]);
+  }
+
+  return rows;
 }
 
 /** true si el servicio cumple el mínimo de personas (o no aplica / sin dato). */

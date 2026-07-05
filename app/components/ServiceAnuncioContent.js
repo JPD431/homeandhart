@@ -1,5 +1,5 @@
 import { resolveAmenities } from "@/app/lib/amenities";
-import { getCapacidadDisplayRows } from "@/app/lib/capacidad";
+import { getCapacidadDisplayRows, formatCapacidadDisplayRow } from "@/app/lib/capacidad";
 import {
   getServiceCardTheme,
   getServiceDescription,
@@ -112,13 +112,13 @@ export default function ServiceAnuncioContent({
           <div className="flex flex-wrap gap-2">
             {capacidadRows.map((row) => (
               <span
-                key={row.label}
+                key={`${row.label}-${row.value}`}
                 className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px]"
                 style={{ borderColor: "#e8e4de", backgroundColor: "#fafaf9" }}
               >
                 <span aria-hidden>{row.icon}</span>
                 <span className="text-[#444]">
-                  {row.value} {row.label.toLowerCase()}
+                  {formatCapacidadDisplayRow(row)}
                 </span>
               </span>
             ))}

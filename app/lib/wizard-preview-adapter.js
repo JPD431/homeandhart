@@ -1,5 +1,5 @@
 import { resolveAmenities } from "@/app/lib/amenities";
-import { getCapacidadDisplayRows } from "@/app/lib/capacidad";
+import { getCapacidadDisplayRows, formatCapacidadDisplayRow } from "@/app/lib/capacidad";
 import { normalizeCancelPolicy } from "@/app/lib/cancelacion-politica";
 import {
   formatServiceCardPrice,
@@ -108,7 +108,7 @@ export function getWizardPreviewSummary(vertical, details = {}) {
       items.push({
         label: "Capacidad",
         value: capRows
-          .map((row) => `${row.value} ${row.label.toLowerCase()}`)
+          .map((row) => formatCapacidadDisplayRow(row))
           .join(" · "),
       });
     }
