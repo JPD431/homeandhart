@@ -5,6 +5,10 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
 import AmenitiesPicker from "@/app/components/AmenitiesPicker";
 import BanoTipoSelector from "@/app/components/BanoTipoSelector";
+import AlojamientoServiceFields from "@/app/components/provider/AlojamientoServiceFields";
+import NinosServiceFields from "@/app/components/provider/NinosServiceFields";
+import MascotasServiceFields from "@/app/components/provider/MascotasServiceFields";
+import ToggleRow from "@/app/components/provider/ToggleRow";
 import ServiceOperationalFields from "@/app/components/ServiceOperationalFields";
 import { BRAND, SERIF } from "@/app/components/brand";
 import {
@@ -94,58 +98,13 @@ const IDIOMAS_DEFAULT = [
   "中文",
 ];
 
-const TIPO_ALOJAMIENTO_OPTIONS = [
-  { value: "completo", label: "Entero", desc: "Piso o casa completa" },
-  { value: "habitacion_privada", label: "Hab. privada", desc: "Habitación propia" },
-  { value: "habitacion_compartida", label: "Compartida", desc: "Compartes habitación" },
-  { value: "habitacion_hotel", label: "Hotel", desc: "Habitación de hotel" },
-  { value: "otros", label: "Otro", desc: "Otro tipo de alojamiento" },
-];
-
-const EDADES_TAGS = ["0-1", "1-3", "3-6", "6-12", "12+"];
-const FORMACION_TAGS = [
-  "Educación infantil",
-  "Primeros auxilios",
-  "Enfermería",
-  "Magisterio",
-  "Monitor ocio",
-];
-const ACTIVIDADES_TAGS = [
-  "Lectura",
-  "Manualidades",
-  "Música",
-  "Naturaleza",
-  "Cocina",
-  "Deporte",
-  "Juegos",
-  "Tecnología",
-  "Idiomas",
-  "Teatro",
-  "Mindfulness",
-];
-const ANIMALES_TAGS = [
-  "Perros",
-  "Gatos",
-  "Conejos",
-  "Aves",
-  "Roedores",
-  "Peces",
-  "Reptiles",
-];
-const TAMANO_PERRO_TAGS = ["Pequeño", "Mediano", "Grande", "Cualquier tamaño"];
-const CERT_MASCOTAS_TAGS = [
-  "Adiestrador",
-  "Auxiliar vet.",
-  "Primeros auxilios animal",
-  "Etología",
-];
+import {
+  TIPO_ALOJAMIENTO_OPTIONS,
+  MODALIDAD_NINOS_OPTIONS as MODALIDAD_OPTIONS_NINOS,
+} from "@/app/lib/service-form-tags";
 
 const MODALIDAD_OPTIONS = {
-  ninos: [
-    { value: "domicilio_cliente", label: "En domicilio del cliente" },
-    { value: "domicilio_proveedor", label: "En mi domicilio" },
-    { value: "ambas", label: "Ambas opciones" },
-  ],
+  ninos: MODALIDAD_OPTIONS_NINOS,
   mascotas: [
     { value: "domicilio_cliente", label: "En domicilio del cliente" },
     { value: "domicilio_proveedor", label: "En mi domicilio" },
@@ -292,27 +251,6 @@ async function geocodeLocationZonesForServices(selectedIds, detailsByService, ci
 }
 
 const inputClass = PROVIDER_INPUT_CLASS;
-
-function ToggleRow({ label, checked, onChange }) {
-  return (
-    <div className="flex items-center justify-between gap-4 py-2">
-      <span className="text-sm text-[#444]">{label}</span>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        onClick={() => onChange(!checked)}
-        className="relative h-7 w-12 shrink-0 rounded-full transition-colors"
-        style={{ backgroundColor: checked ? PRIMARY : "#d1d5db" }}
-      >
-        <span
-          className="absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform"
-          style={{ left: checked ? "calc(100% - 1.625rem)" : "0.125rem" }}
-        />
-      </button>
-    </div>
-  );
-}
 
 function DocUploadRow({ docId, title, required, file, uploaded, uploading, onUpload }) {
   const ok = !!(file || uploaded);
@@ -468,12 +406,6 @@ export default function SerProveedorPage() {
   const [loading, setLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
-  const [customTags, setCustomTags] = useState({
-    formacion: [],
-    actividades: [],
-    animales: [],
-    certMascotas: [],
-  });
 
   const visibleSteps = useMemo(
     () => buildVisibleSteps(verticalesSeleccionados),
@@ -801,27 +733,6 @@ export default function SerProveedorPage() {
     } finally {
       setOpeningPreviewVertical(null);
     }
-  }
-
-  function toggleTag(vertical, field, tag) {
-    const d = serviceDetails[vertical];
-    const arr = d[field] || [];
-    const next = arr.includes(tag) ? arr.filter((t) => t !== tag) : [...arr, tag];
-    updateServiceDetails(vertical, { ...d, [field]: next });
-  }
-
-  function addCustomTag(vertical, field, customKey) {
-    const val = window.prompt("Añadir:");
-    if (!val?.trim()) return;
-    setCustomTags((prev) => ({
-      ...prev,
-      [customKey]: [...(prev[customKey] || []), val.trim()],
-    }));
-    const d = serviceDetails[vertical];
-    updateServiceDetails(vertical, {
-      ...d,
-      [field]: [...(d[field] || []), val.trim()],
-    });
   }
 
   function handleProfilePhoto(e) {
@@ -1247,8 +1158,6 @@ export default function SerProveedorPage() {
       const upd = (field, val) => updateServiceDetails("alojamiento", { ...d, [field]: val });
       const updCap = (key, val) =>
         updateServiceDetails("alojamiento", { ...d, capacidad: { ...d.capacidad, [key]: val } });
-      const updNorma = (key, val) =>
-        updateServiceDetails("alojamiento", { ...d, normas: { ...d.normas, [key]: val } });
       const alojDocs = getDocsForVertical("alojamiento");
 
       return (
@@ -1322,46 +1231,17 @@ export default function SerProveedorPage() {
             onChange={(v) => updCap("bano_tipo", v)}
             accentColor={PRIMARY}
           />
-          <div className="mt-6">
-            <p className="mb-3 text-xs font-semibold text-[#444]">Horario de entrada y salida</p>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className="mb-1.5 block text-xs font-medium text-[#444]">Hora de entrada</label>
-                <input
-                  type="time"
-                  value={d.check_in}
-                  onChange={(e) => upd("check_in", e.target.value)}
-                  className={inputClass}
-                  style={{ borderColor: BRAND.border }}
-                />
-                <p className="mt-1 text-[10px] text-[#888]">Check-in</p>
-              </div>
-              <div>
-                <label className="mb-1.5 block text-xs font-medium text-[#444]">Hora de salida</label>
-                <input
-                  type="time"
-                  value={d.check_out}
-                  onChange={(e) => upd("check_out", e.target.value)}
-                  className={inputClass}
-                  style={{ borderColor: BRAND.border }}
-                />
-                <p className="mt-1 text-[10px] text-[#888]">Check-out</p>
-              </div>
-            </div>
-          </div>
+          <AlojamientoServiceFields
+            details={d}
+            onChange={(next) => updateServiceDetails("alojamiento", next)}
+            accentColor={PRIMARY}
+          />
           <AmenitiesPicker
             className="mt-6"
             value={d.amenities || []}
             onChange={(ids) => upd("amenities", ids)}
             accentColor={PRIMARY}
           />
-          <div className="mt-6 rounded-xl border p-4" style={{ borderColor: BRAND.border }}>
-            <p className="mb-3 text-xs font-semibold text-[#444]">Normas</p>
-            <ToggleRow label="Pet-friendly" checked={d.normas.petFriendly} onChange={(v) => updNorma("petFriendly", v)} />
-            <ToggleRow label="Bebés" checked={d.normas.bebes} onChange={(v) => updNorma("bebes", v)} />
-            <ToggleRow label="Fumar" checked={d.normas.fumar} onChange={(v) => updNorma("fumar", v)} />
-            <ToggleRow label="Fiestas" checked={d.normas.fiestas} onChange={(v) => updNorma("fiestas", v)} />
-          </div>
           <ServiceOperationalFields
             vertical="alojamiento"
             details={d}
@@ -1393,8 +1273,6 @@ export default function SerProveedorPage() {
       const d = serviceDetails.ninos;
       const upd = (field, val) => updateServiceDetails("ninos", { ...d, [field]: val });
       const ninosDocs = getDocsForVertical("ninos");
-      const allFormacion = [...FORMACION_TAGS, ...customTags.formacion];
-      const allActividades = [...ACTIVIDADES_TAGS, ...customTags.actividades];
 
       return (
         <div>
@@ -1443,32 +1321,12 @@ export default function SerProveedorPage() {
             </div>
             <DireccionContactoFields d={d} upd={upd} vertical="ninos" />
           </div>
-          <div className="mt-4">
-            <p className="mb-2 text-xs font-medium text-[#444]">Rango de edad</p>
-            <div className="flex flex-wrap gap-2">
-              {EDADES_TAGS.map((tag) => (
-                <TagPill key={tag} label={tag} selected={(d.edadesTags || []).includes(tag)} onClick={() => toggleTag("ninos", "edadesTags", tag)} color={GREEN} />
-              ))}
-            </div>
-          </div>
-          <div className="mt-4">
-            <p className="mb-2 text-xs font-medium text-[#444]">Formación</p>
-            <div className="flex flex-wrap gap-2">
-              {allFormacion.map((tag) => (
-                <TagPill key={tag} label={tag} selected={(d.formacionTags || []).includes(tag)} onClick={() => toggleTag("ninos", "formacionTags", tag)} color={GREEN} />
-              ))}
-              <TagPill label="+ Otro" selected={false} onClick={() => addCustomTag("ninos", "formacionTags", "formacion")} color="#666" />
-            </div>
-          </div>
-          <div className="mt-4">
-            <p className="mb-2 text-xs font-medium text-[#444]">Actividades</p>
-            <div className="flex flex-wrap gap-2">
-              {allActividades.map((tag) => (
-                <TagPill key={tag} label={tag} selected={(d.actividadesTags || []).includes(tag)} onClick={() => toggleTag("ninos", "actividadesTags", tag)} color={GREEN} />
-              ))}
-              <TagPill label="+ Otro" selected={false} onClick={() => addCustomTag("ninos", "actividadesTags", "actividades")} color="#666" />
-            </div>
-          </div>
+          <NinosServiceFields
+            details={d}
+            onChange={(next) => updateServiceDetails("ninos", next)}
+            accentColor={GREEN}
+            showAnosExperiencia={false}
+          />
           <ServiceOperationalFields
             vertical="ninos"
             details={d}
@@ -1476,11 +1334,6 @@ export default function SerProveedorPage() {
             collapsible
             sectionSubtitle={SERVICE_LABELS.operativo.subtitle}
           />
-          <div className="mt-4 rounded-xl border p-4" style={{ borderColor: BRAND.border }}>
-            <ToggleRow label="Disponible para viajar" checked={d.disponible_para_viajar} onChange={(v) => upd("disponible_para_viajar", v)} />
-            <ToggleRow label="Noches y fines de semana" checked={d.nochesFinde} onChange={(v) => upd("nochesFinde", v)} />
-            <ToggleRow label="Carnet de conducir" checked={d.carnetConducir} onChange={(v) => upd("carnetConducir", v)} />
-          </div>
           <div className="mt-6 rounded-xl border p-4" style={{ borderColor: BRAND.border, backgroundColor: `${GREEN}08` }}>
             <p className="text-sm font-semibold text-[#1a1a1a]">Referencias externas</p>
             <p className="mt-1 text-xs text-[#666]">Pide a familias anteriores que confirmen tu experiencia</p>
@@ -1516,8 +1369,6 @@ export default function SerProveedorPage() {
       const d = serviceDetails.mascotas;
       const upd = (field, val) => updateServiceDetails("mascotas", { ...d, [field]: val });
       const mascotasDocs = getDocsForVertical("mascotas");
-      const allAnimales = [...ANIMALES_TAGS, ...customTags.animales];
-      const allCert = [...CERT_MASCOTAS_TAGS, ...customTags.certMascotas];
 
       return (
         <div>
@@ -1572,30 +1423,12 @@ export default function SerProveedorPage() {
             </div>
             <DireccionContactoFields d={d} upd={upd} vertical="mascotas" />
           </div>
-          <div className="mt-4">
-            <p className="mb-2 text-xs font-medium text-[#444]">Animales</p>
-            <div className="flex flex-wrap gap-2">
-              {allAnimales.map((tag) => (
-                <TagPill key={tag} label={tag} selected={(d.animalesTags || []).includes(tag)} onClick={() => toggleTag("mascotas", "animalesTags", tag)} color={ORANGE} />
-              ))}
-              <TagPill label="+ Otro" selected={false} onClick={() => addCustomTag("mascotas", "animalesTags", "animales")} color="#666" />
-            </div>
-          </div>
-          <div className="mt-4">
-            <p className="mb-2 text-xs font-medium text-[#444]">Tamaño perro</p>
-            <div className="flex flex-wrap gap-2">
-              {TAMANO_PERRO_TAGS.map((tag) => (
-                <TagPill key={tag} label={tag} selected={d.tamanoPerro === tag} onClick={() => upd("tamanoPerro", tag)} color={ORANGE} />
-              ))}
-            </div>
-          </div>
-          <div className="mt-4 rounded-xl border p-4" style={{ borderColor: BRAND.border }}>
-            <ToggleRow label="Tiene jardín" checked={d.jardin} onChange={(v) => upd("jardin", v)} />
-            <ToggleRow label="Paseos incluidos" checked={d.paseosIncluidos} onChange={(v) => upd("paseosIncluidos", v)} />
-            <ToggleRow label="Envía fotos y actualizaciones" checked={d.fotosActualizaciones} onChange={(v) => upd("fotosActualizaciones", v)} />
-            <ToggleRow label="Cerca de veterinario" checked={d.cercaVeterinario} onChange={(v) => upd("cercaVeterinario", v)} />
-            <ToggleRow label="Disponible para viajar" checked={d.disponible_para_viajar} onChange={(v) => upd("disponible_para_viajar", v)} />
-          </div>
+          <MascotasServiceFields
+            details={d}
+            onChange={(next) => updateServiceDetails("mascotas", next)}
+            accentColor={ORANGE}
+            showAnosExperiencia={false}
+          />
           <ServiceOperationalFields
             vertical="mascotas"
             details={d}
@@ -1603,15 +1436,6 @@ export default function SerProveedorPage() {
             collapsible
             sectionSubtitle={SERVICE_LABELS.operativo.subtitle}
           />
-          <div className="mt-4">
-            <p className="mb-2 text-xs font-medium text-[#444]">Certificaciones</p>
-            <div className="flex flex-wrap gap-2">
-              {allCert.map((tag) => (
-                <TagPill key={tag} label={tag} selected={(d.certificacionesTags || []).includes(tag)} onClick={() => toggleTag("mascotas", "certificacionesTags", tag)} color={ORANGE} />
-              ))}
-              <TagPill label="+ Otro" selected={false} onClick={() => addCustomTag("mascotas", "certificacionesTags", "certMascotas")} color="#666" />
-            </div>
-          </div>
           <div className="mt-6 space-y-2">
             <p className="text-xs font-semibold text-[#444]">Documentos</p>
             {mascotasDocs.map((docId) => (

@@ -686,7 +686,7 @@ export default function Navbar() {
                           onNavigate={closeDropdown}
                         />
                         <DropdownItem
-                          href="/editar-perfil"
+                          href="/editar-perfil?tab=servicios"
                           icon="✏️"
                           label="Editar mis servicios"
                           onNavigate={closeDropdown}

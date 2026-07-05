@@ -452,7 +452,7 @@ function ProviderStatusBanner({ perfil, BRAND }) {
       </p>
       {verificado && cobrosActivos && (
         <Link
-          href="/editar-perfil"
+          href="/editar-perfil?tab=servicios"
           style={{
             display: "inline-block",
             marginTop: 8,

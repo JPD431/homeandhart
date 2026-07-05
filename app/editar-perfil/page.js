@@ -3,6 +3,9 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import AlojamientoServiceFields from "@/app/components/provider/AlojamientoServiceFields";
+import NinosServiceFields from "@/app/components/provider/NinosServiceFields";
+import MascotasServiceFields from "@/app/components/provider/MascotasServiceFields";
 import AmenitiesPicker from "@/app/components/AmenitiesPicker";
 import BanoTipoSelector from "@/app/components/BanoTipoSelector";
 import ProveedorEmergenciaToggle from "@/app/components/ProveedorEmergenciaToggle";
@@ -28,6 +31,8 @@ import {
   VERTICALS,
   getServiceHeaderTitle,
   getVerticalColor,
+  GREEN,
+  ORANGE,
 } from "@/app/lib/provider-verticals";
 import {
   DEFAULT_CAPACIDAD_ALOJAMIENTO,
@@ -39,6 +44,12 @@ import {
   serializeDescuentosDuracionForDb,
 } from "@/app/lib/descuentosDuracion";
 import { RELACION_OPTIONS } from "@/app/lib/referencias";
+import { buildEditarPerfilTabHref } from "@/app/lib/editar-perfil-routes";
+import {
+  MODALIDAD_MASCOTAS_OPTIONS,
+  MODALIDAD_NINOS_OPTIONS,
+  TIPO_ALOJAMIENTO_EDIT_OPTIONS,
+} from "@/app/lib/service-form-tags";
 import {
   buildServicePayload,
   DIAS_DISPONIBLES_DEFAULT,
@@ -70,6 +81,8 @@ import {
 
 const SERVICE_ACTIVE_GREEN = "#0e7a5c";
 
+const inputClass = PROVIDER_INPUT_CLASS;
+
 const IDIOMAS_DEFAULT = [
   "Español",
   "English",
@@ -79,29 +92,6 @@ const IDIOMAS_DEFAULT = [
   "Português",
   "中文",
 ];
-
-const TIPO_ALOJAMIENTO_OPTIONS = [
-  { value: "completo", label: "Alojamiento completo — piso o casa entera" },
-  { value: "habitacion_privada", label: "Habitación privada" },
-  { value: "habitacion_compartida", label: "Habitación compartida" },
-  { value: "habitacion_hotel", label: "Habitación de hotel" },
-  { value: "otros", label: "Otros" },
-];
-
-const MODALIDAD_NINOS_OPTIONS = [
-  { value: "domicilio_cliente", label: "En domicilio del cliente" },
-  { value: "domicilio_proveedor", label: "En mi domicilio" },
-  { value: "ambas", label: "Ambas opciones disponibles" },
-];
-
-const MODALIDAD_MASCOTAS_OPTIONS = [
-  { value: "domicilio_proveedor", label: "En mi domicilio" },
-  { value: "domicilio_cliente", label: "En domicilio del cliente" },
-  { value: "paseos", label: "Paseos" },
-  { value: "todo_incluido", label: "Todo incluido" },
-];
-
-const inputClass = PROVIDER_INPUT_CLASS;
 
 const SERVICE_VERTICAL_TAB_ORDER = ["alojamiento", "ninos", "mascotas"];
 
@@ -138,11 +128,6 @@ function resolveTabFromParam(tabParam, services) {
   return "perfil";
 }
 
-function buildEditarPerfilTabHref(tabId) {
-  if (tabId === "perfil") return "/editar-perfil";
-  return `/editar-perfil?tab=${encodeURIComponent(tabId)}`;
-}
-
 function emptyServiceDetails() {
   return {
     titulo: "",
@@ -170,6 +155,22 @@ function emptyServiceDetails() {
     amenities: [],
     foto_url: "",
     capacidad: { ...DEFAULT_CAPACIDAD_ALOJAMIENTO },
+    nru: "",
+    normas: { ...DEFAULT_NORMAS },
+    check_in: "15:00",
+    check_out: "11:00",
+    anos_experiencia: "",
+    edadesTags: [],
+    formacionTags: [],
+    actividadesTags: [],
+    nochesFinde: false,
+    carnetConducir: false,
+    animalesTags: [],
+    tamanoPerro: "",
+    certificacionesTags: [],
+    jardin: false,
+    paseosIncluidos: false,
+    cercaVeterinario: false,
   };
 }
 
@@ -323,7 +324,6 @@ function ServiceDisponibleRow({ service, perfil, onToggle, compact = false }) {
 
 function OfertaEspecialFields({ serviceId, details, onChange }) {
   const enabled = details.oferta_activa === true;
-  const showViajar = serviceId === "ninos" || serviceId === "mascotas";
 
   function update(field, val) {
     onChange({ ...details, [field]: val });
@@ -401,38 +401,6 @@ function OfertaEspecialFields({ serviceId, details, onChange }) {
               style={{ borderColor: BRAND.border }}
             />
           </div>
-          {showViajar && (
-            <div className="sm:col-span-2 flex items-center justify-between gap-4 rounded-xl border px-4 py-3"
-              style={{ borderColor: BRAND.border }}
-            >
-              <p className="text-sm font-semibold text-[#1a1a1a]">
-                Disponible para viajar
-              </p>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={details.disponible_para_viajar === true}
-                onClick={() =>
-                  update("disponible_para_viajar", !details.disponible_para_viajar)
-                }
-                className="relative h-7 w-12 shrink-0 rounded-full transition-colors"
-                style={{
-                  backgroundColor: details.disponible_para_viajar
-                    ? BRAND.primary
-                    : "#d1d5db",
-                }}
-              >
-                <span
-                  className="absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform"
-                  style={{
-                    left: details.disponible_para_viajar
-                      ? "calc(100% - 1.625rem)"
-                      : "0.125rem",
-                  }}
-                />
-              </button>
-            </div>
-          )}
         </div>
       )}
     </div>
@@ -614,6 +582,19 @@ function ServiceEditForm({ vertical, details, onChange, userId }) {
           style={{ borderColor: BRAND.border }}
         />
       </div>
+      {(vertical === "ninos" || vertical === "mascotas") && (
+        <div>
+          <label className="mb-1.5 block text-xs font-medium text-[#444]">Años de experiencia</label>
+          <input
+            type="number"
+            min="0"
+            value={details.anos_experiencia ?? ""}
+            onChange={(e) => update("anos_experiencia", e.target.value)}
+            className={inputClass}
+            style={{ borderColor: BRAND.border }}
+          />
+        </div>
+      )}
       <div>
         <label className="mb-1.5 block text-xs font-medium text-[#444]">
           {servicePrecioLabel(vertical)}
@@ -627,11 +608,22 @@ function ServiceEditForm({ vertical, details, onChange, userId }) {
           style={{ borderColor: BRAND.border }}
         />
       </div>
+      {vertical === "alojamiento" && (
+        <div>
+          <label className="mb-1.5 block text-xs font-medium text-[#444]">NRU</label>
+          <input
+            value={details.nru || ""}
+            onChange={(e) => update("nru", e.target.value)}
+            className={inputClass}
+            style={{ borderColor: BRAND.border }}
+          />
+        </div>
+      )}
       {vertical === "alojamiento" ? (
         <div className="sm:col-span-2">
           <p className="mb-2 text-xs font-medium text-[#444]">{SERVICE_LABELS.tipoAlojamiento}</p>
           <div className="flex flex-col gap-2">
-            {TIPO_ALOJAMIENTO_OPTIONS.map((option) => {
+            {TIPO_ALOJAMIENTO_EDIT_OPTIONS.map((option) => {
               const selected = details.tipo_alojamiento === option.value;
               return (
                 <button
@@ -719,6 +711,12 @@ function ServiceEditForm({ vertical, details, onChange, userId }) {
               accentColor={BRAND.primary}
             />
           </div>
+          <AlojamientoServiceFields
+            className="sm:col-span-2"
+            details={details}
+            onChange={onChange}
+            accentColor={PRIMARY}
+          />
           <div className="sm:col-span-2">
             <AmenitiesPicker
               value={details.amenities || []}
@@ -763,45 +761,30 @@ function ServiceEditForm({ vertical, details, onChange, userId }) {
           </div>
         </>
       )}
+      {vertical === "ninos" && (
+        <NinosServiceFields
+          className="sm:col-span-2"
+          details={details}
+          onChange={onChange}
+          accentColor={GREEN}
+          showAnosExperiencia={false}
+        />
+      )}
+      {vertical === "mascotas" && (
+        <MascotasServiceFields
+          className="sm:col-span-2"
+          details={details}
+          onChange={onChange}
+          accentColor={ORANGE}
+          showAnosExperiencia={false}
+        />
+      )}
       <ServiceOperationalFields
         vertical={vertical}
         details={details}
         onChange={onChange}
         sectionSubtitle={SERVICE_LABELS.operativo.subtitle}
       />
-      {vertical === "ninos" && (
-        <div
-          className="sm:col-span-2 rounded-xl border p-4"
-          style={{ borderColor: BRAND.border }}
-        >
-          <div className="flex items-center justify-between gap-4">
-            <p className="text-sm font-semibold text-[#1a1a1a]">Disponible para viajar</p>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={details.disponible_para_viajar === true}
-              onClick={() =>
-                update("disponible_para_viajar", !details.disponible_para_viajar)
-              }
-              className="relative h-7 w-12 shrink-0 rounded-full transition-colors"
-              style={{
-                backgroundColor: details.disponible_para_viajar
-                  ? BRAND.primary
-                  : "#d1d5db",
-              }}
-            >
-              <span
-                className="absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform"
-                style={{
-                  left: details.disponible_para_viajar
-                    ? "calc(100% - 1.625rem)"
-                    : "0.125rem",
-                }}
-              />
-            </button>
-          </div>
-        </div>
-      )}
       <div className="sm:col-span-2">
         <OfertaEspecialFields
           serviceId={vertical}
