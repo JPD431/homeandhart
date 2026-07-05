@@ -5,6 +5,12 @@ import {
   buildServicePayload,
   DIAS_DISPONIBLES_DEFAULT,
   getServiceLocationFields,
+  parseAnosExperienciaFromDb,
+  parseCheckTimesFromDb,
+  parseMascotasBooleansFromDb,
+  parseMascotasDetalleFromDb,
+  parseNinosDetalleFromDb,
+  parseNormasFromDb,
 } from "@/app/lib/service-payload";
 import { supabase } from "@/app/lib/supabase";
 
@@ -199,34 +205,25 @@ export function mapDraftRowToServiceDetails(row) {
     return {
       ...base,
       nru: row.nru || "",
-      normas: { petFriendly: false, bebes: false, fumar: false, fiestas: false },
-      check_in: "15:00",
-      check_out: "11:00",
+      normas: parseNormasFromDb(row),
+      ...parseCheckTimesFromDb(row),
     };
   }
 
   if (row.vertical === "ninos") {
     return {
       ...base,
-      anos_experiencia: "",
-      edadesTags: [],
-      formacionTags: [],
-      actividadesTags: [],
-      nochesFinde: false,
-      carnetConducir: false,
+      anos_experiencia: parseAnosExperienciaFromDb(row),
+      ...parseNinosDetalleFromDb(row),
     };
   }
 
   return {
     ...base,
-    anos_experiencia: "",
-    animalesTags: [],
-    tamanoPerro: "",
-    certificacionesTags: [],
-    jardin: false,
-    paseosIncluidos: false,
+    anos_experiencia: parseAnosExperienciaFromDb(row),
+    ...parseMascotasDetalleFromDb(row),
+    ...parseMascotasBooleansFromDb(row),
     fotosActualizaciones: false,
-    cercaVeterinario: false,
   };
 }
 

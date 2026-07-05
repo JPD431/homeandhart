@@ -13,6 +13,131 @@ export const DIAS_SEMANA = [
 
 export const DIAS_DISPONIBLES_DEFAULT = DIAS_SEMANA.map((d) => d.id);
 
+export const DEFAULT_NORMAS = {
+  petFriendly: false,
+  bebes: false,
+  fumar: false,
+  fiestas: false,
+};
+
+const DEFAULT_CHECK_IN = "15:00";
+const DEFAULT_CHECK_OUT = "11:00";
+
+export function serializeNormas(details) {
+  const n = details?.normas ?? {};
+  return {
+    petFriendly: n.petFriendly === true,
+    bebes: n.bebes === true,
+    fumar: n.fumar === true,
+    fiestas: n.fiestas === true,
+  };
+}
+
+export function parseNormasFromDb(row) {
+  const raw = row?.normas;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return { ...DEFAULT_NORMAS };
+  }
+  return {
+    petFriendly: raw.petFriendly === true,
+    bebes: raw.bebes === true,
+    fumar: raw.fumar === true,
+    fiestas: raw.fiestas === true,
+  };
+}
+
+export function parseCheckTimesFromDb(row) {
+  return {
+    check_in: row?.check_in?.trim() || DEFAULT_CHECK_IN,
+    check_out: row?.check_out?.trim() || DEFAULT_CHECK_OUT,
+  };
+}
+
+export function serializeNinosDetalle(details) {
+  return {
+    edades_tags: Array.isArray(details?.edadesTags) ? [...details.edadesTags] : [],
+    formacion_tags: Array.isArray(details?.formacionTags)
+      ? [...details.formacionTags]
+      : [],
+    actividades_tags: Array.isArray(details?.actividadesTags)
+      ? [...details.actividadesTags]
+      : [],
+    noches_finde: details?.nochesFinde === true,
+    carnet_conducir: details?.carnetConducir === true,
+  };
+}
+
+export function parseNinosDetalleFromDb(row) {
+  const raw = row?.ninos_detalle;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return {
+      edadesTags: [],
+      formacionTags: [],
+      actividadesTags: [],
+      nochesFinde: false,
+      carnetConducir: false,
+    };
+  }
+  return {
+    edadesTags: Array.isArray(raw.edades_tags) ? [...raw.edades_tags] : [],
+    formacionTags: Array.isArray(raw.formacion_tags) ? [...raw.formacion_tags] : [],
+    actividadesTags: Array.isArray(raw.actividades_tags)
+      ? [...raw.actividades_tags]
+      : [],
+    nochesFinde: raw.noches_finde === true,
+    carnetConducir: raw.carnet_conducir === true,
+  };
+}
+
+export function serializeMascotasDetalle(details) {
+  return {
+    animales_tags: Array.isArray(details?.animalesTags) ? [...details.animalesTags] : [],
+    tamano_perro: details?.tamanoPerro?.trim() || "",
+    certificaciones_tags: Array.isArray(details?.certificacionesTags)
+      ? [...details.certificacionesTags]
+      : [],
+    cerca_veterinario: details?.cercaVeterinario === true,
+  };
+}
+
+export function parseMascotasDetalleFromDb(row) {
+  const raw = row?.mascotas_detalle;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return {
+      animalesTags: [],
+      tamanoPerro: "",
+      certificacionesTags: [],
+      cercaVeterinario: false,
+    };
+  }
+  return {
+    animalesTags: Array.isArray(raw.animales_tags) ? [...raw.animales_tags] : [],
+    tamanoPerro: raw.tamano_perro || "",
+    certificacionesTags: Array.isArray(raw.certificaciones_tags)
+      ? [...raw.certificaciones_tags]
+      : [],
+    cercaVeterinario: raw.cerca_veterinario === true,
+  };
+}
+
+export function parseMascotasBooleansFromDb(row) {
+  return {
+    jardin: row?.jardin === true,
+    paseosIncluidos: row?.paseos_incluidos === true,
+  };
+}
+
+export function serializeAnosExperiencia(details) {
+  const raw = details?.anos_experiencia;
+  if (raw == null || raw === "") return null;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : null;
+}
+
+export function parseAnosExperienciaFromDb(row) {
+  return row?.anos_experiencia != null ? String(row.anos_experiencia) : "";
+}
+
 export function needsDireccionFields(vertical, modalidad) {
   if (vertical === "alojamiento") return true;
   if (vertical === "ninos" && modalidad === "domicilio_proveedor") return true;
@@ -59,7 +184,7 @@ export async function getServiceLocationFields(details, vertical) {
 }
 
 export function buildServicePayload(details, vertical, ciudad, proveedorId, disponible) {
-  return {
+  const payload = {
     proveedor_id: proveedorId,
     vertical,
     titulo: details.titulo.trim(),
@@ -104,7 +229,6 @@ export function buildServicePayload(details, vertical, ciudad, proveedorId, disp
       ? details.oferta_descripcion?.trim() || null
       : null,
     disponible_para_viajar:
-      details.oferta_activa &&
       (vertical === "ninos" || vertical === "mascotas") &&
       details.disponible_para_viajar === true,
     descuentos_duracion: serializeDescuentosDuracionForDb(details),
@@ -113,4 +237,20 @@ export function buildServicePayload(details, vertical, ciudad, proveedorId, disp
     foto_url: details.foto_url || null,
     capacidad: serializeCapacidad(details, vertical),
   };
+
+  if (vertical === "alojamiento") {
+    payload.normas = serializeNormas(details);
+    payload.check_in = details.check_in?.trim() || null;
+    payload.check_out = details.check_out?.trim() || null;
+  } else if (vertical === "ninos") {
+    payload.ninos_detalle = serializeNinosDetalle(details);
+    payload.anos_experiencia = serializeAnosExperiencia(details);
+  } else if (vertical === "mascotas") {
+    payload.mascotas_detalle = serializeMascotasDetalle(details);
+    payload.jardin = details.jardin === true;
+    payload.paseos_incluidos = details.paseosIncluidos === true;
+    payload.anos_experiencia = serializeAnosExperiencia(details);
+  }
+
+  return payload;
 }

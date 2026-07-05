@@ -43,6 +43,12 @@ import {
   buildServicePayload,
   DIAS_DISPONIBLES_DEFAULT,
   getServiceLocationFields,
+  parseAnosExperienciaFromDb,
+  parseCheckTimesFromDb,
+  parseMascotasBooleansFromDb,
+  parseMascotasDetalleFromDb,
+  parseNinosDetalleFromDb,
+  parseNormasFromDb,
 } from "@/app/lib/service-payload";
 import { getServiceDescription } from "@/app/lib/service-card-display";
 import { supabase } from "@/app/lib/supabase";
@@ -129,6 +135,65 @@ function emptyServiceDetails() {
 
 function mapServiceFromDb(row) {
   const tiers = normalizeDescuentosDuracion(row.descuentos_duracion);
+  const baseDetails = {
+    ...emptyServiceDetails(),
+    titulo: row.titulo || "",
+    descripcion: getServiceDescription(row),
+    precio: row.precio ?? "",
+    tipo_alojamiento: row.tipo_alojamiento || "",
+    modalidad: row.modalidad || "domicilio_cliente",
+    estancia_minima: row.estancia_minima ?? "",
+    estancia_maxima: row.estancia_maxima ?? "",
+    antelacion_minima: row.antelacion_minima ?? 24,
+    dias_disponibles:
+      row.dias_disponibles?.length > 0
+        ? row.dias_disponibles
+        : [...DIAS_DISPONIBLES_DEFAULT],
+    cancelacion: row.cancellation_policy || "moderada",
+    reserva_inmediata: row.reserva_inmediata === true,
+    oferta_activa: !!(row.oferta_descuento && row.oferta_valida_hasta),
+    oferta_titulo: row.oferta_titulo || "",
+    oferta_descuento: row.oferta_descuento ?? "",
+    oferta_valida_hasta: row.oferta_valida_hasta || "",
+    oferta_descripcion: row.oferta_descripcion || "",
+    disponible_para_viajar: row.disponible_para_viajar === true,
+    descuentos_duracion_activa: tiers.length > 0,
+    descuentos_duracion:
+      tiers.length > 0
+        ? tiers.map((t) => ({
+            minDias: String(t.minDias),
+            descuento: String(t.descuento),
+          }))
+        : [{ minDias: "", descuento: "" }],
+    proveedor_emergencia: row.proveedor_emergencia === true,
+    amenities: row.amenities || [],
+    foto_url: row.foto_url || "",
+    capacidad: parseCapacidadFromDb(row),
+    direccion_exacta: row.direccion_exacta || "",
+    telefono_contacto: row.telefono_contacto || "",
+    nru: row.nru || "",
+  };
+
+  let verticalDetails = {};
+  if (row.vertical === "alojamiento") {
+    verticalDetails = {
+      normas: parseNormasFromDb(row),
+      ...parseCheckTimesFromDb(row),
+    };
+  } else if (row.vertical === "ninos") {
+    verticalDetails = {
+      anos_experiencia: parseAnosExperienciaFromDb(row),
+      ...parseNinosDetalleFromDb(row),
+    };
+  } else if (row.vertical === "mascotas") {
+    verticalDetails = {
+      anos_experiencia: parseAnosExperienciaFromDb(row),
+      ...parseMascotasDetalleFromDb(row),
+      ...parseMascotasBooleansFromDb(row),
+      fotosActualizaciones: false,
+    };
+  }
+
   return {
     id: row.id,
     vertical: row.vertical,
@@ -136,42 +201,8 @@ function mapServiceFromDb(row) {
     revision_estado: row.revision_estado ?? null,
     isNew: false,
     details: {
-      ...emptyServiceDetails(),
-      titulo: row.titulo || "",
-      descripcion: getServiceDescription(row),
-      precio: row.precio ?? "",
-      tipo_alojamiento: row.tipo_alojamiento || "",
-      modalidad: row.modalidad || "domicilio_cliente",
-      estancia_minima: row.estancia_minima ?? "",
-      estancia_maxima: row.estancia_maxima ?? "",
-      antelacion_minima: row.antelacion_minima ?? 24,
-      dias_disponibles:
-        row.dias_disponibles?.length > 0
-          ? row.dias_disponibles
-          : [...DIAS_DISPONIBLES_DEFAULT],
-      cancelacion: row.cancellation_policy || "moderada",
-      reserva_inmediata: row.reserva_inmediata === true,
-      oferta_activa: !!(row.oferta_descuento && row.oferta_valida_hasta),
-      oferta_titulo: row.oferta_titulo || "",
-      oferta_descuento: row.oferta_descuento ?? "",
-      oferta_valida_hasta: row.oferta_valida_hasta || "",
-      oferta_descripcion: row.oferta_descripcion || "",
-      disponible_para_viajar: row.disponible_para_viajar === true,
-      descuentos_duracion_activa: tiers.length > 0,
-      descuentos_duracion:
-        tiers.length > 0
-          ? tiers.map((t) => ({
-              minDias: String(t.minDias),
-              descuento: String(t.descuento),
-            }))
-          : [{ minDias: "", descuento: "" }],
-      proveedor_emergencia: row.proveedor_emergencia === true,
-      amenities: row.amenities || [],
-      foto_url: row.foto_url || "",
-      capacidad: parseCapacidadFromDb(row),
-      direccion_exacta: row.direccion_exacta || "",
-      telefono_contacto: row.telefono_contacto || "",
-      nru: row.nru || "",
+      ...baseDetails,
+      ...verticalDetails,
     },
   };
 }
