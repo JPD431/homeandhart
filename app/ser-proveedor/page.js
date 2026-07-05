@@ -46,6 +46,7 @@ import {
   getWizardPreviewSummary,
   getWizardPreviewVerticalHeading,
 } from "@/app/lib/wizard-preview-adapter";
+import { buildAnuncioPreviewHref } from "@/app/lib/service-card-display";
 import {
   CONFIRMACION_LABELS,
   DOCUMENT_LABELS,
@@ -460,6 +461,7 @@ export default function SerProveedorPage() {
     ninos: null,
     mascotas: null,
   });
+  const [openingPreviewVertical, setOpeningPreviewVertical] = useState(null);
   const [initialLoading, setInitialLoading] = useState(true);
   const [savingStep, setSavingStep] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -769,6 +771,35 @@ export default function SerProveedorPage() {
 
   function updateServiceDetails(vertical, details) {
     setServiceDetails((prev) => ({ ...prev, [vertical]: details }));
+  }
+
+  async function handleOpenFullAnuncioPreview(vertical) {
+    if (!userId || !draftServiceIds[vertical]) return;
+
+    setOpeningPreviewVertical(vertical);
+    setErrorMessage("");
+    try {
+      const id = await upsertDraftService(
+        userId,
+        vertical,
+        ciudad,
+        serviceDetails[vertical],
+        draftServiceIds[vertical],
+        servicePhotos[vertical],
+      );
+      setDraftServiceIds((prev) => ({ ...prev, [vertical]: id }));
+      if (servicePhotos[vertical]?.length > 0) {
+        setServicePhotos((prev) => ({ ...prev, [vertical]: [] }));
+      }
+      window.open(buildAnuncioPreviewHref(id), "_blank", "noopener,noreferrer");
+    } catch (err) {
+      console.error("Error abriendo vista previa:", err);
+      setErrorMessage(
+        "No se pudo abrir la vista previa: " + (err.message || "error desconocido"),
+      );
+    } finally {
+      setOpeningPreviewVertical(null);
+    }
   }
 
   function toggleTag(vertical, field, tag) {
@@ -1628,6 +1659,9 @@ export default function SerProveedorPage() {
                 vertical,
                 serviceDetails[vertical],
               );
+              const draftId = draftServiceIds[vertical];
+              const canOpenFullPreview = Boolean(draftId);
+              const isOpeningPreview = openingPreviewVertical === vertical;
 
               return (
                 <section key={vertical}>
@@ -1669,6 +1703,25 @@ export default function SerProveedorPage() {
                       </div>
                     ))}
                   </dl>
+                  <div className="mt-4 max-w-md">
+                    {canOpenFullPreview ? (
+                      <button
+                        type="button"
+                        onClick={() => handleOpenFullAnuncioPreview(vertical)}
+                        disabled={isOpeningPreview}
+                        className="text-sm font-semibold transition-opacity hover:opacity-80 disabled:cursor-wait disabled:opacity-60"
+                        style={{ color }}
+                      >
+                        {isOpeningPreview
+                          ? "Guardando borrador…"
+                          : "Ver anuncio completo →"}
+                      </button>
+                    ) : (
+                      <p className="text-xs text-[#aaa]">
+                        Completa este servicio para ver la vista previa completa
+                      </p>
+                    )}
+                  </div>
                 </section>
               );
             })}

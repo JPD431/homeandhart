@@ -1,4 +1,8 @@
 import { REVISION_APROBADO } from "@/app/lib/onboarding-persist";
+import {
+  buildAnuncioHref,
+  buildAnuncioPreviewHref,
+} from "@/app/lib/service-card-display";
 
 export const COBROS_REQUERIDOS_MSG =
   "Configura tus cobros antes de activar un servicio. Ve a tu panel de proveedor y pulsa «Configurar cobros».";
@@ -58,4 +62,18 @@ export function getServiceVisibilidadEstado(perfil, disponible) {
     subtitle: "Visible en búsqueda",
     color: "#0e7a5c",
   };
+}
+
+/** URL del anuncio para el proveedor: pública si ya es visible, preview si no. */
+export function getProviderAnuncioHref(service, perfil) {
+  if (!service?.id) return buildAnuncioPreviewHref("unknown");
+
+  const publiclyVisible =
+    service.disponible === true &&
+    servicioRevisionAprobada(service.revision_estado) &&
+    getServiceVisibilidadEstado(perfil, true).label === "Servicio activo";
+
+  return publiclyVisible
+    ? buildAnuncioHref(service.id)
+    : buildAnuncioPreviewHref(service.id);
 }

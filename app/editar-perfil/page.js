@@ -55,6 +55,7 @@ import {
 import {
   COBROS_REQUERIDOS_MSG,
   getActivacionBloqueoMensaje,
+  getProviderAnuncioHref,
   getServiceVisibilidadEstado,
   proveedorPuedePublicar,
   REVISION_PENDIENTE_MSG,
@@ -131,6 +132,7 @@ function mapServiceFromDb(row) {
     id: row.id,
     vertical: row.vertical,
     disponible: row.disponible !== false,
+    revision_estado: row.revision_estado ?? null,
     isNew: false,
     details: {
       ...emptyServiceDetails(),
@@ -1557,6 +1559,15 @@ export default function EditarPerfilPage() {
                         </div>
                       </div>
                       <div className="flex gap-2">
+                        <a
+                          href={getProviderAnuncioHref(service, perfil)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="rounded-lg border px-3 py-1.5 text-xs font-semibold no-underline transition-colors hover:bg-[#f7f5f2]"
+                          style={{ borderColor: BRAND.border, color: PRIMARY }}
+                        >
+                          Vista previa
+                        </a>
                         <button type="button" onClick={() => setEditingId(isEditing ? null : service.id)} className="rounded-lg border px-3 py-1.5 text-xs font-semibold" style={{ borderColor: BRAND.border, color: PRIMARY }}>
                           {isEditing ? "Cerrar" : "Editar"}
                         </button>
