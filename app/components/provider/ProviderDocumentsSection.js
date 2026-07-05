@@ -18,6 +18,7 @@ const NRU_TEXTO_HINT =
  * @param {string | null} [props.uploadingDocId]
  * @param {(docId: string) => void} props.onUpload
  * @param {boolean} [props.showHeader]
+ * @param {string[]} [props.highlightDocIds]
  */
 export default function ProviderDocumentsSection({
   verticales,
@@ -25,8 +26,10 @@ export default function ProviderDocumentsSection({
   uploadingDocId = null,
   onUpload,
   showHeader = true,
+  highlightDocIds = [],
 }) {
   const groups = groupApplicableDocuments(verticales);
+  const highlightSet = new Set(highlightDocIds);
 
   function renderRow(definition) {
     const status = getDocumentStatus(definition.id, context, verticales);
@@ -43,6 +46,7 @@ export default function ProviderDocumentsSection({
         uploading={uploadingDocId === definition.id}
         onUpload={definition.storage === "texto" ? undefined : onUpload}
         hint={hint}
+        highlighted={highlightSet.has(definition.id) && !status.uploaded}
       />
     );
   }

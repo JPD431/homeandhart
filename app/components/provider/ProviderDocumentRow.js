@@ -11,6 +11,7 @@ import { GREEN, ORANGE, PRIMARY } from "@/app/lib/provider-verticals";
  * @param {boolean} [props.uploading]
  * @param {(docId: string) => void} [props.onUpload]
  * @param {string} [props.hint]
+ * @param {boolean} [props.highlighted]
  */
 export default function ProviderDocumentRow({
   definition,
@@ -18,6 +19,7 @@ export default function ProviderDocumentRow({
   uploading = false,
   onUpload,
   hint,
+  highlighted = false,
 }) {
   const isTextField = definition.storage === "texto";
   const { uploaded, state } = status;
@@ -49,7 +51,10 @@ export default function ProviderDocumentRow({
   return (
     <div
       className="flex items-center justify-between gap-3 rounded-xl border p-3"
-      style={{ borderColor: BRAND.border }}
+      style={{
+        borderColor: highlighted ? ORANGE : BRAND.border,
+        backgroundColor: highlighted ? "#fdf4e7" : undefined,
+      }}
     >
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium text-[#1a1a1a]">

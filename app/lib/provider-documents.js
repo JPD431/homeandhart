@@ -356,6 +356,49 @@ export function getMissingAlojamientoNruForPublish(context = {}) {
 }
 
 /**
+ * Documentos que bloquean publicación para una vertical (excluye perfil si ya verificado).
+ * @param {'alojamiento' | 'ninos' | 'mascotas'} vertical
+ * @param {DocumentContext} context
+ * @param {{ verificado?: boolean } | null} [perfil]
+ * @returns {DocumentDefinition[]}
+ */
+export function getMissingPublishDocumentsForVertical(
+  vertical,
+  context = {},
+  perfil = null,
+) {
+  const verificado = perfil?.verificado === true;
+
+  if (vertical === "alojamiento") {
+    const nruMissing = getMissingAlojamientoNruForPublish(context);
+    const other = getMissingPublishDocuments([vertical], context).filter(
+      (def) =>
+        def.storage !== "profile" &&
+        def.id !== "nru_texto" &&
+        def.id !== "nru_comprobante",
+    );
+    const seen = new Set();
+    return [...nruMissing, ...other].filter((def) => {
+      if (seen.has(def.id)) return false;
+      seen.add(def.id);
+      return true;
+    });
+  }
+
+  return getMissingPublishDocuments([vertical], context).filter((def) => {
+    if (verificado && def.storage === "profile") return false;
+    return true;
+  });
+}
+
+/**
+ * Etiquetas legibles de documentos pendientes para publicar.
+ */
+export function formatMissingPublishDocumentLabels(missingDocs = []) {
+  return missingDocs.map((def) => def.label).filter(Boolean);
+}
+
+/**
  * ¿NRU texto + PDF resolución listos para activar alojamiento?
  * @param {DocumentContext} context
  * @returns {boolean}

@@ -62,7 +62,10 @@ import {
   parseNinosDetalleFromDb,
   parseNormasFromDb,
 } from "@/app/lib/service-payload";
-import { getServiceDescription } from "@/app/lib/service-card-display";
+import {
+  formatMissingPublishDocumentLabels,
+  getMissingPublishDocumentsForVertical,
+} from "@/app/lib/provider-documents";
 import { supabase } from "@/app/lib/supabase";
 
 import {
@@ -82,8 +85,41 @@ import {
   REVISION_PENDIENTE_MSG,
 } from "@/app/lib/provider-publicacion";
 
-const SERVICE_ACTIVE_GREEN = "#0e7a5c";
+const SERVICE_VERTICAL_TABS = ["alojamiento", "ninos", "mascotas"];
 
+function buildPublishReminderMessage(vertical, missingDocs) {
+  const verticalLabel =
+    VERTICALS.find((v) => v.id === vertical)?.label?.toLowerCase() || vertical;
+  const list = formatMissingPublishDocumentLabels(missingDocs).join(", ");
+  return `Guardamos tus cambios. Para publicar tu ${verticalLabel}, todavía necesitas: ${list}.`;
+}
+
+function DocumentsPublishReminder({ vertical, missingDocs }) {
+  if (!vertical || missingDocs.length === 0) return null;
+
+  const verticalLabel =
+    VERTICALS.find((v) => v.id === vertical)?.label?.toLowerCase() || vertical;
+  const list = formatMissingPublishDocumentLabels(missingDocs).join(", ");
+
+  return (
+    <div
+      className="mb-4 rounded-lg border px-4 py-3 text-sm leading-relaxed"
+      style={{
+        borderColor: "#c47d1a",
+        backgroundColor: "#fdf4e7",
+        color: "#5c4a32",
+      }}
+    >
+      <p className="font-semibold">Documentación pendiente para publicar</p>
+      <p className="mt-1">
+        Guardamos tus cambios. Para publicar tu {verticalLabel}, todavía necesitas:{" "}
+        <span className="font-medium">{list}</span>.
+      </p>
+    </div>
+  );
+}
+
+const SERVICE_ACTIVE_GREEN = "#0e7a5c";
 const inputClass = PROVIDER_INPUT_CLASS;
 
 const IDIOMAS_DEFAULT = [
@@ -1000,6 +1036,7 @@ function EditarPerfilContent() {
   const [activeDocumentId, setActiveDocumentId] = useState(null);
   const [uploadingDoc, setUploadingDoc] = useState(null);
   const [providerDocuments, setProviderDocuments] = useState([]);
+  const [documentosReminderVertical, setDocumentosReminderVertical] = useState(null);
 
   useEffect(() => {
     async function load() {
@@ -1103,6 +1140,9 @@ function EditarPerfilContent() {
   }, [loading, services, tabParam, router]);
 
   function handleTabChange(tabId) {
+    if (tabId !== "documentos") {
+      setDocumentosReminderVertical(null);
+    }
     setActiveTab(tabId);
     router.replace(buildEditarPerfilTabHref(tabId), { scroll: false });
   }
@@ -1138,6 +1178,26 @@ function EditarPerfilContent() {
     [perfil, providerDocuments, services],
   );
 
+  const documentosMissingForReminder = useMemo(() => {
+    if (!documentosReminderVertical) return [];
+    return getMissingPublishDocumentsForVertical(
+      documentosReminderVertical,
+      documentContext,
+      perfil,
+    );
+  }, [documentosReminderVertical, documentContext, perfil]);
+
+  useEffect(() => {
+    if (
+      documentosReminderVertical &&
+      documentosMissingForReminder.length === 0
+    ) {
+      setDocumentosReminderVertical(null);
+    }
+  }, [documentosReminderVertical, documentosMissingForReminder.length]);
+
+  const puedePublicarServicios = proveedorPuedePublicar(perfil);
+
   function toggleServiceDisponible(serviceId) {
     const target = services.find((s) => s.id === serviceId);
     if (!target) return;
@@ -1165,8 +1225,6 @@ function EditarPerfilContent() {
       prev.includes(lang) ? prev.filter((l) => l !== lang) : [...prev, lang],
     );
   }
-
-  const puedePublicarServicios = proveedorPuedePublicar(perfil);
 
   const esClienteSinServicios = perfil?.role === "cliente" && services.length === 0;
   const tieneServicios = services.length > 0;
@@ -1319,18 +1377,6 @@ function EditarPerfilContent() {
       if (profileError) throw profileError;
 
       for (const service of services) {
-        if (!service.disponible) continue;
-        const bloqueo = getActivacionBloqueoMensaje(
-          perfil,
-          service,
-          documentContext,
-        );
-        if (bloqueo && !service.disponibleOnLoad) {
-          throw new Error(bloqueo);
-        }
-      }
-
-      for (const service of services) {
         const locationFields = await getServiceLocationFields(
           service.details,
           service.vertical,
@@ -1357,6 +1403,11 @@ function EditarPerfilContent() {
           if (error) throw error;
         }
       }
+
+      let servicesAfterSave = services.map((s) => ({
+        ...s,
+        disponible: resolveDisponibleForSave(s, perfil, documentContext),
+      }));
 
       if (addingService && newServiceDetails.titulo.trim()) {
         const nuevoServicio = {
@@ -1394,10 +1445,16 @@ function EditarPerfilContent() {
           .select("*")
           .single();
         if (error) throw error;
-        setServices((prev) => [...prev, mapServiceFromDb(data)]);
+        servicesAfterSave = [...servicesAfterSave, mapServiceFromDb(data)];
         setAddingService(false);
         setNewServiceDetails(emptyServiceDetails());
       }
+
+      setServices(servicesAfterSave);
+
+      const savedFromVertical = SERVICE_VERTICAL_TABS.includes(activeTab)
+        ? activeTab
+        : null;
 
       setFotoPerfil(fotoUrl);
       setProfilePhotoFile(null);
@@ -1409,9 +1466,36 @@ function EditarPerfilContent() {
         setNuevaPassword("");
       }
 
-      setSuccessMessage("Cambios guardados correctamente ✓");
       setEditingId(null);
       setDirty(false);
+
+      if (savedFromVertical) {
+        const postSaveContext = {
+          ...documentContext,
+          services: servicesAfterSave.map((s) => ({
+            vertical: s.vertical,
+            nru: s.details?.nru,
+            details: s.details,
+          })),
+        };
+        const missingPublishDocs = getMissingPublishDocumentsForVertical(
+          savedFromVertical,
+          postSaveContext,
+          perfil,
+        );
+
+        if (missingPublishDocs.length > 0) {
+          setDocumentosReminderVertical(savedFromVertical);
+          setActiveTab("documentos");
+          router.replace(buildEditarPerfilTabHref("documentos"), { scroll: false });
+          setSuccessMessage(
+            buildPublishReminderMessage(savedFromVertical, missingPublishDocs),
+          );
+          return;
+        }
+      }
+
+      setSuccessMessage("Cambios guardados correctamente ✓");
     } catch (err) {
       setErrorMessage(err.message || "Error al guardar los cambios.");
     } finally {
@@ -1839,14 +1923,13 @@ function EditarPerfilContent() {
     }
 
     if (activeTab === "documentos") {
+      const highlightDocIds = documentosMissingForReminder.map((def) => def.id);
+
       return (
         <Card title={DOCUMENT_LABELS.title}>
-          <input
-            ref={documentInputRef}
-            type="file"
-            accept=".pdf,.jpg,.jpeg,.png"
-            className="hidden"
-            onChange={handleDocumentFile}
+          <DocumentsPublishReminder
+            vertical={documentosReminderVertical}
+            missingDocs={documentosMissingForReminder}
           />
           <ProviderDocumentsSection
             verticales={verticalsActivos}
@@ -1854,6 +1937,7 @@ function EditarPerfilContent() {
             uploadingDocId={uploadingDoc}
             onUpload={openDocumentUpload}
             showHeader={false}
+            highlightDocIds={highlightDocIds}
           />
         </Card>
       );
@@ -1926,6 +2010,13 @@ function EditarPerfilContent() {
       )}
 
       <form id="editar-perfil-form" onSubmit={handleSubmit}>
+        <input
+          ref={documentInputRef}
+          type="file"
+          accept=".pdf,.jpg,.jpeg,.png"
+          className="hidden"
+          onChange={handleDocumentFile}
+        />
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_280px]" style={{ padding: "20px 24px" }}>
           <div>{renderTabContent()}</div>
           <PreviewPanel fotoPreview={fotoPreview} nombre={nombre} apellido={apellido} ciudad={ciudad} services={services} />
