@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import AmenitiesPicker from "@/app/components/AmenitiesPicker";
 import BanoTipoSelector from "@/app/components/BanoTipoSelector";
 import ProveedorEmergenciaToggle from "@/app/components/ProveedorEmergenciaToggle";
@@ -918,7 +918,15 @@ function PreviewPanel({ fotoPreview, nombre, apellido, ciudad, services }) {
   );
 }
 
-export default function EditarPerfilPage() {
+function EditarPerfilPageFallback() {
+  return (
+    <div className="min-h-screen font-sans" style={{ backgroundColor: BRAND.warm }}>
+      <main className="px-6 py-16 text-center text-sm text-[#666]">Cargando perfil…</main>
+    </div>
+  );
+}
+
+function EditarPerfilContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab");
@@ -1879,5 +1887,13 @@ export default function EditarPerfilPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function EditarPerfilPage() {
+  return (
+    <Suspense fallback={<EditarPerfilPageFallback />}>
+      <EditarPerfilContent />
+    </Suspense>
   );
 }
