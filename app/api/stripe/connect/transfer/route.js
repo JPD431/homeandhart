@@ -1,11 +1,16 @@
 import Stripe from "stripe";
+import { authorizeAdminOrCron } from "@/app/lib/stripe-api-auth";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 export async function POST(request) {
   try {
+    const auth = await authorizeAdminOrCron(request);
+    if (!auth.ok) {
+      return Response.json({ error: auth.error }, { status: auth.status });
+    }
+
     const { paymentIntentId, proveedores } = await request.json();
-    // proveedores = [{ stripe_account_id, amount }]
 
     const transfers = await Promise.all(
       proveedores.map((p) =>

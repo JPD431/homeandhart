@@ -1,4 +1,5 @@
 import Stripe from "stripe";
+import { authorizeAuthenticatedClient } from "@/app/lib/stripe-api-auth";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
@@ -14,10 +15,23 @@ export async function POST(request) {
       setup_future_usage,
     } = await request.json();
 
+    const clienteId = metadata?.cliente_id;
+    const auth = await authorizeAuthenticatedClient(request, { clienteId });
+    if (!auth.ok) {
+      return Response.json({ error: auth.error }, { status: auth.status });
+    }
+
+    if (!clienteId) {
+      return Response.json(
+        { error: "Falta metadata.cliente_id en la retención de pago." },
+        { status: 400 },
+      );
+    }
+
     const intentParams = {
-      amount: Math.round(amount * 100), // Stripe trabaja en céntimos
+      amount: Math.round(amount * 100),
       currency,
-      capture_method: "manual", // Retención — no cobrar hasta confirmar
+      capture_method: "manual",
       metadata,
     };
 

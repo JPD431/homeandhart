@@ -19,9 +19,32 @@ const TABS = [
   { id: "verificados", label: "Verificados" },
   { id: "rechazados", label: "Rechazados" },
   { id: "reportes", label: "Reportes" },
+  { id: "incidencias", label: "Incidencias" },
   { id: "ingresos", label: "Ingresos" },
   { id: "blog", label: "Blog" },
 ];
+
+function formatFechasReserva(inc) {
+  if (!inc.fecha_inicio) return "—";
+  if (inc.hora) return `${inc.fecha_inicio} · ${inc.hora}`;
+  if (inc.fecha_fin && inc.fecha_fin !== inc.fecha_inicio) {
+    return `${inc.fecha_inicio} – ${inc.fecha_fin}`;
+  }
+  return inc.fecha_inicio;
+}
+
+function stripeStatusBadgeStyle(status) {
+  switch (status) {
+    case "requires_capture":
+      return { bg: "#fef3c7", color: "#92400e" };
+    case "succeeded":
+      return { bg: "#e6f4f0", color: "#085041" };
+    case "canceled":
+      return { bg: "#f3f4f6", color: "#6b7280" };
+    default:
+      return { bg: "#fee2e2", color: "#b91c1c" };
+  }
+}
 
 const BLOG_CATEGORIAS_ADMIN = [
   "familias",
@@ -284,6 +307,7 @@ export default function AdminPage() {
   const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [completedBookings, setCompletedBookings] = useState([]);
+  const [incidencias, setIncidencias] = useState([]);
   const [reports, setReports] = useState([]);
   const [lateCancellations, setLateCancellations] = useState([]);
   const [blogPosts, setBlogPosts] = useState([]);
@@ -432,6 +456,17 @@ export default function AdminPage() {
         setReports(reportsData ?? []);
       }
 
+      const incidenciasRes = await fetch("/api/admin/incidencias");
+      const incidenciasPayload = await incidenciasRes.json().catch(() => ({}));
+
+      if (!incidenciasRes.ok) {
+        setErrorMessage(
+          incidenciasPayload.error || "Error al cargar incidencias",
+        );
+      } else {
+        setIncidencias(incidenciasPayload.incidencias ?? []);
+      }
+
       const garantiaRes = await fetch("/api/admin/garantia/cancelaciones-tardias");
       const garantiaData = await garantiaRes.json().catch(() => ({}));
 
@@ -477,6 +512,7 @@ export default function AdminPage() {
       verificados: 0,
       rechazados: 0,
       reportes: 0,
+      incidencias: 0,
       ingresos: 0,
       blog: 0,
     };
@@ -484,10 +520,11 @@ export default function AdminPage() {
       result[getProviderStatus(p)] += 1;
     }
     result.reportes = reports.filter((r) => r.estado === "pendiente").length;
+    result.incidencias = incidencias.length;
     result.ingresos = completedBookings.length;
     result.blog = blogPosts.length;
     return result;
-  }, [providers, completedBookings, reports, blogPosts]);
+  }, [providers, completedBookings, reports, incidencias, blogPosts]);
 
   const pendingReports = useMemo(
     () => reports.filter((r) => r.estado === "pendiente"),
@@ -1352,6 +1389,185 @@ export default function AdminPage() {
                 </ul>
               )}
             </section>
+          </div>
+        ) : activeTab === "incidencias" ? (
+          <div className="mt-6">
+            <p className="mb-4 text-sm text-[#666]">
+              Reservas con conflicto abierto. Consulta el estado del pago en Stripe antes de
+              resolver (acciones de dinero en fases posteriores).
+            </p>
+
+            {incidencias.length === 0 ? (
+              <p
+                className="rounded-2xl border bg-white px-6 py-10 text-center text-sm text-[#666]"
+                style={{ borderColor: BRAND.border }}
+              >
+                No hay reservas en incidencia.
+              </p>
+            ) : (
+              <ul className="flex flex-col gap-4">
+                {incidencias.map((inc) => {
+                  const stripeStyle = stripeStatusBadgeStyle(inc.stripe?.status);
+                  return (
+                    <li
+                      key={inc.id}
+                      className="rounded-2xl border bg-white p-6"
+                      style={{ borderColor: BRAND.border }}
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-[#1a1a1a]">
+                            {inc.servicio.titulo}{" "}
+                            <span className="font-normal text-[#888]">
+                              · {inc.servicio.vertical_label}
+                            </span>
+                          </p>
+                          <p className="mt-1 text-xs text-[#888]">
+                            Reserva {inc.id.slice(0, 8)}… · {formatFechasReserva(inc)}
+                            {inc.servicio.ciudad ? ` · ${inc.servicio.ciudad}` : ""}
+                          </p>
+                        </div>
+                        <span
+                          className="rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide"
+                          style={{ backgroundColor: "#fee2e2", color: "#b91c1c" }}
+                        >
+                          Incidencia
+                        </span>
+                      </div>
+
+                      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                        <div>
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-[#888]">
+                            Cliente
+                          </p>
+                          <p className="mt-0.5 text-sm">{inc.cliente.nombre}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-[#888]">
+                            Proveedor
+                          </p>
+                          <p className="mt-0.5 text-sm">{inc.proveedor.nombre}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-[#888]">
+                            Importe cliente
+                          </p>
+                          <p className="mt-0.5 text-sm font-semibold" style={{ color: BRAND.primary }}>
+                            {formatEuroAdmin(inc.precio_total)}
+                          </p>
+                          {inc.credito_aplicado > 0 && (
+                            <p className="text-[10px] text-[#888]">
+                              incl. {formatEuroAdmin(inc.credito_aplicado)} crédito
+                            </p>
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-[#888]">
+                            Cobraría proveedor
+                          </p>
+                          <p className="mt-0.5 text-sm font-semibold" style={{ color: BRAND.primary }}>
+                            {formatEuroAdmin(inc.ingreso_proveedor_estimado)}
+                          </p>
+                        </div>
+                      </div>
+
+                      {inc.reporte && (
+                        <div
+                          className="mt-4 rounded-xl border p-4"
+                          style={{ borderColor: BRAND.border, backgroundColor: "#f7f5f2" }}
+                        >
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-[#888]">
+                            Reporte · {formatDate(inc.reporte.created_at)}
+                          </p>
+                          <p className="mt-1 text-sm">
+                            <span className="font-medium capitalize">
+                              {inc.reporte.reporter_rol}
+                            </span>
+                            {inc.reporte.reporter_nombre
+                              ? ` (${inc.reporte.reporter_nombre})`
+                              : ""}
+                            : {inc.reporte.motivo}
+                          </p>
+                          {inc.reporte.descripcion && (
+                            <p className="mt-2 text-sm leading-relaxed text-[#444]">
+                              {inc.reporte.descripcion}
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      <div
+                        className="mt-4 rounded-xl border p-4"
+                        style={{ borderColor: BRAND.border }}
+                      >
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-[#888]">
+                          Pago Stripe
+                        </p>
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <span
+                            className="rounded-full px-2.5 py-0.5 text-[11px] font-semibold"
+                            style={{
+                              backgroundColor: stripeStyle.bg,
+                              color: stripeStyle.color,
+                            }}
+                          >
+                            {inc.stripe?.status_label ?? "—"}
+                          </span>
+                          {inc.stripe?.status && (
+                            <span className="text-xs text-[#888]">({inc.stripe.status})</span>
+                          )}
+                        </div>
+                        {inc.payment_intent_id && (
+                          <p className="mt-2 font-mono text-xs text-[#666]">
+                            PI: {inc.payment_intent_id}
+                          </p>
+                        )}
+                        {inc.stripe?.amount_authorized_eur != null && (
+                          <p className="mt-1 text-xs text-[#666]">
+                            Autorizado: {formatEuroAdmin(inc.stripe.amount_authorized_eur)}
+                            {inc.stripe.amount_captured_eur != null &&
+                            inc.stripe.amount_captured_eur > 0
+                              ? ` · Capturado: ${formatEuroAdmin(inc.stripe.amount_captured_eur)}`
+                              : ""}
+                          </p>
+                        )}
+                        {inc.stripe?.error && (
+                          <p className="mt-2 text-xs text-red-700">{inc.stripe.error}</p>
+                        )}
+                        {inc.pago_liberado_at && (
+                          <p className="mt-2 text-xs text-amber-700">
+                            pago_liberado_at: {formatDate(inc.pago_liberado_at)}
+                          </p>
+                        )}
+                      </div>
+
+                      {inc.bundle?.is_bundle && (
+                        <div
+                          className="mt-4 rounded-xl border px-4 py-3"
+                          style={{ borderColor: "#fcd34d", backgroundColor: "#fffbeb" }}
+                        >
+                          <p className="text-sm font-semibold text-[#92400e]">
+                            Bundle — PaymentIntent compartido
+                          </p>
+                          <p className="mt-1 text-xs leading-relaxed text-[#78350f]">
+                            {inc.bundle.bundle_note}
+                          </p>
+                          {inc.bundle.siblings?.length > 0 && (
+                            <ul className="mt-2 space-y-1 text-xs text-[#78350f]">
+                              {inc.bundle.siblings.map((sib) => (
+                                <li key={sib.id}>
+                                  · {sib.titulo} ({sib.vertical_label}) — estado: {sib.estado}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </div>
         ) : activeTab === "ingresos" ? (
           <div className="mt-6">
