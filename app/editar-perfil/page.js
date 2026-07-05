@@ -66,6 +66,7 @@ import {
   formatMissingPublishDocumentLabels,
   getMissingPublishDocumentsForVertical,
 } from "@/app/lib/provider-documents";
+import { getServiceDescription } from "@/app/lib/service-card-display";
 import { supabase } from "@/app/lib/supabase";
 
 import {
