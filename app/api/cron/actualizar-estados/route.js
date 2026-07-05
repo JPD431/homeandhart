@@ -5,6 +5,20 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY,
 );
 
+/** YYYY-MM-DD en UTC (misma convención que el cron original). */
+function todayUtcDateString() {
+  return new Date().toISOString().split("T")[0];
+}
+
+/**
+ * PostgREST: COALESCE(fecha_fin, fecha_inicio) <= hoy
+ * - Con fecha_fin (alojamiento/mascotas): fecha_fin <= hoy
+ * - Sin fecha_fin (niñera): fecha_inicio <= hoy
+ */
+function buildEffectiveEndDateLteFilter(hoy) {
+  return `fecha_fin.lte.${hoy},and(fecha_fin.is.null,fecha_inicio.lte.${hoy})`;
+}
+
 export async function GET(request) {
   const authHeader = request.headers.get("authorization");
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -12,13 +26,14 @@ export async function GET(request) {
   }
 
   const ahora = new Date().toISOString();
+  const hoy = todayUtcDateString();
   const hace24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
   const { data: paraIniciar } = await supabase
     .from("bookings")
     .select("id")
     .eq("estado", "confirmada")
-    .lte("fecha_inicio", ahora.split("T")[0]);
+    .lte("fecha_inicio", hoy);
 
   if (paraIniciar?.length) {
     await supabase
@@ -35,7 +50,7 @@ export async function GET(request) {
     .select("id, cliente_id, service_id, payment_intent_id, precio_total")
     .eq("estado", "en_curso")
     .is("confirmacion_cliente", null)
-    .lte("fecha_fin", ahora.split("T")[0]);
+    .or(buildEffectiveEndDateLteFilter(hoy));
 
   for (const booking of paraCompletar || []) {
     await supabase
