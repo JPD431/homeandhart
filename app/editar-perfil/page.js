@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
+import AmenitiesPicker from "@/app/components/AmenitiesPicker";
+import BanoTipoSelector from "@/app/components/BanoTipoSelector";
 import ProveedorEmergenciaToggle from "@/app/components/ProveedorEmergenciaToggle";
 import CalendarioTarifas from "@/app/components/CalendarioTarifas";
 import ServiceOperationalFields from "@/app/components/ServiceOperationalFields";
@@ -36,7 +38,6 @@ import {
   normalizeDescuentosDuracion,
   serializeDescuentosDuracionForDb,
 } from "@/app/lib/descuentosDuracion";
-import { AMENITIES_GROUPS } from "@/app/lib/amenities";
 import { RELACION_OPTIONS } from "@/app/lib/referencias";
 import {
   buildServicePayload,
@@ -490,14 +491,6 @@ function ServiceEditForm({ vertical, details, onChange, userId }) {
     onChange({ ...details, [field]: val });
   }
 
-  function toggleAmenity(id) {
-    const amenities = details.amenities || [];
-    const next = amenities.includes(id)
-      ? amenities.filter((item) => item !== id)
-      : [...amenities, id];
-    update("amenities", next);
-  }
-
   async function handleServicePhotoChange(e) {
     const file = e.target.files?.[0];
     if (!file || !userId) return;
@@ -648,33 +641,20 @@ function ServiceEditForm({ vertical, details, onChange, userId }) {
                 min={1}
               />
             </div>
+            <BanoTipoSelector
+              className="mt-4"
+              value={capacidad.bano_tipo ?? null}
+              onChange={(v) => updCap("bano_tipo", v)}
+              accentColor={BRAND.primary}
+            />
           </div>
-          {AMENITIES_GROUPS.map((group) => (
-            <div key={group.title} className="sm:col-span-2">
-              <p className="mb-3 text-xs font-semibold text-[#444]">{group.title}</p>
-              <div className="grid grid-cols-4 gap-2">
-                {group.items.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => toggleAmenity(item.id)}
-                    className="flex flex-col items-center rounded-xl border p-2 text-center transition-colors"
-                    style={{
-                      borderColor: (details.amenities || []).includes(item.id)
-                        ? BRAND.primary
-                        : BRAND.border,
-                      backgroundColor: (details.amenities || []).includes(item.id)
-                        ? `${BRAND.primary}10`
-                        : "#fff",
-                    }}
-                  >
-                    <span className="text-lg">{item.icon}</span>
-                    <span className="mt-1 text-[10px] text-[#555]">{item.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
+          <div className="sm:col-span-2">
+            <AmenitiesPicker
+              value={details.amenities || []}
+              onChange={(ids) => update("amenities", ids)}
+              accentColor={BRAND.primary}
+            />
+          </div>
           <div className="sm:col-span-2">
             <p className="mb-2 text-xs font-medium text-[#444]">{serviceFotosLabel(vertical, "edit")}</p>
             <input

@@ -1,4 +1,4 @@
-import { resolveAmenities } from "@/app/lib/amenities";
+import { resolveAmenitiesGrouped } from "@/app/lib/amenities";
 import { getCapacidadDisplayRows, formatCapacidadDisplayRow } from "@/app/lib/capacidad";
 import {
   getServiceCardTheme,
@@ -85,9 +85,9 @@ export default function ServiceAnuncioContent({
     showCapacidad && vertical === "alojamiento"
       ? getCapacidadDisplayRows(service)
       : [];
-  const amenityItems =
+  const amenityGroups =
     showAmenities && vertical === "alojamiento"
-      ? resolveAmenities(
+      ? resolveAmenitiesGrouped(
           Array.isArray(service.amenities) ? service.amenities : [],
         )
       : [];
@@ -126,21 +126,30 @@ export default function ServiceAnuncioContent({
         </div>
       )}
 
-      {amenityItems.length > 0 && (
+      {amenityGroups.length > 0 && (
         <div>
-          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-[#888]">
+          <p className="mb-3 text-[10px] font-semibold uppercase tracking-wide text-[#888]">
             Comodidades
           </p>
-          <div className="flex flex-wrap gap-2">
-            {amenityItems.map((item) => (
-              <span
-                key={item.id}
-                className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px]"
-                style={{ borderColor: "#e8e4de", backgroundColor: "#fff" }}
-              >
-                <span aria-hidden>{item.icon}</span>
-                <span className="text-[#444]">{item.label}</span>
-              </span>
+          <div className="flex flex-col gap-4">
+            {amenityGroups.map((group) => (
+              <div key={group.title}>
+                <p className="mb-2 text-[11px] font-semibold text-[#666]">
+                  {group.title}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {group.items.map((item) => (
+                    <span
+                      key={item.id}
+                      className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px]"
+                      style={{ borderColor: "#e8e4de", backgroundColor: "#fff" }}
+                    >
+                      <span aria-hidden>{item.icon}</span>
+                      <span className="text-[#444]">{item.label}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
         </div>

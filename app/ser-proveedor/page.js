@@ -3,9 +3,10 @@
 import { useEffect, useRef, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/app/lib/supabase";
-import { BRAND, SERIF } from "@/app/components/brand";
+import AmenitiesPicker from "@/app/components/AmenitiesPicker";
+import BanoTipoSelector from "@/app/components/BanoTipoSelector";
 import ServiceOperationalFields from "@/app/components/ServiceOperationalFields";
-import { AMENITIES_GROUPS } from "@/app/lib/amenities";
+import { BRAND, SERIF } from "@/app/components/brand";
 import {
   loadProviderDocuments,
   persistProviderDocument,
@@ -188,7 +189,7 @@ const EMPTY_SERVICE_DETAILS = {
     reserva_inmediata: false,
     antelacion_minima: 24,
     dias_disponibles: [...DIAS_DISPONIBLES_DEFAULT],
-    capacidad: { personas: 2, habitaciones: 1, camas: 1, banos: 1 },
+    capacidad: { personas: 2, habitaciones: 1, camas: 1, banos: 1, bano_tipo: null },
     amenities: [],
     direccion_exacta: "",
     telefono_contacto: "",
@@ -1248,10 +1249,6 @@ export default function SerProveedorPage() {
         updateServiceDetails("alojamiento", { ...d, capacidad: { ...d.capacidad, [key]: val } });
       const updNorma = (key, val) =>
         updateServiceDetails("alojamiento", { ...d, normas: { ...d.normas, [key]: val } });
-      const toggleAmenity = (id) => {
-        const next = d.amenities.includes(id) ? d.amenities.filter((a) => a !== id) : [...d.amenities, id];
-        upd("amenities", next);
-      };
       const alojDocs = getDocsForVertical("alojamiento");
 
       return (
@@ -1313,34 +1310,24 @@ export default function SerProveedorPage() {
             <DireccionContactoFields d={d} upd={upd} vertical="alojamiento" />
           </div>
           <p className="mt-6 mb-3 text-xs font-medium text-[#444]">{SERVICE_LABELS.capacidad}</p>
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <CounterField label={SERVICE_LABELS.capacidadPersonas} value={d.capacidad.personas} onChange={(v) => updCap("personas", v)} min={1} />
             <CounterField label={SERVICE_LABELS.capacidadHabitaciones} value={d.capacidad.habitaciones} onChange={(v) => updCap("habitaciones", v)} min={1} />
             <CounterField label={SERVICE_LABELS.capacidadCamas} value={d.capacidad.camas} onChange={(v) => updCap("camas", v)} min={1} />
             <CounterField label={SERVICE_LABELS.capacidadBanos} value={d.capacidad.banos} onChange={(v) => updCap("banos", v)} min={1} />
           </div>
-          {AMENITIES_GROUPS.map((group) => (
-            <div key={group.title} className="mt-6">
-              <p className="mb-3 text-xs font-semibold text-[#444]">{group.title}</p>
-              <div className="grid grid-cols-4 gap-2">
-                {group.items.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => toggleAmenity(item.id)}
-                    className="flex flex-col items-center rounded-xl border p-2 text-center transition-colors"
-                    style={{
-                      borderColor: d.amenities.includes(item.id) ? PRIMARY : BRAND.border,
-                      backgroundColor: d.amenities.includes(item.id) ? `${PRIMARY}10` : "#fff",
-                    }}
-                  >
-                    <span className="text-lg">{item.icon}</span>
-                    <span className="mt-1 text-[10px] text-[#555]">{item.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
+          <BanoTipoSelector
+            className="mt-4"
+            value={d.capacidad.bano_tipo ?? null}
+            onChange={(v) => updCap("bano_tipo", v)}
+            accentColor={PRIMARY}
+          />
+          <AmenitiesPicker
+            className="mt-6"
+            value={d.amenities || []}
+            onChange={(ids) => upd("amenities", ids)}
+            accentColor={PRIMARY}
+          />
           <div className="mt-6 rounded-xl border p-4" style={{ borderColor: BRAND.border }}>
             <p className="mb-3 text-xs font-semibold text-[#444]">Normas</p>
             <ToggleRow label="Pet-friendly" checked={d.normas.petFriendly} onChange={(v) => updNorma("petFriendly", v)} />
