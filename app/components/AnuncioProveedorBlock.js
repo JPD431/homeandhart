@@ -29,6 +29,7 @@ function formatProviderFullName(nombre, apellido) {
  * @param {{ sum: number, count: number, avg: number|null }} props.rating
  * @param {string} [props.accentColor]
  * @param {string} [props.vertical]
+ * @param {boolean} [props.isOwnerPreview]
  */
 export default function AnuncioProveedorBlock({
   profile,
@@ -36,6 +37,7 @@ export default function AnuncioProveedorBlock({
   rating,
   accentColor = "#1d4f91",
   vertical = "alojamiento",
+  isOwnerPreview = false,
 }) {
   if (!profile || !proveedorId) return null;
 
@@ -105,16 +107,18 @@ export default function AnuncioProveedorBlock({
       </div>
 
       <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <ProveedorPreguntarButton
-          proveedorId={proveedorId}
-          className="rounded-lg px-5 py-2.5 text-[13px] font-semibold transition-colors hover:opacity-90 sm:w-auto"
-          style={{
-            backgroundColor: accentColor || theme.color,
-            color: "#fff",
-          }}
-        >
-          Contactar
-        </ProveedorPreguntarButton>
+        {!isOwnerPreview && (
+          <ProveedorPreguntarButton
+            proveedorId={proveedorId}
+            className="rounded-lg px-5 py-2.5 text-[13px] font-semibold transition-colors hover:opacity-90 sm:w-auto"
+            style={{
+              backgroundColor: accentColor || theme.color,
+              color: "#fff",
+            }}
+          >
+            Contactar
+          </ProveedorPreguntarButton>
+        )}
 
         <Link
           href={`/proveedor/${proveedorId}`}

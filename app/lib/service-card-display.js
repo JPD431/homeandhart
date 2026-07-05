@@ -162,3 +162,7 @@ export function buildAnuncioHref(serviceId, desde, hasta) {
   const query = params.toString();
   return query ? `/anuncio/${serviceId}?${query}` : `/anuncio/${serviceId}`;
 }
+
+export function buildAnuncioPreviewHref(serviceId) {
+  return `/anuncio/${serviceId}?preview=1`;
+}

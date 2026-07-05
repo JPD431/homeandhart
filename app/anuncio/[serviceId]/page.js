@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import AnuncioBookingPanel from "@/app/components/AnuncioBookingPanel";
+import AnuncioPreviewBanner from "@/app/components/AnuncioPreviewBanner";
 import AnuncioProveedorBlock from "@/app/components/AnuncioProveedorBlock";
 import ServiceAnuncioContent, {
   ServicePhotoGallery,
@@ -14,7 +15,7 @@ import {
 import { loadProveedorRating } from "@/app/lib/reviews";
 import {
   buildCalendarioServiceEntry,
-  loadPublicServiceById,
+  loadAnuncioService,
   loadServiceBloqueos,
 } from "@/app/lib/public-service";
 import {
@@ -24,6 +25,7 @@ import {
   getServicePhotos,
   normalizeServiceProfile,
 } from "@/app/lib/service-card-display";
+import { createClient } from "@/lib/supabase/server";
 
 const CANCEL_LABELS = {
   flexible: "Cancelación flexible",
@@ -52,9 +54,31 @@ function getListingTags(service, profile) {
   return tags;
 }
 
-export async function generateMetadata({ params }) {
+/** Auth server-side + carga pública o preview del dueño. */
+async function resolveAnuncioRequest(serviceId, previewRequested) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const result = await loadAnuncioService(serviceId, {
+    previewRequested,
+    userId: user?.id ?? null,
+    supabase,
+  });
+
+  return result;
+}
+
+export async function generateMetadata({ params, searchParams }) {
   const { serviceId } = await params;
-  const service = await loadPublicServiceById(serviceId);
+  const sp = await searchParams;
+  const previewRequested = sp?.preview === "1";
+
+  const { service, mode } = await resolveAnuncioRequest(
+    serviceId,
+    previewRequested,
+  );
 
   if (!service) {
     return {
@@ -70,6 +94,14 @@ export async function generateMetadata({ params }) {
     "Servicio";
   const ciudad = service.ciudad || profile.ciudad || "";
 
+  if (mode === "owner-preview") {
+    return {
+      title: `Vista previa · ${titulo}`,
+      description: "Vista previa de tu anuncio en Home&Heart.",
+      robots: { index: false, follow: false },
+    };
+  }
+
   return {
     title: ciudad ? `${titulo} · ${ciudad}` : titulo,
     description: `Anuncio verificado en Home&Heart${ciudad ? ` · ${ciudad}` : ""}.`,
@@ -81,12 +113,18 @@ export default async function AnuncioPage({ params, searchParams }) {
   const sp = await searchParams;
   const initialDesde = typeof sp?.desde === "string" ? sp.desde : "";
   const initialHasta = typeof sp?.hasta === "string" ? sp.hasta : "";
+  const previewRequested = sp?.preview === "1";
 
-  const service = await loadPublicServiceById(serviceId);
+  const { service, mode } = await resolveAnuncioRequest(
+    serviceId,
+    previewRequested,
+  );
 
   if (!service) {
     notFound();
   }
+
+  const isOwnerPreview = mode === "owner-preview";
 
   const [bloqueosCalendario, proveedorRating] = await Promise.all([
     loadServiceBloqueos(serviceId),
@@ -115,6 +153,8 @@ export default async function AnuncioPage({ params, searchParams }) {
       className="min-h-screen font-sans"
       style={{ backgroundColor: "#f7f5f2", color: "#1a1a1a" }}
     >
+      {isOwnerPreview && <AnuncioPreviewBanner />}
+
       <header
         className="border-b"
         style={{ backgroundColor: "#f7f5f2", borderColor: "#e8e4de" }}
@@ -189,6 +229,7 @@ export default async function AnuncioPage({ params, searchParams }) {
               rating={proveedorRating}
               accentColor={accent}
               vertical={service.vertical}
+              isOwnerPreview={isOwnerPreview}
             />
           </div>
 
@@ -199,6 +240,7 @@ export default async function AnuncioPage({ params, searchParams }) {
             accentColor={accent}
             initialDesde={initialDesde}
             initialHasta={initialHasta}
+            isOwnerPreview={isOwnerPreview}
           />
         </div>
       </main>

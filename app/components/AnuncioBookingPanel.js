@@ -24,6 +24,7 @@ import {
  * @param {string} [props.accentColor]
  * @param {string} [props.initialDesde]
  * @param {string} [props.initialHasta]
+ * @param {boolean} [props.isOwnerPreview]
  */
 export default function AnuncioBookingPanel({
   service,
@@ -32,6 +33,7 @@ export default function AnuncioBookingPanel({
   accentColor = "#1d4f91",
   initialDesde = "",
   initialHasta = "",
+  isOwnerPreview = false,
 }) {
   const theme = getServiceCardTheme(service?.vertical);
   const ofertaActiva = isOfertaActiva(service);
@@ -114,18 +116,26 @@ export default function AnuncioBookingPanel({
         />
       </div>
 
-      <Link
-        href={reservaHref}
-        className="mt-5 block w-full rounded-lg py-3 text-center text-[13px] font-semibold text-white no-underline transition-opacity hover:opacity-90"
-        style={{ backgroundColor: accentColor }}
-      >
-        {reservaLabel}
-      </Link>
-
-      {!fechaDesde && (
-        <p className="mt-2 text-center text-[10px] text-[#aaa]">
-          También puedes elegir fechas en la página de reserva
+      {isOwnerPreview ? (
+        <p className="mt-5 rounded-lg border px-3 py-2.5 text-center text-[11px] text-[#888]" style={{ borderColor: "#e8e4de", backgroundColor: "#fafaf9" }}>
+          La reserva estará disponible cuando publiques el anuncio.
         </p>
+      ) : (
+        <>
+          <Link
+            href={reservaHref}
+            className="mt-5 block w-full rounded-lg py-3 text-center text-[13px] font-semibold text-white no-underline transition-opacity hover:opacity-90"
+            style={{ backgroundColor: accentColor }}
+          >
+            {reservaLabel}
+          </Link>
+
+          {!fechaDesde && (
+            <p className="mt-2 text-center text-[10px] text-[#aaa]">
+              También puedes elegir fechas en la página de reserva
+            </p>
+          )}
+        </>
       )}
     </aside>
   );

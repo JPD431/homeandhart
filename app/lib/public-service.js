@@ -37,6 +37,65 @@ export async function loadPublicServiceById(serviceId) {
   return data;
 }
 
+const OWNER_PROFILE_SELECT =
+  "id, nombre, apellido, foto_perfil, descripcion, ciudad, location_zone, verificado, idiomas, badge_respuesta";
+
+/**
+ * Servicio del proveedor autenticado para vista previa (sin filtros públicos).
+ * Solo devuelve datos si proveedor_id === userId (comprobado en la query).
+ */
+export async function loadOwnerServiceForPreview(serviceId, userId, supabase) {
+  if (!serviceId || !userId || !supabase) return null;
+
+  const { data: service, error } = await supabase
+    .from("services")
+    .select("*")
+    .eq("id", serviceId)
+    .eq("proveedor_id", userId)
+    .maybeSingle();
+
+  if (error || !service) return null;
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select(OWNER_PROFILE_SELECT)
+    .eq("id", userId)
+    .maybeSingle();
+
+  return {
+    ...service,
+    profiles_public: profile ?? {},
+  };
+}
+
+/**
+ * Carga anuncio público o, con preview autorizado, el borrador del dueño.
+ *
+ * @returns {{ service: object|null, mode: 'public'|'owner-preview'|null }}
+ */
+export async function loadAnuncioService(
+  serviceId,
+  { previewRequested = false, userId = null, supabase = null } = {},
+) {
+  const publicService = await loadPublicServiceById(serviceId);
+  if (publicService) {
+    return { service: publicService, mode: "public" };
+  }
+
+  if (previewRequested && userId && supabase) {
+    const ownerService = await loadOwnerServiceForPreview(
+      serviceId,
+      userId,
+      supabase,
+    );
+    if (ownerService) {
+      return { service: ownerService, mode: "owner-preview" };
+    }
+  }
+
+  return { service: null, mode: null };
+}
+
 /** Bloqueos de disponibilidad de un servicio (calendario Fase B). */
 export async function loadServiceBloqueos(serviceId) {
   if (!serviceId) return [];
