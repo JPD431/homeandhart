@@ -219,6 +219,73 @@ export async function POST(request) {
         { bookingId },
       );
     }
+
+    try {
+      const [
+        { data: proveedorProfile, error: proveedorProfileError },
+        { data: clienteProfile, error: clienteProfileError },
+      ] = await Promise.all([
+        supabaseAdmin
+          .from("profiles")
+          .select("nombre, apellido")
+          .eq("id", user.id)
+          .maybeSingle(),
+        booking.cliente_id
+          ? supabaseAdmin
+              .from("profiles")
+              .select("nombre, apellido")
+              .eq("id", booking.cliente_id)
+              .maybeSingle()
+          : Promise.resolve({ data: null, error: null }),
+      ]);
+
+      if (proveedorProfileError) {
+        console.error(
+          "[bookings/respond] Error cargando perfil proveedor (rechazo):",
+          proveedorProfileError,
+          { bookingId },
+        );
+      }
+
+      if (clienteProfileError) {
+        console.error(
+          "[bookings/respond] Error cargando perfil cliente (rechazo):",
+          clienteProfileError,
+          { bookingId, cliente_id: booking.cliente_id },
+        );
+      }
+
+      if (booking.cliente_id) {
+        const proveedorNombre =
+          [proveedorProfile?.nombre, proveedorProfile?.apellido]
+            .filter(Boolean)
+            .join(" ") || "Proveedor";
+        const clienteNombre =
+          [clienteProfile?.nombre, clienteProfile?.apellido]
+            .filter(Boolean)
+            .join(" ") || undefined;
+        const baseUrl =
+          process.env.NEXT_PUBLIC_URL || "https://homeandheart.es";
+        const finEmail = booking.fecha_fin || booking.fecha_inicio;
+
+        await postBookingEmail(baseUrl, {
+          tipo: "reserva_rechazada",
+          cliente_id: booking.cliente_id,
+          cliente_nombre: clienteNombre,
+          proveedor_nombre: proveedorNombre,
+          servicio_titulo: service.titulo || "Servicio",
+          fecha_inicio: booking.fecha_inicio,
+          fecha_fin: finEmail,
+          precio_total: Number(booking.precio_total || 0).toFixed(2),
+        });
+      }
+    } catch (emailErr) {
+      console.error(
+        "[bookings/respond] Error enviando email de rechazo:",
+        emailErr,
+        { bookingId },
+      );
+    }
   }
 
   if (action === "aceptar") {

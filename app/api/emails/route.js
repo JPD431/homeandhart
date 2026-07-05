@@ -733,6 +733,34 @@ function reservaSolicitudEmailHtml(data) {
   });
 }
 
+function reservaRechazadaEmailHtml(data) {
+  const fechaLabel = formatFechaReservaEmail(data.fecha_inicio, data.fecha_fin);
+  const buscarUrl = `${BASE_URL}/buscar`;
+
+  return emailLayout({
+    title: "Tu solicitud no pudo confirmarse — Home&Heart",
+    bodyHtml: `
+      <h1 style="margin:0;font-size:22px;color:${BRAND_PRIMARY};font-weight:600;text-align:center;">Tu solicitud no pudo confirmarse</h1>
+      <p style="margin:20px 0 0;font-size:15px;color:#444;line-height:1.7;">
+        Hola ${data.cliente_nombre ?? "Cliente"},
+      </p>
+      <p style="margin:16px 0 0;font-size:14px;color:#444;line-height:1.7;">
+        <strong>${data.proveedor_nombre || "El proveedor"}</strong> no ha podido confirmar tu solicitud de
+        <strong>${data.servicio_titulo || "servicio"}</strong> para el <strong>${fechaLabel}</strong>.
+      </p>
+      ${detailsBlock(data)}
+      <p style="margin:20px 0 0;font-size:14px;color:#444;line-height:1.7;">
+        <strong>No se te ha cobrado nada.</strong> Hemos liberado el pago retenido de forma segura;
+        puede tardar unos días en reflejarse en tu banco.
+      </p>
+      <p style="margin:16px 0 0;font-size:14px;color:#444;line-height:1.7;">
+        Seguro que encuentras otra opción que encaje contigo.
+      </p>
+      ${ctaButton(buscarUrl, "Buscar otras opciones")}
+    `,
+  });
+}
+
 function proveedorEmailHtml(data) {
   const mensajeBlock = data.mensaje
     ? `<p style="margin:16px 0 0;font-size:14px;color:#444;line-height:1.6;"><strong>Mensaje del cliente:</strong> ${data.mensaje}</p>`
@@ -937,6 +965,47 @@ async function sendReservaCanceladaClienteEmail(data) {
     to: payload.cliente_email,
     subject: "Tu reserva en Home&Heart ha sido cancelada",
     html: reservaCanceladaClienteEmailHtml(payload),
+  });
+
+  if (result.error) {
+    return { error: result.error.message };
+  }
+
+  return { success: true };
+}
+
+async function sendReservaRechazadaEmail(data) {
+  const payload = { ...data };
+
+  if (payload.cliente_id && !payload.cliente_email) {
+    payload.cliente_email = await resolverEmailUsuario(payload.cliente_id);
+  }
+
+  if (!payload.cliente_nombre && payload.cliente_id) {
+    payload.cliente_nombre =
+      (await resolverNombreUsuario(payload.cliente_id)) || "Cliente";
+  }
+
+  const required = [
+    "cliente_email",
+    "cliente_nombre",
+    "proveedor_nombre",
+    "servicio_titulo",
+    "fecha_inicio",
+    "precio_total",
+  ];
+
+  for (const field of required) {
+    if (payload[field] == null || payload[field] === "") {
+      return { error: `Falta el campo requerido: ${field}` };
+    }
+  }
+
+  const result = await resend.emails.send({
+    from: FROM,
+    to: payload.cliente_email,
+    subject: "Tu solicitud no pudo confirmarse — Home&Heart",
+    html: reservaRechazadaEmailHtml(payload),
   });
 
   if (result.error) {
@@ -1482,6 +1551,16 @@ export async function POST(request) {
 
     if (tipo === "reserva_solicitud") {
       const result = await sendReservaSolicitudEmail(data);
+
+      if (result.error) {
+        return Response.json({ error: result.error }, { status: 400 });
+      }
+
+      return Response.json({ success: true });
+    }
+
+    if (tipo === "reserva_rechazada") {
+      const result = await sendReservaRechazadaEmail(data);
 
       if (result.error) {
         return Response.json({ error: result.error }, { status: 400 });
