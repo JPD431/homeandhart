@@ -76,7 +76,9 @@ import {
   getActivacionBloqueoMensaje,
   getProviderAnuncioHref,
   getServiceVisibilidadEstado,
+  puedeActivarServicio,
   proveedorPuedePublicar,
+  resolveDisponibleForSave,
   REVISION_PENDIENTE_MSG,
 } from "@/app/lib/provider-publicacion";
 
@@ -268,6 +270,7 @@ function mapServiceFromDb(row) {
     id: row.id,
     vertical: row.vertical,
     disponible: row.disponible !== false,
+    disponibleOnLoad: row.disponible !== false,
     revision_estado: row.revision_estado ?? null,
     isNew: false,
     details: mergeServiceDetails(
@@ -291,11 +294,20 @@ function SectionLabel({ number, title }) {
   );
 }
 
-function ServiceDisponibleRow({ service, perfil, onToggle, compact = false }) {
+function ServiceDisponibleRow({
+  service,
+  perfil,
+  documentContext,
+  onToggle,
+  compact = false,
+}) {
   const activo = service.disponible;
-  const puedePublicar = proveedorPuedePublicar(perfil);
-  const switchBlocked = !activo && !puedePublicar;
-  const visibilidad = getServiceVisibilidadEstado(perfil, activo);
+  const puedeActivar = puedeActivarServicio(service, perfil, documentContext);
+  const switchBlocked = !activo && !puedeActivar;
+  const visibilidad = getServiceVisibilidadEstado(perfil, activo, {
+    service,
+    documentContext,
+  });
 
   const switchControl = (
     <button
@@ -1106,11 +1118,36 @@ function EditarPerfilContent() {
     );
   }
 
+  const verticalsActivos = [...new Set(services.map((s) => s.vertical))];
+  const documentContext = useMemo(
+    () => ({
+      profile: perfil
+        ? {
+            doc_dni_url: perfil.doc_dni_url,
+            doc_antecedentes_url: perfil.doc_antecedentes_url,
+            doc_antecedentes_sexuales_url: perfil.doc_antecedentes_sexuales_url,
+          }
+        : {},
+      providerDocuments,
+      services: services.map((s) => ({
+        vertical: s.vertical,
+        nru: s.details?.nru,
+        details: s.details,
+      })),
+    }),
+    [perfil, providerDocuments, services],
+  );
+
   function toggleServiceDisponible(serviceId) {
     const target = services.find((s) => s.id === serviceId);
-    if (target && !target.disponible && !proveedorPuedePublicar(perfil)) {
-      setErrorMessage(getActivacionBloqueoMensaje(perfil));
-      return;
+    if (!target) return;
+
+    if (!target.disponible) {
+      const bloqueo = getActivacionBloqueoMensaje(perfil, target, documentContext);
+      if (bloqueo) {
+        setErrorMessage(bloqueo);
+        return;
+      }
     }
 
     setErrorMessage("");
@@ -1131,25 +1168,6 @@ function EditarPerfilContent() {
 
   const puedePublicarServicios = proveedorPuedePublicar(perfil);
 
-  const verticalsActivos = [...new Set(services.map((s) => s.vertical))];
-  const documentContext = useMemo(
-    () => ({
-      profile: perfil
-        ? {
-            doc_dni_url: perfil.doc_dni_url,
-            doc_antecedentes_url: perfil.doc_antecedentes_url,
-            doc_antecedentes_sexuales_url: perfil.doc_antecedentes_sexuales_url,
-          }
-        : {},
-      providerDocuments,
-      services: services.map((s) => ({
-        vertical: s.vertical,
-        nru: s.details?.nru,
-        details: s.details,
-      })),
-    }),
-    [perfil, providerDocuments, services],
-  );
   const esClienteSinServicios = perfil?.role === "cliente" && services.length === 0;
   const tieneServicios = services.length > 0;
   const tabs = [
@@ -1300,15 +1318,15 @@ function EditarPerfilContent() {
 
       if (profileError) throw profileError;
 
-      const puedePublicar = proveedorPuedePublicar(perfil);
-
-      if (
-        !puedePublicar &&
-        (services.some((s) => s.disponible) ||
-          (addingService && newServiceDetails.titulo.trim()))
-      ) {
-        if (services.some((s) => s.disponible)) {
-          throw new Error(getActivacionBloqueoMensaje(perfil));
+      for (const service of services) {
+        if (!service.disponible) continue;
+        const bloqueo = getActivacionBloqueoMensaje(
+          perfil,
+          service,
+          documentContext,
+        );
+        if (bloqueo && !service.disponibleOnLoad) {
+          throw new Error(bloqueo);
         }
       }
 
@@ -1323,7 +1341,7 @@ function EditarPerfilContent() {
             service.vertical,
             ciudad,
             userId,
-            puedePublicar && service.disponible,
+            resolveDisponibleForSave(service, perfil, documentContext),
           ),
           ...locationFields,
         };
@@ -1341,6 +1359,21 @@ function EditarPerfilContent() {
       }
 
       if (addingService && newServiceDetails.titulo.trim()) {
+        const nuevoServicio = {
+          vertical: newVertical,
+          details: newServiceDetails,
+        };
+        const nuevoContext = {
+          ...documentContext,
+          services: [
+            ...documentContext.services,
+            {
+              vertical: newVertical,
+              nru: newServiceDetails.nru,
+              details: newServiceDetails,
+            },
+          ],
+        };
         const locationFields = await getServiceLocationFields(
           newServiceDetails,
           newVertical,
@@ -1351,7 +1384,7 @@ function EditarPerfilContent() {
             newVertical,
             ciudad,
             userId,
-            puedePublicar,
+            puedeActivarServicio(nuevoServicio, perfil, nuevoContext),
           ),
           ...locationFields,
         };
@@ -1665,7 +1698,7 @@ function EditarPerfilContent() {
                       </div>
                       <div className="flex gap-2">
                         <a
-                          href={getProviderAnuncioHref(service, perfil)}
+                          href={getProviderAnuncioHref(service, perfil, documentContext)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="rounded-lg border px-3 py-1.5 text-xs font-semibold no-underline transition-colors hover:bg-[#f7f5f2]"
@@ -1681,6 +1714,7 @@ function EditarPerfilContent() {
                     <ServiceDisponibleRow
                       service={service}
                       perfil={perfil}
+                      documentContext={documentContext}
                       onToggle={toggleServiceDisponible}
                     />
                     {isEditing && (
@@ -1778,6 +1812,7 @@ function EditarPerfilContent() {
                 compact
                 service={service}
                 perfil={perfil}
+                documentContext={documentContext}
                 onToggle={toggleServiceDisponible}
               />
             }

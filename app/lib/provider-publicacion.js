@@ -1,4 +1,5 @@
 import { REVISION_APROBADO } from "@/app/lib/onboarding-persist";
+import { alojamientoNruPublishReady } from "@/app/lib/provider-documents";
 import {
   buildAnuncioHref,
   buildAnuncioPreviewHref,
@@ -9,6 +10,9 @@ export const COBROS_REQUERIDOS_MSG =
 
 export const REVISION_PENDIENTE_MSG =
   "Tus servicios están en revisión. Te avisaremos por email cuando los aprobemos.";
+
+export const NRU_PDF_REQUERIDO_MSG =
+  "Para publicar tu alojamiento, sube el PDF de la resolución del NRU en tus documentos.";
 
 /** Servicios legacy (revision_estado null) o explícitamente aprobados. */
 export function servicioRevisionAprobada(revisionEstado) {
@@ -21,18 +25,51 @@ export function proveedorPuedePublicar(perfil) {
   );
 }
 
-/** Mensaje al bloquear activación; prioriza revisión sobre cobros. */
-export function getActivacionBloqueoMensaje(perfil) {
+/**
+ * ¿Puede activarse este servicio ahora? (verificado + cobros; alojamiento además NRU texto + PDF)
+ * @param {{ vertical?: string, details?: { nru?: string } }} service
+ * @param {object} perfil
+ * @param {import("@/app/lib/provider-documents").DocumentContext} [documentContext]
+ */
+export function puedeActivarServicio(service, perfil, documentContext = {}) {
+  if (!proveedorPuedePublicar(perfil)) return false;
+  if (service?.vertical === "alojamiento") {
+    return alojamientoNruPublishReady(documentContext);
+  }
+  return true;
+}
+
+/**
+ * Mensaje al bloquear activación; prioriza revisión → cobros → PDF NRU (alojamiento).
+ * @param {object} perfil
+ * @param {{ vertical?: string }} [service]
+ * @param {import("@/app/lib/provider-documents").DocumentContext} [documentContext]
+ */
+export function getActivacionBloqueoMensaje(perfil, service = null, documentContext = null) {
   if (perfil?.verificado !== true) {
     return REVISION_PENDIENTE_MSG;
   }
   if (perfil?.cobros_activos !== true) {
     return COBROS_REQUERIDOS_MSG;
   }
+  if (
+    service?.vertical === "alojamiento" &&
+    documentContext &&
+    !alojamientoNruPublishReady(documentContext)
+  ) {
+    return NRU_PDF_REQUERIDO_MSG;
+  }
   return null;
 }
 
-export function getServiceVisibilidadEstado(perfil, disponible) {
+/**
+ * @param {object} perfil
+ * @param {boolean} disponible
+ * @param {{ service?: { vertical?: string }, documentContext?: import("@/app/lib/provider-documents").DocumentContext }} [options]
+ */
+export function getServiceVisibilidadEstado(perfil, disponible, options = {}) {
+  const { service, documentContext } = options;
+
   if (!disponible) {
     return {
       label: "Servicio en pausa",
@@ -57,6 +94,18 @@ export function getServiceVisibilidadEstado(perfil, disponible) {
     };
   }
 
+  if (
+    service?.vertical === "alojamiento" &&
+    documentContext &&
+    !alojamientoNruPublishReady(documentContext)
+  ) {
+    return {
+      label: "Falta resolución NRU",
+      subtitle: "Sube el PDF de la resolución del NRU en Documentos",
+      color: "#c47d1a",
+    };
+  }
+
   return {
     label: "Servicio activo",
     subtitle: "Visible en búsqueda",
@@ -64,14 +113,25 @@ export function getServiceVisibilidadEstado(perfil, disponible) {
   };
 }
 
+/**
+ * Disponible efectivo al guardar: no desactiva legacy ya activo; bloquea activaciones nuevas sin requisitos.
+ * @param {{ disponible?: boolean, disponibleOnLoad?: boolean, vertical?: string, details?: object }} service
+ */
+export function resolveDisponibleForSave(service, perfil, documentContext) {
+  if (!service.disponible) return false;
+  if (service.disponibleOnLoad === true) return true;
+  return puedeActivarServicio(service, perfil, documentContext);
+}
+
 /** URL del anuncio para el proveedor: pública si ya es visible, preview si no. */
-export function getProviderAnuncioHref(service, perfil) {
+export function getProviderAnuncioHref(service, perfil, documentContext = null) {
   if (!service?.id) return buildAnuncioPreviewHref("unknown");
 
   const publiclyVisible =
     service.disponible === true &&
     servicioRevisionAprobada(service.revision_estado) &&
-    getServiceVisibilidadEstado(perfil, true).label === "Servicio activo";
+    getServiceVisibilidadEstado(perfil, true, { service, documentContext }).label ===
+      "Servicio activo";
 
   return publiclyVisible
     ? buildAnuncioHref(service.id)

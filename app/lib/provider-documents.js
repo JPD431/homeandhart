@@ -344,7 +344,28 @@ export function getMissingPublishDocuments(verticales = [], context = {}) {
 }
 
 /**
- * ¿Puede activarse/publicarse el alojamiento? (NRU texto + PDF resolución)
+ * Documentos NRU necesarios para activar alojamiento (sin DNI — lo cubre verificado).
+ * @param {DocumentContext} context
+ * @returns {DocumentDefinition[]}
+ */
+export function getMissingAlojamientoNruForPublish(context = {}) {
+  return ["nru_texto", "nru_comprobante"]
+    .map((id) => getDocumentDefinition(id))
+    .filter(Boolean)
+    .filter((def) => !isDocumentUploaded(def, context));
+}
+
+/**
+ * ¿NRU texto + PDF resolución listos para activar alojamiento?
+ * @param {DocumentContext} context
+ * @returns {boolean}
+ */
+export function alojamientoNruPublishReady(context = {}) {
+  return getMissingAlojamientoNruForPublish(context).length === 0;
+}
+
+/**
+ * ¿Puede activarse/publicarse el alojamiento? (NRU texto + PDF resolución + DNI vía catálogo completo)
  * @param {DocumentContext} context
  * @returns {boolean}
  */
