@@ -4,27 +4,22 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { BRAND, SERIF } from "@/app/components/brand";
+import {
+  BOOKING_STATUS_STYLES,
+  BOOKING_VERTICAL_META,
+  formatBookingPrice,
+  getBookingDateRangeLabel,
+  getBookingDurationLabel,
+  getBookingEstado,
+  getBookingMonthKey,
+  getBookingMonthLabel,
+  getCancelRefundBreakdown,
+} from "@/app/lib/booking-display";
 import { supabase } from "@/app/lib/supabase";
 
 const PRIMARY = "#1d4f91";
 const GREEN = "#0e7a5c";
 const BORDER = "#e8e4de";
-
-const VERTICAL_META = {
-  alojamiento: { label: "Alojamiento", color: PRIMARY, gradient: `linear-gradient(135deg, ${PRIMARY}, #2a6bb5)` },
-  ninos: { label: "Niñera", color: "#0e7a5c", gradient: "linear-gradient(135deg, #0e7a5c, #1a9d75)" },
-  mascotas: { label: "Mascotas", color: "#c47d1a", gradient: "linear-gradient(135deg, #c47d1a, #e09a2e)" },
-};
-
-const STATUS_STYLES = {
-  pendiente: { bg: "#fef3c7", color: "#c47d1a", label: "Pendiente" },
-  confirmada: { bg: "#e8f0fb", color: PRIMARY, label: "Confirmada" },
-  en_curso: { bg: "#ede9fe", color: "#7c3aed", label: "En curso" },
-  completada: { bg: "#e6f4f0", color: "#0e7a5c", label: "Completada" },
-  incidencia: { bg: "#fee2e2", color: "#b91c1c", label: "Incidencia" },
-  cancelada: { bg: "#fee2e2", color: "#dc2626", label: "Cancelada" },
-  cancelada_garantia: { bg: "#fee2e2", color: "#dc2626", label: "Cancelada" },
-};
 
 const FILTER_TABS = [
   { id: "todas", label: "Todas" },
@@ -34,88 +29,6 @@ const FILTER_TABS = [
   { id: "completada", label: "Completadas" },
   { id: "cancelada", label: "Canceladas" },
 ];
-
-const MONTH_NAMES = [
-  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
-];
-
-function getBookingEstado(booking) {
-  const estado = booking.estado ?? booking.status;
-  if (estado === "cancelada_garantia") return "cancelada";
-  return estado;
-}
-
-function formatPrice(precio) {
-  if (precio == null || precio === "") return "—";
-  return `${Number(precio).toFixed(2)}€`;
-}
-
-function formatDateShort(dateStr) {
-  if (!dateStr) return "";
-  const [y, m, d] = dateStr.split("-").map(Number);
-  if (!y || !m || !d) return dateStr;
-  return `${d} ${MONTH_NAMES[m - 1]?.slice(0, 3) ?? ""}`;
-}
-
-function daysBetween(start, end) {
-  if (!start || !end) return null;
-  const a = new Date(`${start}T12:00:00`);
-  const b = new Date(`${end}T12:00:00`);
-  const diff = Math.round((b - a) / (1000 * 60 * 60 * 24));
-  return diff >= 0 ? diff + 1 : null;
-}
-
-function getDurationLabel(booking, vertical) {
-  if (vertical === "ninos" && booking.duracion_horas) {
-    return `${booking.duracion_horas}h`;
-  }
-  if (vertical === "alojamiento" || vertical === "mascotas") {
-    const days = daysBetween(booking.fecha_inicio, booking.fecha_fin || booking.fecha_inicio);
-    if (days) return `${days} ${days === 1 ? "noche" : vertical === "mascotas" ? "días" : "noches"}`;
-  }
-  return null;
-}
-
-function getDateRangeLabel(booking) {
-  if (!booking.fecha_inicio) return "—";
-  const start = formatDateShort(booking.fecha_inicio);
-  const end = booking.fecha_fin && booking.fecha_fin !== booking.fecha_inicio
-    ? formatDateShort(booking.fecha_fin)
-    : null;
-  if (booking.hora) return `${start} · ${booking.hora}`;
-  return end ? `${start} – ${end}` : start;
-}
-
-function getMonthKey(booking) {
-  const dateStr = booking.fecha_inicio || booking.created_at?.slice(0, 10);
-  if (!dateStr) return "sin-fecha";
-  const [y, m] = dateStr.split("-");
-  return `${y}-${m}`;
-}
-
-function getMonthLabel(key) {
-  if (key === "sin-fecha") return "SIN FECHA";
-  const [y, m] = key.split("-").map(Number);
-  return `${MONTH_NAMES[m - 1]?.toUpperCase() ?? ""} ${y}`;
-}
-
-function getCancelRefundBreakdown(booking) {
-  if (getBookingEstado(booking) !== "cancelada") return null;
-  if (booking.reembolso_cliente_total == null) return null;
-
-  const precioTotal = Number(booking.precio_total) || 0;
-  const reembolsoTotal = Number(booking.reembolso_cliente_total) || 0;
-  const reembolsoPct = Number(booking.reembolso_cliente_pct) || 0;
-  const reembolsoCredito = Number(booking.reembolso_cliente_credito) || 0;
-
-  return {
-    importeFinal: Math.max(0, precioTotal - reembolsoTotal),
-    reembolsoTotal,
-    reembolsoPct,
-    reembolsoCredito,
-  };
-}
 
 function getExtraTags(service, vertical) {
   const tags = [];
@@ -132,7 +45,7 @@ function getExtraTags(service, vertical) {
 
 function StatusTag({ status }) {
   const key = status ?? "pendiente";
-  const style = STATUS_STYLES[key] ?? STATUS_STYLES.pendiente;
+  const style = BOOKING_STATUS_STYLES[key] ?? BOOKING_STATUS_STYLES.pendiente;
   return (
     <span
       className="inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold"
@@ -193,13 +106,13 @@ function BookingCard({ booking, reviewed, onCancel, cancelling }) {
   const service = booking.services ?? {};
   const proveedor = service.profiles_public ?? {};
   const vertical = service.vertical ?? "alojamiento";
-  const vMeta = VERTICAL_META[vertical] ?? VERTICAL_META.alojamiento;
+  const vMeta = BOOKING_VERTICAL_META[vertical] ?? BOOKING_VERTICAL_META.alojamiento;
   const proveedorNombre =
     [proveedor.nombre, proveedor.apellido].filter(Boolean).join(" ") || "Proveedor";
   const zona = service.ciudad || "—";
-  const duration = getDurationLabel(booking, vertical);
+  const duration = getBookingDurationLabel(booking, vertical);
   const personas = vertical === "alojamiento" ? "2 pers." : null;
-  const metaParts = [getDateRangeLabel(booking), duration, personas].filter(Boolean);
+  const metaParts = [getBookingDateRangeLabel(booking), duration, personas].filter(Boolean);
   const extraTags = getExtraTags(service, vertical);
   const refundBreakdown = getCancelRefundBreakdown(booking);
 
@@ -223,21 +136,21 @@ function BookingCard({ booking, reviewed, onCancel, cancelling }) {
             {refundBreakdown ? (
               <>
                 <p className="text-[13px] font-semibold" style={{ color: PRIMARY }}>
-                  Pagas: {formatPrice(refundBreakdown.importeFinal)}
+                  Pagas: {formatBookingPrice(refundBreakdown.importeFinal)}
                 </p>
                 <p className="mt-0.5 text-[10px] font-medium" style={{ color: GREEN }}>
-                  Devolución: {formatPrice(refundBreakdown.reembolsoTotal)} (
+                  Devolución: {formatBookingPrice(refundBreakdown.reembolsoTotal)} (
                   {refundBreakdown.reembolsoPct}%)
                 </p>
                 {refundBreakdown.reembolsoCredito > 0 && (
                   <p className="mt-0.5 text-[10px] font-medium" style={{ color: GREEN }}>
-                    +{formatPrice(refundBreakdown.reembolsoCredito)} a tu crédito
+                    +{formatBookingPrice(refundBreakdown.reembolsoCredito)} a tu crédito
                   </p>
                 )}
               </>
             ) : (
               <p className="text-[13px] font-medium" style={{ color: PRIMARY }}>
-                {formatPrice(booking.precio_total)}
+                {formatBookingPrice(booking.precio_total)}
               </p>
             )}
           </div>
@@ -284,7 +197,7 @@ function BookingCard({ booking, reviewed, onCancel, cancelling }) {
 
           {(estado === "confirmada" || estado === "pendiente") && (
             <>
-              <GrayButton href={`/reservar/${booking.service_id}`}>Ver detalle</GrayButton>
+              <GrayButton href={`/reserva/${booking.id}`}>Ver detalle</GrayButton>
               <GrayButton
                 onClick={() => onCancel(booking)}
                 disabled={cancelling === booking.id}
@@ -295,11 +208,11 @@ function BookingCard({ booking, reviewed, onCancel, cancelling }) {
           )}
 
           {estado === "en_curso" && (
-            <GrayButton href={`/reservar/${booking.service_id}`}>Ver detalle</GrayButton>
+            <GrayButton href={`/reserva/${booking.id}`}>Ver detalle</GrayButton>
           )}
 
           {estado === "cancelada" && (
-            <GrayButton href={`/reservar/${booking.service_id}`}>Ver detalle</GrayButton>
+            <GrayButton href={`/reserva/${booking.id}`}>Ver detalle</GrayButton>
           )}
         </div>
       </div>
@@ -433,7 +346,7 @@ export default function HistorialPage() {
   const groupedByMonth = useMemo(() => {
     const groups = new Map();
     for (const booking of filteredBookings) {
-      const key = getMonthKey(booking);
+      const key = getBookingMonthKey(booking);
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push(booking);
     }
@@ -526,13 +439,13 @@ export default function HistorialPage() {
           <StatItem label="Activas" value={stats.activas} showDivider />
           <StatItem
             label="Total gastado"
-            value={formatPrice(stats.totalGastado)}
+            value={formatBookingPrice(stats.totalGastado)}
             showDivider
           />
           {creditoDisponible > 0 && (
             <StatItem
               label="Crédito disponible"
-              value={formatPrice(creditoDisponible)}
+              value={formatBookingPrice(creditoDisponible)}
               showDivider
             />
           )}
@@ -601,7 +514,7 @@ export default function HistorialPage() {
                     className="shrink-0 text-[10px] font-semibold uppercase tracking-widest"
                     style={{ color: PRIMARY }}
                   >
-                    {getMonthLabel(monthKey)}
+                    {getBookingMonthLabel(monthKey)}
                   </span>
                   <div className="h-px flex-1" style={{ backgroundColor: BORDER }} />
                 </div>
