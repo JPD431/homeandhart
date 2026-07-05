@@ -52,6 +52,7 @@ import {
 } from "@/app/lib/service-form-tags";
 import {
   buildServicePayload,
+  DEFAULT_NORMAS,
   DIAS_DISPONIBLES_DEFAULT,
   getServiceLocationFields,
   parseAnosExperienciaFromDb,
@@ -174,6 +175,34 @@ function emptyServiceDetails() {
   };
 }
 
+/** Asegura defaults seguros para el formulario (servicios legacy con campos null en BD). */
+function mergeServiceDetails(rawDetails, vertical) {
+  const merged = { ...emptyServiceDetails(), ...(rawDetails || {}) };
+
+  merged.amenities = Array.isArray(merged.amenities) ? merged.amenities : [];
+  merged.edadesTags = Array.isArray(merged.edadesTags) ? merged.edadesTags : [];
+  merged.formacionTags = Array.isArray(merged.formacionTags) ? merged.formacionTags : [];
+  merged.actividadesTags = Array.isArray(merged.actividadesTags) ? merged.actividadesTags : [];
+  merged.animalesTags = Array.isArray(merged.animalesTags) ? merged.animalesTags : [];
+  merged.certificacionesTags = Array.isArray(merged.certificacionesTags)
+    ? merged.certificacionesTags
+    : [];
+  merged.tamanoPerro = merged.tamanoPerro || "";
+  merged.anos_experiencia =
+    merged.anos_experiencia != null ? String(merged.anos_experiencia) : "";
+  merged.nru = merged.nru || "";
+  merged.capacidad = merged.capacidad ?? { ...DEFAULT_CAPACIDAD_ALOJAMIENTO };
+
+  if (vertical === "alojamiento") {
+    merged.normas = parseNormasFromDb({ normas: rawDetails?.normas ?? merged.normas });
+    Object.assign(merged, parseCheckTimesFromDb(rawDetails || {}));
+  } else if (vertical === "ninos" || vertical === "mascotas") {
+    merged.anos_experiencia = parseAnosExperienciaFromDb(rawDetails || {});
+  }
+
+  return merged;
+}
+
 function mapServiceFromDb(row) {
   const tiers = normalizeDescuentosDuracion(row.descuentos_duracion);
   const baseDetails = {
@@ -241,10 +270,13 @@ function mapServiceFromDb(row) {
     disponible: row.disponible !== false,
     revision_estado: row.revision_estado ?? null,
     isNew: false,
-    details: {
-      ...baseDetails,
-      ...verticalDetails,
-    },
+    details: mergeServiceDetails(
+      {
+        ...baseDetails,
+        ...verticalDetails,
+      },
+      row.vertical,
+    ),
   };
 }
 
@@ -522,12 +554,16 @@ function DescuentosDuracionFields({ serviceId, details, onChange }) {
   );
 }
 
-function ServiceEditForm({ vertical, details, onChange, userId }) {
+function ServiceEditForm({ vertical, details: rawDetails, onChange, userId }) {
   const servicePhotoInputRef = useRef(null);
   const [photoUploading, setPhotoUploading] = useState(false);
+  const details = useMemo(
+    () => mergeServiceDetails(rawDetails, vertical),
+    [rawDetails, vertical],
+  );
 
   function update(field, val) {
-    onChange({ ...details, [field]: val });
+    onChange({ ...(rawDetails || {}), [field]: val });
   }
 
   async function handleServicePhotoChange(e) {
