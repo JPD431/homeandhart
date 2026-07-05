@@ -1843,6 +1843,38 @@ export async function POST(request) {
       return Response.json({ success: true });
     }
 
+    if (tipo === "incidencia_reserva") {
+      const adminEmail = process.env.ADMIN_EMAIL || FROM;
+      const rolLabel =
+        data.reporter_rol === "proveedor" ? "Proveedor" : "Cliente";
+      const result = await resend.emails.send({
+        from: FROM,
+        to: adminEmail,
+        subject: `Incidencia de reserva (${rolLabel}) — Home&Heart`,
+        html: emailLayout({
+          title: "Incidencia de reserva",
+          bodyHtml: `
+            <h1 style="margin:0 0 16px;font-size:20px;color:${BRAND_PRIMARY};">Nueva incidencia en reserva</h1>
+            <p style="margin:0 0 8px;font-size:14px;line-height:1.6;"><strong>Reserva:</strong> ${data.booking_id ?? "—"}</p>
+            <p style="margin:0 0 8px;font-size:14px;line-height:1.6;"><strong>Reportado por:</strong> ${rolLabel} — ${data.reporter_nombre ?? "—"}</p>
+            <p style="margin:0 0 8px;font-size:14px;line-height:1.6;"><strong>Servicio:</strong> ${data.servicio_titulo ?? "—"}</p>
+            <p style="margin:0 0 8px;font-size:14px;line-height:1.6;"><strong>Proveedor:</strong> ${data.proveedor_nombre ?? "—"}</p>
+            <p style="margin:0 0 8px;font-size:14px;line-height:1.6;"><strong>Fechas:</strong> ${data.fecha_inicio ?? "—"}${data.fecha_fin && data.fecha_fin !== data.fecha_inicio ? ` — ${data.fecha_fin}` : ""}</p>
+            <p style="margin:16px 0 0;font-size:14px;line-height:1.6;"><strong>Motivo:</strong> ${(data.motivo ?? "—").replace(/</g, "&lt;")}</p>
+            <p style="margin:16px 0 0;font-size:14px;line-height:1.6;"><strong>Descripción:</strong></p>
+            <p style="margin:8px 0 0;font-size:14px;line-height:1.6;color:#444;">${(data.descripcion ?? "—").replace(/</g, "&lt;")}</p>
+            <p style="margin:20px 0 0;font-size:13px;color:#888;">Gestiona este reporte en el panel de administración → pestaña Reportes.</p>
+          `,
+        }),
+      });
+
+      if (result.error) {
+        return Response.json({ error: result.error.message }, { status: 400 });
+      }
+
+      return Response.json({ success: true });
+    }
+
     if (MARKETING_HTML_BUILDERS[tipo]) {
       const result = await sendMarketingSequenceEmail({ tipo, ...data });
 

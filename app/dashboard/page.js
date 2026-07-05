@@ -3,7 +3,9 @@ import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Navbar from '@/app/components/Navbar';
+import ReportarIncidenciaForm from '@/app/components/ReportarIncidenciaForm';
 import { getIngresoProveedorFromBooking } from '@/app/lib/ingresos-proveedor';
+import { puedeReportarIncidencia } from '@/app/lib/booking-incidencia';
 import { supabase } from '@/app/lib/supabase';
 
 const BRAND = {
@@ -737,9 +739,12 @@ function ReservaRecibidaCard({
   responding,
   onCancelProvider,
   canceling,
+  onIncidenciaReported,
 }) {
   const isPendiente = booking.estado === 'pendiente';
   const isConfirmada = booking.estado === 'confirmada';
+  const isIncidencia = booking.estado === 'incidencia';
+  const canReport = puedeReportarIncidencia(booking.estado);
   const importeReserva = formatImporteReservaRecibida(booking, sinComisionProveedor);
 
   return (
@@ -846,6 +851,32 @@ function ReservaRecibidaCard({
           >
             {canceling ? 'Cancelando…' : 'Cancelar reserva'}
           </button>
+        </div>
+      )}
+      {isIncidencia && (
+        <p
+          style={{
+            marginTop: 12,
+            marginBottom: 0,
+            fontSize: 11,
+            color: '#b91c1c',
+            background: '#fef2f2',
+            border: '1px solid #fecaca',
+            borderRadius: 6,
+            padding: '8px 10px',
+            lineHeight: 1.5,
+          }}
+        >
+          Incidencia reportada. Nuestro equipo está revisando el caso.
+        </p>
+      )}
+      {canReport && (
+        <div style={{ marginTop: 12 }}>
+          <ReportarIncidenciaForm
+            bookingId={booking.id}
+            compact
+            onSuccess={() => onIncidenciaReported?.(booking.id)}
+          />
         </div>
       )}
     </div>
@@ -966,6 +997,12 @@ function ReservasRecibidas({ perfil, BRAND }) {
     } finally {
       setRespondingId(null);
     }
+  }
+
+  function handleIncidenciaReported(bookingId) {
+    setBookings((prev) =>
+      prev.map((b) => (b.id === bookingId ? { ...b, estado: 'incidencia' } : b)),
+    );
   }
 
   async function handleCancelProvider(bookingId) {
@@ -1138,6 +1175,7 @@ function ReservasRecibidas({ perfil, BRAND }) {
                   responding={respondingId === booking.id}
                   onCancelProvider={handleCancelProvider}
                   canceling={cancelingId === booking.id}
+                  onIncidenciaReported={handleIncidenciaReported}
                 />
               ))}
             </>
@@ -1170,6 +1208,7 @@ function ReservasRecibidas({ perfil, BRAND }) {
                   responding={respondingId === booking.id}
                   onCancelProvider={handleCancelProvider}
                   canceling={cancelingId === booking.id}
+                  onIncidenciaReported={handleIncidenciaReported}
                 />
               ))}
             </>

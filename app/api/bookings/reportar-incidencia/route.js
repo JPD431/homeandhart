@@ -1,12 +1,12 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import { verificarTokenConfirmacion } from "@/app/lib/confirmar-token";
+import { createClient } from "@/lib/supabase/server";
 import {
   enviarEmailIncidenciaReserva,
   registrarIncidenciaReserva,
 } from "@/app/lib/booking-incidencia";
 
-const supabaseAdmin = createClient(
+const supabaseAdmin = createServiceClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY,
 );
@@ -23,14 +23,29 @@ export async function POST(request) {
     return NextResponse.json({ error: "Body inválido" }, { status: 400 });
   }
 
-  const { bookingId, token, comentario } = body ?? {};
+  const bookingId = body?.bookingId ?? body?.booking_id;
+  const motivo = body?.motivo;
+  const comentario = body?.comentario ?? body?.descripcion;
 
-  if (!bookingId || !token) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!bookingId) {
+    return NextResponse.json({ error: "Falta bookingId" }, { status: 400 });
   }
 
-  if (!verificarTokenConfirmacion(bookingId, token)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!comentario?.trim()) {
+    return NextResponse.json(
+      { error: "Describe el problema antes de enviar." },
+      { status: 400 },
+    );
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError || !user) {
+    return NextResponse.json({ error: "No autenticado" }, { status: 401 });
   }
 
   const { data: booking, error: bookingError } = await supabaseAdmin
@@ -43,6 +58,7 @@ export async function POST(request) {
       estado,
       fecha_inicio,
       fecha_fin,
+      hora,
       services:service_id (
         titulo,
         proveedor_id,
@@ -58,13 +74,23 @@ export async function POST(request) {
   }
 
   const service = booking.services ?? {};
-  const motivo = "Incidencia reportada tras el servicio (email)";
+  const isCliente = booking.cliente_id === user.id;
+  const isProveedor = service.proveedor_id === user.id;
+
+  if (!isCliente && !isProveedor) {
+    return NextResponse.json(
+      { error: "No tienes permiso para reportar esta reserva." },
+      { status: 403 },
+    );
+  }
+
+  const reporterRol = isCliente ? "cliente" : "proveedor";
 
   const result = await registrarIncidenciaReserva(supabaseAdmin, {
     booking,
     service,
-    reporterId: booking.cliente_id,
-    reporterRol: "cliente",
+    reporterId: user.id,
+    reporterRol,
     motivo,
     comentario,
   });
@@ -76,10 +102,10 @@ export async function POST(request) {
     );
   }
 
-  const { data: clienteProfile } = await supabaseAdmin
+  const { data: reporterProfile } = await supabaseAdmin
     .from("profiles")
     .select("nombre, apellido")
-    .eq("id", booking.cliente_id)
+    .eq("id", user.id)
     .maybeSingle();
 
   const proveedorProfile = service.profiles ?? {};
@@ -87,8 +113,8 @@ export async function POST(request) {
 
   await enviarEmailIncidenciaReserva(baseUrl, {
     booking_id: booking.id,
-    reporter_rol: "cliente",
-    reporter_nombre: fullName(clienteProfile),
+    reporter_rol: reporterRol,
+    reporter_nombre: fullName(reporterProfile),
     servicio_titulo: service.titulo || "Servicio Home&Heart",
     fecha_inicio: booking.fecha_inicio || "—",
     fecha_fin: booking.fecha_fin || booking.fecha_inicio || "—",
@@ -97,5 +123,5 @@ export async function POST(request) {
     proveedor_nombre: fullName(proveedorProfile),
   });
 
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ success: true, estado: "incidencia" });
 }

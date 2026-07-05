@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import ProveedorPreguntarButton from "@/app/components/ProveedorPreguntarButton";
+import ReportarIncidenciaForm from "@/app/components/ReportarIncidenciaForm";
 import { BRAND, SERIF } from "@/app/components/brand";
 import {
   BOOKING_STATUS_STYLES,
@@ -15,6 +16,7 @@ import {
   getBookingEstado,
   getCancelRefundBreakdown,
 } from "@/app/lib/booking-display";
+import { puedeReportarIncidencia } from "@/app/lib/booking-incidencia";
 import { supabase } from "@/app/lib/supabase";
 
 const PRIMARY = "#1d4f91";
@@ -341,6 +343,25 @@ export default function ReservaDetallePage() {
                     Enviar mensaje
                   </ProveedorPreguntarButton>
                 )}
+              </section>
+            )}
+
+            {estado === "incidencia" && (
+              <section
+                className="mt-5 rounded-lg border px-4 py-3 text-sm"
+                style={{ borderColor: "#fecaca", backgroundColor: "#fef2f2", color: "#b91c1c" }}
+              >
+                Hay un reporte de incidencia en curso. Nuestro equipo lo está revisando y te
+                contactará pronto.
+              </section>
+            )}
+
+            {puedeReportarIncidencia(estado) && (
+              <section className="mt-5">
+                <ReportarIncidenciaForm
+                  bookingId={booking.id}
+                  onSuccess={() => setBooking((prev) => ({ ...prev, estado: "incidencia" }))}
+                />
               </section>
             )}
 
