@@ -1322,6 +1322,33 @@ export default function SerProveedorPage() {
             onChange={(v) => updCap("bano_tipo", v)}
             accentColor={PRIMARY}
           />
+          <div className="mt-6">
+            <p className="mb-3 text-xs font-semibold text-[#444]">Horario de entrada y salida</p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-[#444]">Hora de entrada</label>
+                <input
+                  type="time"
+                  value={d.check_in}
+                  onChange={(e) => upd("check_in", e.target.value)}
+                  className={inputClass}
+                  style={{ borderColor: BRAND.border }}
+                />
+                <p className="mt-1 text-[10px] text-[#888]">Check-in</p>
+              </div>
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-[#444]">Hora de salida</label>
+                <input
+                  type="time"
+                  value={d.check_out}
+                  onChange={(e) => upd("check_out", e.target.value)}
+                  className={inputClass}
+                  style={{ borderColor: BRAND.border }}
+                />
+                <p className="mt-1 text-[10px] text-[#888]">Check-out</p>
+              </div>
+            </div>
+          </div>
           <AmenitiesPicker
             className="mt-6"
             value={d.amenities || []}
@@ -1334,16 +1361,6 @@ export default function SerProveedorPage() {
             <ToggleRow label="Bebés" checked={d.normas.bebes} onChange={(v) => updNorma("bebes", v)} />
             <ToggleRow label="Fumar" checked={d.normas.fumar} onChange={(v) => updNorma("fumar", v)} />
             <ToggleRow label="Fiestas" checked={d.normas.fiestas} onChange={(v) => updNorma("fiestas", v)} />
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className="mb-1.5 block text-xs font-medium text-[#444]">Check-in</label>
-                <input type="time" value={d.check_in} onChange={(e) => upd("check_in", e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-xs font-medium text-[#444]">Check-out</label>
-                <input type="time" value={d.check_out} onChange={(e) => upd("check_out", e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
-              </div>
-            </div>
           </div>
           <ServiceOperationalFields
             vertical="alojamiento"

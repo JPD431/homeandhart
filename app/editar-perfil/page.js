@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import AmenitiesPicker from "@/app/components/AmenitiesPicker";
 import BanoTipoSelector from "@/app/components/BanoTipoSelector";
@@ -102,6 +102,46 @@ const MODALIDAD_MASCOTAS_OPTIONS = [
 ];
 
 const inputClass = PROVIDER_INPUT_CLASS;
+
+const SERVICE_VERTICAL_TAB_ORDER = ["alojamiento", "ninos", "mascotas"];
+
+function getVerticalsFromServices(services) {
+  return [...new Set(services.map((s) => s.vertical).filter(Boolean))];
+}
+
+function resolveTabFromParam(tabParam, services) {
+  const verticalsActivos = getVerticalsFromServices(services);
+  const tieneServicios = services.length > 0;
+
+  if (!tabParam) return "perfil";
+
+  if (tabParam === "servicios") {
+    if (!tieneServicios) return "perfil";
+    for (const vertical of SERVICE_VERTICAL_TAB_ORDER) {
+      if (verticalsActivos.includes(vertical)) return vertical;
+    }
+    return "perfil";
+  }
+
+  if (tabParam === "perfil") return "perfil";
+  if (tabParam === "cuenta") return "cuenta";
+  if (tabParam === "documentos") {
+    return tieneServicios ? "documentos" : "perfil";
+  }
+  if (
+    SERVICE_VERTICAL_TAB_ORDER.includes(tabParam) &&
+    verticalsActivos.includes(tabParam)
+  ) {
+    return tabParam;
+  }
+
+  return "perfil";
+}
+
+function buildEditarPerfilTabHref(tabId) {
+  if (tabId === "perfil") return "/editar-perfil";
+  return `/editar-perfil?tab=${encodeURIComponent(tabId)}`;
+}
 
 function emptyServiceDetails() {
   return {
@@ -880,6 +920,8 @@ function PreviewPanel({ fotoPreview, nombre, apellido, ciudad, services }) {
 
 export default function EditarPerfilPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get("tab");
   const profilePhotoRef = useRef(null);
   const documentInputRef = useRef(null);
 
@@ -1000,6 +1042,31 @@ export default function EditarPerfilPage() {
 
     load();
   }, [router]);
+
+  useEffect(() => {
+    if (loading) return;
+    setActiveTab(resolveTabFromParam(tabParam, services));
+  }, [loading, services, tabParam]);
+
+  useEffect(() => {
+    if (loading || !tabParam) return;
+
+    const resolved = resolveTabFromParam(tabParam, services);
+    const href = buildEditarPerfilTabHref(resolved);
+    const current =
+      tabParam === "perfil"
+        ? "/editar-perfil"
+        : `/editar-perfil?tab=${encodeURIComponent(tabParam)}`;
+
+    if (tabParam === "servicios" || href !== current) {
+      router.replace(href, { scroll: false });
+    }
+  }, [loading, services, tabParam, router]);
+
+  function handleTabChange(tabId) {
+    setActiveTab(tabId);
+    router.replace(buildEditarPerfilTabHref(tabId), { scroll: false });
+  }
 
   function markDirty() {
     setDirty(true);
@@ -1776,7 +1843,7 @@ export default function EditarPerfilPage() {
             <button
               key={tab.id}
               type="button"
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => handleTabChange(tab.id)}
               className="shrink-0 px-4 py-3 text-xs font-semibold whitespace-nowrap"
               style={{
                 borderBottom: activeTab === tab.id ? `2px solid ${PRIMARY}` : "2px solid transparent",
