@@ -89,13 +89,13 @@ export async function aplicarReembolsoStripeBooking(
 
   if (CANCELABLE_PI_STATUSES.has(status)) {
     if (reembolsoCents >= piAmountCents) {
-      await stripe.paymentIntents.cancel(paymentIntentId, stripeOpts);
+      await stripe.paymentIntents.cancel(paymentIntentId, {}, stripeOpts);
       return { stripe_ok: true, stripe_action: "cancel", pi_status: status };
     }
 
     const amountToCapture = piAmountCents - reembolsoCents;
     if (amountToCapture <= 0) {
-      await stripe.paymentIntents.cancel(paymentIntentId, stripeOpts);
+      await stripe.paymentIntents.cancel(paymentIntentId, {}, stripeOpts);
       return { stripe_ok: true, stripe_action: "cancel", pi_status: status };
     }
 
