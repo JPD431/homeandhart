@@ -1,5 +1,5 @@
 import Stripe from "stripe";
-import { invocarCapturePaymentInterno } from "@/app/lib/capture-payment-interno";
+import { capturarYTransferirPago } from "@/app/lib/capturar-y-transferir";
 import { getIngresoProveedorFromBooking } from "@/app/lib/ingresos-proveedor";
 import {
   CANCELABLE_PI_STATUSES,
@@ -14,7 +14,7 @@ export function calcularImporteProveedorEstimado(booking) {
   return roundMoney(getIngresoProveedorFromBooking(booking));
 }
 
-async function ejecutarCaptureProveedorStripe(booking, bookingsEnGrupo) {
+async function ejecutarCaptureProveedorStripe(supabaseAdmin, booking, bookingsEnGrupo) {
   if (!booking.payment_intent_id) {
     return { stripe_ok: true, stripe_action: "sin_pi" };
   }
@@ -71,25 +71,36 @@ async function ejecutarCaptureProveedorStripe(booking, bookingsEnGrupo) {
   }
 
   if (piStatus === "succeeded" || CANCELABLE_PI_STATUSES.has(piStatus)) {
-    const capture = await invocarCapturePaymentInterno({
-      paymentIntentId: booking.payment_intent_id,
-      bookingId: booking.id,
-    });
+    let capture;
+    try {
+      capture = await capturarYTransferirPago(
+        supabaseAdmin,
+        booking.payment_intent_id,
+        { logPrefix: LOG_PREFIX },
+      );
+    } catch (err) {
+      return {
+        stripe_ok: false,
+        stripe_action: null,
+        pi_status: piStatus,
+        stripe_error: err?.message ?? String(err),
+      };
+    }
 
     console.error(`${LOG_PREFIX} stripe-despues`, {
       bookingId: booking.id,
-      ok: capture.ok,
+      ok: capture.success,
       pi_status: piStatus,
-      already_processed: capture.data?.already_processed,
-      error: capture.data?.error,
+      already_processed: capture.already_processed,
+      error: capture.error,
     });
 
-    if (capture.ok || capture.data?.already_processed) {
+    if (capture.success || capture.already_processed) {
       return {
         stripe_ok: true,
         stripe_action: piStatus === "succeeded" ? "already_captured" : "capture",
         pi_status: piStatus,
-        capture: capture.data,
+        capture,
       };
     }
 
@@ -97,8 +108,8 @@ async function ejecutarCaptureProveedorStripe(booking, bookingsEnGrupo) {
       stripe_ok: false,
       stripe_action: null,
       pi_status: piStatus,
-      stripe_error: capture.data?.error || "Error al capturar y transferir al proveedor.",
-      capture: capture.data,
+      stripe_error: capture.error || "Error al capturar y transferir al proveedor.",
+      capture,
     };
   }
 
@@ -161,7 +172,11 @@ export async function ejecutarLiberarProveedorIncidencia(
     };
   }
 
-  const stripeResult = await ejecutarCaptureProveedorStripe(booking, bookingsEnGrupo);
+  const stripeResult = await ejecutarCaptureProveedorStripe(
+    supabaseAdmin,
+    booking,
+    bookingsEnGrupo,
+  );
 
   if (!stripeResult.stripe_ok) {
     return {

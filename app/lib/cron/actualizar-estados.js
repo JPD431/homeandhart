@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { capturarYTransferirPago } from "@/app/lib/capturar-y-transferir";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -21,7 +22,7 @@ function buildEffectiveEndDateLteFilter(hoy) {
 
 /**
  * Avanza estados de reservas y captura pagos pendientes (24h post-completada).
- * Usa capture-payment con CRON_SECRET (llamada interna server-to-server).
+ * Captura vía función compartida (sin HTTP interno).
  */
 export async function runActualizarEstados() {
   const ahora = new Date().toISOString();
@@ -99,16 +100,18 @@ export async function runActualizarEstados() {
       continue;
     }
 
-    await fetch(`${process.env.NEXT_PUBLIC_URL}/api/stripe/capture-payment`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.CRON_SECRET}`,
-      },
-      body: JSON.stringify({
-        paymentIntentId: booking.payment_intent_id,
-      }),
-    });
+    try {
+      await capturarYTransferirPago(supabase, booking.payment_intent_id, {
+        logPrefix: "[cron/actualizar-estados]",
+      });
+    } catch (captureErr) {
+      console.error(
+        "[cron/actualizar-estados] Error capturando pago",
+        booking.id,
+        captureErr?.message ?? captureErr,
+      );
+      continue;
+    }
 
     await supabase
       .from("bookings")
