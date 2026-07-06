@@ -14,6 +14,101 @@ export function idempotencyKeyReembolsoTotal(bookingId) {
   return `incidencia-reembolso-total-${bookingId}`;
 }
 
+/**
+ * Devuelve credito_aplicado al saldo del cliente, como máximo una vez por reserva.
+ * Reclama en bookings.reembolso_cliente_credito antes de tocar profiles (idempotente).
+ */
+async function devolverCreditoResolucionIdempotente(
+  supabaseAdmin,
+  booking,
+  reembolso,
+) {
+  const credito = reembolso.credito;
+
+  if (!credito || credito <= 0) {
+    console.error(`${LOG_PREFIX} credito`, {
+      bookingId: booking.id,
+      skipped: true,
+      reason: "sin_credito_aplicado",
+    });
+    return { credito_devuelto: 0, skipped: true, reason: "sin_credito_aplicado" };
+  }
+
+  const { data: existing, error: readError } = await supabaseAdmin
+    .from("bookings")
+    .select("reembolso_cliente_credito")
+    .eq("id", booking.id)
+    .maybeSingle();
+
+  if (readError) {
+    console.error(`${LOG_PREFIX} credito`, {
+      bookingId: booking.id,
+      ok: false,
+      message: readError.message,
+    });
+    throw readError;
+  }
+
+  if (existing?.reembolso_cliente_credito != null) {
+    console.error(`${LOG_PREFIX} credito`, {
+      bookingId: booking.id,
+      skipped: true,
+      reason: "reembolso_cliente_credito_ya_registrado",
+      reembolso_cliente_credito: existing.reembolso_cliente_credito,
+    });
+    return {
+      credito_devuelto: 0,
+      skipped: true,
+      reason: "ya_registrado_en_booking",
+    };
+  }
+
+  const { data: claimed, error: claimError } = await supabaseAdmin
+    .from("bookings")
+    .update({
+      reembolso_cliente_credito: credito,
+      reembolso_cliente_total: reembolso.bruto,
+      reembolso_cliente_pct: 100,
+    })
+    .eq("id", booking.id)
+    .is("reembolso_cliente_credito", null)
+    .select("id");
+
+  if (claimError) {
+    console.error(`${LOG_PREFIX} credito`, {
+      bookingId: booking.id,
+      ok: false,
+      message: claimError.message,
+      code: claimError.code,
+    });
+    throw claimError;
+  }
+
+  if (!claimed?.length) {
+    console.error(`${LOG_PREFIX} credito`, {
+      bookingId: booking.id,
+      skipped: true,
+      reason: "claim_sin_filas_otro_proceso",
+    });
+    return { credito_devuelto: 0, skipped: true, reason: "claim_sin_filas" };
+  }
+
+  await devolverCreditoCliente(
+    supabaseAdmin,
+    booking.cliente_id,
+    credito,
+    LOG_PREFIX,
+  );
+
+  console.error(`${LOG_PREFIX} credito`, {
+    bookingId: booking.id,
+    ok: true,
+    credito_devuelto: credito,
+  });
+
+  return { credito_devuelto: credito, skipped: false };
+}
+
 export async function ejecutarReembolsoTotalIncidencia(supabaseAdmin, booking, adminId, nota) {
   if (booking.estado === "incidencia_resuelta") {
     if (booking.resolucion_tipo === "reembolso_total") {
@@ -163,12 +258,24 @@ export async function ejecutarReembolsoTotalIncidencia(supabaseAdmin, booking, a
     }
   }
 
-  await devolverCreditoCliente(
-    supabaseAdmin,
-    booking.cliente_id,
-    reembolso.credito,
-    LOG_PREFIX,
-  );
+  let creditoResult = { credito_devuelto: 0, skipped: true, reason: "sin_credito_aplicado" };
+
+  try {
+    creditoResult = await devolverCreditoResolucionIdempotente(
+      supabaseAdmin,
+      booking,
+      reembolso,
+    );
+  } catch (creditoErr) {
+    return {
+      success: false,
+      status: 500,
+      step: "credito",
+      error: creditoErr?.message ?? String(creditoErr),
+      stripe: stripeResult,
+      reembolso,
+    };
+  }
 
   const resolucionAt = new Date().toISOString();
 
@@ -275,6 +382,8 @@ export async function ejecutarReembolsoTotalIncidencia(supabaseAdmin, booking, a
     reembolso_bruto: reembolso.bruto,
     reembolso_tarjeta: reembolso.tarjeta,
     reembolso_credito: reembolso.credito,
+    credito_devuelto_este_intento: creditoResult.credito_devuelto,
+    credito_skip: creditoResult.skipped,
     stripe_action: stripeResult.stripe_action,
     bundle: bookingsEnGrupo > 1,
   });
@@ -291,6 +400,7 @@ export async function ejecutarReembolsoTotalIncidencia(supabaseAdmin, booking, a
       importe_proveedor: 0,
     },
     stripe: stripeResult,
+    credito: creditoResult,
     bundle_warning: bundleWarning,
     is_bundle: bookingsEnGrupo > 1,
   };
