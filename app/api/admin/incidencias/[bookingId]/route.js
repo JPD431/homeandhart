@@ -29,7 +29,7 @@ const BOOKING_SELECT = `
   fecha_fin,
   hora,
   created_at,
-  updated_at,
+  completada_at,
   comentario_problema,
   confirmacion_cliente,
   profiles_public:cliente_id (nombre, apellido),

@@ -29,7 +29,7 @@ const BOOKING_SELECT = `
   fecha_fin,
   hora,
   created_at,
-  updated_at,
+  completada_at,
   profiles_public:cliente_id (nombre, apellido),
   services:service_id (
     titulo,
@@ -93,7 +93,7 @@ export async function GET() {
     .from("bookings")
     .select(BOOKING_SELECT)
     .eq("estado", "incidencia")
-    .order("updated_at", { ascending: false });
+    .order("created_at", { ascending: false });
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -110,6 +110,12 @@ export async function GET() {
 
     incidencias.push(mapIncidenciaRow(booking, report, stripePi, bundleInfo));
   }
+
+  incidencias.sort((a, b) => {
+    const dateA = a.reporte?.created_at || a.incidencia_desde || "";
+    const dateB = b.reporte?.created_at || b.incidencia_desde || "";
+    return dateB.localeCompare(dateA);
+  });
 
   return NextResponse.json({ incidencias });
 }

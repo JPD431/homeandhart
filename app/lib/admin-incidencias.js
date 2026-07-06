@@ -171,6 +171,7 @@ export function mapIncidenciaRow(booking, report, stripePi, bundleInfo) {
       : null,
     stripe: stripePi,
     bundle: bundleInfo,
-    incidencia_desde: booking.updated_at || booking.created_at,
+    incidencia_desde:
+      report?.created_at || booking.completada_at || booking.created_at,
   };
 }
