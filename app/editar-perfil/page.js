@@ -299,7 +299,6 @@ function mapServiceFromDb(row) {
       anos_experiencia: parseAnosExperienciaFromDb(row),
       ...parseMascotasDetalleFromDb(row),
       ...parseMascotasBooleansFromDb(row),
-      fotosActualizaciones: false,
     };
   }
 

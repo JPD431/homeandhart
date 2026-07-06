@@ -62,6 +62,12 @@ export function buildWizardPreviewService(
     modalidad: details.modalidad || "",
     cancellation_policy: details.cancelacion || "moderada",
     capacidad: details.capacidad ?? null,
+    jardin: details.jardin === true,
+    paseos_incluidos: details.paseosIncluidos === true,
+    fotos_actualizaciones: details.fotosActualizaciones === true,
+    mascotas_detalle: {
+      cerca_veterinario: details.cercaVeterinario === true,
+    },
     profiles_public: {
       id: userId || "preview",
       nombre: nombre?.trim() || "",

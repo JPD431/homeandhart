@@ -1,5 +1,6 @@
 import { resolveAmenitiesGrouped } from "@/app/lib/amenities";
 import { getCapacidadDisplayRows, formatCapacidadDisplayRow } from "@/app/lib/capacidad";
+import { getMascotasDisplayRows } from "@/app/lib/service-payload";
 import {
   getServiceCardTheme,
   getServiceDescription,
@@ -91,6 +92,8 @@ export default function ServiceAnuncioContent({
           Array.isArray(service.amenities) ? service.amenities : [],
         )
       : [];
+  const mascotasRows =
+    vertical === "mascotas" ? getMascotasDisplayRows(service) : [];
 
   return (
     <div className="mt-4 flex flex-col gap-4">
@@ -120,6 +123,26 @@ export default function ServiceAnuncioContent({
                 <span className="text-[#444]">
                   {formatCapacidadDisplayRow(row)}
                 </span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {mascotasRows.length > 0 && (
+        <div>
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-[#888]">
+            Servicio
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {mascotasRows.map((row) => (
+              <span
+                key={row.label}
+                className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px]"
+                style={{ borderColor: "#e8e4de", backgroundColor: "#fafaf9" }}
+              >
+                <span aria-hidden>{row.icon}</span>
+                <span className="text-[#444]">{row.label}</span>
               </span>
             ))}
           </div>

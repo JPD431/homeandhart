@@ -93,10 +93,10 @@ export function getCapacidadForDisplay(service) {
 }
 
 const CAPACIDAD_DISPLAY_ITEMS = [
-  { key: "personas", label: "Personas", icon: "👥" },
-  { key: "habitaciones", label: "Habitaciones", icon: "🛏️" },
-  { key: "camas", label: "Camas", icon: "🛌" },
-  { key: "banos", label: "Baños", icon: "🚿" },
+  { key: "personas", singular: "persona", plural: "personas", icon: "👥" },
+  { key: "habitaciones", singular: "habitación", plural: "habitaciones", icon: "🛏️" },
+  { key: "camas", singular: "cama", plural: "camas", icon: "🛌" },
+  { key: "banos", singular: "baño", plural: "baños", icon: "🚿" },
 ];
 
 const BANO_TIPO_DISPLAY = {
@@ -104,23 +104,36 @@ const BANO_TIPO_DISPLAY = {
   [BANO_TIPO_COMPARTIDO]: { icon: "🚿", label: "Baño", value: "Compartido", banoTipo: true },
 };
 
+/**
+ * Etiqueta con número + singular/plural correcto.
+ * @param {number|string} count
+ * @param {string} singular — p. ej. "habitación"
+ * @param {string} plural — p. ej. "habitaciones"
+ */
+export function formatCountLabel(count, singular, plural) {
+  const n = Number(count);
+  const safe = Number.isFinite(n) ? Math.floor(n) : 0;
+  const word = safe === 1 ? singular : plural;
+  return `${safe} ${word}`;
+}
+
 /** Texto legible de una fila de capacidad (anuncio / ficha). */
 export function formatCapacidadDisplayRow(row) {
   if (row?.banoTipo) {
     return `${row.label} ${String(row.value).toLowerCase()}`;
   }
-  return `${row.value} ${row.label.toLowerCase()}`;
+  return formatCountLabel(row.value, row.singular, row.plural);
 }
 
-/** Filas { icon, label, value } para la ficha; vacío si no hay capacidad. */
+/** Filas { icon, label, value, singular, plural } para la ficha; vacío si no hay capacidad. */
 export function getCapacidadDisplayRows(service) {
   const cap = getCapacidadForDisplay(service);
   if (!cap) return [];
 
-  const rows = CAPACIDAD_DISPLAY_ITEMS.map(({ key, label, icon }) => {
+  const rows = CAPACIDAD_DISPLAY_ITEMS.map(({ key, singular, plural, icon }) => {
     const value = cap[key];
     if (value == null || value === "") return null;
-    return { icon, label, value };
+    return { icon, label: plural, singular, plural, value };
   }).filter(Boolean);
 
   if (cap.bano_tipo && BANO_TIPO_DISPLAY[cap.bano_tipo]) {

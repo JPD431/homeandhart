@@ -124,7 +124,34 @@ export function parseMascotasBooleansFromDb(row) {
   return {
     jardin: row?.jardin === true,
     paseosIncluidos: row?.paseos_incluidos === true,
+    fotosActualizaciones: row?.fotos_actualizaciones === true,
   };
+}
+
+/** Filas de plus para ficha de mascotas (anuncio / preview). */
+export function getMascotasDisplayRows(service) {
+  if (!service || service.vertical !== "mascotas") return [];
+
+  const rows = [];
+  if (service.jardin === true) {
+    rows.push({ icon: "🌿", label: "Tiene jardín" });
+  }
+  if (service.paseos_incluidos === true) {
+    rows.push({ icon: "🐕", label: "Paseos incluidos" });
+  }
+  if (service.fotos_actualizaciones === true) {
+    rows.push({
+      icon: "📷",
+      label: "Envía fotos y actualizaciones del cuidado",
+    });
+  }
+
+  const det = service.mascotas_detalle;
+  if (det && typeof det === "object" && det.cerca_veterinario === true) {
+    rows.push({ icon: "🏥", label: "Cerca de veterinario" });
+  }
+
+  return rows;
 }
 
 export function serializeAnosExperiencia(details) {
@@ -249,6 +276,7 @@ export function buildServicePayload(details, vertical, ciudad, proveedorId, disp
     payload.mascotas_detalle = serializeMascotasDetalle(details);
     payload.jardin = details.jardin === true;
     payload.paseos_incluidos = details.paseosIncluidos === true;
+    payload.fotos_actualizaciones = details.fotosActualizaciones === true;
     payload.anos_experiencia = serializeAnosExperiencia(details);
   }
 

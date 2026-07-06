@@ -223,7 +223,6 @@ export function mapDraftRowToServiceDetails(row) {
     anos_experiencia: parseAnosExperienciaFromDb(row),
     ...parseMascotasDetalleFromDb(row),
     ...parseMascotasBooleansFromDb(row),
-    fotosActualizaciones: false,
   };
 }
 

@@ -130,6 +130,10 @@ export function getServiceCardTags(service, profile, lang = "es", options = {}) 
     tags.push({ text: "Pet-friendly 🐾", light: "#e6f4f0", color: "#085041" });
   }
 
+  if (service.vertical === "mascotas" && service.fotos_actualizaciones === true) {
+    tags.push({ text: "Envía fotos 📷", light: "#fdf3e3", color: "#92400e" });
+  }
+
   const languages = Array.isArray(profile?.idiomas) ? profile.idiomas : [];
   if (languages[0]) {
     tags.push({ text: languages[0], light: "#f3f3f3", color: "#666" });

@@ -118,6 +118,12 @@ export default function MascotasServiceFields({
           accentColor={accentColor}
         />
         <ToggleRow
+          label="Envía fotos y actualizaciones"
+          checked={details.fotosActualizaciones === true}
+          onChange={(v) => update("fotosActualizaciones", v)}
+          accentColor={accentColor}
+        />
+        <ToggleRow
           label="Disponible para viajar"
           checked={details.disponible_para_viajar === true}
           onChange={(v) => update("disponible_para_viajar", v)}
