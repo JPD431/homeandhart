@@ -310,6 +310,7 @@ export default function AdminPage() {
   const [incidencias, setIncidencias] = useState([]);
   const [reembolsoModalInc, setReembolsoModalInc] = useState(null);
   const [reembolsoNota, setReembolsoNota] = useState("");
+  const [reembolsoModalError, setReembolsoModalError] = useState("");
   const [reports, setReports] = useState([]);
   const [lateCancellations, setLateCancellations] = useState([]);
   const [blogPosts, setBlogPosts] = useState([]);
@@ -627,41 +628,73 @@ export default function AdminPage() {
     await loadData();
   }
 
+  function formatReembolsoError(result, response) {
+    const parts = [
+      result.step ? `[${result.step}]` : null,
+      result.error,
+      result.hint,
+      result.stripe?.stripe_error,
+      result.stripe_code ? `stripe_code=${result.stripe_code}` : null,
+      result.stripe_type ? `stripe_type=${result.stripe_type}` : null,
+      result.db_code ? `db_code=${result.db_code}` : null,
+      !result.error && !response.ok ? `HTTP ${response.status}` : null,
+    ].filter(Boolean);
+    return parts.join(" — ") || "Error al procesar el reembolso.";
+  }
+
   async function handleReembolsoTotalConfirm() {
     if (!reembolsoModalInc) return;
 
     setActionLoading(reembolsoModalInc.id);
     setErrorMessage("");
     setSuccessMessage("");
+    setReembolsoModalError("");
 
-    const response = await fetch("/api/admin/incidencias/reembolso-total", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        bookingId: reembolsoModalInc.id,
-        nota: reembolsoNota.trim() || undefined,
-      }),
-    });
-    const result = await response.json().catch(() => ({}));
+    try {
+      const response = await fetch("/api/admin/incidencias/reembolso-total", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({
+          bookingId: reembolsoModalInc.id,
+          nota: reembolsoNota.trim() || undefined,
+        }),
+      });
+      const result = await response.json().catch(() => ({}));
 
-    setActionLoading(null);
+      if (!response.ok) {
+        const msg = formatReembolsoError(result, response);
+        console.error("[admin] reembolso-total failed", {
+          status: response.status,
+          result,
+        });
+        setReembolsoModalError(msg);
+        setErrorMessage(msg);
+        window.alert(`Error al reembolsar:\n\n${msg}`);
+        return;
+      }
 
-    if (!response.ok) {
-      setErrorMessage(result.error || "Error al procesar el reembolso.");
-      return;
+      const importeReembolsado =
+        result.reembolso?.bruto ?? reembolsoModalInc.precio_total;
+
+      setReembolsoModalInc(null);
+      setReembolsoNota("");
+      setReembolsoModalError("");
+      setSuccessMessage(
+        result.already_processed
+          ? "Esta incidencia ya tenía un reembolso total aplicado."
+          : `Reembolso total aplicado: ${formatEuroAdmin(importeReembolsado)} al cliente.`,
+      );
+      await loadData();
+    } catch (err) {
+      const msg = err?.message || "Error de red al contactar con el servidor.";
+      console.error("[admin] reembolso-total network error", err);
+      setReembolsoModalError(msg);
+      setErrorMessage(msg);
+      window.alert(`Error al reembolsar:\n\n${msg}`);
+    } finally {
+      setActionLoading(null);
     }
-
-    const importeReembolsado =
-      result.reembolso?.bruto ?? reembolsoModalInc.precio_total;
-
-    setReembolsoModalInc(null);
-    setReembolsoNota("");
-    setSuccessMessage(
-      result.already_processed
-        ? "Esta incidencia ya tenía un reembolso total aplicado."
-        : `Reembolso total aplicado: ${formatEuroAdmin(importeReembolsado)} al cliente.`,
-    );
-    await loadData();
   }
 
   async function handleReject(providerId) {
@@ -1475,6 +1508,14 @@ export default function AdminPage() {
                       el resto del PaymentIntent se capturará para las otras verticales.
                     </p>
                   )}
+                  {reembolsoModalError && (
+                    <p
+                      className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm leading-relaxed text-red-800"
+                      role="alert"
+                    >
+                      {reembolsoModalError}
+                    </p>
+                  )}
                   <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-[#888]">
                     Nota interna (opcional)
                   </label>
@@ -1492,6 +1533,7 @@ export default function AdminPage() {
                       onClick={() => {
                         setReembolsoModalInc(null);
                         setReembolsoNota("");
+                        setReembolsoModalError("");
                       }}
                       className="rounded-xl border px-4 py-2 text-sm font-medium text-[#666]"
                       style={{ borderColor: BRAND.border }}
@@ -1690,6 +1732,7 @@ export default function AdminPage() {
                             type="button"
                             onClick={() => {
                               setReembolsoNota("");
+                              setReembolsoModalError("");
                               setReembolsoModalInc(inc);
                             }}
                             disabled={actionLoading === inc.id}

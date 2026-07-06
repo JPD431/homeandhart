@@ -8,7 +8,7 @@ import {
 } from "@/app/lib/stripe-reembolso";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-const LOG_PREFIX = "[admin/incidencia-reembolso-total]";
+const LOG_PREFIX = "[reembolso]";
 
 export function idempotencyKeyReembolsoTotal(bookingId) {
   return `incidencia-reembolso-total-${bookingId}`;
@@ -29,6 +29,7 @@ export async function ejecutarReembolsoTotalIncidencia(supabaseAdmin, booking, a
     return {
       success: false,
       status: 409,
+      step: "validate_estado",
       error: "La reserva ya fue resuelta con otro tipo de resolución.",
     };
   }
@@ -37,6 +38,7 @@ export async function ejecutarReembolsoTotalIncidencia(supabaseAdmin, booking, a
     return {
       success: false,
       status: 409,
+      step: "validate_estado",
       error: "La reserva no está en estado incidencia.",
     };
   }
@@ -57,6 +59,7 @@ export async function ejecutarReembolsoTotalIncidencia(supabaseAdmin, booking, a
       return {
         success: false,
         status: 500,
+        step: "bundle_count",
         error: err?.message ?? String(err),
       };
     }
@@ -77,6 +80,37 @@ export async function ejecutarReembolsoTotalIncidencia(supabaseAdmin, booking, a
   let stripeResult = { stripe_ok: true, stripe_action: "sin_pi" };
 
   if (reembolso.tarjeta > 0 && booking.payment_intent_id) {
+    let piAntes = null;
+    try {
+      piAntes = await stripe.paymentIntents.retrieve(booking.payment_intent_id);
+      console.error(`${LOG_PREFIX} stripe-antes`, {
+        bookingId: booking.id,
+        payment_intent_id: booking.payment_intent_id,
+        pi_status: piAntes.status,
+        pi_amount_cents: piAntes.amount,
+        reembolso_tarjeta: reembolso.tarjeta,
+        reembolso_tarjeta_cents: Math.round(reembolso.tarjeta * 100),
+        idempotencyKey,
+      });
+    } catch (retrieveErr) {
+      console.error(`${LOG_PREFIX} stripe-antes`, {
+        bookingId: booking.id,
+        payment_intent_id: booking.payment_intent_id,
+        ok: false,
+        message: retrieveErr?.message ?? String(retrieveErr),
+        type: retrieveErr?.type,
+        code: retrieveErr?.code,
+      });
+      return {
+        success: false,
+        status: 500,
+        step: "stripe_retrieve",
+        error: retrieveErr?.message ?? String(retrieveErr),
+        stripe_type: retrieveErr?.type,
+        stripe_code: retrieveErr?.code,
+      };
+    }
+
     try {
       stripeResult = await aplicarReembolsoStripeBooking(
         stripe,
@@ -84,22 +118,45 @@ export async function ejecutarReembolsoTotalIncidencia(supabaseAdmin, booking, a
         reembolso.tarjeta,
         { idempotencyKey },
       );
-    } catch (err) {
-      console.error(LOG_PREFIX, "Error Stripe:", err?.message ?? err, {
+      console.error(`${LOG_PREFIX} stripe-despues`, {
         bookingId: booking.id,
+        ok: true,
+        pi_status_antes: piAntes?.status,
+        stripe_action: stripeResult.stripe_action,
+        stripe_ok: stripeResult.stripe_ok,
+        pi_status_resultado: stripeResult.pi_status,
+      });
+    } catch (err) {
+      console.error(`${LOG_PREFIX} stripe-despues`, {
+        bookingId: booking.id,
+        ok: false,
+        message: err?.message ?? String(err),
+        type: err?.type,
+        code: err?.code,
       });
       return {
         success: false,
         status: 500,
+        step: "stripe",
         error: err?.message ?? String(err),
         stripe: stripeResult,
+        stripe_type: err?.type,
+        stripe_code: err?.code,
       };
     }
 
     if (!stripeResult.stripe_ok) {
+      console.error(`${LOG_PREFIX} stripe-despues`, {
+        bookingId: booking.id,
+        ok: false,
+        stripe_error: stripeResult.stripe_error,
+        stripe_action: stripeResult.stripe_action,
+        pi_status: stripeResult.pi_status,
+      });
       return {
         success: false,
         status: 502,
+        step: "stripe",
         error: stripeResult.stripe_error || "Error al procesar el reembolso en Stripe.",
         stripe: stripeResult,
       };
@@ -134,15 +191,39 @@ export async function ejecutarReembolsoTotalIncidencia(supabaseAdmin, booking, a
     .select("id");
 
   if (updateError) {
-    console.error(LOG_PREFIX, "Error actualizando booking:", updateError);
+    console.error(`${LOG_PREFIX} db-update`, {
+      bookingId: booking.id,
+      ok: false,
+      message: updateError.message,
+      code: updateError.code,
+      details: updateError.details,
+      hint: updateError.hint,
+    });
+    const hint = updateError.message.includes("resolucion_")
+      ? "Ejecuta la migración SQL de columnas resolucion_* en bookings."
+      : updateError.message.includes("incidencia_resuelta")
+        ? "El estado incidencia_resuelta puede no estar permitido en el CHECK de bookings.estado."
+        : undefined;
+
     return {
       success: false,
       status: 500,
+      step: "db_update",
       error: updateError.message,
+      hint,
+      db_code: updateError.code,
+      db_hint: updateError.hint,
       stripe: stripeResult,
       reembolso,
     };
   }
+
+  console.error(`${LOG_PREFIX} db-update`, {
+    bookingId: booking.id,
+    ok: true,
+    rows_updated: updatedRows?.length ?? 0,
+    estado_nuevo: "incidencia_resuelta",
+  });
 
   if (!updatedRows?.length) {
     const { data: current } = await supabaseAdmin
@@ -163,9 +244,17 @@ export async function ejecutarReembolsoTotalIncidencia(supabaseAdmin, booking, a
       };
     }
 
+    console.error(`${LOG_PREFIX} db-update`, {
+      bookingId: booking.id,
+      ok: false,
+      reason: "zero_rows_updated",
+      estado_actual: current?.estado,
+    });
+
     return {
       success: false,
       status: 409,
+      step: "db_update",
       error: "No se pudo actualizar la reserva; el estado cambió durante el proceso.",
     };
   }
