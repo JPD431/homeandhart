@@ -55,6 +55,10 @@ function puedeMostrarAccionesResolucionIncidencia(inc) {
   return inc.estado === "incidencia";
 }
 
+function puedeLiberarPagoProveedor(inc) {
+  return inc.estado === "incidencia" && !stripePagoYaLiberado(inc.stripe?.status);
+}
+
 const BLOG_CATEGORIAS_ADMIN = [
   "familias",
   "mascotas",
@@ -320,6 +324,9 @@ export default function AdminPage() {
   const [reembolsoModalInc, setReembolsoModalInc] = useState(null);
   const [reembolsoNota, setReembolsoNota] = useState("");
   const [reembolsoModalError, setReembolsoModalError] = useState("");
+  const [liberarModalInc, setLiberarModalInc] = useState(null);
+  const [liberarNota, setLiberarNota] = useState("");
+  const [liberarModalError, setLiberarModalError] = useState("");
   const [reports, setReports] = useState([]);
   const [lateCancellations, setLateCancellations] = useState([]);
   const [blogPosts, setBlogPosts] = useState([]);
@@ -649,6 +656,72 @@ export default function AdminPage() {
       !result.error && !response.ok ? `HTTP ${response.status}` : null,
     ].filter(Boolean);
     return parts.join(" — ") || "Error al procesar el reembolso.";
+  }
+
+  function formatLiberarProveedorError(result, response) {
+    const parts = [
+      result.step ? `[${result.step}]` : null,
+      result.error,
+      result.hint,
+      result.stripe?.stripe_error,
+      !result.error && !response.ok ? `HTTP ${response.status}` : null,
+    ].filter(Boolean);
+    return parts.join(" — ") || "Error al liberar el pago al proveedor.";
+  }
+
+  async function handleLiberarProveedorConfirm() {
+    if (!liberarModalInc) return;
+
+    setActionLoading(liberarModalInc.id);
+    setErrorMessage("");
+    setSuccessMessage("");
+    setLiberarModalError("");
+
+    try {
+      const response = await fetch("/api/admin/incidencias/liberar-proveedor", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({
+          bookingId: liberarModalInc.id,
+          nota: liberarNota.trim() || undefined,
+        }),
+      });
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        const msg = formatLiberarProveedorError(result, response);
+        console.error("[admin] liberar-proveedor failed", {
+          status: response.status,
+          result,
+        });
+        setLiberarModalError(msg);
+        setErrorMessage(msg);
+        window.alert(`Error al liberar pago:\n\n${msg}`);
+        return;
+      }
+
+      const importeProveedor =
+        result.importe_proveedor ?? liberarModalInc.ingreso_proveedor_estimado;
+
+      setLiberarModalInc(null);
+      setLiberarNota("");
+      setLiberarModalError("");
+      setSuccessMessage(
+        result.already_processed
+          ? "Esta incidencia ya tenía el pago liberado al proveedor."
+          : `Pago liberado al proveedor: ${formatEuroAdmin(importeProveedor)}.`,
+      );
+      await loadData();
+    } catch (err) {
+      const msg = err?.message || "Error de red al contactar con el servidor.";
+      console.error("[admin] liberar-proveedor network error", err);
+      setLiberarModalError(msg);
+      setErrorMessage(msg);
+      window.alert(`Error al liberar pago:\n\n${msg}`);
+    } finally {
+      setActionLoading(null);
+    }
   }
 
   async function handleReembolsoTotalConfirm() {
@@ -1477,6 +1550,94 @@ export default function AdminPage() {
               Reservas con conflicto abierto. Revisa el pago en Stripe antes de resolver.
             </p>
 
+            {liberarModalInc && (
+              <div
+                className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="liberar-modal-title"
+              >
+                <div
+                  className="w-full max-w-md rounded-2xl border bg-white p-6 shadow-xl"
+                  style={{ borderColor: BRAND.border }}
+                >
+                  <h3
+                    id="liberar-modal-title"
+                    className="text-lg font-semibold text-[#1a1a1a]"
+                  >
+                    ¿Liberar pago al proveedor?
+                  </h3>
+                  <p className="mt-2 text-sm leading-relaxed text-[#666]">
+                    Se pagarán{" "}
+                    <strong>
+                      {formatEuroAdmin(liberarModalInc.ingreso_proveedor_estimado)}
+                    </strong>{" "}
+                    al proveedor por{" "}
+                    <strong>{liberarModalInc.servicio.titulo}</strong>. El cliente no
+                    recibirá reembolso. La reserva quedará como incidencia resuelta.
+                  </p>
+                  {liberarModalInc.bundle?.is_bundle && (
+                    <p
+                      className="mt-3 rounded-lg border px-3 py-2 text-xs leading-relaxed text-[#92400e]"
+                      style={{ borderColor: "#fcd34d", backgroundColor: "#fffbeb" }}
+                    >
+                      Bundle: esta acción no está disponible automáticamente para
+                      PaymentIntents compartidos. Gestiona manualmente para no afectar
+                      otras verticales.
+                    </p>
+                  )}
+                  {liberarModalError && (
+                    <p
+                      className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm leading-relaxed text-red-800"
+                      role="alert"
+                    >
+                      {liberarModalError}
+                    </p>
+                  )}
+                  <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-[#888]">
+                    Nota interna (opcional)
+                  </label>
+                  <textarea
+                    value={liberarNota}
+                    onChange={(e) => setLiberarNota(e.target.value)}
+                    rows={2}
+                    className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
+                    style={{ borderColor: BRAND.border }}
+                    placeholder="Motivo o contexto para auditoría"
+                  />
+                  <div className="mt-5 flex flex-wrap justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLiberarModalInc(null);
+                        setLiberarNota("");
+                        setLiberarModalError("");
+                      }}
+                      className="rounded-xl border px-4 py-2 text-sm font-medium text-[#666]"
+                      style={{ borderColor: BRAND.border }}
+                      disabled={actionLoading === liberarModalInc.id}
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleLiberarProveedorConfirm}
+                      disabled={
+                        actionLoading === liberarModalInc.id ||
+                        liberarModalInc.bundle?.is_bundle
+                      }
+                      className="rounded-xl px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                      style={{ backgroundColor: BRAND.primary }}
+                    >
+                      {actionLoading === liberarModalInc.id
+                        ? "Procesando…"
+                        : "Confirmar liberación al proveedor"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {reembolsoModalInc && (
               <div
                 className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
@@ -1756,6 +1917,21 @@ export default function AdminPage() {
                             </p>
                           )}
                           <div className="flex flex-wrap gap-2">
+                            {puedeLiberarPagoProveedor(inc) && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setLiberarNota("");
+                                  setLiberarModalError("");
+                                  setLiberarModalInc(inc);
+                                }}
+                                disabled={actionLoading === inc.id}
+                                className="rounded-xl px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                                style={{ backgroundColor: BRAND.primary }}
+                              >
+                                Liberar pago al proveedor
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={() => {

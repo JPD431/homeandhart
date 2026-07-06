@@ -1032,6 +1032,96 @@ async function sendIncidenciaReembolsoClienteEmail(data) {
   return { success: true };
 }
 
+async function sendIncidenciaLiberadoProveedorEmail(data) {
+  const payload = { ...data };
+
+  if (payload.proveedor_id && !payload.proveedor_email) {
+    payload.proveedor_email = await resolverEmailUsuario(payload.proveedor_id);
+  }
+
+  if (!payload.proveedor_nombre && payload.proveedor_id) {
+    payload.proveedor_nombre =
+      (await resolverNombreUsuario(payload.proveedor_id)) || "Proveedor";
+  }
+
+  if (!payload.proveedor_email) {
+    return { error: "No se pudo resolver el email del proveedor" };
+  }
+
+  const importeProveedor = Number(payload.importe_proveedor) || 0;
+  const servicioTitulo = payload.servicio_titulo || "tu servicio";
+
+  const result = await resend.emails.send({
+    from: FROM,
+    to: payload.proveedor_email,
+    subject: "Pago liberado — Home&Heart",
+    html: emailLayout({
+      title: "Pago liberado",
+      bodyHtml: `
+        <h1 style="margin:0 0 16px;font-size:20px;color:${BRAND_PRIMARY};">Se ha liberado tu pago</h1>
+        <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#444;">
+          Hola ${payload.proveedor_nombre}, tras revisar la incidencia de <strong>${servicioTitulo}</strong>,
+          hemos liberado el pago de <strong>${formatEurEmail(importeProveedor)}</strong> a tu cuenta.
+        </p>
+        <p style="margin:0;font-size:14px;line-height:1.6;color:#666;">
+          El importe debería reflejarse en tu cuenta de Stripe en breve. Si tienes dudas, responde a este correo.
+        </p>
+      `,
+    }),
+  });
+
+  if (result.error) {
+    return { error: result.error.message };
+  }
+
+  return { success: true };
+}
+
+async function sendIncidenciaResueltaClienteEmail(data) {
+  const payload = { ...data };
+
+  if (payload.cliente_id && !payload.cliente_email) {
+    payload.cliente_email = await resolverEmailUsuario(payload.cliente_id);
+  }
+
+  if (!payload.cliente_nombre && payload.cliente_id) {
+    payload.cliente_nombre =
+      (await resolverNombreUsuario(payload.cliente_id)) || "Cliente";
+  }
+
+  if (!payload.cliente_email) {
+    return { error: "No se pudo resolver el email del cliente" };
+  }
+
+  const servicioTitulo = payload.servicio_titulo || "tu reserva";
+  const proveedorNombre = payload.proveedor_nombre || "el proveedor";
+
+  const result = await resend.emails.send({
+    from: FROM,
+    to: payload.cliente_email,
+    subject: "Incidencia resuelta — Home&Heart",
+    html: emailLayout({
+      title: "Incidencia resuelta",
+      bodyHtml: `
+        <h1 style="margin:0 0 16px;font-size:20px;color:${BRAND_PRIMARY};">Incidencia resuelta</h1>
+        <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#444;">
+          Hola ${payload.cliente_nombre}, tras revisar el problema con <strong>${servicioTitulo}</strong>,
+          hemos cerrado la incidencia. El servicio se considera prestado correctamente por ${proveedorNombre}.
+        </p>
+        <p style="margin:0;font-size:14px;line-height:1.6;color:#666;">
+          Si tienes alguna duda, responde a este correo o escríbenos desde la app.
+        </p>
+      `,
+    }),
+  });
+
+  if (result.error) {
+    return { error: result.error.message };
+  }
+
+  return { success: true };
+}
+
 async function sendReservaRechazadaEmail(data) {
   const payload = { ...data };
 
@@ -1723,6 +1813,26 @@ export async function POST(request) {
 
     if (tipo === "incidencia_reembolso_cliente") {
       const result = await sendIncidenciaReembolsoClienteEmail(data);
+
+      if (result.error) {
+        return Response.json({ error: result.error }, { status: 400 });
+      }
+
+      return Response.json({ success: true });
+    }
+
+    if (tipo === "incidencia_liberado_proveedor") {
+      const result = await sendIncidenciaLiberadoProveedorEmail(data);
+
+      if (result.error) {
+        return Response.json({ error: result.error }, { status: 400 });
+      }
+
+      return Response.json({ success: true });
+    }
+
+    if (tipo === "incidencia_resuelta_cliente") {
+      const result = await sendIncidenciaResueltaClienteEmail(data);
 
       if (result.error) {
         return Response.json({ error: result.error }, { status: 400 });
