@@ -1,5 +1,6 @@
 import Stripe from "stripe";
 import { getIngresoProveedorFromBooking } from "@/app/lib/ingresos-proveedor";
+import { calcularBoteRepartoIncidencia } from "@/app/lib/incidencia-reparto-bote";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
@@ -171,6 +172,7 @@ export function mapIncidenciaRow(booking, report, stripePi, bundleInfo) {
       : null,
     stripe: stripePi,
     bundle: bundleInfo,
+    reparto: calcularBoteRepartoIncidencia(booking),
     incidencia_desde:
       report?.created_at || booking.completada_at || booking.created_at,
   };

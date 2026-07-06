@@ -59,6 +59,22 @@ function puedeLiberarPagoProveedor(inc) {
   return inc.estado === "incidencia" && !stripePagoYaLiberado(inc.stripe?.status);
 }
 
+function puedeRepartoIncidencia(inc) {
+  return inc.estado === "incidencia" && !inc.bundle?.is_bundle;
+}
+
+function parseEuroInput(value) {
+  const n = Number(String(value).replace(",", "."));
+  return Number.isFinite(n) ? n : NaN;
+}
+
+function repartoSumaValida(inc, importeCliente, importeProveedor) {
+  const bote = inc.reparto?.bote ?? inc.ingreso_proveedor_estimado ?? 0;
+  if (Number.isNaN(importeCliente) || Number.isNaN(importeProveedor)) return false;
+  if (importeCliente < 0 || importeProveedor < 0) return false;
+  return Math.abs(importeCliente + importeProveedor - bote) <= 0.01;
+}
+
 const BLOG_CATEGORIAS_ADMIN = [
   "familias",
   "mascotas",
@@ -327,6 +343,11 @@ export default function AdminPage() {
   const [liberarModalInc, setLiberarModalInc] = useState(null);
   const [liberarNota, setLiberarNota] = useState("");
   const [liberarModalError, setLiberarModalError] = useState("");
+  const [repartoModalInc, setRepartoModalInc] = useState(null);
+  const [repartoCliente, setRepartoCliente] = useState("");
+  const [repartoProveedor, setRepartoProveedor] = useState("");
+  const [repartoNota, setRepartoNota] = useState("");
+  const [repartoModalError, setRepartoModalError] = useState("");
   const [reports, setReports] = useState([]);
   const [lateCancellations, setLateCancellations] = useState([]);
   const [blogPosts, setBlogPosts] = useState([]);
@@ -667,6 +688,128 @@ export default function AdminPage() {
       !result.error && !response.ok ? `HTTP ${response.status}` : null,
     ].filter(Boolean);
     return parts.join(" — ") || "Error al liberar el pago al proveedor.";
+  }
+
+  async function handleRepartoConfirm() {
+    if (!repartoModalInc) return;
+
+    const ic = parseEuroInput(repartoCliente);
+    const ip = parseEuroInput(repartoProveedor);
+
+    if (!repartoSumaValida(repartoModalInc, ic, ip)) {
+      const msg = "Cliente + proveedor deben sumar exactamente el bote a repartir.";
+      setRepartoModalError(msg);
+      setErrorMessage(msg);
+      return;
+    }
+
+    const bote =
+      repartoModalInc.reparto?.bote ?? repartoModalInc.ingreso_proveedor_estimado ?? 0;
+    const confirmMsg = [
+      "¿Confirmar reparto?",
+      "",
+      `Al cliente: ${formatEuroAdmin(ic)}`,
+      `Al proveedor: ${formatEuroAdmin(ip)}`,
+      `Bote repartido: ${formatEuroAdmin(bote)}`,
+      "",
+      "H&H retiene sus comisiones fijas.",
+    ].join("\n");
+
+    if (!window.confirm(confirmMsg)) {
+      return;
+    }
+
+    setActionLoading(repartoModalInc.id);
+    setErrorMessage("");
+    setSuccessMessage("");
+    setRepartoModalError("");
+
+    try {
+      const response = await fetch("/api/admin/incidencias/reparto", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({
+          bookingId: repartoModalInc.id,
+          importeCliente: ic,
+          importeProveedor: ip,
+          nota: repartoNota.trim() || undefined,
+        }),
+      });
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        const parts = [
+          result.step ? `[${result.step}]` : null,
+          result.error,
+          result.hint,
+          result.stripe?.stripe_error,
+        ].filter(Boolean);
+        const msg = parts.join(" — ") || "Error al ejecutar el reparto.";
+        console.error("[admin] reparto failed", { status: response.status, result });
+        setRepartoModalError(msg);
+        setErrorMessage(msg);
+        window.alert(`Error en reparto:\n\n${msg}`);
+        return;
+      }
+
+      setRepartoModalInc(null);
+      setRepartoCliente("");
+      setRepartoProveedor("");
+      setRepartoNota("");
+      setRepartoModalError("");
+      setSuccessMessage(
+        result.already_processed
+          ? "Esta incidencia ya tenía un reparto aplicado."
+          : `Reparto aplicado: ${formatEuroAdmin(result.importe_cliente)} al cliente, ${formatEuroAdmin(result.importe_proveedor)} al proveedor.`,
+      );
+      await loadData();
+    } catch (err) {
+      const msg = err?.message || "Error de red al contactar con el servidor.";
+      setRepartoModalError(msg);
+      setErrorMessage(msg);
+      window.alert(`Error en reparto:\n\n${msg}`);
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  function openRepartoModal(inc) {
+    const bote = inc.reparto?.bote ?? inc.ingreso_proveedor_estimado ?? 0;
+    const mitad = Math.round((bote / 2) * 100) / 100;
+    setRepartoModalInc(inc);
+    setRepartoCliente(String(mitad));
+    setRepartoProveedor(String(Math.round((bote - mitad) * 100) / 100));
+    setRepartoNota("");
+    setRepartoModalError("");
+  }
+
+  function applyRepartoMitadMitad() {
+    if (!repartoModalInc) return;
+    const bote = repartoModalInc.reparto?.bote ?? repartoModalInc.ingreso_proveedor_estimado ?? 0;
+    const mitad = Math.round((bote / 2) * 100) / 100;
+    setRepartoCliente(String(mitad));
+    setRepartoProveedor(String(Math.round((bote - mitad) * 100) / 100));
+  }
+
+  function onRepartoClienteChange(value) {
+    setRepartoCliente(value);
+    if (!repartoModalInc) return;
+    const bote = repartoModalInc.reparto?.bote ?? repartoModalInc.ingreso_proveedor_estimado ?? 0;
+    const ic = parseEuroInput(value);
+    if (!Number.isNaN(ic)) {
+      setRepartoProveedor(String(Math.max(0, Math.round((bote - ic) * 100) / 100)));
+    }
+  }
+
+  function onRepartoProveedorChange(value) {
+    setRepartoProveedor(value);
+    if (!repartoModalInc) return;
+    const bote = repartoModalInc.reparto?.bote ?? repartoModalInc.ingreso_proveedor_estimado ?? 0;
+    const ip = parseEuroInput(value);
+    if (!Number.isNaN(ip)) {
+      setRepartoCliente(String(Math.max(0, Math.round((bote - ip) * 100) / 100)));
+    }
   }
 
   async function handleLiberarProveedorConfirm() {
@@ -1550,6 +1693,181 @@ export default function AdminPage() {
               Reservas con conflicto abierto. Revisa el pago en Stripe antes de resolver.
             </p>
 
+            {repartoModalInc && (
+              <div
+                className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="reparto-modal-title"
+              >
+                <div
+                  className="w-full max-w-lg rounded-2xl border bg-white p-6 shadow-xl"
+                  style={{ borderColor: BRAND.border }}
+                >
+                  <h3
+                    id="reparto-modal-title"
+                    className="text-lg font-semibold text-[#1a1a1a]"
+                  >
+                    Reparto / reembolso parcial
+                  </h3>
+                  <p className="mt-2 text-sm leading-relaxed text-[#666]">
+                    H&H retiene sus comisiones fijas. El resto (bote) se reparte entre cliente y
+                    proveedor.
+                  </p>
+
+                  <div
+                    className="mt-4 rounded-xl border p-4 text-sm"
+                    style={{ borderColor: BRAND.border, backgroundColor: "#f7f5f2" }}
+                  >
+                    <div className="flex justify-between">
+                      <span className="text-[#666]">Total pagado</span>
+                      <span className="font-semibold">
+                        {formatEuroAdmin(repartoModalInc.reparto?.precio_total ?? repartoModalInc.precio_total)}
+                      </span>
+                    </div>
+                    <div className="mt-1 flex justify-between text-xs text-[#888]">
+                      <span>Comisión cliente (H&H)</span>
+                      <span>
+                        {formatEuroAdmin(repartoModalInc.reparto?.comision_cliente ?? 0)}
+                      </span>
+                    </div>
+                    <div className="mt-0.5 flex justify-between text-xs text-[#888]">
+                      <span>Comisión proveedor (H&H)</span>
+                      <span>
+                        {formatEuroAdmin(repartoModalInc.reparto?.comision_proveedor ?? 0)}
+                      </span>
+                    </div>
+                    <div className="mt-2 flex justify-between border-t pt-2" style={{ borderColor: BRAND.border }}>
+                      <span className="font-semibold text-[#1a1a1a]">Bote a repartir</span>
+                      <span className="font-bold" style={{ color: BRAND.primary }}>
+                        {formatEuroAdmin(
+                          repartoModalInc.reparto?.bote ??
+                            repartoModalInc.ingreso_proveedor_estimado,
+                        )}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    <label className="block">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-[#888]">
+                        Importe al cliente
+                      </span>
+                      <input
+                        type="number"
+                        min={0}
+                        step={0.01}
+                        value={repartoCliente}
+                        onChange={(e) => onRepartoClienteChange(e.target.value)}
+                        className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
+                        style={{ borderColor: BRAND.border }}
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-[#888]">
+                        Importe al proveedor
+                      </span>
+                      <input
+                        type="number"
+                        min={0}
+                        step={0.01}
+                        value={repartoProveedor}
+                        onChange={(e) => onRepartoProveedorChange(e.target.value)}
+                        className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
+                        style={{ borderColor: BRAND.border }}
+                      />
+                    </label>
+                  </div>
+
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={applyRepartoMitadMitad}
+                      className="rounded-lg border px-3 py-1 text-xs font-medium text-[#666]"
+                      style={{ borderColor: BRAND.border }}
+                    >
+                      Mitad y mitad
+                    </button>
+                    {(() => {
+                      const bote =
+                        repartoModalInc.reparto?.bote ??
+                        repartoModalInc.ingreso_proveedor_estimado ??
+                        0;
+                      const ic = parseEuroInput(repartoCliente);
+                      const ip = parseEuroInput(repartoProveedor);
+                      const ok = repartoSumaValida(repartoModalInc, ic, ip);
+                      return (
+                        <span
+                          className={`text-xs ${ok ? "text-emerald-700" : "text-amber-700"}`}
+                        >
+                          {ok
+                            ? `Suma: ${formatEuroAdmin(ic + ip)} = bote ✓`
+                            : `Deben sumar exactamente ${formatEuroAdmin(bote)} (actual: ${Number.isNaN(ic + ip) ? "—" : formatEuroAdmin(ic + ip)})`}
+                        </span>
+                      );
+                    })()}
+                  </div>
+
+                  {repartoModalError && (
+                    <p
+                      className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"
+                      role="alert"
+                    >
+                      {repartoModalError}
+                    </p>
+                  )}
+
+                  <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-[#888]">
+                    Nota interna (opcional)
+                  </label>
+                  <textarea
+                    value={repartoNota}
+                    onChange={(e) => setRepartoNota(e.target.value)}
+                    rows={2}
+                    className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
+                    style={{ borderColor: BRAND.border }}
+                    placeholder="Motivo o contexto para auditoría"
+                  />
+
+                  <div className="mt-5 flex flex-wrap justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRepartoModalInc(null);
+                        setRepartoCliente("");
+                        setRepartoProveedor("");
+                        setRepartoNota("");
+                        setRepartoModalError("");
+                      }}
+                      className="rounded-xl border px-4 py-2 text-sm font-medium text-[#666]"
+                      style={{ borderColor: BRAND.border }}
+                      disabled={actionLoading === repartoModalInc.id}
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleRepartoConfirm}
+                      disabled={
+                        actionLoading === repartoModalInc.id ||
+                        !repartoSumaValida(
+                          repartoModalInc,
+                          parseEuroInput(repartoCliente),
+                          parseEuroInput(repartoProveedor),
+                        )
+                      }
+                      className="rounded-xl px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                      style={{ backgroundColor: "#7c3aed" }}
+                    >
+                      {actionLoading === repartoModalInc.id
+                        ? "Procesando…"
+                        : "Confirmar reparto"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {liberarModalInc && (
               <div
                 className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
@@ -1917,6 +2235,17 @@ export default function AdminPage() {
                             </p>
                           )}
                           <div className="flex flex-wrap gap-2">
+                            {puedeRepartoIncidencia(inc) && (
+                              <button
+                                type="button"
+                                onClick={() => openRepartoModal(inc)}
+                                disabled={actionLoading === inc.id}
+                                className="rounded-xl px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                                style={{ backgroundColor: "#7c3aed" }}
+                              >
+                                Reparto / reembolso parcial
+                              </button>
+                            )}
                             {puedeLiberarPagoProveedor(inc) && (
                               <button
                                 type="button"

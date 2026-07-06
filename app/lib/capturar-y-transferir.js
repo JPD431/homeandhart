@@ -4,6 +4,9 @@ import {
   getIngresoProveedorDesdeBase,
   roundMoney,
 } from "@/app/lib/ingresos-proveedor";
+import { calcularCapturaRepartoCents, validarCapturaRepartoStripe } from "@/app/lib/incidencia-reparto-bote";
+import { ejecutarTransferProveedorConDeudaSaldo } from "@/app/lib/transfer-proveedor";
+import { CANCELABLE_PI_STATUSES } from "@/app/lib/stripe-reembolso";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
@@ -421,5 +424,227 @@ export async function capturarYTransferirPago(
             "Una o más transferencias obligatorias fallaron; pago_liberado_at no marcado en esas reservas",
         }
       : {}),
+  };
+}
+
+async function loadProveedorParaTransfer(supabase, serviceId) {
+  const { data: service, error } = await supabase
+    .from("services")
+    .select(
+      `
+      proveedor_id,
+      profiles!proveedor_id (
+        id,
+        stripe_account_id,
+        deuda_pendiente,
+        saldo_pendiente_transferir,
+        cobros_activos
+      )
+    `,
+    )
+    .eq("id", serviceId)
+    .maybeSingle();
+
+  if (error || !service?.proveedor_id) {
+    return { error: error?.message || "Servicio o proveedor no encontrado" };
+  }
+
+  return {
+    proveedorId: service.proveedor_id,
+    stripeAccountId: service.profiles?.stripe_account_id,
+    profile: service.profiles,
+  };
+}
+
+/**
+ * Reparto en incidencia: captura parcial (total tarjeta − devolución cliente) y transfiere P al proveedor.
+ * H&H retiene comisiones fijas; importe_cliente queda sin capturar en tarjeta.
+ */
+export async function capturarRepartoIncidencia(
+  supabase,
+  paymentIntentId,
+  {
+    bookingId,
+    serviceId,
+    importeProveedor,
+    importeTarjeta,
+    tarjetaCliente,
+    comisionHHTotal,
+    creditoAplicado = 0,
+    logPrefix = "[capturar-reparto]",
+  },
+  { idempotencyKey } = {},
+) {
+  const stripeOpts = idempotencyKey ? { idempotencyKey } : undefined;
+
+  if (!paymentIntentId) {
+    return { success: false, error: "Falta paymentIntentId" };
+  }
+
+  const { data: bookingRow } = await supabase
+    .from("bookings")
+    .select("pago_liberado_at, importe_transferido, proveedor_sin_comision")
+    .eq("id", bookingId)
+    .maybeSingle();
+
+  if (bookingRow?.pago_liberado_at) {
+    return {
+      success: true,
+      already_processed: true,
+      importe_transferido: bookingRow.importe_transferido,
+    };
+  }
+
+  let paymentIntent;
+  try {
+    paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+  } catch (err) {
+    return { success: false, error: err?.message ?? String(err) };
+  }
+
+  const piStatus = paymentIntent.status;
+
+  if (piStatus === "canceled") {
+    return {
+      success: false,
+      error: "El pago ya está liberado al cliente, no se puede repartir.",
+      pi_status: piStatus,
+    };
+  }
+
+  const piAmountCents = paymentIntent.amount;
+  const amountToCaptureCents = calcularCapturaRepartoCents(
+    importeTarjeta,
+    tarjetaCliente,
+    piAmountCents,
+  );
+
+  const capturaCheck = validarCapturaRepartoStripe(
+    amountToCaptureCents,
+    importeProveedor,
+    piAmountCents,
+  );
+
+  if (!capturaCheck.ok) {
+    return {
+      success: false,
+      error: capturaCheck.error,
+      pi_status: piStatus,
+      amount_captured_cents: amountToCaptureCents,
+    };
+  }
+
+  const cancelPiOnly = capturaCheck.action === "cancel_pi";
+
+  let chargeId = paymentIntent.latest_charge;
+
+  if (CANCELABLE_PI_STATUSES.has(piStatus)) {
+    try {
+      if (cancelPiOnly || amountToCaptureCents <= 0) {
+        await stripe.paymentIntents.cancel(paymentIntentId, {}, stripeOpts);
+        chargeId = null;
+      } else if (amountToCaptureCents >= piAmountCents) {
+        const captured = await stripe.paymentIntents.capture(
+          paymentIntentId,
+          {},
+          stripeOpts,
+        );
+        chargeId = captured.latest_charge;
+      } else {
+        const captured = await stripe.paymentIntents.capture(
+          paymentIntentId,
+          { amount_to_capture: amountToCaptureCents },
+          stripeOpts,
+        );
+        chargeId = captured.latest_charge;
+      }
+    } catch (err) {
+      return {
+        success: false,
+        error: err?.message ?? String(err),
+        pi_status: piStatus,
+        stripe_code: err?.code,
+      };
+    }
+  } else if (piStatus === "succeeded") {
+    return {
+      success: false,
+      error: "PI ya capturado: usar flujo de refund parcial.",
+      pi_status: piStatus,
+      requires_refund_path: true,
+    };
+  } else {
+    return {
+      success: false,
+      error: `Estado del PaymentIntent no manejado para reparto: ${piStatus}`,
+      pi_status: piStatus,
+    };
+  }
+
+  const capturadoNeto = roundMoney(amountToCaptureCents / 100);
+  let transferSummary = null;
+
+  if (importeProveedor > 0) {
+    const proveedorInfo = await loadProveedorParaTransfer(supabase, serviceId);
+    if (proveedorInfo.error) {
+      return { success: false, error: proveedorInfo.error };
+    }
+
+    const usePlatformBalance =
+      creditoAplicado > 0 ||
+      roundMoney(importeProveedor) > capturadoNeto;
+
+    transferSummary = await ejecutarTransferProveedorConDeudaSaldo({
+      stripe,
+      supabase,
+      proveedorId: proveedorInfo.proveedorId,
+      stripeAccountId: proveedorInfo.stripeAccountId,
+      profile: proveedorInfo.profile,
+      amountBruto: importeProveedor,
+      chargeId: usePlatformBalance ? null : chargeId,
+      usePlatformBalance,
+      logPrefix,
+    });
+
+    if (!transferSummary.success) {
+      return {
+        success: false,
+        error: transferSummary.error || "Error al transferir al proveedor.",
+        transfer: transferSummary,
+        capturado_neto: capturadoNeto,
+      };
+    }
+
+    await supabase
+      .from("bookings")
+      .update({
+        importe_transferido: roundMoney(importeProveedor),
+        ...(bookingRow?.proveedor_sin_comision != null
+          ? { proveedor_sin_comision: bookingRow.proveedor_sin_comision }
+          : {}),
+      })
+      .eq("id", bookingId);
+  }
+
+  const liberadoAt = new Date().toISOString();
+  await supabase
+    .from("bookings")
+    .update({ pago_liberado_at: liberadoAt })
+    .eq("id", bookingId);
+
+  return {
+    success: true,
+    already_processed: false,
+    pi_status: piStatus,
+    stripe_action: cancelPiOnly
+      ? "cancel"
+      : amountToCaptureCents >= piAmountCents
+        ? "capture"
+        : "capture_parcial",
+    amount_captured_cents: amountToCaptureCents,
+    capturado_neto: capturadoNeto,
+    importe_proveedor: roundMoney(importeProveedor),
+    transfer: transferSummary,
+    pago_liberado_at: liberadoAt,
   };
 }
