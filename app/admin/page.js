@@ -308,6 +308,8 @@ export default function AdminPage() {
   const [errorMessage, setErrorMessage] = useState("");
   const [completedBookings, setCompletedBookings] = useState([]);
   const [incidencias, setIncidencias] = useState([]);
+  const [reembolsoModalInc, setReembolsoModalInc] = useState(null);
+  const [reembolsoNota, setReembolsoNota] = useState("");
   const [reports, setReports] = useState([]);
   const [lateCancellations, setLateCancellations] = useState([]);
   const [blogPosts, setBlogPosts] = useState([]);
@@ -621,6 +623,43 @@ export default function AdminPage() {
       estado === "resuelto"
         ? "Reporte marcado como resuelto."
         : "Reporte desestimado.",
+    );
+    await loadData();
+  }
+
+  async function handleReembolsoTotalConfirm() {
+    if (!reembolsoModalInc) return;
+
+    setActionLoading(reembolsoModalInc.id);
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    const response = await fetch("/api/admin/incidencias/reembolso-total", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        bookingId: reembolsoModalInc.id,
+        nota: reembolsoNota.trim() || undefined,
+      }),
+    });
+    const result = await response.json().catch(() => ({}));
+
+    setActionLoading(null);
+
+    if (!response.ok) {
+      setErrorMessage(result.error || "Error al procesar el reembolso.");
+      return;
+    }
+
+    const importeReembolsado =
+      result.reembolso?.bruto ?? reembolsoModalInc.precio_total;
+
+    setReembolsoModalInc(null);
+    setReembolsoNota("");
+    setSuccessMessage(
+      result.already_processed
+        ? "Esta incidencia ya tenía un reembolso total aplicado."
+        : `Reembolso total aplicado: ${formatEuroAdmin(importeReembolsado)} al cliente.`,
     );
     await loadData();
   }
@@ -1393,9 +1432,88 @@ export default function AdminPage() {
         ) : activeTab === "incidencias" ? (
           <div className="mt-6">
             <p className="mb-4 text-sm text-[#666]">
-              Reservas con conflicto abierto. Consulta el estado del pago en Stripe antes de
-              resolver (acciones de dinero en fases posteriores).
+              Reservas con conflicto abierto. Revisa el pago en Stripe antes de resolver.
             </p>
+
+            {reembolsoModalInc && (
+              <div
+                className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="reembolso-modal-title"
+              >
+                <div
+                  className="w-full max-w-md rounded-2xl border bg-white p-6 shadow-xl"
+                  style={{ borderColor: BRAND.border }}
+                >
+                  <h3
+                    id="reembolso-modal-title"
+                    className="text-lg font-semibold text-[#1a1a1a]"
+                  >
+                    ¿Reembolsar todo al cliente?
+                  </h3>
+                  <p className="mt-2 text-sm leading-relaxed text-[#666]">
+                    Se devolverán{" "}
+                    <strong>{formatEuroAdmin(reembolsoModalInc.precio_total)}</strong> al
+                    cliente por{" "}
+                    <strong>{reembolsoModalInc.servicio.titulo}</strong>
+                    {reembolsoModalInc.credito_aplicado > 0 && (
+                      <>
+                        {" "}
+                        (incl. {formatEuroAdmin(reembolsoModalInc.credito_aplicado)} a
+                        crédito)
+                      </>
+                    )}
+                    . La reserva quedará como incidencia resuelta.
+                  </p>
+                  {reembolsoModalInc.bundle?.is_bundle && (
+                    <p
+                      className="mt-3 rounded-lg border px-3 py-2 text-xs leading-relaxed text-[#92400e]"
+                      style={{ borderColor: "#fcd34d", backgroundColor: "#fffbeb" }}
+                    >
+                      Bundle: solo se reembolsa este servicio. Si el pago estaba retenido,
+                      el resto del PaymentIntent se capturará para las otras verticales.
+                    </p>
+                  )}
+                  <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-[#888]">
+                    Nota interna (opcional)
+                  </label>
+                  <textarea
+                    value={reembolsoNota}
+                    onChange={(e) => setReembolsoNota(e.target.value)}
+                    rows={2}
+                    className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
+                    style={{ borderColor: BRAND.border }}
+                    placeholder="Motivo o contexto para auditoría"
+                  />
+                  <div className="mt-5 flex flex-wrap justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setReembolsoModalInc(null);
+                        setReembolsoNota("");
+                      }}
+                      className="rounded-xl border px-4 py-2 text-sm font-medium text-[#666]"
+                      style={{ borderColor: BRAND.border }}
+                      disabled={actionLoading === reembolsoModalInc.id}
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleReembolsoTotalConfirm}
+                      disabled={actionLoading === reembolsoModalInc.id}
+                      className="rounded-xl px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                      style={{ backgroundColor: "#b91c1c" }}
+                    >
+                      {actionLoading === reembolsoModalInc.id
+                        ? "Procesando…"
+                        : "Confirmar reembolso total"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {incidencias.length === 0 ? (
               <p
@@ -1561,6 +1679,25 @@ export default function AdminPage() {
                               ))}
                             </ul>
                           )}
+                        </div>
+                      )}
+
+                      {["requires_capture", "succeeded", "processing"].includes(
+                        inc.stripe?.status,
+                      ) && (
+                        <div className="mt-4 flex flex-wrap gap-2 border-t pt-4" style={{ borderColor: BRAND.border }}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setReembolsoNota("");
+                              setReembolsoModalInc(inc);
+                            }}
+                            disabled={actionLoading === inc.id}
+                            className="rounded-xl px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                            style={{ backgroundColor: "#b91c1c" }}
+                          >
+                            Reembolsar todo al cliente
+                          </button>
                         </div>
                       )}
                     </li>

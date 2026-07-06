@@ -974,6 +974,64 @@ async function sendReservaCanceladaClienteEmail(data) {
   return { success: true };
 }
 
+async function sendIncidenciaReembolsoClienteEmail(data) {
+  const payload = { ...data };
+
+  if (payload.cliente_id && !payload.cliente_email) {
+    payload.cliente_email = await resolverEmailUsuario(payload.cliente_id);
+  }
+
+  if (!payload.cliente_nombre && payload.cliente_id) {
+    payload.cliente_nombre =
+      (await resolverNombreUsuario(payload.cliente_id)) || "Cliente";
+  }
+
+  if (!payload.cliente_email) {
+    return { error: "No se pudo resolver el email del cliente" };
+  }
+
+  const reembolsoTotal = Number(payload.reembolso_total) || 0;
+  const reembolsoTarjeta = Number(payload.reembolso_tarjeta) || 0;
+  const reembolsoCredito = Number(payload.reembolso_credito) || 0;
+  const servicioTitulo = payload.servicio_titulo || "tu reserva";
+  const fechas =
+    payload.fecha_fin && payload.fecha_fin !== payload.fecha_inicio
+      ? `${payload.fecha_inicio} — ${payload.fecha_fin}`
+      : payload.fecha_inicio || "";
+
+  let detalleReembolso = `te hemos reembolsado <strong>${formatEurEmail(reembolsoTotal)}</strong>`;
+  if (reembolsoCredito > 0 && reembolsoTarjeta > 0) {
+    detalleReembolso = `te hemos devuelto <strong>${formatEurEmail(reembolsoTarjeta)}</strong> a tu tarjeta y <strong>${formatEurEmail(reembolsoCredito)}</strong> a tu saldo de crédito`;
+  } else if (reembolsoCredito > 0) {
+    detalleReembolso = `hemos devuelto <strong>${formatEurEmail(reembolsoCredito)}</strong> a tu saldo de crédito`;
+  }
+
+  const result = await resend.emails.send({
+    from: FROM,
+    to: payload.cliente_email,
+    subject: "Incidencia resuelta — reembolso en Home&Heart",
+    html: emailLayout({
+      title: "Incidencia resuelta",
+      bodyHtml: `
+        <h1 style="margin:0 0 16px;font-size:20px;color:${BRAND_PRIMARY};">Hemos resuelto tu incidencia</h1>
+        <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#444;">
+          Hola ${payload.cliente_nombre}, tras revisar el problema con <strong>${servicioTitulo}</strong>${fechas ? ` (${fechas})` : ""},
+          ${detalleReembolso}.
+        </p>
+        <p style="margin:0;font-size:14px;line-height:1.6;color:#666;">
+          Si tienes alguna duda, responde a este correo o escríbenos desde la app.
+        </p>
+      `,
+    }),
+  });
+
+  if (result.error) {
+    return { error: result.error.message };
+  }
+
+  return { success: true };
+}
+
 async function sendReservaRechazadaEmail(data) {
   const payload = { ...data };
 
@@ -1655,6 +1713,16 @@ export async function POST(request) {
 
     if (tipo === "reserva_cancelada_cliente") {
       const result = await sendReservaCanceladaClienteEmail(data);
+
+      if (result.error) {
+        return Response.json({ error: result.error }, { status: 400 });
+      }
+
+      return Response.json({ success: true });
+    }
+
+    if (tipo === "incidencia_reembolso_cliente") {
+      const result = await sendIncidenciaReembolsoClienteEmail(data);
 
       if (result.error) {
         return Response.json({ error: result.error }, { status: 400 });

@@ -9,6 +9,13 @@ import {
 import { calcularRepartoCancelacionCliente } from "@/app/lib/cancelacion-cliente-reparto";
 import { ejecutarTransferProveedorConDeudaSaldo } from "@/app/lib/transfer-proveedor";
 import { getProveedorFromService } from "@/app/lib/service-bookable";
+import {
+  aplicarReembolsoStripeBooking,
+  CANCELABLE_PI_STATUSES,
+  contarBookingsPorPaymentIntent,
+  devolverCreditoCliente,
+  roundMoney,
+} from "@/app/lib/stripe-reembolso";
 
 const supabaseAdmin = createServiceClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -18,114 +25,6 @@ const supabaseAdmin = createServiceClient(
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 const ESTADOS_CANCELABLES = new Set(["pendiente", "confirmada"]);
-
-/** PI pre-captura: cancel o capture parcial liberan el resto. */
-const CANCELABLE_PI_STATUSES = new Set([
-  "requires_capture",
-  "requires_confirmation",
-  "requires_action",
-  "requires_payment_method",
-  "processing",
-]);
-
-function roundMoney(amount) {
-  return Math.round(Number(amount) * 100) / 100;
-}
-
-async function devolverCreditoCliente(clienteId, importe) {
-  if (!importe || importe <= 0) return;
-
-  try {
-    const { data: profile, error: readError } = await supabaseAdmin
-      .from("profiles")
-      .select("credito_disponible")
-      .eq("id", clienteId)
-      .maybeSingle();
-
-    if (readError || !profile) {
-      console.error(
-        "[bookings/cancelar-cliente] No se pudo leer credito_disponible:",
-        readError?.message || "Perfil no encontrado",
-        { clienteId },
-      );
-      return;
-    }
-
-    const actual = Number(profile.credito_disponible) || 0;
-    const { error: updateError } = await supabaseAdmin
-      .from("profiles")
-      .update({ credito_disponible: roundMoney(actual + importe) })
-      .eq("id", clienteId);
-
-    if (updateError) {
-      console.error(
-        "[bookings/cancelar-cliente] No se pudo devolver credito_disponible:",
-        updateError,
-        { clienteId, importe },
-      );
-    }
-  } catch (err) {
-    console.error(
-      "[bookings/cancelar-cliente] No se pudo devolver credito_disponible:",
-      err,
-      { clienteId, importe },
-    );
-  }
-}
-
-/**
- * Reembolso Stripe — solo reserva única con ese payment_intent_id.
- * requires_capture: cancel (100% tarjeta) o capture parcial (libera reembolsoTarjeta).
- * succeeded: refund parcial por reembolsoTarjeta.
- */
-async function aplicarReembolsoStripeSingleBooking(
-  paymentIntentId,
-  reembolsoTarjeta,
-) {
-  const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
-  const { status, amount: piAmountCents } = paymentIntent;
-
-  if (reembolsoTarjeta <= 0) {
-    return { stripe_ok: true };
-  }
-
-  const reembolsoCents = Math.round(reembolsoTarjeta * 100);
-
-  if (CANCELABLE_PI_STATUSES.has(status)) {
-    if (reembolsoCents >= piAmountCents) {
-      await stripe.paymentIntents.cancel(paymentIntentId);
-      return { stripe_ok: true };
-    }
-
-    const amountToCapture = piAmountCents - reembolsoCents;
-    if (amountToCapture <= 0) {
-      await stripe.paymentIntents.cancel(paymentIntentId);
-      return { stripe_ok: true };
-    }
-
-    await stripe.paymentIntents.capture(paymentIntentId, {
-      amount_to_capture: amountToCapture,
-    });
-    return { stripe_ok: true };
-  }
-
-  if (status === "succeeded") {
-    await stripe.refunds.create({
-      payment_intent: paymentIntentId,
-      amount: reembolsoCents,
-    });
-    return { stripe_ok: true };
-  }
-
-  if (status === "canceled") {
-    return { stripe_ok: true };
-  }
-
-  return {
-    stripe_ok: false,
-    stripe_error: `Estado del PaymentIntent no manejado: ${status}`,
-  };
-}
 
 async function calcularYAplicarReembolso(booking, service) {
   const sinReembolso = {
@@ -170,7 +69,12 @@ async function calcularYAplicarReembolso(booking, service) {
 
   const reembolsoTarjeta = roundMoney(reembolsoBruto - reembolsoCredito);
 
-  await devolverCreditoCliente(booking.cliente_id, reembolsoCredito);
+  await devolverCreditoCliente(
+    supabaseAdmin,
+    booking.cliente_id,
+    reembolsoCredito,
+    "[bookings/cancelar-cliente]",
+  );
 
   let stripe_ok = true;
   let stripe_error;
@@ -180,6 +84,7 @@ async function calcularYAplicarReembolso(booking, service) {
       let bookingsEnGrupo = 1;
       try {
         bookingsEnGrupo = await contarBookingsPorPaymentIntent(
+          supabaseAdmin,
           booking.payment_intent_id,
         );
       } catch (grupoError) {
@@ -198,7 +103,8 @@ async function calcularYAplicarReembolso(booking, service) {
           booking.payment_intent_id,
           bookingsEnGrupo,
         );
-        const stripeResult = await aplicarReembolsoStripeSingleBooking(
+        const stripeResult = await aplicarReembolsoStripeBooking(
+          stripe,
           booking.payment_intent_id,
           reembolsoTarjeta,
         );
@@ -228,21 +134,6 @@ async function calcularYAplicarReembolso(booking, service) {
     stripe_ok,
     ...(stripe_error ? { stripe_error } : {}),
   };
-}
-
-async function contarBookingsPorPaymentIntent(paymentIntentId) {
-  if (!paymentIntentId) return 1;
-
-  const { data, error } = await supabaseAdmin
-    .from("bookings")
-    .select("id")
-    .eq("payment_intent_id", paymentIntentId);
-
-  if (error) {
-    throw error;
-  }
-
-  return data?.length ?? 0;
 }
 
 /** Salvaguarda legacy: 1 PI por booking en reservas nuevas; si count > 1, solo avisar. */
@@ -345,6 +236,7 @@ async function aplicarCompensacionProveedorCancelacionCliente(
   let bookingsEnGrupo = 1;
   try {
     bookingsEnGrupo = await contarBookingsPorPaymentIntent(
+      supabaseAdmin,
       booking.payment_intent_id,
     );
   } catch (err) {
