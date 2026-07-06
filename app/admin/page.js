@@ -3,7 +3,9 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Navbar from "@/app/components/Navbar";
-import AdminProviderDocuments from "@/app/components/admin/AdminProviderDocuments";
+import AdminProviderDocuments, {
+  getMissingMandatoryDocumentsSummary,
+} from "@/app/components/admin/AdminProviderDocuments";
 import { BRAND, SERIF } from "@/app/components/brand";
 import { articulosIniciales, slugify } from "@/app/lib/blog-seed";
 import { getIngresoProveedorFromBooking } from "@/app/lib/ingresos-proveedor";
@@ -2275,6 +2277,11 @@ export default function AdminPage() {
               const isRequestingDocs = requestingDocsId === provider.id;
               const isBusy = actionLoading === provider.id;
               const hasAlojamiento = services.some((s) => s.vertical === "alojamiento");
+              const docSummary = getMissingMandatoryDocumentsSummary(
+                provider,
+                provider.providerDocuments ?? [],
+                services,
+              );
               const availableDocuments = REQUESTABLE_DOCUMENTS.filter(
                 (doc) => !doc.alojamientoOnly || hasAlojamiento,
               );
@@ -2311,6 +2318,23 @@ export default function AdminPage() {
                         >
                           {provider.verificado ? "Verificado ✓" : "Pendiente de verificar"}
                         </span>
+                        {docSummary.missingCount > 0 && (
+                          <span
+                            className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                            style={{
+                              backgroundColor:
+                                provider.verificado && provider.rechazado !== true
+                                  ? "#fdf4e7"
+                                  : "#fef2f2",
+                              color:
+                                provider.verificado && provider.rechazado !== true
+                                  ? "#92400e"
+                                  : "#b91c1c",
+                            }}
+                          >
+                            Docs incompletos ({docSummary.missingCount})
+                          </span>
+                        )}
                       </div>
                       {provider.email_contacto && (
                         <p className="mt-0.5 text-sm text-[#666]">

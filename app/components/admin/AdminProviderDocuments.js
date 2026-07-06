@@ -37,6 +37,74 @@ function isMandatoryDefinition(def) {
   return def.required || def.requiredForPublish;
 }
 
+/** @returns {'pending' | 'verified' | 'rejected'} */
+function getProviderReviewState(profile) {
+  if (profile?.rechazado === true) return "rejected";
+  if (profile?.verificado === true) return "verified";
+  return "pending";
+}
+
+/**
+ * Resumen de obligatorios faltantes (misma lógica que la vista; exportado para el badge).
+ * @param {Object} profile
+ * @param {Array} providerDocuments
+ * @param {Array} services
+ */
+export function getMissingMandatoryDocumentsSummary(
+  profile,
+  providerDocuments = [],
+  services = [],
+) {
+  const verticales = [
+    ...new Set((services || []).map((s) => s.vertical).filter(Boolean)),
+  ];
+  const context = { profile, providerDocuments, services };
+  const mandatory = getApplicableDocuments(verticales).filter(isMandatoryDefinition);
+  const missingMandatory = mandatory.filter(
+    (def) => !getDocumentStatus(def.id, context, verticales).uploaded,
+  );
+
+  return {
+    missingMandatory,
+    missingCount: missingMandatory.length,
+    missingNruPdf: missingMandatory.some((d) => d.id === "nru_comprobante"),
+    hasAlojamiento: verticales.includes("alojamiento"),
+    verticales,
+  };
+}
+
+function buildMissingDocsBanner(reviewState, missingMandatory) {
+  const labels = missingMandatory.map((d) => d.label).join(", ");
+  const count = missingMandatory.length;
+
+  if (reviewState === "verified") {
+    return {
+      tone: "amber",
+      title: "Verificado ✓.",
+      body: `En el sistema no constan algunos documentos (${labels}); puede haberse verificado manualmente.`,
+    };
+  }
+
+  if (reviewState === "rejected") {
+    return {
+      tone: "red",
+      title: `Faltan ${count} documento(s) obligatorio(s):`,
+      body: labels,
+    };
+  }
+
+  return {
+    tone: "red",
+    title: `Faltan ${count} documento(s) obligatorio(s) — revísalos antes de aprobar.`,
+    body: labels,
+  };
+}
+
+const BANNER_TONES = {
+  red: { borderColor: "#fecaca", backgroundColor: "#fef2f2", color: RED },
+  amber: { borderColor: "#fcd34d", backgroundColor: "#fdf4e7", color: "#92400e" },
+};
+
 function mandatoryHint(def) {
   if (def.required && def.requiredForPublish) return null;
   if (def.requiredForPublish && !def.required) return "Necesario para publicar";
@@ -161,8 +229,18 @@ export default function AdminProviderDocuments({
     (def) => !getDocumentStatus(def.id, context, verticales).uploaded,
   );
 
+  const reviewState = getProviderReviewState(profile);
+  const hasAlojamiento = verticales.includes("alojamiento");
   const missingNruPdf = missingMandatory.some((d) => d.id === "nru_comprobante");
   const nruText = getNruText(services);
+  const missingBanner =
+    missingMandatory.length > 0
+      ? buildMissingDocsBanner(reviewState, missingMandatory)
+      : null;
+  const showNruPublishNotice =
+    missingNruPdf &&
+    hasAlojamiento &&
+    (reviewState === "verified" || reviewState === "pending" || reviewState === "rejected");
 
   async function handleOpenDocument(docId, storedUrl) {
     setLoadingDoc(docId);
@@ -205,18 +283,28 @@ export default function AdminProviderDocuments({
         Documentos
       </p>
 
-      {missingMandatory.length > 0 && (
+      {missingBanner && (
         <div
           className="mt-2 rounded-xl border px-3 py-2.5 text-sm"
-          style={{ borderColor: "#fecaca", backgroundColor: "#fef2f2", color: RED }}
+          style={BANNER_TONES[missingBanner.tone]}
         >
-          <strong>Faltan {missingMandatory.length} documento(s) obligatorio(s):</strong>{" "}
-          {missingMandatory.map((d) => d.label).join(", ")}
-          {missingNruPdf && (
+          <strong>{missingBanner.title}</strong>{" "}
+          {missingBanner.body}
+          {showNruPublishNotice && reviewState !== "verified" && (
             <span className="mt-1 block text-xs">
               El PDF de resolución NRU es necesario para publicar alojamiento.
             </span>
           )}
+        </div>
+      )}
+
+      {showNruPublishNotice && reviewState === "verified" && (
+        <div
+          className="mt-2 rounded-xl border px-3 py-2.5 text-xs"
+          style={BANNER_TONES.amber}
+        >
+          Falta el PDF de resolución NRU — necesario para publicar el alojamiento
+          (el proveedor ya está verificado; conviene solicitarlo si aún no consta).
         </div>
       )}
 
