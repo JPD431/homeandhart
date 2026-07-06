@@ -46,6 +46,15 @@ function stripeStatusBadgeStyle(status) {
   }
 }
 
+/** PI ya cancelado/reembolsado en Stripe; la reserva puede seguir abierta en BD. */
+function stripePagoYaLiberado(status) {
+  return status === "canceled";
+}
+
+function puedeMostrarAccionesResolucionIncidencia(inc) {
+  return inc.estado === "incidencia";
+}
+
 const BLOG_CATEGORIAS_ADMIN = [
   "familias",
   "mascotas",
@@ -1483,22 +1492,34 @@ export default function AdminPage() {
                     id="reembolso-modal-title"
                     className="text-lg font-semibold text-[#1a1a1a]"
                   >
-                    ¿Reembolsar todo al cliente?
+                    {stripePagoYaLiberado(reembolsoModalInc.stripe?.status)
+                      ? "¿Cerrar incidencia con reembolso total?"
+                      : "¿Reembolsar todo al cliente?"}
                   </h3>
-                  <p className="mt-2 text-sm leading-relaxed text-[#666]">
-                    Se devolverán{" "}
-                    <strong>{formatEuroAdmin(reembolsoModalInc.precio_total)}</strong> al
-                    cliente por{" "}
-                    <strong>{reembolsoModalInc.servicio.titulo}</strong>
-                    {reembolsoModalInc.credito_aplicado > 0 && (
-                      <>
-                        {" "}
-                        (incl. {formatEuroAdmin(reembolsoModalInc.credito_aplicado)} a
-                        crédito)
-                      </>
-                    )}
-                    . La reserva quedará como incidencia resuelta.
-                  </p>
+                  {stripePagoYaLiberado(reembolsoModalInc.stripe?.status) ? (
+                    <p className="mt-2 text-sm leading-relaxed text-[#666]">
+                      El pago en Stripe ya está <strong>cancelado/liberado</strong>. Al
+                      confirmar solo se cerrará la incidencia en la plataforma (sin volver a
+                      tocar Stripe) por{" "}
+                      <strong>{reembolsoModalInc.servicio.titulo}</strong> (
+                      {formatEuroAdmin(reembolsoModalInc.precio_total)}).
+                    </p>
+                  ) : (
+                    <p className="mt-2 text-sm leading-relaxed text-[#666]">
+                      Se devolverán{" "}
+                      <strong>{formatEuroAdmin(reembolsoModalInc.precio_total)}</strong> al
+                      cliente por{" "}
+                      <strong>{reembolsoModalInc.servicio.titulo}</strong>
+                      {reembolsoModalInc.credito_aplicado > 0 && (
+                        <>
+                          {" "}
+                          (incl. {formatEuroAdmin(reembolsoModalInc.credito_aplicado)} a
+                          crédito)
+                        </>
+                      )}
+                      . La reserva quedará como incidencia resuelta.
+                    </p>
+                  )}
                   {reembolsoModalInc.bundle?.is_bundle && (
                     <p
                       className="mt-3 rounded-lg border px-3 py-2 text-xs leading-relaxed text-[#92400e]"
@@ -1550,7 +1571,9 @@ export default function AdminPage() {
                     >
                       {actionLoading === reembolsoModalInc.id
                         ? "Procesando…"
-                        : "Confirmar reembolso total"}
+                        : stripePagoYaLiberado(reembolsoModalInc.stripe?.status)
+                          ? "Confirmar cierre de incidencia"
+                          : "Confirmar reembolso total"}
                     </button>
                   </div>
                 </div>
@@ -1724,23 +1747,31 @@ export default function AdminPage() {
                         </div>
                       )}
 
-                      {["requires_capture", "succeeded", "processing"].includes(
-                        inc.stripe?.status,
-                      ) && (
-                        <div className="mt-4 flex flex-wrap gap-2 border-t pt-4" style={{ borderColor: BRAND.border }}>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setReembolsoNota("");
-                              setReembolsoModalError("");
-                              setReembolsoModalInc(inc);
-                            }}
-                            disabled={actionLoading === inc.id}
-                            className="rounded-xl px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
-                            style={{ backgroundColor: "#b91c1c" }}
-                          >
-                            Reembolsar todo al cliente
-                          </button>
+                      {puedeMostrarAccionesResolucionIncidencia(inc) && (
+                        <div className="mt-4 flex flex-col gap-2 border-t pt-4" style={{ borderColor: BRAND.border }}>
+                          {stripePagoYaLiberado(inc.stripe?.status) && (
+                            <p className="text-xs leading-relaxed text-[#666]">
+                              El pago ya se liberó en Stripe. Puedes confirmar para cerrar la
+                              incidencia en la plataforma sin repetir el reembolso.
+                            </p>
+                          )}
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setReembolsoNota("");
+                                setReembolsoModalError("");
+                                setReembolsoModalInc(inc);
+                              }}
+                              disabled={actionLoading === inc.id}
+                              className="rounded-xl px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                              style={{ backgroundColor: "#b91c1c" }}
+                            >
+                              {stripePagoYaLiberado(inc.stripe?.status)
+                                ? "Cerrar incidencia (pago ya liberado)"
+                                : "Reembolsar todo al cliente"}
+                            </button>
+                          </div>
                         </div>
                       )}
                     </li>
