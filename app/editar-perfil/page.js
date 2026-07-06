@@ -17,6 +17,7 @@ import CounterField from "@/app/components/provider/CounterField";
 import TagPill from "@/app/components/provider/TagPill";
 import ProviderDocumentsSection from "@/app/components/provider/ProviderDocumentsSection";
 import { BRAND, SERIF } from "@/app/components/brand";
+import { hasDniUploaded, DNI_SUBIR_RUTA } from "@/app/lib/dni";
 import {
   DOCUMENT_LABELS,
   PROFILE_LABELS,
@@ -2006,7 +2007,20 @@ function EditarPerfilContent() {
         <div className="mx-6 mt-4 rounded-lg bg-green-50 px-4 py-3 text-sm text-green-700">{successMessage}</div>
       )}
       {errorMessage && (
-        <div className="mx-6 mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{errorMessage}</div>
+        <div className="mx-6 mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+          {errorMessage}
+          {!hasDniUploaded(perfil) && (
+            <p className="mt-2">
+              <Link
+                href={`${DNI_SUBIR_RUTA}?next=/editar-perfil`}
+                className="font-semibold no-underline hover:underline"
+                style={{ color: BRAND.primary }}
+              >
+                Subir DNI →
+              </Link>
+            </p>
+          )}
+        </div>
       )}
 
       <form id="editar-perfil-form" onSubmit={handleSubmit}>

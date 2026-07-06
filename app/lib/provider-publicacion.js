@@ -1,5 +1,6 @@
 import { REVISION_APROBADO } from "@/app/lib/onboarding-persist";
 import { alojamientoNruPublishReady } from "@/app/lib/provider-documents";
+import { hasDniUploaded, DNI_REQUIRED_PROVIDER_MSG } from "@/app/lib/dni";
 import {
   buildAnuncioHref,
   buildAnuncioPreviewHref,
@@ -32,6 +33,7 @@ export function proveedorPuedePublicar(perfil) {
  * @param {import("@/app/lib/provider-documents").DocumentContext} [documentContext]
  */
 export function puedeActivarServicio(service, perfil, documentContext = {}) {
+  if (!hasDniUploaded(perfil)) return false;
   if (!proveedorPuedePublicar(perfil)) return false;
   if (service?.vertical === "alojamiento") {
     return alojamientoNruPublishReady(documentContext);
@@ -46,6 +48,9 @@ export function puedeActivarServicio(service, perfil, documentContext = {}) {
  * @param {import("@/app/lib/provider-documents").DocumentContext} [documentContext]
  */
 export function getActivacionBloqueoMensaje(perfil, service = null, documentContext = null) {
+  if (!hasDniUploaded(perfil)) {
+    return DNI_REQUIRED_PROVIDER_MSG;
+  }
   if (perfil?.verificado !== true) {
     return REVISION_PENDIENTE_MSG;
   }

@@ -1,13 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLang } from "@/app/lib/LangContext";
 import { useTranslation } from "@/app/lib/i18n";
 import { getBookingEstado } from "@/app/lib/viajes";
 import { BRAND } from "./brand";
 import { needsProviderOnboarding } from "@/app/lib/onboarding";
+import {
+  DNI_BANNER_CLIENT_MSG,
+  DNI_BANNER_PROVIDER_MSG,
+  DNI_SUBIR_RUTA,
+  hasDniUploaded,
+} from "@/app/lib/dni";
 import { supabase } from "@/app/lib/supabase";
 
 const PRIMARY = "#1d4f91";
@@ -132,6 +138,7 @@ function getReservasSinComisionCliente(perfil) {
 
 export default function Navbar() {
   const router = useRouter();
+  const pathname = usePathname();
   const { lang } = useLang();
   const t = useTranslation(lang);
 
@@ -201,7 +208,7 @@ export default function Navbar() {
       const { data: profileData } = await supabase
         .from("profiles")
         .select(
-          "nombre, apellido, role, descripcion, idiomas, foto_perfil, reservas_sin_comision_cliente, onboarding_completed_at",
+          "nombre, apellido, role, descripcion, idiomas, foto_perfil, reservas_sin_comision_cliente, onboarding_completed_at, doc_dni_url",
         )
         .eq("id", authUser.id)
         .single();
@@ -303,8 +310,15 @@ export default function Navbar() {
     perfil?.nombre ||
     "Mi cuenta";
   const initials = perfil?.nombre?.[0]?.toUpperCase() || "U";
+  const showDniBanner = user && perfil && !hasDniUploaded(perfil);
+  const dniBannerText =
+    perfil?.role === "proveedor"
+      ? DNI_BANNER_PROVIDER_MSG
+      : DNI_BANNER_CLIENT_MSG;
+  const dniBannerHref = `${DNI_SUBIR_RUTA}?next=${encodeURIComponent(pathname || "/")}`;
 
   return (
+    <>
     <header
       className="sticky top-0 z-50 border-b bg-white/90 backdrop-blur-md"
       style={{ borderColor: BRAND.border }}
@@ -888,5 +902,21 @@ export default function Navbar() {
         </>
       )}
     </header>
+    {showDniBanner && (
+      <div
+        className="border-b px-4 py-2 text-center text-xs leading-relaxed text-[#92400e]"
+        style={{ borderColor: BRAND.border, backgroundColor: "#fdf4e7" }}
+      >
+        {dniBannerText}{" "}
+        <Link
+          href={dniBannerHref}
+          className="font-semibold no-underline hover:underline"
+          style={{ color: PRIMARY }}
+        >
+          Subir DNI →
+        </Link>
+      </div>
+    )}
+    </>
   );
 }

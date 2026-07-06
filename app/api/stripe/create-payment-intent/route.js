@@ -1,5 +1,12 @@
 import Stripe from "stripe";
 import { authorizeAuthenticatedClient } from "@/app/lib/stripe-api-auth";
+import { assertUserHasDni } from "@/app/lib/dni";
+import { createClient as createServiceClient } from "@supabase/supabase-js";
+
+const supabaseAdmin = createServiceClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY,
+);
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
@@ -26,6 +33,11 @@ export async function POST(request) {
         { error: "Falta metadata.cliente_id en la retención de pago." },
         { status: 400 },
       );
+    }
+
+    const dniCheck = await assertUserHasDni(supabaseAdmin, clienteId);
+    if (!dniCheck.ok) {
+      return Response.json(dniCheck.body, { status: dniCheck.status });
     }
 
     const intentParams = {

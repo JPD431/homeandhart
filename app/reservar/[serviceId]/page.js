@@ -8,10 +8,15 @@ import {
   useStripe,
 } from "@stripe/react-stripe-js";
 import Link from "next/link";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CalendarioRangoFechas from "@/app/components/CalendarioRangoFechas";
 import { BRAND, SERIF } from "@/app/components/brand";
+import {
+  DNI_REQUIRED_CLIENT_MSG,
+  DNI_SUBIR_RUTA,
+  hasDniUploaded,
+} from "@/app/lib/dni";
 import { getUserFamiliaActiva } from "@/app/lib/familia";
 import { getHoyDateStr, getPrecioEfectivo, isOfertaActiva } from "@/app/lib/ofertas";
 import {
@@ -1568,6 +1573,7 @@ export default function ReservarPage() {
   const router = useRouter();
   const params = useParams();
   const searchParams = useSearchParams();
+  const pathname = usePathname();
   const serviceId = params.serviceId;
   const precioEspecialParam = searchParams.get("precio_especial");
   const validaHastaParam = searchParams.get("valida_hasta");
@@ -1667,7 +1673,7 @@ export default function ReservarPage() {
       const { data: perfilClienteData } = await supabase
         .from("profiles")
         .select(
-          "nombre, apellido, stripe_customer_id, reservas_sin_comision_cliente, credito_disponible",
+          "nombre, apellido, stripe_customer_id, reservas_sin_comision_cliente, credito_disponible, doc_dni_url",
         )
         .eq("id", user.id)
         .single();
@@ -1933,6 +1939,13 @@ export default function ReservarPage() {
     }
     return null;
   }, [selectedServices]);
+
+  const clienteSinDni = !hasDniUploaded(perfilCliente);
+  const dniSubirHref = useMemo(() => {
+    const qs = searchParams?.toString();
+    const current = qs ? `${pathname}?${qs}` : pathname;
+    return `${DNI_SUBIR_RUTA}?next=${encodeURIComponent(current)}`;
+  }, [pathname, searchParams]);
 
   useEffect(() => {
     if (!fechaInicio || !service || selectedServices.length === 0) {
@@ -2293,6 +2306,14 @@ export default function ReservarPage() {
       return;
     }
 
+    if (clienteSinDni) {
+      setClientSecret(null);
+      setPaymentIntentId(null);
+      setGrupoReserva(null);
+      setPaymentIntentLoading(false);
+      return;
+    }
+
     const dateError = validateBookingDates(vertical, fechaInicio, hora);
     if (dateError) {
       setErrorMessage(dateError);
@@ -2377,6 +2398,7 @@ export default function ReservarPage() {
     vertical,
     fechaInicio,
     hora,
+    clienteSinDni,
     calendarioError,
     disponibilidadChecking,
     selectedServices.length,
@@ -3472,6 +3494,22 @@ export default function ReservarPage() {
                 🛡️ Pago retenido hasta que el servicio se completa. Reembolso total si algo falla.
               </div>
 
+              {clienteSinDni && (
+                <div
+                  className="mt-4 rounded-lg px-3 py-2.5 text-[12px] leading-relaxed text-[#92400e]"
+                  style={{ backgroundColor: "#fef3c7" }}
+                >
+                  {DNI_REQUIRED_CLIENT_MSG}{" "}
+                  <Link
+                    href={dniSubirHref}
+                    className="font-semibold no-underline hover:underline"
+                    style={{ color: "#1d4f91" }}
+                  >
+                    Subir DNI →
+                  </Link>
+                </div>
+              )}
+
               {bookabilityBlock && (
                 <p
                   className="mt-4 rounded-lg px-3 py-2.5 text-[12px] leading-relaxed text-[#92400e]"
@@ -3481,7 +3519,7 @@ export default function ReservarPage() {
                 </p>
               )}
 
-              {precioListo && priceSummary.total > 0 && !bookabilityBlock ? (
+              {precioListo && priceSummary.total > 0 && !bookabilityBlock && !clienteSinDni ? (
                 isBundle ? (
                   paymentMethodsLoading ? (
                     <p className="mt-4 text-center text-[11px] text-[#666]">

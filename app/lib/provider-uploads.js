@@ -33,6 +33,21 @@ export async function uploadDocumentToStorage(userId, storageKey, file) {
   return data.publicUrl;
 }
 
+/**
+ * Sube DNI/NIE/pasaporte y persiste la referencia en profiles.doc_dni_url.
+ * @param {string} userId
+ * @param {File} file
+ */
+export async function persistUserDni(userId, file) {
+  const url = await uploadDocumentToStorage(userId, "doc_dni_url", file);
+  const { error } = await supabase
+    .from("profiles")
+    .update({ doc_dni_url: url })
+    .eq("id", userId);
+  if (error) throw error;
+  return url;
+}
+
 export async function uploadServicePhoto(userId, vertical, file, index) {
   const ext = file.name.includes(".") ? file.name.split(".").pop() : "jpg";
   const filePath = `${userId}/service-${vertical}-${index}-${Date.now()}.${ext}`;

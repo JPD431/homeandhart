@@ -1,5 +1,5 @@
 export const ONBOARDING_PROFILE_SELECT =
-  "role, onboarding_completed_at, onboarding_verticales, necesidades, ciudad, nombre, apellido";
+  "role, onboarding_completed_at, onboarding_verticales, necesidades, ciudad, nombre, apellido, doc_dni_url";
 
 /**
  * Cliente que ya pasó por completar-perfil (tiene necesidades o ciudad).
