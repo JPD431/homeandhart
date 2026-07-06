@@ -23,13 +23,57 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // Enriquecer con email de auth.users
+  const providerIds = (profiles || []).map((p) => p.id);
+
+  let docsByProvider = {};
+  let servicesByProvider = {};
+
+  if (providerIds.length > 0) {
+    const [docsResult, servicesResult] = await Promise.all([
+      supabaseAdmin
+        .from("provider_documents")
+        .select("id, proveedor_id, tipo, vertical, url, created_at, updated_at")
+        .in("proveedor_id", providerIds)
+        .order("created_at", { ascending: true }),
+      supabaseAdmin
+        .from("services")
+        .select(
+          "id, proveedor_id, vertical, titulo, precio, ciudad, revision_estado, disponible, nru",
+        )
+        .in("proveedor_id", providerIds),
+    ]);
+
+    if (docsResult.error) {
+      return NextResponse.json({ error: docsResult.error.message }, { status: 500 });
+    }
+    if (servicesResult.error) {
+      return NextResponse.json({ error: servicesResult.error.message }, { status: 500 });
+    }
+
+    for (const row of docsResult.data ?? []) {
+      if (!docsByProvider[row.proveedor_id]) docsByProvider[row.proveedor_id] = [];
+      docsByProvider[row.proveedor_id].push(row);
+    }
+
+    for (const svc of servicesResult.data ?? []) {
+      if (!servicesByProvider[svc.proveedor_id]) {
+        servicesByProvider[svc.proveedor_id] = [];
+      }
+      servicesByProvider[svc.proveedor_id].push(svc);
+    }
+  }
+
+  // Enriquecer con email de auth.users, documentos y servicios (NRU)
   const enriched = await Promise.all(
     (profiles || []).map(async (p) => {
       const { data: userData } = await supabaseAdmin.auth.admin.getUserById(p.id);
-      return { ...p, email_contacto: userData?.user?.email || null };
+      return {
+        ...p,
+        email_contacto: userData?.user?.email || null,
+        providerDocuments: docsByProvider[p.id] ?? [],
+      };
     }),
   );
 
-  return NextResponse.json({ providers: enriched });
+  return NextResponse.json({ providers: enriched, servicesByProvider });
 }

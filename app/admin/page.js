@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Navbar from "@/app/components/Navbar";
+import AdminProviderDocuments from "@/app/components/admin/AdminProviderDocuments";
 import { BRAND, SERIF } from "@/app/components/brand";
 import { articulosIniciales, slugify } from "@/app/lib/blog-seed";
 import { getIngresoProveedorFromBooking } from "@/app/lib/ingresos-proveedor";
@@ -116,26 +117,6 @@ const VERTICALS = {
   mascotas: { label: "Cuidado de mascotas", priceSuffix: "/ día" },
 };
 
-const PROVIDER_DOCUMENTS = [
-  {
-    urlKey: "doc_dni_url",
-    linkLabel: "Ver DNI",
-    name: "DNI o NIE",
-  },
-  {
-    urlKey: "doc_antecedentes_url",
-    linkLabel: "Ver certificado de antecedentes",
-    name: "Certificado de antecedentes",
-  },
-  {
-    urlKey: "doc_antecedentes_sexuales_url",
-    linkLabel: "Ver cert. delitos sexuales",
-    name: "Cert. delitos sexuales",
-  },
-];
-
-const STORAGE_BUCKET = "Documentos";
-const SIGNED_URL_TTL = 3600;
 const AMBER = "#c47d1a";
 
 const REQUESTABLE_DOCUMENTS = [
@@ -148,118 +129,6 @@ const REQUESTABLE_DOCUMENTS = [
   { id: "titulacion", label: "Titulación o formación profesional" },
   { id: "foto_perfil", label: "Foto de perfil real y reciente" },
 ];
-
-function extractStoragePath(storedValue) {
-  if (!storedValue) return null;
-
-  const publicMatch =
-    storedValue.match(/\/object\/public\/Documentos\/(.+)$/i) ||
-    storedValue.match(/\/object\/public\/documentos\/(.+)$/i);
-  if (publicMatch) {
-    return decodeURIComponent(publicMatch[1].split("?")[0]);
-  }
-
-  const signedMatch = storedValue.match(/\/object\/sign\/Documentos\/(.+?)(\?|$)/i);
-  if (signedMatch) {
-    return decodeURIComponent(signedMatch[1]);
-  }
-
-  return storedValue.replace(/^\/+/, "");
-}
-
-async function getDocumentSignedUrl(storedValue) {
-  const path = extractStoragePath(storedValue);
-  if (!path) return null;
-
-  const { data, error } = await supabase.storage
-    .from(STORAGE_BUCKET)
-    .createSignedUrl(path, SIGNED_URL_TTL);
-
-  if (error) throw error;
-  return data.signedUrl;
-}
-
-function FileIcon({ className }) {
-  return (
-    <svg
-      className={className}
-      fill="none"
-      viewBox="0 0 24 24"
-      strokeWidth={1.5}
-      stroke="currentColor"
-      aria-hidden
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"
-      />
-    </svg>
-  );
-}
-
-function ProviderDocuments({ provider }) {
-  const [loadingDoc, setLoadingDoc] = useState(null);
-  const [docError, setDocError] = useState("");
-  const available = PROVIDER_DOCUMENTS.filter((doc) => provider[doc.urlKey]);
-
-  async function handleOpenDocument(urlKey, storedValue) {
-    setLoadingDoc(urlKey);
-    setDocError("");
-
-    try {
-      const signedUrl = await getDocumentSignedUrl(storedValue);
-      if (signedUrl) {
-        window.open(signedUrl, "_blank", "noopener,noreferrer");
-      }
-    } catch (err) {
-      setDocError(err.message || "No se pudo abrir el documento.");
-    } finally {
-      setLoadingDoc(null);
-    }
-  }
-
-  return (
-    <div className="mt-4">
-      <p className="text-xs font-semibold uppercase tracking-wide text-[#888]">
-        Documentación aportada
-      </p>
-
-      {docError && (
-        <p className="mt-1 text-xs text-red-600">{docError}</p>
-      )}
-
-      {available.length === 0 ? (
-        <p className="mt-1 text-sm text-[#888]">
-          No ha aportado documentación todavía
-        </p>
-      ) : (
-        <ul className="mt-2 flex flex-col gap-2">
-          {available.map((doc) => (
-            <li key={doc.urlKey}>
-              <button
-                type="button"
-                disabled={loadingDoc === doc.urlKey}
-                onClick={() => handleOpenDocument(doc.urlKey, provider[doc.urlKey])}
-                className="flex w-full flex-wrap items-center gap-2 rounded-xl border px-3 py-2.5 text-left text-sm transition-colors hover:bg-[#fafafa] disabled:cursor-wait disabled:opacity-70"
-                style={{ borderColor: BRAND.border, color: BRAND.primary }}
-              >
-                <FileIcon className="h-5 w-5 shrink-0" />
-                <span className="font-medium text-[#1a1a1a]">{doc.name}</span>
-                <span className="text-[#666]">
-                  · {loadingDoc === doc.urlKey ? "Abriendo…" : doc.linkLabel}
-                </span>
-                <span className="ml-auto rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold text-green-700">
-                  Subido ✓
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
 
 function getTransferidoProveedorFromBooking(booking) {
   if (booking.importe_transferido != null && booking.importe_transferido !== "") {
@@ -423,29 +292,7 @@ export default function AdminPage() {
 
       const providerList = providersPayload.providers ?? [];
       setProviders(providerList);
-
-      if (providerList.length > 0) {
-        const providerIds = providerList.map((p) => p.id);
-        const { data: services, error: servicesError } = await supabase
-          .from("services")
-          .select(
-            "id, proveedor_id, vertical, titulo, precio, ciudad, revision_estado, disponible",
-          )
-          .in("proveedor_id", providerIds);
-
-        if (servicesError) {
-          setErrorMessage(servicesError.message);
-        } else {
-          const grouped = {};
-          for (const svc of services ?? []) {
-            if (!grouped[svc.proveedor_id]) grouped[svc.proveedor_id] = [];
-            grouped[svc.proveedor_id].push(svc);
-          }
-          setServicesByProvider(grouped);
-        }
-      } else {
-        setServicesByProvider({});
-      }
+      setServicesByProvider(providersPayload.servicesByProvider ?? {});
 
       const { data: bookingsData, error: bookingsError } = await supabase
         .from("bookings")
@@ -2554,7 +2401,11 @@ export default function AdminPage() {
                     </div>
                   )}
 
-                  <ProviderDocuments provider={provider} />
+                  <AdminProviderDocuments
+                    profile={provider}
+                    providerDocuments={provider.providerDocuments ?? []}
+                    services={services}
+                  />
 
                   {provider.motivo_rechazo && activeTab === "rechazados" && (
                     <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
