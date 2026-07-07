@@ -22,6 +22,10 @@ export async function uploadProfilePhoto(userId, file) {
   return data.publicUrl;
 }
 
+/**
+ * Sube un documento al bucket privado y devuelve la ruta relativa (no URL pública).
+ * @returns {Promise<string>} Path dentro del bucket, p. ej. "{userId}/doc_dni_url-123.pdf"
+ */
 export async function uploadDocumentToStorage(userId, storageKey, file) {
   const ext = file.name.includes(".") ? file.name.split(".").pop() : "pdf";
   const filePath = `${userId}/${storageKey}-${Date.now()}.${ext}`;
@@ -29,23 +33,23 @@ export async function uploadDocumentToStorage(userId, storageKey, file) {
     .from(STORAGE_BUCKET)
     .upload(filePath, file, { upsert: true, contentType: file.type });
   if (error) throw error;
-  const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(filePath);
-  return data.publicUrl;
+  return filePath;
 }
 
 /**
- * Sube DNI/NIE/pasaporte y persiste la referencia en profiles.doc_dni_url.
+ * Sube DNI/NIE/pasaporte y persiste la ruta en profiles.doc_dni_url.
  * @param {string} userId
  * @param {File} file
+ * @returns {Promise<string>} Ruta relativa en Storage (no URL pública)
  */
 export async function persistUserDni(userId, file) {
-  const url = await uploadDocumentToStorage(userId, "doc_dni_url", file);
+  const storagePath = await uploadDocumentToStorage(userId, "doc_dni_url", file);
   const { error } = await supabase
     .from("profiles")
-    .update({ doc_dni_url: url })
+    .update({ doc_dni_url: storagePath })
     .eq("id", userId);
   if (error) throw error;
-  return url;
+  return storagePath;
 }
 
 export async function uploadServicePhoto(userId, vertical, file, index) {
@@ -101,18 +105,18 @@ export async function persistProviderDocument(userId, docId, file) {
     if (!profileField) {
       throw new Error(`Sin columna de perfil para: ${docId}`);
     }
-    const url = await uploadDocumentToStorage(userId, profileField, file);
+    const storagePath = await uploadDocumentToStorage(userId, profileField, file);
     const { error } = await supabase
       .from("profiles")
-      .update({ [profileField]: url })
+      .update({ [profileField]: storagePath })
       .eq("id", userId);
     if (error) throw error;
-    return { storage: "profile", profileField, url, tipo: canonicalId };
+    return { storage: "profile", profileField, url: storagePath, tipo: canonicalId };
   }
 
   if (def.storage === "tabla") {
     const tipo = def.tableTipo || canonicalId;
-    const url = await uploadDocumentToStorage(userId, tipo, file);
+    const storagePath = await uploadDocumentToStorage(userId, tipo, file);
     const { data, error } = await supabase
       .from("provider_documents")
       .upsert(
@@ -120,7 +124,7 @@ export async function persistProviderDocument(userId, docId, file) {
           proveedor_id: userId,
           tipo,
           vertical: def.vertical,
-          url,
+          url: storagePath,
         },
         { onConflict: "proveedor_id,tipo" },
       )
@@ -128,7 +132,7 @@ export async function persistProviderDocument(userId, docId, file) {
       .single();
 
     if (error) throw error;
-    return { storage: "tabla", tipo, url, row: data };
+    return { storage: "tabla", tipo, url: storagePath, row: data };
   }
 
   throw new Error(`Storage no soportado para: ${docId}`);

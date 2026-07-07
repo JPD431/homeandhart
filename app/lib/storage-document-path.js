@@ -5,8 +5,10 @@ export const STORAGE_BUCKET = "Documentos";
 export const ADMIN_SIGNED_URL_TTL = 600;
 
 /**
- * Extrae la ruta relativa dentro del bucket a partir de una URL almacenada en BD
- * (pública, firmada o path directo).
+ * Extrae la ruta relativa dentro del bucket a partir de un valor en BD:
+ * - Path directo (nuevo): "userId/doc_dni_url-123.pdf"
+ * - URL pública antigua: ".../object/public/Documentos/userId/..."
+ * - URL firmada o privada de Supabase
  * @param {string | null | undefined} storedValue
  * @returns {string | null}
  */

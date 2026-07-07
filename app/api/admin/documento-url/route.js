@@ -17,7 +17,7 @@ const supabaseAdmin = createClient(
  * Devuelve una signed URL temporal para un documento en Storage.
  * Solo admin autenticado; bucket privado vía service role.
  *
- * GET /api/admin/documento-url?storedUrl=<url codificada>
+ * GET /api/admin/documento-url?storedUrl=<path o URL codificada>
  */
 export async function GET(request) {
   const admin = await getAdminUser();
