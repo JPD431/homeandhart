@@ -6,6 +6,7 @@ import Navbar from "@/app/components/Navbar";
 import AdminProviderDocuments, {
   getMissingMandatoryDocumentsSummary,
 } from "@/app/components/admin/AdminProviderDocuments";
+import AdminUsersTab from "@/app/components/admin/AdminUsersTab";
 import { BRAND, SERIF } from "@/app/components/brand";
 import { articulosIniciales, slugify } from "@/app/lib/blog-seed";
 import { getIngresoProveedorFromBooking } from "@/app/lib/ingresos-proveedor";
@@ -18,6 +19,7 @@ import {
 import { supabase } from "@/app/lib/supabase";
 
 const TABS = [
+  { id: "usuarios", label: "Usuarios" },
   { id: "pendientes", label: "Pendientes de verificar" },
   { id: "verificados", label: "Verificados" },
   { id: "rechazados", label: "Rechazados" },
@@ -227,6 +229,7 @@ export default function AdminPage() {
   const [blogTagInput, setBlogTagInput] = useState("");
   const [blogSaving, setBlogSaving] = useState(false);
   const [blogSeeding, setBlogSeeding] = useState(false);
+  const [usuariosSummary, setUsuariosSummary] = useState({ pendientes: 0, sin_dni: 0 });
 
   const loadData = useCallback(async () => {
     setErrorMessage("");
@@ -295,6 +298,12 @@ export default function AdminPage() {
       const providerList = providersPayload.providers ?? [];
       setProviders(providerList);
       setServicesByProvider(providersPayload.servicesByProvider ?? {});
+
+      const usuariosRes = await fetch("/api/admin/usuarios?filtro=todos&limit=1");
+      const usuariosPayload = await usuariosRes.json().catch(() => ({}));
+      if (usuariosRes.ok && usuariosPayload.meta?.summary) {
+        setUsuariosSummary(usuariosPayload.meta.summary);
+      }
 
       const { data: bookingsData, error: bookingsError } = await supabase
         .from("bookings")
@@ -397,6 +406,7 @@ export default function AdminPage() {
 
   const counts = useMemo(() => {
     const result = {
+      usuarios: usuariosSummary.pendientes,
       pendientes: 0,
       verificados: 0,
       rechazados: 0,
@@ -413,7 +423,7 @@ export default function AdminPage() {
     result.ingresos = completedBookings.length;
     result.blog = blogPosts.length;
     return result;
-  }, [providers, completedBookings, reports, incidencias, blogPosts]);
+  }, [providers, completedBookings, reports, incidencias, blogPosts, usuariosSummary]);
 
   const pendingReports = useMemo(
     () => reports.filter((r) => r.estado === "pendiente"),
@@ -1092,7 +1102,24 @@ export default function AdminPage() {
           </p>
         )}
 
-        {activeTab === "blog" ? (
+        {activeTab === "usuarios" ? (
+          <AdminUsersTab
+            onSuccess={(msg) => {
+              setSuccessMessage(msg);
+              setErrorMessage("");
+              fetch("/api/admin/usuarios?filtro=todos&limit=1")
+                .then((r) => r.json())
+                .then((payload) => {
+                  if (payload.meta?.summary) setUsuariosSummary(payload.meta.summary);
+                })
+                .catch(() => {});
+            }}
+            onError={(msg) => {
+              setErrorMessage(msg);
+              setSuccessMessage("");
+            }}
+          />
+        ) : activeTab === "blog" ? (
           <div className="mt-6">
             <div className="flex flex-wrap items-center gap-3">
               <button
