@@ -1,16 +1,16 @@
 import { supabase } from "@/app/lib/supabase";
 import {
+  STORAGE_BUCKET_DOCUMENTOS,
+  STORAGE_BUCKET_MEDIA,
+} from "@/app/lib/storage-buckets";
+import {
   DOC_ID_TO_PROFILE_FIELD,
   getDocumentDefinition,
   getProfileFieldForDocId,
   normalizeDocumentId,
 } from "@/app/lib/provider-documents";
 
-/** Bucket privado: DNI, antecedentes, NRU y documentos opcionales. */
-export const STORAGE_BUCKET_DOCUMENTOS = "Documentos";
-
-/** Bucket público: avatares de perfil y fotos de anuncios/servicios. */
-export const STORAGE_BUCKET_MEDIA = "Media";
+export { STORAGE_BUCKET_DOCUMENTOS, STORAGE_BUCKET_MEDIA };
 
 /** @deprecated Usar STORAGE_BUCKET_DOCUMENTOS */
 export const STORAGE_BUCKET = STORAGE_BUCKET_DOCUMENTOS;
@@ -18,17 +18,33 @@ export const STORAGE_BUCKET = STORAGE_BUCKET_DOCUMENTOS;
 /** @deprecated Importar desde @/app/lib/provider-documents */
 export { DOC_ID_TO_PROFILE_FIELD, getProfileFieldForDocId };
 
-export async function uploadProfilePhoto(userId, file) {
-  const ext = file.name.includes(".") ? file.name.split(".").pop() : "jpg";
-  const filePath = `${userId}/foto-perfil-${Date.now()}.${ext}`;
-  const { error } = await supabase.storage
-    .from(STORAGE_BUCKET_MEDIA)
-    .upload(filePath, file, { upsert: true, contentType: file.type });
-  if (error) throw error;
-  const { data } = supabase.storage
-    .from(STORAGE_BUCKET_MEDIA)
-    .getPublicUrl(filePath);
-  return data.publicUrl;
+async function uploadMediaViaApi(file, fields) {
+  const formData = new FormData();
+  formData.append("file", file);
+  for (const [key, value] of Object.entries(fields)) {
+    formData.append(key, String(value));
+  }
+
+  const res = await fetch("/api/upload/media", {
+    method: "POST",
+    body: formData,
+  });
+  const payload = await res.json().catch(() => ({}));
+
+  if (!res.ok || !payload.url) {
+    throw new Error(payload.error || "No se pudo subir la imagen");
+  }
+
+  return payload.url;
+}
+
+/**
+ * Sube avatar al bucket público Media vía API (servidor).
+ * @param {string} _userId — ignorado; el servidor usa la sesión autenticada
+ * @param {File} file
+ */
+export async function uploadProfilePhoto(_userId, file) {
+  return uploadMediaViaApi(file, { kind: "profile" });
 }
 
 /**
@@ -61,17 +77,19 @@ export async function persistUserDni(userId, file) {
   return storagePath;
 }
 
-export async function uploadServicePhoto(userId, vertical, file, index) {
-  const ext = file.name.includes(".") ? file.name.split(".").pop() : "jpg";
-  const filePath = `${userId}/service-${vertical}-${index}-${Date.now()}.${ext}`;
-  const { error } = await supabase.storage
-    .from(STORAGE_BUCKET_MEDIA)
-    .upload(filePath, file, { upsert: true, contentType: file.type });
-  if (error) throw error;
-  const { data } = supabase.storage
-    .from(STORAGE_BUCKET_MEDIA)
-    .getPublicUrl(filePath);
-  return data.publicUrl;
+/**
+ * Sube foto de anuncio al bucket público Media vía API (servidor).
+ * @param {string} _userId — ignorado; el servidor usa la sesión autenticada
+ * @param {string} vertical
+ * @param {File} file
+ * @param {number} index
+ */
+export async function uploadServicePhoto(_userId, vertical, file, index) {
+  return uploadMediaViaApi(file, {
+    kind: "service",
+    vertical,
+    index,
+  });
 }
 
 /**

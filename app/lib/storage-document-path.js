@@ -1,5 +1,6 @@
-/** Bucket privado de documentos del proveedor (DNI, antecedentes, NRU, etc.). */
-export const STORAGE_BUCKET_DOCUMENTOS = "Documentos";
+import { STORAGE_BUCKET_DOCUMENTOS } from "@/app/lib/storage-buckets";
+
+export { STORAGE_BUCKET_DOCUMENTOS };
 
 /** @deprecated Usar STORAGE_BUCKET_DOCUMENTOS */
 export const STORAGE_BUCKET = STORAGE_BUCKET_DOCUMENTOS;

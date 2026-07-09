@@ -620,7 +620,7 @@ function ServiceEditForm({ vertical, details: rawDetails, onChange, userId }) {
     if (!file || !userId) return;
     setPhotoUploading(true);
     try {
-      const url = await uploadServicePhoto(userId, "alojamiento", file, 0);
+      const url = await uploadServicePhoto(userId, vertical, file, 0);
       update("foto_url", url);
     } catch (err) {
       console.error("Error subiendo foto:", err);
