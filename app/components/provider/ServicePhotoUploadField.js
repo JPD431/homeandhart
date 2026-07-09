@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import ServicePhotoUploadGrid from "@/app/components/provider/ServicePhotoUploadGrid";
-import { uploadServicePhoto } from "@/app/lib/provider-uploads";
+import { uploadServicePhotosBatch } from "@/app/lib/provider-uploads";
 import {
   fotosArraysEqual,
   getServicePhotoLimit,
@@ -162,7 +162,8 @@ export default function ServicePhotoUploadField({
       detailsRef.current?.foto_url,
     );
     const remaining = maxCount - currentFotos.length;
-    const toAdd = files.slice(0, remaining);
+    const maxNew = multiple ? remaining : Math.min(1, remaining);
+    const toAdd = files.slice(0, maxNew);
 
     if (!toAdd.length) {
       setError(`Ya tienes el máximo de ${maxCount} fotos.`);
@@ -182,26 +183,28 @@ export default function ServicePhotoUploadField({
     onUploadError?.("");
 
     try {
-      const newUrls = [];
-      let workingFotos = [...currentFotos];
+      const startIndex = currentFotos.length;
+      console.log("[ServicePhotoUploadField] batch upload", {
+        filesCount: toAdd.length,
+        startIndex,
+        expectedStorageIndices: toAdd.map((_, i) => startIndex + i),
+        fileNames: toAdd.map((f) => f.name),
+      });
 
-      for (let i = 0; i < toAdd.length; i++) {
-        const file = toAdd[i];
-        console.log("[ServicePhotoUploadField] subiendo", {
-          index: workingFotos.length,
-          fileName: file.name,
-          fileSize: file.size,
-        });
-        const url = await uploadServicePhoto(
-          userId,
-          vertical,
-          file,
-          workingFotos.length,
+      const newUrls = await uploadServicePhotosBatch(
+        userId,
+        vertical,
+        toAdd,
+        startIndex,
+      );
+
+      if (newUrls.length !== toAdd.length) {
+        throw new Error(
+          `Solo se subieron ${newUrls.length} de ${toAdd.length} foto(s) a Storage.`,
         );
-        console.log("[ServicePhotoUploadField] URL recibida", { index: i, url });
-        newUrls.push(url);
-        workingFotos = normalizeFotosArray([...workingFotos, url]);
       }
+
+      const workingFotos = normalizeFotosArray([...currentFotos, ...newUrls]);
 
       console.log("[ServicePhotoUploadField] subida completa", {
         newUrlsCount: newUrls.length,
@@ -298,7 +301,7 @@ export default function ServicePhotoUploadField({
         ref={inputRef}
         type="file"
         accept="image/*"
-        multiple={multiple}
+        multiple
         className="hidden"
         onChange={handleFiles}
       />

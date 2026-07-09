@@ -29,7 +29,6 @@ export function buildWizardPreviewService(
   vertical,
   {
     serviceDetails,
-    servicePhotoPreviews,
     nombre,
     apellido,
     ciudad,
@@ -39,8 +38,8 @@ export function buildWizardPreviewService(
 ) {
   const details = serviceDetails?.[vertical] ?? {};
   const photos = getServicePhotos({
-    fotos: servicePhotoPreviews?.[vertical] ?? [],
-    foto_url: (servicePhotoPreviews?.[vertical] ?? [])[0] || null,
+    fotos: details.fotos,
+    foto_url: details.foto_url,
   });
   const foto_url = photos[0] || null;
 

@@ -115,11 +115,53 @@ export async function persistUserDni(userId, file) {
  * @param {number} index
  */
 export async function uploadServicePhoto(_userId, vertical, file, index) {
+  console.log("[uploadServicePhoto] llamada", {
+    vertical,
+    storageIndex: index,
+    fileName: file.name,
+    fileSize: file.size,
+  });
   return uploadMediaViaApi(file, {
     kind: "service",
     vertical,
     index,
   });
+}
+
+/**
+ * Sube varias fotos de servicio con índices correlativos en Storage (0, 1, 2…).
+ * @param {string} _userId
+ * @param {string} vertical
+ * @param {File[]} files
+ * @param {number} [startIndex=0] — índice de la primera foto (p. ej. fotos ya guardadas)
+ * @returns {Promise<string[]>}
+ */
+export async function uploadServicePhotosBatch(
+  _userId,
+  vertical,
+  files,
+  startIndex = 0,
+) {
+  const urls = [];
+  for (let i = 0; i < files.length; i++) {
+    const storageIndex = startIndex + i;
+    const url = await uploadServicePhoto(
+      _userId,
+      vertical,
+      files[i],
+      storageIndex,
+    );
+    urls.push(url);
+  }
+  console.log("[uploadServicePhotosBatch] completo", {
+    vertical,
+    startIndex,
+    filesCount: files.length,
+    urlsCount: urls.length,
+    storageIndices: files.map((_, i) => startIndex + i),
+    urls,
+  });
+  return urls;
 }
 
 /**

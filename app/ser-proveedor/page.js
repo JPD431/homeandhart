@@ -22,11 +22,8 @@ import {
   getMissingRequiredDocuments,
   normalizeDocumentId,
 } from "@/app/lib/provider-documents";
-import ServicePhotoUploadGrid from "@/app/components/provider/ServicePhotoUploadGrid";
+import ServicePhotoUploadField from "@/app/components/provider/ServicePhotoUploadField";
 import {
-  getServicePhotoLimit,
-  normalizeFotosArray,
-  parseFotosFromDb,
   syncDetailsPhotos,
 } from "@/app/lib/service-photos";
 import {
@@ -166,6 +163,8 @@ const EMPTY_SERVICE_DETAILS = {
     descuentos_duracion_activa: false,
     descuentos_duracion: [{ minDias: "", descuento: "" }],
     proveedor_emergencia: false,
+    fotos: [],
+    foto_url: "",
   },
   ninos: {
     titulo: "",
@@ -193,6 +192,8 @@ const EMPTY_SERVICE_DETAILS = {
     proveedor_emergencia: false,
     descuentos_duracion_activa: false,
     descuentos_duracion: [{ minDias: "", descuento: "" }],
+    fotos: [],
+    foto_url: "",
   },
   mascotas: {
     titulo: "",
@@ -221,6 +222,8 @@ const EMPTY_SERVICE_DETAILS = {
     proveedor_emergencia: false,
     descuentos_duracion_activa: false,
     descuentos_duracion: [{ minDias: "", descuento: "" }],
+    fotos: [],
+    foto_url: "",
   },
 };
 
@@ -334,9 +337,7 @@ function calcCompletion(verticales, fields, documentContext) {
 export default function SerProveedorPage() {
   const router = useRouter();
   const profilePhotoRef = useRef(null);
-  const servicePhotoRefs = useRef({ alojamiento: null, ninos: null, mascotas: null });
   const documentInputRef = useRef(null);
-  const activePhotoVerticalRef = useRef(null);
 
   const [currentStepKey, setCurrentStepKey] = useState(STEP_KEY.PERFIL);
   const [verticalesSeleccionados, setVerticalesSeleccionados] = useState([]);
@@ -352,12 +353,6 @@ export default function SerProveedorPage() {
   const [idiomas, setIdiomas] = useState([]);
   const [customIdiomas, setCustomIdiomas] = useState([]);
   const [serviceDetails, setServiceDetails] = useState(EMPTY_SERVICE_DETAILS);
-  const [servicePhotos, setServicePhotos] = useState({ alojamiento: [], ninos: [], mascotas: [] });
-  const [servicePhotoPreviews, setServicePhotoPreviews] = useState({
-    alojamiento: [],
-    ninos: [],
-    mascotas: [],
-  });
   const [documentFiles, setDocumentFiles] = useState({});
   const [savedDocUrls, setSavedDocUrls] = useState({
     doc_dni_url: null,
@@ -408,7 +403,6 @@ export default function SerProveedorPage() {
     () =>
       buildWizardPreviewServices(verticalesSeleccionados, {
         serviceDetails,
-        servicePhotoPreviews,
         nombre,
         apellido,
         ciudad,
@@ -418,7 +412,6 @@ export default function SerProveedorPage() {
     [
       verticalesSeleccionados,
       serviceDetails,
-      servicePhotoPreviews,
       nombre,
       apellido,
       ciudad,
@@ -514,7 +507,6 @@ export default function SerProveedorPage() {
         if (drafts.length > 0) {
           const nextDetails = { ...EMPTY_SERVICE_DETAILS };
           const nextDraftIds = { alojamiento: null, ninos: null, mascotas: null };
-          const nextPreviews = { alojamiento: [], ninos: [], mascotas: [] };
 
           for (const row of drafts) {
             const vertical = row.vertical;
@@ -524,13 +516,10 @@ export default function SerProveedorPage() {
               ...mapDraftRowToServiceDetails(row),
             };
             nextDraftIds[vertical] = row.id;
-            const fotos = parseFotosFromDb(row);
-            nextPreviews[vertical] = fotos;
           }
 
           setServiceDetails(nextDetails);
           setDraftServiceIds(nextDraftIds);
-          setServicePhotoPreviews(nextPreviews);
         }
       } catch (err) {
         console.error("[ser-proveedor] Error cargando borrador:", err);
@@ -593,7 +582,7 @@ export default function SerProveedorPage() {
         ciudad,
         serviceDetails.alojamiento,
         draftServiceIds.alojamiento,
-        servicePhotos.alojamiento,
+        [],
       );
       applyDraftSaveResult("alojamiento", result);
       await saveOnboardingStep(userId, stepKey);
@@ -610,7 +599,7 @@ export default function SerProveedorPage() {
         ciudad,
         serviceDetails.ninos,
         draftServiceIds.ninos,
-        servicePhotos.ninos,
+        [],
       );
       applyDraftSaveResult("ninos", result);
       await saveOnboardingStep(userId, stepKey);
@@ -627,7 +616,7 @@ export default function SerProveedorPage() {
         ciudad,
         serviceDetails.mascotas,
         draftServiceIds.mascotas,
-        servicePhotos.mascotas,
+        [],
       );
       applyDraftSaveResult("mascotas", result);
       await saveOnboardingStep(userId, stepKey);
@@ -676,34 +665,6 @@ export default function SerProveedorPage() {
       ...prev,
       [vertical]: syncDetailsPhotos({ ...prev[vertical], fotos }),
     }));
-    setServicePhotoPreviews((prev) => ({ ...prev, [vertical]: fotos }));
-    setServicePhotos((prev) => ({ ...prev, [vertical]: [] }));
-  }
-
-  function reorderServicePhotoPreviews(vertical, fromIndex, toIndex) {
-    if (fromIndex === toIndex || servicePhotos[vertical]?.length > 0) return;
-
-    setServicePhotoPreviews((prev) => {
-      const list = [...prev[vertical]];
-      const [item] = list.splice(fromIndex, 1);
-      list.splice(toIndex, 0, item);
-      return { ...prev, [vertical]: list };
-    });
-
-    setServiceDetails((prev) => {
-      const saved = normalizeFotosArray(prev[vertical]?.fotos);
-      const nextFotos = [...saved];
-      const [item] = nextFotos.splice(fromIndex, 1);
-      nextFotos.splice(toIndex, 0, item);
-      return {
-        ...prev,
-        [vertical]: syncDetailsPhotos({ ...prev[vertical], fotos: nextFotos }),
-      };
-    });
-  }
-
-  function makeServicePhotoCover(vertical, index) {
-    reorderServicePhotoPreviews(vertical, index, 0);
   }
 
   async function handleOpenFullAnuncioPreview(vertical) {
@@ -718,7 +679,7 @@ export default function SerProveedorPage() {
         ciudad,
         serviceDetails[vertical],
         draftServiceIds[vertical],
-        servicePhotos[vertical],
+        [],
       );
       applyDraftSaveResult(vertical, result);
       window.open(buildAnuncioPreviewHref(result.id), "_blank", "noopener,noreferrer");
@@ -737,55 +698,6 @@ export default function SerProveedorPage() {
     if (!file) return;
     setProfilePhoto(file);
     setProfilePhotoPreview(URL.createObjectURL(file));
-  }
-
-  function openServicePhotoUpload(vertical) {
-    activePhotoVerticalRef.current = vertical;
-    servicePhotoRefs.current[vertical]?.click();
-  }
-
-  function handleServicePhotos(e) {
-    const vertical = activePhotoVerticalRef.current;
-    if (!vertical) return;
-    const files = Array.from(e.target.files ?? []);
-    const max = vertical === "alojamiento" ? 8 : 6;
-    const remaining = max - servicePhotos[vertical].length;
-    const toAdd = files.slice(0, remaining);
-    if (toAdd.length === 0) return;
-    setServicePhotos((prev) => ({
-      ...prev,
-      [vertical]: [...prev[vertical], ...toAdd],
-    }));
-    setServicePhotoPreviews((prev) => ({
-      ...prev,
-      [vertical]: [...prev[vertical], ...toAdd.map((f) => URL.createObjectURL(f))],
-    }));
-    e.target.value = "";
-  }
-
-  function removeServicePhoto(vertical, index) {
-    const savedCount = normalizeFotosArray(serviceDetails[vertical]?.fotos).length;
-
-    setServicePhotoPreviews((prev) => ({
-      ...prev,
-      [vertical]: prev[vertical].filter((_, i) => i !== index),
-    }));
-
-    if (index < savedCount) {
-      const nextFotos = normalizeFotosArray(serviceDetails[vertical]?.fotos).filter(
-        (_, i) => i !== index,
-      );
-      updateServiceDetails(
-        vertical,
-        syncDetailsPhotos({ ...serviceDetails[vertical], fotos: nextFotos }),
-      );
-    } else {
-      const fileIndex = index - savedCount;
-      setServicePhotos((prev) => ({
-        ...prev,
-        [vertical]: prev[vertical].filter((_, i) => i !== fileIndex),
-      }));
-    }
   }
 
   function openDocumentUpload(docId) {
@@ -971,7 +883,7 @@ export default function SerProveedorPage() {
           ciudad,
           servicioData,
           finalDraftIds[vertical],
-          servicePhotos[vertical],
+          [],
         );
         finalDraftIds[vertical] = result.id;
       }
@@ -1174,31 +1086,16 @@ export default function SerProveedorPage() {
       return (
         <div>
           <ServiceStepHeader title={getServiceHeaderTitle("alojamiento")} color={getVerticalColor("alojamiento")} />
-          <input ref={(el) => { servicePhotoRefs.current.alojamiento = el; }} type="file" accept="image/*" multiple className="hidden" onChange={handleServicePhotos} />
-          <div className="mt-6">
-            <ServicePhotoUploadGrid
-              label={serviceFotosLabel("alojamiento")}
-              previews={servicePhotoPreviews.alojamiento}
-              maxCount={getServicePhotoLimit("alojamiento")}
-              onAdd={() => openServicePhotoUpload("alojamiento")}
-              onRemove={(i) => removeServicePhoto("alojamiento", i)}
-              onMakeCover={
-                servicePhotos.alojamiento.length === 0
-                  ? (i) => makeServicePhotoCover("alojamiento", i)
-                  : undefined
-              }
-              onMoveUp={
-                servicePhotos.alojamiento.length === 0
-                  ? (i) => reorderServicePhotoPreviews("alojamiento", i, i - 1)
-                  : undefined
-              }
-              onMoveDown={
-                servicePhotos.alojamiento.length === 0
-                  ? (i) => reorderServicePhotoPreviews("alojamiento", i, i + 1)
-                  : undefined
-              }
-            />
-          </div>
+          <ServicePhotoUploadField
+            vertical="alojamiento"
+            userId={userId}
+            serviceId={draftServiceIds.alojamiento}
+            details={d}
+            onChange={(details) => updateServiceDetails("alojamiento", details)}
+            onUploadError={setErrorMessage}
+            label={serviceFotosLabel("alojamiento")}
+            multiple
+          />
           <div className="mt-6 grid gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
               <label className="mb-1.5 block text-xs font-medium text-[#444]">{SERVICE_LABELS.titulo}</label>
@@ -1304,31 +1201,16 @@ export default function SerProveedorPage() {
       return (
         <div>
           <ServiceStepHeader title={getServiceHeaderTitle("ninos")} color={getVerticalColor("ninos")} />
-          <input ref={(el) => { servicePhotoRefs.current.ninos = el; }} type="file" accept="image/*" multiple className="hidden" onChange={handleServicePhotos} />
-          <div className="mt-6">
-            <ServicePhotoUploadGrid
-              label={serviceFotosLabel("ninos")}
-              previews={servicePhotoPreviews.ninos}
-              maxCount={getServicePhotoLimit("ninos")}
-              onAdd={() => openServicePhotoUpload("ninos")}
-              onRemove={(i) => removeServicePhoto("ninos", i)}
-              onMakeCover={
-                servicePhotos.ninos.length === 0
-                  ? (i) => makeServicePhotoCover("ninos", i)
-                  : undefined
-              }
-              onMoveUp={
-                servicePhotos.ninos.length === 0
-                  ? (i) => reorderServicePhotoPreviews("ninos", i, i - 1)
-                  : undefined
-              }
-              onMoveDown={
-                servicePhotos.ninos.length === 0
-                  ? (i) => reorderServicePhotoPreviews("ninos", i, i + 1)
-                  : undefined
-              }
-            />
-          </div>
+          <ServicePhotoUploadField
+            vertical="ninos"
+            userId={userId}
+            serviceId={draftServiceIds.ninos}
+            details={d}
+            onChange={(details) => updateServiceDetails("ninos", details)}
+            onUploadError={setErrorMessage}
+            label={serviceFotosLabel("ninos")}
+            multiple
+          />
           <div className="mt-6 grid gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
               <label className="mb-1.5 block text-xs font-medium text-[#444]">{SERVICE_LABELS.titulo}</label>
@@ -1415,31 +1297,16 @@ export default function SerProveedorPage() {
       return (
         <div>
           <ServiceStepHeader title={getServiceHeaderTitle("mascotas")} color={getVerticalColor("mascotas")} />
-          <input ref={(el) => { servicePhotoRefs.current.mascotas = el; }} type="file" accept="image/*" multiple className="hidden" onChange={handleServicePhotos} />
-          <div className="mt-6">
-            <ServicePhotoUploadGrid
-              label={serviceFotosLabel("mascotas")}
-              previews={servicePhotoPreviews.mascotas}
-              maxCount={getServicePhotoLimit("mascotas")}
-              onAdd={() => openServicePhotoUpload("mascotas")}
-              onRemove={(i) => removeServicePhoto("mascotas", i)}
-              onMakeCover={
-                servicePhotos.mascotas.length === 0
-                  ? (i) => makeServicePhotoCover("mascotas", i)
-                  : undefined
-              }
-              onMoveUp={
-                servicePhotos.mascotas.length === 0
-                  ? (i) => reorderServicePhotoPreviews("mascotas", i, i - 1)
-                  : undefined
-              }
-              onMoveDown={
-                servicePhotos.mascotas.length === 0
-                  ? (i) => reorderServicePhotoPreviews("mascotas", i, i + 1)
-                  : undefined
-              }
-            />
-          </div>
+          <ServicePhotoUploadField
+            vertical="mascotas"
+            userId={userId}
+            serviceId={draftServiceIds.mascotas}
+            details={d}
+            onChange={(details) => updateServiceDetails("mascotas", details)}
+            onUploadError={setErrorMessage}
+            label={serviceFotosLabel("mascotas")}
+            multiple
+          />
           <div className="mt-6 grid gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
               <label className="mb-1.5 block text-xs font-medium text-[#444]">{SERVICE_LABELS.titulo}</label>
