@@ -5,6 +5,7 @@ import {
   formatServiceCardPrice,
   getServiceCardTheme,
   getServiceDescription,
+  getServicePhotos,
 } from "@/app/lib/service-card-display";
 
 const CANCEL_LABELS = {
@@ -37,7 +38,10 @@ export function buildWizardPreviewService(
   },
 ) {
   const details = serviceDetails?.[vertical] ?? {};
-  const photos = (servicePhotoPreviews?.[vertical] ?? []).filter(Boolean);
+  const photos = getServicePhotos({
+    fotos: servicePhotoPreviews?.[vertical] ?? [],
+    foto_url: (servicePhotoPreviews?.[vertical] ?? [])[0] || null,
+  });
   const foto_url = photos[0] || null;
 
   return {

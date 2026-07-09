@@ -12,6 +12,12 @@ import {
   parseNinosDetalleFromDb,
   parseNormasFromDb,
 } from "@/app/lib/service-payload";
+import {
+  getServicePhotoLimit,
+  normalizeFotosArray,
+  parseFotosFromDb,
+  syncServicePhotos,
+} from "@/app/lib/service-photos";
 import { supabase } from "@/app/lib/supabase";
 
 export const REVISION_BORRADOR = "borrador";
@@ -128,21 +134,37 @@ export async function upsertDraftService(
   servicePhotos = [],
 ) {
   const locationFields = await getServiceLocationFields(servicioData, vertical);
-  let fotoUrl = servicioData.foto_url || null;
+  const existingFotos = parseFotosFromDb({
+    fotos: servicioData.fotos,
+    foto_url: servicioData.foto_url,
+  });
+  const limit = getServicePhotoLimit(vertical);
+  const uploadedUrls = [];
 
   if (servicePhotos.length > 0) {
+    const startIndex = existingFotos.length;
     for (let i = 0; i < servicePhotos.length; i++) {
-      const photoUrl = await uploadServicePhoto(userId, vertical, servicePhotos[i], i);
-      if (i === 0) fotoUrl = photoUrl;
+      if (existingFotos.length + uploadedUrls.length >= limit) break;
+      const photoUrl = await uploadServicePhoto(
+        userId,
+        vertical,
+        servicePhotos[i],
+        startIndex + i,
+      );
+      uploadedUrls.push(photoUrl);
     }
   }
+
+  const allFotos = normalizeFotosArray(
+    [...existingFotos, ...uploadedUrls],
+  ).slice(0, limit);
 
   const payload = {
     ...buildServicePayload(servicioData, vertical, ciudad, userId, false),
     ...locationFields,
     revision_estado: REVISION_BORRADOR,
-    foto_url: fotoUrl,
   };
+  syncServicePhotos(payload, allFotos);
 
   const draftId = knownDraftId ?? (await findDraftServiceId(userId, vertical));
 
@@ -151,23 +173,24 @@ export async function upsertDraftService(
       .from("services")
       .update(payload)
       .eq("id", draftId)
-      .select("id")
+      .select("id, fotos, foto_url")
       .single();
     if (error) throw error;
-    return data.id;
+    return { id: data.id, fotos: parseFotosFromDb(data) };
   }
 
   const { data, error } = await supabase
     .from("services")
     .insert(payload)
-    .select("id")
+    .select("id, fotos, foto_url")
     .single();
   if (error) throw error;
-  return data.id;
+  return { id: data.id, fotos: parseFotosFromDb(data) };
 }
 
 export function mapDraftRowToServiceDetails(row) {
   const tiers = normalizeDescuentosDuracion(row.descuentos_duracion);
+  const fotos = parseFotosFromDb(row);
   const base = {
     titulo: row.titulo || "",
     descripcion: row.descripcion || row.descripcion_anuncio || "",
@@ -189,7 +212,8 @@ export function mapDraftRowToServiceDetails(row) {
     disponible_para_viajar: row.disponible_para_viajar === true,
     proveedor_emergencia: row.proveedor_emergencia === true,
     amenities: row.amenities || [],
-    foto_url: row.foto_url || "",
+    fotos,
+    foto_url: fotos[0] || "",
     capacidad: parseCapacidadFromDb(row),
     descuentos_duracion_activa: tiers.length > 0,
     descuentos_duracion:

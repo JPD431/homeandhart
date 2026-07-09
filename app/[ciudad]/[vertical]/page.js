@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { getServiceCoverPhoto } from "@/app/lib/service-card-display";
 import { supabase } from "@/app/lib/supabase";
 import { SERIF } from "@/app/components/brand";
 
@@ -177,7 +178,10 @@ function ProviderCard({ service, theme, rating }) {
   const profile = service.profiles_public ?? {};
   const nombre = formatShortName(profile.nombre, profile.apellido) || "Proveedor";
   const zone = service.location_zone || service.ciudad || profile.ciudad || "";
-  const foto = service.foto_url || profile.foto_perfil || profile.avatar_url;
+  const foto =
+    getServiceCoverPhoto(service) ||
+    profile.foto_perfil ||
+    profile.avatar_url;
   const valoracionMedia =
     rating?.count > 0 ? (rating.sum / rating.count).toFixed(1) : null;
 
@@ -281,6 +285,7 @@ async function fetchLandingData(ciudadCapital, verticalDB) {
       vertical,
       precio,
       foto_url,
+      fotos,
       ciudad,
       location_zone,
       proveedor_id,

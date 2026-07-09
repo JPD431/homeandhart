@@ -81,17 +81,20 @@ export function getServiceDescription(service) {
   return fallback;
 }
 
+import { parseFotosFromDb } from "@/app/lib/service-photos";
+
 /**
- * URLs de fotos del servicio.
- * Hoy en BD solo persiste services.foto_url (text); el wizard preview puede pasar fotos[].
+ * URLs de fotos del servicio (ordenadas; portada = [0]).
+ * Prioriza services.fotos (jsonb); fallback a foto_url legacy.
  */
 export function getServicePhotos(service) {
   if (!service) return [];
-  if (Array.isArray(service.fotos)) {
-    return [...new Set(service.fotos.filter(Boolean))];
-  }
-  if (service.foto_url) return [service.foto_url];
-  return [];
+  return parseFotosFromDb(service);
+}
+
+/** URL de portada para tarjetas, emails y SEO. */
+export function getServiceCoverPhoto(service) {
+  return getServicePhotos(service)[0] ?? null;
 }
 
 function hasPetFriendlyInDescription(service) {

@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import Navbar from "@/app/components/Navbar";
 import { SERIF } from "@/app/components/brand";
+import { getServiceCoverPhoto } from "@/app/lib/service-card-display";
 import { supabase } from "@/app/lib/supabase";
 
 const VERTICAL_THEME = {
@@ -121,6 +122,7 @@ function CompararContent() {
           precio,
           disponible,
           foto_url,
+          fotos,
           reserva_inmediata,
           cancellation_policy,
           disponible_para_viajar,
@@ -453,6 +455,7 @@ function CompararContent() {
                 const avg =
                   rating?.count > 0 ? (rating.sum / rating.count).toFixed(1) : null;
                 const reviewCount = rating?.count || 0;
+                const coverPhoto = getServiceCoverPhoto(service);
 
                 return (
                   <div
@@ -472,10 +475,10 @@ function CompararContent() {
                         background: theme.gradient,
                       }}
                     >
-                      {service.foto_url ? (
+                      {coverPhoto ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
-                          src={service.foto_url}
+                          src={coverPhoto}
                           alt=""
                           style={{ width: "100%", height: "100%", objectFit: "cover" }}
                         />

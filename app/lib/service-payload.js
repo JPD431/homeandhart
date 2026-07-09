@@ -1,5 +1,6 @@
 import { serializeCapacidad } from "@/app/lib/capacidad";
 import { serializeDescuentosDuracionForDb } from "@/app/lib/descuentosDuracion";
+import { parseFotosFromDb, syncServicePhotos } from "@/app/lib/service-photos";
 
 export const DIAS_SEMANA = [
   { id: "lun", label: "Lun" },
@@ -261,9 +262,13 @@ export function buildServicePayload(details, vertical, ciudad, proveedorId, disp
     descuentos_duracion: serializeDescuentosDuracionForDb(details),
     proveedor_emergencia: details.proveedor_emergencia === true,
     amenities: details.amenities || [],
-    foto_url: details.foto_url || null,
     capacidad: serializeCapacidad(details, vertical),
   };
+
+  syncServicePhotos(
+    payload,
+    parseFotosFromDb({ fotos: details.fotos, foto_url: details.foto_url }),
+  );
 
   if (vertical === "alojamiento") {
     payload.normas = serializeNormas(details);

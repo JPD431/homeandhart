@@ -3,9 +3,8 @@ import { notFound } from "next/navigation";
 import AnuncioBookingPanel from "@/app/components/AnuncioBookingPanel";
 import AnuncioPreviewBanner from "@/app/components/AnuncioPreviewBanner";
 import AnuncioProveedorBlock from "@/app/components/AnuncioProveedorBlock";
-import ServiceAnuncioContent, {
-  ServicePhotoGallery,
-} from "@/app/components/ServiceAnuncioContent";
+import ServicePhotoGalleryHero from "@/app/components/ServicePhotoGalleryHero";
+import ServiceAnuncioContent from "@/app/components/ServiceAnuncioContent";
 import { SERIF } from "@/app/components/brand";
 import { normalizeCancelPolicy } from "@/app/lib/cancelacion-politica";
 import {
@@ -177,10 +176,9 @@ export default async function AnuncioPage({ params, searchParams }) {
       </header>
 
       <div className="w-full" style={{ borderBottom: "1px solid #e8e4de" }}>
-        <ServicePhotoGallery
+        <ServicePhotoGalleryHero
           photos={photos}
           vertical={service.vertical}
-          hero
           className="w-full"
         />
       </div>

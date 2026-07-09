@@ -669,6 +669,7 @@ function BuscarContent() {
           reserva_inmediata,
           descripcion,
           foto_url,
+          fotos,
           tipo_alojamiento,
           modalidad,
           location_zone,

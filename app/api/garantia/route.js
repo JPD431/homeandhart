@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { getServiceCoverPhoto } from "@/app/lib/service-card-display";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -55,6 +56,7 @@ export async function POST(request) {
         vertical,
         ciudad,
         foto_url,
+        fotos,
         proveedor_id,
         profiles:proveedor_id!inner (
           nombre,
@@ -116,7 +118,7 @@ export async function POST(request) {
           [proveedor.nombre, proveedor.apellido].filter(Boolean).join(" ") ||
           "Proveedor";
         const foto =
-          svc.foto_url ||
+          getServiceCoverPhoto(svc) ||
           proveedor.foto_perfil ||
           proveedor.avatar_url ||
           null;

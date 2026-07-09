@@ -89,7 +89,9 @@ export default function ServiceCard({
 
   if (!service) return null;
 
-  const primaryPhoto = getServicePhotos(service)[0] ?? null;
+  const photos = getServicePhotos(service);
+  const primaryPhoto = photos[0] ?? null;
+  const extraPhotoCount = photos.length > 1 ? photos.length - 1 : 0;
   const anuncioHref = buildAnuncioHref(
     service.id,
     fechaBusquedaDesde,
@@ -191,6 +193,15 @@ export default function ServiceCard({
             )}
           </Link>
         )}
+
+        {extraPhotoCount > 0 ? (
+          <span
+            className="pointer-events-none absolute bottom-2 left-2 rounded-md px-2 py-1 text-[10px] font-semibold text-white"
+            style={{ backgroundColor: "rgba(0,0,0,.62)" }}
+          >
+            +{extraPhotoCount} {extraPhotoCount === 1 ? "foto" : "fotos"}
+          </span>
+        ) : null}
 
         {!isPreview && (
           <button

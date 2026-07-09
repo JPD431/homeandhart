@@ -67,14 +67,15 @@ import {
   formatMissingPublishDocumentLabels,
   getMissingPublishDocumentsForVertical,
 } from "@/app/lib/provider-documents";
+import ServicePhotoUploadField from "@/app/components/provider/ServicePhotoUploadField";
 import { getServiceDescription } from "@/app/lib/service-card-display";
+import { parseFotosFromDb } from "@/app/lib/service-photos";
 import { supabase } from "@/app/lib/supabase";
 
 import {
   loadProviderDocuments,
   persistProviderDocument,
   uploadProfilePhoto,
-  uploadServicePhoto,
 } from "@/app/lib/provider-uploads";
 import {
   COBROS_REQUERIDOS_MSG,
@@ -194,6 +195,7 @@ function emptyServiceDetails() {
     descuentos_duracion: [{ minDias: "", descuento: "" }],
     proveedor_emergencia: false,
     amenities: [],
+    fotos: [],
     foto_url: "",
     capacidad: { ...DEFAULT_CAPACIDAD_ALOJAMIENTO },
     nru: "",
@@ -232,6 +234,8 @@ function mergeServiceDetails(rawDetails, vertical) {
     merged.anos_experiencia != null ? String(merged.anos_experiencia) : "";
   merged.nru = merged.nru || "";
   merged.capacidad = merged.capacidad ?? { ...DEFAULT_CAPACIDAD_ALOJAMIENTO };
+  merged.fotos = parseFotosFromDb({ fotos: merged.fotos, foto_url: merged.foto_url });
+  merged.foto_url = merged.fotos[0] || merged.foto_url || "";
 
   if (vertical === "alojamiento") {
     merged.normas = parseNormasFromDb({ normas: rawDetails?.normas ?? merged.normas });
@@ -277,7 +281,8 @@ function mapServiceFromDb(row) {
         : [{ minDias: "", descuento: "" }],
     proveedor_emergencia: row.proveedor_emergencia === true,
     amenities: row.amenities || [],
-    foto_url: row.foto_url || "",
+    fotos: parseFotosFromDb(row),
+    foto_url: parseFotosFromDb(row)[0] || "",
     capacidad: parseCapacidadFromDb(row),
     direccion_exacta: row.direccion_exacta || "",
     telefono_contacto: row.telefono_contacto || "",
@@ -604,9 +609,6 @@ function DescuentosDuracionFields({ serviceId, details, onChange }) {
 }
 
 function ServiceEditForm({ vertical, details: rawDetails, onChange, userId, serviceId, onUploadError }) {
-  const servicePhotoInputRef = useRef(null);
-  const [photoUploading, setPhotoUploading] = useState(false);
-  const [photoError, setPhotoError] = useState("");
   const details = useMemo(
     () => mergeServiceDetails(rawDetails, vertical),
     [rawDetails, vertical],
@@ -614,59 +616,6 @@ function ServiceEditForm({ vertical, details: rawDetails, onChange, userId, serv
 
   function update(field, val) {
     onChange({ ...details, [field]: val });
-  }
-
-  async function handleServicePhotoChange(e) {
-    const file = e.target.files?.[0];
-    if (!file || !userId) return;
-    setPhotoUploading(true);
-    setPhotoError("");
-    onUploadError?.("");
-    try {
-      console.log("[editar-perfil] subiendo foto servicio", {
-        vertical,
-        userId,
-        fileName: file.name,
-      });
-      const url = await uploadServicePhoto(userId, vertical, file, 0);
-      console.log("[editar-perfil] foto servicio URL recibida", { url, serviceId });
-      const nextDetails = { ...details, foto_url: url };
-      onChange(nextDetails);
-      console.log("[editar-perfil] estado details.foto_url actualizado", { foto_url: url });
-
-      if (serviceId) {
-        const { data: persisted, error: persistError } = await supabase
-          .from("services")
-          .update({ foto_url: url })
-          .eq("id", serviceId)
-          .select("id, foto_url")
-          .single();
-        console.log("[editar-perfil] foto persistida en BD inmediata", {
-          persisted,
-          persistError,
-        });
-        if (persistError) {
-          throw new Error(
-            persistError.message || "La foto se subió pero no se guardó en la base de datos.",
-          );
-        }
-        if (persisted?.foto_url && persisted.foto_url !== url) {
-          throw new Error(
-            `La BD guardó otra URL (${persisted.foto_url}). Esperada: ${url}`,
-          );
-        }
-      }
-
-      onUploadError?.("");
-    } catch (err) {
-      const message = err?.message || "No se pudo subir la foto del servicio.";
-      console.error("[editar-perfil] error subiendo foto servicio", err);
-      setPhotoError(message);
-      onUploadError?.(message);
-    } finally {
-      setPhotoUploading(false);
-      e.target.value = "";
-    }
   }
 
   const capacidad = details.capacidad ?? { ...DEFAULT_CAPACIDAD_ALOJAMIENTO };
@@ -706,6 +655,16 @@ function ServiceEditForm({ vertical, details: rawDetails, onChange, userId, serv
           style={{ borderColor: BRAND.border }}
         />
       </div>
+      <ServicePhotoUploadField
+        vertical={vertical}
+        userId={userId}
+        serviceId={serviceId}
+        details={details}
+        onChange={onChange}
+        onUploadError={onUploadError}
+        label={serviceFotosLabel(vertical, "edit")}
+        multiple
+      />
       {(vertical === "ninos" || vertical === "mascotas") && (
         <div>
           <label className="mb-1.5 block text-xs font-medium text-[#444]">Años de experiencia</label>
@@ -847,46 +806,6 @@ function ServiceEditForm({ vertical, details: rawDetails, onChange, userId, serv
               onChange={(ids) => update("amenities", ids)}
               accentColor={BRAND.primary}
             />
-          </div>
-          <div className="sm:col-span-2">
-            <p className="mb-2 text-xs font-medium text-[#444]">{serviceFotosLabel(vertical, "edit")}</p>
-            <input
-              ref={servicePhotoInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleServicePhotoChange}
-            />
-            {details.foto_url ? (
-              <div className="relative mb-3 inline-block h-32 w-48 overflow-hidden rounded-xl border" style={{ borderColor: BRAND.border }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={details.foto_url}
-                  alt=""
-                  className="h-full w-full object-cover"
-                />
-              </div>
-            ) : (
-              <p className="mb-3 text-xs text-[#888]">Sin foto subida</p>
-            )}
-            <button
-              type="button"
-              onClick={() => servicePhotoInputRef.current?.click()}
-              disabled={photoUploading || !userId}
-              className="rounded-lg border px-4 py-2 text-xs font-semibold disabled:opacity-60"
-              style={{ borderColor: BRAND.primary, color: BRAND.primary }}
-            >
-              {photoUploading
-                ? "Subiendo…"
-                : details.foto_url
-                  ? "Cambiar foto"
-                  : "Subir foto"}
-            </button>
-            {photoError && (
-              <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
-                {photoError}
-              </p>
-            )}
           </div>
         </>
       )}
