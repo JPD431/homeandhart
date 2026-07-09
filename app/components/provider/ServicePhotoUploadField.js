@@ -7,13 +7,11 @@ import {
   getServicePhotoLimit,
   normalizeFotosArray,
   syncDetailsPhotos,
-  syncServicePhotos,
 } from "@/app/lib/service-photos";
-import { supabase } from "@/app/lib/supabase";
 
 /**
  * Campo de galería con subida a Media, reordenar y elegir portada.
- * Persiste en BD inmediatamente si serviceId está definido.
+ * Persiste en BD vía PATCH /api/services/[id]/fotos (inmediato si hay serviceId).
  */
 export default function ServicePhotoUploadField({
   vertical,
@@ -26,43 +24,98 @@ export default function ServicePhotoUploadField({
   multiple = true,
 }) {
   const inputRef = useRef(null);
+  const detailsRef = useRef(details);
+  detailsRef.current = details;
+
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
+  const [successHint, setSuccessHint] = useState("");
 
   const fotos = normalizeFotosArray(details?.fotos, details?.foto_url);
   const maxCount = getServicePhotoLimit(vertical);
 
   async function persistFotos(nextFotos) {
-    const nextDetails = syncDetailsPhotos({ ...details, fotos: nextFotos });
+    const normalized = normalizeFotosArray(nextFotos);
+    const baseDetails = detailsRef.current ?? details;
+    const nextDetails = syncDetailsPhotos({ ...baseDetails, fotos: normalized });
+
+    console.log("[ServicePhotoUploadField] persistFotos — estado local", {
+      serviceId,
+      vertical,
+      count: normalized.length,
+      fotos: normalized,
+    });
+
     onChange(nextDetails);
+    detailsRef.current = nextDetails;
 
-    if (!serviceId) return;
+    if (!serviceId) {
+      console.warn(
+        "[ServicePhotoUploadField] sin serviceId — fotos solo en memoria hasta Guardar",
+      );
+      setSuccessHint(
+        normalized.length > 0
+          ? `${normalized.length} foto(s) en el formulario. Pulsa «Guardar cambios» para confirmar.`
+          : "",
+      );
+      return nextDetails;
+    }
 
-    const payload = syncServicePhotos({}, nextFotos);
-    const { data, error: persistError } = await supabase
-      .from("services")
-      .update(payload)
-      .eq("id", serviceId)
-      .select("id, fotos, foto_url")
-      .single();
+    console.log("[ServicePhotoUploadField] PATCH /api/services/.../fotos", {
+      serviceId,
+      count: normalized.length,
+    });
 
-    if (persistError) {
+    const res = await fetch(`/api/services/${serviceId}/fotos`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ fotos: normalized }),
+    });
+
+    const payload = await res.json().catch(() => ({}));
+
+    console.log("[ServicePhotoUploadField] PATCH respuesta", {
+      status: res.status,
+      ok: res.ok,
+      payload,
+    });
+
+    if (!res.ok) {
       throw new Error(
-        persistError.message || "No se pudieron guardar las fotos en la base de datos.",
+        payload.error ||
+          `No se pudieron guardar las fotos (HTTP ${res.status}).`,
       );
     }
 
-    const saved = normalizeFotosArray(data?.fotos, data?.foto_url);
-    onChange(syncDetailsPhotos({ ...details, fotos: saved }));
+    const saved = normalizeFotosArray(payload.fotos, payload.foto_url);
+    if (saved.length !== normalized.length) {
+      throw new Error(
+        `La base de datos guardó ${saved.length} foto(s) pero se enviaron ${normalized.length}.`,
+      );
+    }
+
+    const synced = syncDetailsPhotos({ ...nextDetails, fotos: saved });
+    onChange(synced);
+    detailsRef.current = synced;
+    setSuccessHint(
+      saved.length === 1
+        ? "1 foto guardada en el anuncio."
+        : `${saved.length} fotos guardadas en el anuncio.`,
+    );
+    return synced;
   }
 
   async function applyFotos(nextFotos) {
     setError("");
+    setSuccessHint("");
     onUploadError?.("");
     try {
       await persistFotos(nextFotos);
+      onUploadError?.("");
     } catch (err) {
       const message = err?.message || "No se pudieron guardar las fotos.";
+      console.error("[ServicePhotoUploadField] applyFotos error", err);
       setError(message);
       onUploadError?.(message);
       throw err;
@@ -72,30 +125,71 @@ export default function ServicePhotoUploadField({
   async function handleFiles(e) {
     const files = Array.from(e.target.files ?? []);
     e.target.value = "";
+
+    console.log("[ServicePhotoUploadField] archivos seleccionados", {
+      count: files.length,
+      names: files.map((f) => f.name),
+      multiple,
+      currentFotos: fotos.length,
+    });
+
     if (!files.length || !userId) return;
 
-    const remaining = maxCount - fotos.length;
+    const currentFotos = normalizeFotosArray(
+      detailsRef.current?.fotos,
+      detailsRef.current?.foto_url,
+    );
+    const remaining = maxCount - currentFotos.length;
     const toAdd = files.slice(0, remaining);
-    if (!toAdd.length) return;
+
+    if (!toAdd.length) {
+      setError(`Ya tienes el máximo de ${maxCount} fotos.`);
+      onUploadError?.(`Ya tienes el máximo de ${maxCount} fotos.`);
+      return;
+    }
+
+    if (files.length > remaining) {
+      setError(
+        `Solo caben ${remaining} foto(s) más (máximo ${maxCount}). Se subirán las primeras ${remaining}.`,
+      );
+    }
 
     setUploading(true);
     setError("");
+    setSuccessHint("");
     onUploadError?.("");
 
     try {
       const newUrls = [];
+      let workingFotos = [...currentFotos];
+
       for (let i = 0; i < toAdd.length; i++) {
+        const file = toAdd[i];
+        console.log("[ServicePhotoUploadField] subiendo", {
+          index: workingFotos.length,
+          fileName: file.name,
+          fileSize: file.size,
+        });
         const url = await uploadServicePhoto(
           userId,
           vertical,
-          toAdd[i],
-          fotos.length + i,
+          file,
+          workingFotos.length,
         );
+        console.log("[ServicePhotoUploadField] URL recibida", { index: i, url });
         newUrls.push(url);
+        workingFotos = normalizeFotosArray([...workingFotos, url]);
       }
-      await applyFotos(normalizeFotosArray([...fotos, ...newUrls]));
+
+      console.log("[ServicePhotoUploadField] subida completa", {
+        newUrlsCount: newUrls.length,
+        totalFotos: workingFotos.length,
+      });
+
+      await applyFotos(workingFotos);
     } catch (err) {
       const message = err?.message || "No se pudo subir la foto.";
+      console.error("[ServicePhotoUploadField] handleFiles error", err);
       setError(message);
       onUploadError?.(message);
     } finally {
@@ -104,7 +198,11 @@ export default function ServicePhotoUploadField({
   }
 
   async function handleRemove(index) {
-    const next = fotos.filter((_, i) => i !== index);
+    const currentFotos = normalizeFotosArray(
+      detailsRef.current?.fotos,
+      detailsRef.current?.foto_url,
+    );
+    const next = currentFotos.filter((_, i) => i !== index);
     setUploading(true);
     try {
       await applyFotos(next);
@@ -116,8 +214,12 @@ export default function ServicePhotoUploadField({
   }
 
   async function handleMakeCover(index) {
-    if (index <= 0 || index >= fotos.length) return;
-    const next = [...fotos];
+    const currentFotos = normalizeFotosArray(
+      detailsRef.current?.fotos,
+      detailsRef.current?.foto_url,
+    );
+    if (index <= 0 || index >= currentFotos.length) return;
+    const next = [...currentFotos];
     const [photo] = next.splice(index, 1);
     next.unshift(photo);
     setUploading(true);
@@ -131,8 +233,12 @@ export default function ServicePhotoUploadField({
   }
 
   async function handleMoveUp(index) {
+    const currentFotos = normalizeFotosArray(
+      detailsRef.current?.fotos,
+      detailsRef.current?.foto_url,
+    );
     if (index <= 0) return;
-    const next = [...fotos];
+    const next = [...currentFotos];
     [next[index - 1], next[index]] = [next[index], next[index - 1]];
     setUploading(true);
     try {
@@ -145,8 +251,12 @@ export default function ServicePhotoUploadField({
   }
 
   async function handleMoveDown(index) {
-    if (index >= fotos.length - 1) return;
-    const next = [...fotos];
+    const currentFotos = normalizeFotosArray(
+      detailsRef.current?.fotos,
+      detailsRef.current?.foto_url,
+    );
+    if (index >= currentFotos.length - 1) return;
+    const next = [...currentFotos];
     [next[index], next[index + 1]] = [next[index + 1], next[index]];
     setUploading(true);
     try {
@@ -181,9 +291,17 @@ export default function ServicePhotoUploadField({
         onMoveUp={handleMoveUp}
         onMoveDown={handleMoveDown}
       />
+      {uploading ? (
+        <p className="mt-2 text-xs text-[#666]">Subiendo fotos…</p>
+      ) : null}
       {error ? (
         <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
           {error}
+        </p>
+      ) : null}
+      {!error && successHint ? (
+        <p className="mt-2 rounded-lg bg-green-50 px-3 py-2 text-xs text-green-800">
+          {successHint}
         </p>
       ) : null}
     </div>

@@ -69,7 +69,7 @@ import {
 } from "@/app/lib/provider-documents";
 import ServicePhotoUploadField from "@/app/components/provider/ServicePhotoUploadField";
 import { getServiceDescription } from "@/app/lib/service-card-display";
-import { parseFotosFromDb } from "@/app/lib/service-photos";
+import { parseFotosFromDb, normalizeFotosArray } from "@/app/lib/service-photos";
 import { supabase } from "@/app/lib/supabase";
 
 import {
@@ -1323,10 +1323,12 @@ function EditarPerfilContent() {
       }
 
       console.log(
-        "[editar-perfil] guardar — foto_url en estado antes de Supabase",
+        "[editar-perfil] guardar — fotos en estado antes de Supabase",
         services.map((s) => ({
           id: s.id,
           vertical: s.vertical,
+          fotosCount: normalizeFotosArray(s.details?.fotos, s.details?.foto_url).length,
+          fotos: normalizeFotosArray(s.details?.fotos, s.details?.foto_url),
           foto_url: s.details?.foto_url,
         })),
       );
@@ -1370,6 +1372,8 @@ function EditarPerfilContent() {
         console.log("[editar-perfil] guardar — payload servicio", {
           serviceId: service.id,
           vertical: service.vertical,
+          fotosCount: Array.isArray(payload.fotos) ? payload.fotos.length : 0,
+          fotos: payload.fotos,
           foto_url: payload.foto_url,
         });
 
@@ -1377,14 +1381,52 @@ function EditarPerfilContent() {
           const { error } = await supabase.from("services").insert(payload);
           if (error) throw error;
         } else {
+          const expectedFotos = parseFotosFromDb({
+            fotos: payload.fotos,
+            foto_url: payload.foto_url,
+          });
+
           const { data: updated, error } = await supabase
             .from("services")
             .update(payload)
             .eq("id", service.id)
-            .select("id, foto_url")
+            .select("id, fotos, foto_url")
             .single();
-          console.log("[editar-perfil] guardar — BD devolvió", updated);
+
           if (error) throw error;
+
+          let savedFotos = parseFotosFromDb(updated);
+          console.log("[editar-perfil] guardar — BD devolvió", {
+            id: updated?.id,
+            fotosCount: savedFotos.length,
+            fotos: updated?.fotos,
+            foto_url: updated?.foto_url,
+          });
+
+          if (savedFotos.length !== expectedFotos.length) {
+            console.warn(
+              "[editar-perfil] fotos no coinciden tras update cliente — fallback API",
+              { expected: expectedFotos.length, saved: savedFotos.length },
+            );
+            const res = await fetch(`/api/services/${service.id}/fotos`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              credentials: "same-origin",
+              body: JSON.stringify({ fotos: expectedFotos }),
+            });
+            const apiPayload = await res.json().catch(() => ({}));
+            if (!res.ok) {
+              throw new Error(
+                apiPayload.error ||
+                  "No se pudieron guardar las fotos del servicio.",
+              );
+            }
+            savedFotos = normalizeFotosArray(apiPayload.fotos, apiPayload.foto_url);
+            console.log("[editar-perfil] guardar — fotos vía API", {
+              fotosCount: savedFotos.length,
+              fotos: savedFotos,
+            });
+          }
         }
       }
 
