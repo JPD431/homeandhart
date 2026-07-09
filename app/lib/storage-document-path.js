@@ -1,5 +1,8 @@
-/** Bucket privado de documentos del proveedor. */
-export const STORAGE_BUCKET = "Documentos";
+/** Bucket privado de documentos del proveedor (DNI, antecedentes, NRU, etc.). */
+export const STORAGE_BUCKET_DOCUMENTOS = "Documentos";
+
+/** @deprecated Usar STORAGE_BUCKET_DOCUMENTOS */
+export const STORAGE_BUCKET = STORAGE_BUCKET_DOCUMENTOS;
 
 /** TTL por defecto para signed URLs del admin (10 min). */
 export const ADMIN_SIGNED_URL_TTL = 600;

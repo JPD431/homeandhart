@@ -5,7 +5,7 @@ import {
   ADMIN_SIGNED_URL_TTL,
   extractStoragePath,
   isAllowedStoragePath,
-  STORAGE_BUCKET,
+  STORAGE_BUCKET_DOCUMENTOS,
 } from "@/app/lib/storage-document-path";
 
 const supabaseAdmin = createClient(
@@ -36,7 +36,7 @@ export async function GET(request) {
   }
 
   const { data, error } = await supabaseAdmin.storage
-    .from(STORAGE_BUCKET)
+    .from(STORAGE_BUCKET_DOCUMENTOS)
     .createSignedUrl(path, ADMIN_SIGNED_URL_TTL);
 
   if (error) {

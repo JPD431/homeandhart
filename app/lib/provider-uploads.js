@@ -6,7 +6,14 @@ import {
   normalizeDocumentId,
 } from "@/app/lib/provider-documents";
 
-export const STORAGE_BUCKET = "Documentos";
+/** Bucket privado: DNI, antecedentes, NRU y documentos opcionales. */
+export const STORAGE_BUCKET_DOCUMENTOS = "Documentos";
+
+/** Bucket público: avatares de perfil y fotos de anuncios/servicios. */
+export const STORAGE_BUCKET_MEDIA = "Media";
+
+/** @deprecated Usar STORAGE_BUCKET_DOCUMENTOS */
+export const STORAGE_BUCKET = STORAGE_BUCKET_DOCUMENTOS;
 
 /** @deprecated Importar desde @/app/lib/provider-documents */
 export { DOC_ID_TO_PROFILE_FIELD, getProfileFieldForDocId };
@@ -15,10 +22,12 @@ export async function uploadProfilePhoto(userId, file) {
   const ext = file.name.includes(".") ? file.name.split(".").pop() : "jpg";
   const filePath = `${userId}/foto-perfil-${Date.now()}.${ext}`;
   const { error } = await supabase.storage
-    .from(STORAGE_BUCKET)
+    .from(STORAGE_BUCKET_MEDIA)
     .upload(filePath, file, { upsert: true, contentType: file.type });
   if (error) throw error;
-  const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(filePath);
+  const { data } = supabase.storage
+    .from(STORAGE_BUCKET_MEDIA)
+    .getPublicUrl(filePath);
   return data.publicUrl;
 }
 
@@ -30,7 +39,7 @@ export async function uploadDocumentToStorage(userId, storageKey, file) {
   const ext = file.name.includes(".") ? file.name.split(".").pop() : "pdf";
   const filePath = `${userId}/${storageKey}-${Date.now()}.${ext}`;
   const { error } = await supabase.storage
-    .from(STORAGE_BUCKET)
+    .from(STORAGE_BUCKET_DOCUMENTOS)
     .upload(filePath, file, { upsert: true, contentType: file.type });
   if (error) throw error;
   return filePath;
@@ -56,10 +65,12 @@ export async function uploadServicePhoto(userId, vertical, file, index) {
   const ext = file.name.includes(".") ? file.name.split(".").pop() : "jpg";
   const filePath = `${userId}/service-${vertical}-${index}-${Date.now()}.${ext}`;
   const { error } = await supabase.storage
-    .from(STORAGE_BUCKET)
+    .from(STORAGE_BUCKET_MEDIA)
     .upload(filePath, file, { upsert: true, contentType: file.type });
   if (error) throw error;
-  const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(filePath);
+  const { data } = supabase.storage
+    .from(STORAGE_BUCKET_MEDIA)
+    .getPublicUrl(filePath);
   return data.publicUrl;
 }
 
