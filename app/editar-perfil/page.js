@@ -69,7 +69,7 @@ import {
 } from "@/app/lib/provider-documents";
 import ServicePhotoUploadField from "@/app/components/provider/ServicePhotoUploadField";
 import { getServiceDescription } from "@/app/lib/service-card-display";
-import { parseFotosFromDb, normalizeFotosArray } from "@/app/lib/service-photos";
+import { parseFotosFromDb, parseFotosFromDbStrict, normalizeFotosArray } from "@/app/lib/service-photos";
 import { supabase } from "@/app/lib/supabase";
 
 import {
@@ -1395,10 +1395,11 @@ function EditarPerfilContent() {
 
           if (error) throw error;
 
-          let savedFotos = parseFotosFromDb(updated);
+          let savedFotos = parseFotosFromDbStrict(updated);
           console.log("[editar-perfil] guardar — BD devolvió", {
             id: updated?.id,
-            fotosCount: savedFotos.length,
+            fotosCountStrict: savedFotos.length,
+            fotosCountWithFallback: parseFotosFromDb(updated).length,
             fotos: updated?.fotos,
             foto_url: updated?.foto_url,
           });
@@ -1421,7 +1422,12 @@ function EditarPerfilContent() {
                   "No se pudieron guardar las fotos del servicio.",
               );
             }
-            savedFotos = normalizeFotosArray(apiPayload.fotos, apiPayload.foto_url);
+            if (apiPayload.verified !== true) {
+              throw new Error(
+                "La API no confirmó la escritura de fotos en la base de datos.",
+              );
+            }
+            savedFotos = normalizeFotosArray(apiPayload.fotos);
             console.log("[editar-perfil] guardar — fotos vía API", {
               fotosCount: savedFotos.length,
               fotos: savedFotos,

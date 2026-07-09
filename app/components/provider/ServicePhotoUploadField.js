@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import ServicePhotoUploadGrid from "@/app/components/provider/ServicePhotoUploadGrid";
 import { uploadServicePhoto } from "@/app/lib/provider-uploads";
 import {
+  fotosArraysEqual,
   getServicePhotoLimit,
   normalizeFotosArray,
   syncDetailsPhotos,
@@ -61,16 +62,19 @@ export default function ServicePhotoUploadField({
       return nextDetails;
     }
 
-    console.log("[ServicePhotoUploadField] PATCH /api/services/.../fotos", {
+    const patchBody = { fotos: normalized };
+    console.log("[ServicePhotoUploadField] PATCH /api/services/.../fotos — body exacto", {
       serviceId,
       count: normalized.length,
+      fotos: normalized,
+      bodyJson: JSON.stringify(patchBody),
     });
 
     const res = await fetch(`/api/services/${serviceId}/fotos`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       credentials: "same-origin",
-      body: JSON.stringify({ fotos: normalized }),
+      body: JSON.stringify(patchBody),
     });
 
     const payload = await res.json().catch(() => ({}));
@@ -78,20 +82,38 @@ export default function ServicePhotoUploadField({
     console.log("[ServicePhotoUploadField] PATCH respuesta", {
       status: res.status,
       ok: res.ok,
+      verified: payload.verified,
+      savedCount: Array.isArray(payload.fotos) ? payload.fotos.length : null,
       payload,
     });
 
     if (!res.ok) {
+      const detail =
+        payload.saved && payload.sent
+          ? ` Enviadas: ${payload.sent.length}, en BD (fotos[]): ${payload.saved?.length ?? "?"}.`
+          : "";
       throw new Error(
-        payload.error ||
-          `No se pudieron guardar las fotos (HTTP ${res.status}).`,
+        (payload.error ||
+          `No se pudieron guardar las fotos (HTTP ${res.status}).`) + detail,
       );
     }
 
-    const saved = normalizeFotosArray(payload.fotos, payload.foto_url);
+    if (payload.verified !== true) {
+      throw new Error(
+        "El servidor no confirmó la escritura en la base de datos (verified=false).",
+      );
+    }
+
+    const saved = normalizeFotosArray(payload.fotos);
     if (saved.length !== normalized.length) {
       throw new Error(
         `La base de datos guardó ${saved.length} foto(s) pero se enviaron ${normalized.length}.`,
+      );
+    }
+
+    if (!fotosArraysEqual(saved, normalized)) {
+      throw new Error(
+        "Las URLs devueltas por la BD no coinciden con las enviadas. Revisa la consola.",
       );
     }
 
@@ -183,7 +205,9 @@ export default function ServicePhotoUploadField({
 
       console.log("[ServicePhotoUploadField] subida completa", {
         newUrlsCount: newUrls.length,
+        newUrls,
         totalFotos: workingFotos.length,
+        arrayFinalParaPatch: workingFotos,
       });
 
       await applyFotos(workingFotos);

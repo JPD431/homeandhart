@@ -37,6 +37,38 @@ export function normalizeFotosArray(fotos, fotoUrlFallback = null) {
 }
 
 /**
+ * Extrae fotos del jsonb SIN fallback a foto_url (solo para verificar escrituras).
+ * @param {object|null|undefined} row
+ * @returns {string[]}
+ */
+export function parseFotosFromDbStrict(row) {
+  if (!row) return [];
+
+  let raw = row.fotos;
+  if (typeof raw === "string") {
+    try {
+      raw = JSON.parse(raw);
+    } catch {
+      return [];
+    }
+  }
+
+  return normalizeFotosArray(raw, null);
+}
+
+/**
+ * Compara dos arrays de URLs (mismo orden y mismas cadenas).
+ * @param {string[]} a
+ * @param {string[]} b
+ */
+export function fotosArraysEqual(a, b) {
+  if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) {
+    return false;
+  }
+  return a.every((url, i) => url === b[i]);
+}
+
+/**
  * Lee fotos desde una fila de BD (jsonb) con fallback a foto_url legacy.
  * @param {object|null|undefined} row
  * @returns {string[]}
