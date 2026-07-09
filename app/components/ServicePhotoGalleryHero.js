@@ -1,16 +1,25 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import PhotoArchProgressBar from "@/app/components/PhotoArchProgressBar";
 import { getServiceCardTheme } from "@/app/lib/service-card-display";
+import { photoArchStyle } from "@/app/lib/photo-arch-shape";
 
-function Placeholder({ vertical, className = "", minHeight = 280 }) {
+function ArchPlaceholder({ vertical, style = {}, className = "" }) {
   const theme = getServiceCardTheme(vertical);
   return (
     <div
-      className={`overflow-hidden ${className}`}
-      style={{ background: theme.gradient, minHeight }}
+      className={`flex min-h-[200px] w-full items-center justify-center ${className}`}
+      style={{
+        ...photoArchStyle("main"),
+        background: theme.gradient,
+        maxHeight: "min(55vh, 420px)",
+        ...style,
+      }}
       aria-hidden
-    />
+    >
+      <span className="text-4xl opacity-40">🏠</span>
+    </div>
   );
 }
 
@@ -96,7 +105,7 @@ function Lightbox({ photos, index, onClose, onChangeIndex }) {
           setTouchStartX(null);
         }}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
+        {/* eslint-disable-next-line @next/next/no-img-element — lightbox: foto completa, sin arco */}
         <img
           src={photos[index]}
           alt=""
@@ -107,8 +116,108 @@ function Lightbox({ photos, index, onClose, onChangeIndex }) {
   );
 }
 
+function MobileCarousel({ photos, vertical, onOpenLightbox }) {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const touchStartX = useRef(null);
+  const scrollRef = useRef(null);
+
+  const goTo = useCallback(
+    (index) => {
+      const wrapped = ((index % photos.length) + photos.length) % photos.length;
+      setActiveIndex(wrapped);
+      scrollRef.current?.children[wrapped]?.scrollIntoView({
+        behavior: "smooth",
+        inline: "center",
+        block: "nearest",
+      });
+    },
+    [photos.length],
+  );
+
+  return (
+    <div className="w-full">
+      <div
+        ref={scrollRef}
+        className="flex snap-x snap-mandatory overflow-x-auto scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        onTouchStart={(e) => {
+          touchStartX.current = e.changedTouches[0]?.clientX ?? null;
+        }}
+        onTouchEnd={(e) => {
+          if (touchStartX.current == null || photos.length <= 1) return;
+          const delta =
+            (e.changedTouches[0]?.clientX ?? 0) - touchStartX.current;
+          touchStartX.current = null;
+          if (Math.abs(delta) < 40) return;
+          if (delta > 0) goTo(activeIndex - 1);
+          else goTo(activeIndex + 1);
+        }}
+        onScroll={() => {
+          const el = scrollRef.current;
+          if (!el || !el.children.length) return;
+          const w = el.offsetWidth;
+          const idx = Math.round(el.scrollLeft / w);
+          if (idx !== activeIndex && idx >= 0 && idx < photos.length) {
+            setActiveIndex(idx);
+          }
+        }}
+      >
+        {photos.map((url, index) => (
+          <button
+            key={`${url}-${index}`}
+            type="button"
+            onClick={() => onOpenLightbox(index)}
+            className="relative mx-1 w-[calc(100%-0.5rem)] shrink-0 snap-center first:ml-0 last:mr-0"
+            style={{
+              ...photoArchStyle("mobile"),
+              height: "min(52vh, 340px)",
+            }}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={url}
+              alt=""
+              className="h-full w-full object-cover"
+              loading={index === 0 ? "eager" : "lazy"}
+            />
+          </button>
+        ))}
+      </div>
+      <PhotoArchProgressBar
+        count={photos.length}
+        activeIndex={activeIndex}
+        vertical={vertical}
+        className="mt-2 px-1"
+      />
+    </div>
+  );
+}
+
+function ArchPhotoButton({
+  url,
+  variant = "main",
+  className = "",
+  style = {},
+  onClick,
+  overlay = null,
+  bottomAction = null,
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`relative block h-full w-full ${className}`}
+      style={{ ...photoArchStyle(variant), ...style }}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={url} alt="" className="h-full w-full object-cover" />
+      {overlay}
+      {bottomAction}
+    </button>
+  );
+}
+
 /**
- * Galería hero estilo Airbnb + lightbox a pantalla completa.
+ * Galería hero del anuncio — arco Home&Heart + lightbox rectangular.
  */
 export default function ServicePhotoGalleryHero({
   photos = [],
@@ -116,7 +225,6 @@ export default function ServicePhotoGalleryHero({
   className = "",
 }) {
   const [lightboxIndex, setLightboxIndex] = useState(null);
-  const theme = getServiceCardTheme(vertical);
 
   const openLightbox = useCallback((index) => {
     setLightboxIndex(index);
@@ -126,25 +234,36 @@ export default function ServicePhotoGalleryHero({
     setLightboxIndex(null);
   }, []);
 
+  const heroMaxHeight = "min(58vh, 420px)";
+
   if (!photos.length) {
-    return <Placeholder vertical={vertical} className={className} minHeight={280} />;
+    return (
+      <ArchPlaceholder
+        vertical={vertical}
+        className={className}
+        style={{ maxHeight: heroMaxHeight }}
+      />
+    );
   }
+
+  const verFotosButton = (
+    <span className="absolute bottom-3 left-1/2 z-[2] -translate-x-1/2 rounded-full bg-white/95 px-4 py-1.5 text-xs font-semibold text-[#1a1a1a] shadow-md">
+      Ver {photos.length} {photos.length === 1 ? "foto" : "fotos"}
+    </span>
+  );
 
   if (photos.length === 1) {
     return (
       <>
-        <button
-          type="button"
-          onClick={() => openLightbox(0)}
-          className={`block w-full overflow-hidden ${className}`}
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={photos[0]}
-            alt=""
-            className="h-[min(480px,55vh)] w-full object-cover"
+        <div className={className} style={{ maxHeight: heroMaxHeight }}>
+          <ArchPhotoButton
+            url={photos[0]}
+            variant="main"
+            style={{ height: heroMaxHeight, maxHeight: heroMaxHeight }}
+            onClick={() => openLightbox(0)}
+            bottomAction={verFotosButton}
           />
-        </button>
+        </div>
         {lightboxIndex != null ? (
           <Lightbox
             photos={photos}
@@ -157,79 +276,63 @@ export default function ServicePhotoGalleryHero({
     );
   }
 
-  const sidePhotos = photos.slice(1, 5);
-  const extraCount = photos.length - 5;
+  const thumbTop = photos[1];
+  const thumbBottom = photos[2];
+  const extraCount = photos.length - 3;
 
   return (
     <>
       <div className={`md:hidden ${className}`}>
-        <div className="flex snap-x snap-mandatory overflow-x-auto scroll-smooth">
-          {photos.map((url, index) => (
-            <button
-              key={`${url}-${index}`}
-              type="button"
-              onClick={() => openLightbox(index)}
-              className="relative h-64 w-full shrink-0 snap-center"
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={url} alt="" className="h-full w-full object-cover" />
-              <span className="absolute bottom-3 right-3 rounded-full bg-black/55 px-2.5 py-1 text-xs font-medium text-white">
-                {index + 1} / {photos.length}
-              </span>
-            </button>
-          ))}
-        </div>
+        <MobileCarousel
+          photos={photos}
+          vertical={vertical}
+          onOpenLightbox={openLightbox}
+        />
       </div>
 
       <div
-        className={`hidden max-h-[min(480px,55vh)] grid-cols-4 grid-rows-2 gap-2 overflow-hidden md:grid ${className}`}
+        className={`hidden gap-2 md:grid md:grid-cols-3 ${className}`}
+        style={{ maxHeight: heroMaxHeight, height: heroMaxHeight }}
       >
-        <button
-          type="button"
-          onClick={() => openLightbox(0)}
-          className="relative col-span-2 row-span-2 overflow-hidden rounded-l-xl"
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={photos[0]} alt="" className="h-full w-full object-cover" />
-        </button>
-        {sidePhotos.map((url, i) => {
-          const globalIndex = i + 1;
-          const isLastCell = i === sidePhotos.length - 1 && extraCount > 0;
-          const roundedClass =
-            globalIndex === 2
-              ? "rounded-tr-xl"
-              : globalIndex === 4 ||
-                  (sidePhotos.length <= 2 && globalIndex === sidePhotos.length)
-                ? "rounded-br-xl"
-                : "";
+        <div className="col-span-2 h-full min-h-0">
+          <ArchPhotoButton
+            url={photos[0]}
+            variant="main"
+            className="h-full"
+            onClick={() => openLightbox(0)}
+            bottomAction={verFotosButton}
+          />
+        </div>
 
-          return (
-            <button
-              key={`${url}-${globalIndex}`}
-              type="button"
-              onClick={() => openLightbox(globalIndex)}
-              className={`relative overflow-hidden ${roundedClass}`}
-              style={{ minHeight: 120 }}
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={url} alt="" className="h-full w-full object-cover" />
-              {isLastCell ? (
-                <span className="absolute inset-0 flex items-center justify-center bg-black/45 text-lg font-semibold text-white">
-                  +{extraCount} fotos
-                </span>
-              ) : null}
-            </button>
-          );
-        })}
-        {sidePhotos.length < 4
-          ? Array.from({ length: 4 - sidePhotos.length }).map((_, i) => (
-              <div
-                key={`empty-${i}`}
-                style={{ background: theme.gradient, minHeight: 120 }}
-                aria-hidden
+        <div className="flex h-full min-h-0 flex-col gap-2">
+          {thumbTop ? (
+            <div className="min-h-0 flex-1">
+              <ArchPhotoButton
+                url={thumbTop}
+                variant="thumb"
+                className="h-full"
+                onClick={() => openLightbox(1)}
               />
-            ))
-          : null}
+            </div>
+          ) : null}
+          {thumbBottom ? (
+            <div className="relative min-h-0 flex-1">
+              <ArchPhotoButton
+                url={thumbBottom}
+                variant="thumb"
+                className="h-full"
+                onClick={() => openLightbox(2)}
+                overlay={
+                  extraCount > 0 ? (
+                    <span className="absolute inset-0 flex items-center justify-center bg-black/45 text-base font-semibold text-white">
+                      +{extraCount} {extraCount === 1 ? "foto" : "fotos"}
+                    </span>
+                  ) : null
+                }
+              />
+            </div>
+          ) : null}
+        </div>
       </div>
 
       {lightboxIndex != null ? (

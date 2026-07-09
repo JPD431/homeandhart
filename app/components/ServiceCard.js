@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import ServiceCardPhotoCarousel from "@/app/components/ServiceCardPhotoCarousel";
 import { supabase } from "@/app/lib/supabase";
 import {
   buildAnuncioHref,
@@ -90,8 +91,6 @@ export default function ServiceCard({
   if (!service) return null;
 
   const photos = getServicePhotos(service);
-  const primaryPhoto = photos[0] ?? null;
-  const extraPhotoCount = photos.length > 1 ? photos.length - 1 : 0;
   const anuncioHref = buildAnuncioHref(
     service.id,
     fechaBusquedaDesde,
@@ -130,106 +129,23 @@ export default function ServiceCard({
       ? "No reviews"
       : "Sin valoraciones";
 
+  const photoHref = isPreview
+    ? null
+    : showAnuncioLinks
+      ? anuncioHref
+      : `/proveedor/${profile.id}`;
+
   const cardBody = (
     <>
-      <div
-        className="relative h-[160px] w-full overflow-hidden"
-        style={{ position: "relative" }}
+      <ServiceCardPhotoCarousel
+        photos={photos}
+        vertical={service.vertical}
+        href={photoHref}
+        isPreview={isPreview}
+        height={160}
       >
-        {isPreview ? (
-          <div className="block h-full w-full">
-            {primaryPhoto ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={primaryPhoto}
-                alt=""
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <div
-                className="h-full w-full"
-                style={{ background: theme.gradient }}
-              />
-            )}
-          </div>
-        ) : showAnuncioLinks ? (
-          <Link
-            href={anuncioHref}
-            onClick={(e) => e.stopPropagation()}
-            className="block h-full w-full"
-          >
-            {primaryPhoto ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={primaryPhoto}
-                alt=""
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <div
-                className="h-full w-full"
-                style={{ background: theme.gradient }}
-              />
-            )}
-          </Link>
-        ) : (
-          <Link
-            href={`/proveedor/${profile.id}`}
-            onClick={(e) => e.stopPropagation()}
-            className="block h-full w-full"
-          >
-            {primaryPhoto ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={primaryPhoto}
-                alt=""
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <div
-                className="h-full w-full"
-                style={{ background: theme.gradient }}
-              />
-            )}
-          </Link>
-        )}
-
-        {extraPhotoCount > 0 ? (
-          <span
-            className="pointer-events-none absolute bottom-2 left-2 rounded-md px-2 py-1 text-[10px] font-semibold text-white"
-            style={{ backgroundColor: "rgba(0,0,0,.62)" }}
-          >
-            +{extraPhotoCount} {extraPhotoCount === 1 ? "foto" : "fotos"}
-          </span>
-        ) : null}
-
-        {!isPreview && (
-          <button
-            type="button"
-            onClick={toggleFavorito}
-            style={{
-              position: "absolute",
-              top: 8,
-              right: 8,
-              background: "rgba(255,255,255,.9)",
-              border: "none",
-              borderRadius: "50%",
-              width: 32,
-              height: 32,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              cursor: "pointer",
-              fontSize: 14,
-              zIndex: 2,
-            }}
-          >
-            {esFavorito ? "❤️" : "🤍"}
-          </button>
-        )}
-
         <div
-          className="pointer-events-none absolute inset-0"
+          className="pointer-events-none absolute inset-0 z-[1]"
           style={{
             background:
               "linear-gradient(to bottom, transparent 40%, rgba(0,0,0,.55) 100%)",
@@ -237,7 +153,7 @@ export default function ServiceCard({
           aria-hidden
         />
         <span
-          className="absolute right-2.5 top-2.5 px-2.5 py-1 text-[10px] font-semibold"
+          className="pointer-events-none absolute right-2.5 top-2.5 z-[2] px-2.5 py-1 text-[10px] font-semibold"
           style={{
             backgroundColor: "rgba(255,255,255,.92)",
             borderRadius: 14,
@@ -247,7 +163,7 @@ export default function ServiceCard({
           {priceLabel}
         </span>
         <span
-          className="absolute bottom-2 left-2.5 flex h-[22px] w-[22px] items-center justify-center rounded-full text-[8px] font-bold text-white"
+          className="pointer-events-none absolute bottom-2 left-2.5 z-[2] flex h-[22px] w-[22px] items-center justify-center rounded-full text-[8px] font-bold text-white"
           style={{
             backgroundColor: theme.color,
             border: "1.5px solid rgba(255,255,255,.7)",
@@ -256,6 +172,17 @@ export default function ServiceCard({
           {getServiceCardInitials(profile.nombre, profile.apellido)}
         </span>
 
+        {!isPreview && (
+          <button
+            type="button"
+            onClick={toggleFavorito}
+            className="absolute right-2 top-2 z-[4] flex h-8 w-8 items-center justify-center rounded-full border-0 bg-white/90 text-sm"
+            style={{ cursor: "pointer" }}
+          >
+            {esFavorito ? "❤️" : "🤍"}
+          </button>
+        )}
+
         {!isPreview && !bundleMode && (
           <button
             type="button"
@@ -263,7 +190,7 @@ export default function ServiceCard({
               e.stopPropagation();
               if (!compareFull) onToggleComparar?.(service);
             }}
-            className="absolute bottom-2 right-2 rounded px-2 py-1 text-[9px] font-semibold text-white transition-opacity hover:opacity-90"
+            className="absolute bottom-2 right-2 z-[2] rounded px-2 py-1 text-[9px] font-semibold text-white transition-opacity hover:opacity-90"
             style={{
               backgroundColor: isComparing ? theme.color : "rgba(0,0,0,.55)",
               opacity: compareFull ? 0.5 : 1,
@@ -273,7 +200,7 @@ export default function ServiceCard({
             {isComparing ? "✓ Añadido" : "＋ Comparar"}
           </button>
         )}
-      </div>
+      </ServiceCardPhotoCarousel>
 
       <div className="px-3 py-2.5">
         <div className="flex items-center justify-between gap-2">
