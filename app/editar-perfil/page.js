@@ -603,27 +603,66 @@ function DescuentosDuracionFields({ serviceId, details, onChange }) {
   );
 }
 
-function ServiceEditForm({ vertical, details: rawDetails, onChange, userId }) {
+function ServiceEditForm({ vertical, details: rawDetails, onChange, userId, serviceId, onUploadError }) {
   const servicePhotoInputRef = useRef(null);
   const [photoUploading, setPhotoUploading] = useState(false);
+  const [photoError, setPhotoError] = useState("");
   const details = useMemo(
     () => mergeServiceDetails(rawDetails, vertical),
     [rawDetails, vertical],
   );
 
   function update(field, val) {
-    onChange({ ...(rawDetails || {}), [field]: val });
+    onChange({ ...details, [field]: val });
   }
 
   async function handleServicePhotoChange(e) {
     const file = e.target.files?.[0];
     if (!file || !userId) return;
     setPhotoUploading(true);
+    setPhotoError("");
+    onUploadError?.("");
     try {
+      console.log("[editar-perfil] subiendo foto servicio", {
+        vertical,
+        userId,
+        fileName: file.name,
+      });
       const url = await uploadServicePhoto(userId, vertical, file, 0);
-      update("foto_url", url);
+      console.log("[editar-perfil] foto servicio URL recibida", { url, serviceId });
+      const nextDetails = { ...details, foto_url: url };
+      onChange(nextDetails);
+      console.log("[editar-perfil] estado details.foto_url actualizado", { foto_url: url });
+
+      if (serviceId) {
+        const { data: persisted, error: persistError } = await supabase
+          .from("services")
+          .update({ foto_url: url })
+          .eq("id", serviceId)
+          .select("id, foto_url")
+          .single();
+        console.log("[editar-perfil] foto persistida en BD inmediata", {
+          persisted,
+          persistError,
+        });
+        if (persistError) {
+          throw new Error(
+            persistError.message || "La foto se subió pero no se guardó en la base de datos.",
+          );
+        }
+        if (persisted?.foto_url && persisted.foto_url !== url) {
+          throw new Error(
+            `La BD guardó otra URL (${persisted.foto_url}). Esperada: ${url}`,
+          );
+        }
+      }
+
+      onUploadError?.("");
     } catch (err) {
-      console.error("Error subiendo foto:", err);
+      const message = err?.message || "No se pudo subir la foto del servicio.";
+      console.error("[editar-perfil] error subiendo foto servicio", err);
+      setPhotoError(message);
+      onUploadError?.(message);
     } finally {
       setPhotoUploading(false);
       e.target.value = "";
@@ -843,6 +882,11 @@ function ServiceEditForm({ vertical, details: rawDetails, onChange, userId }) {
                   ? "Cambiar foto"
                   : "Subir foto"}
             </button>
+            {photoError && (
+              <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
+                {photoError}
+              </p>
+            )}
           </div>
         </>
       )}
@@ -1354,8 +1398,19 @@ function EditarPerfilContent() {
     try {
       let fotoUrl = fotoPerfil;
       if (profilePhotoFile) {
+        console.log("[editar-perfil] subiendo foto perfil");
         fotoUrl = await uploadProfilePhoto(userId, profilePhotoFile);
+        console.log("[editar-perfil] foto perfil URL recibida", { fotoUrl });
       }
+
+      console.log(
+        "[editar-perfil] guardar — foto_url en estado antes de Supabase",
+        services.map((s) => ({
+          id: s.id,
+          vertical: s.vertical,
+          foto_url: s.details?.foto_url,
+        })),
+      );
 
       const descripcionParts = [descripcion.trim()];
       if (personalidad.trim()) {
@@ -1393,14 +1448,23 @@ function EditarPerfilContent() {
           ...locationFields,
         };
 
+        console.log("[editar-perfil] guardar — payload servicio", {
+          serviceId: service.id,
+          vertical: service.vertical,
+          foto_url: payload.foto_url,
+        });
+
         if (service.isNew) {
           const { error } = await supabase.from("services").insert(payload);
           if (error) throw error;
         } else {
-          const { error } = await supabase
+          const { data: updated, error } = await supabase
             .from("services")
             .update(payload)
-            .eq("id", service.id);
+            .eq("id", service.id)
+            .select("id, foto_url")
+            .single();
+          console.log("[editar-perfil] guardar — BD devolvió", updated);
           if (error) throw error;
         }
       }
@@ -1498,6 +1562,7 @@ function EditarPerfilContent() {
 
       setSuccessMessage("Cambios guardados correctamente ✓");
     } catch (err) {
+      console.error("[editar-perfil] error al guardar", err);
       setErrorMessage(err.message || "Error al guardar los cambios.");
     } finally {
       setSubmitting(false);
@@ -1803,7 +1868,7 @@ function EditarPerfilContent() {
                       onToggle={toggleServiceDisponible}
                     />
                     {isEditing && (
-                      <ServiceEditForm vertical={service.vertical} details={service.details} userId={userId} onChange={(details) => updateServiceDetails(service.id, details)} />
+                      <ServiceEditForm vertical={service.vertical} details={service.details} userId={userId} serviceId={service.isNew ? null : service.id} onChange={(details) => updateServiceDetails(service.id, details)} onUploadError={setErrorMessage} />
                     )}
                   </li>
                 );
@@ -1819,7 +1884,7 @@ function EditarPerfilContent() {
                     </button>
                   ))}
                 </div>
-                <ServiceEditForm vertical={newVertical} details={newServiceDetails} userId={userId} onChange={(d) => { markDirty(); setNewServiceDetails(d); }} />
+                <ServiceEditForm vertical={newVertical} details={newServiceDetails} userId={userId} onChange={(d) => { markDirty(); setNewServiceDetails(d); }} onUploadError={setErrorMessage} />
                 <button type="button" onClick={() => { setAddingService(false); setNewServiceDetails(emptyServiceDetails()); }} className="mt-4 text-sm text-[#666]">Cancelar</button>
               </div>
             ) : (
@@ -1906,7 +1971,9 @@ function EditarPerfilContent() {
               vertical={service.vertical}
               details={service.details}
               userId={userId}
+              serviceId={service.isNew ? null : service.id}
               onChange={(details) => updateServiceDetails(service.id, details)}
+              onUploadError={setErrorMessage}
             />
           </Card>
           {(service.vertical === "alojamiento" ||

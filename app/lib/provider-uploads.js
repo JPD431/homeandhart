@@ -1,5 +1,6 @@
 import { supabase } from "@/app/lib/supabase";
 import {
+  assertMediaPublicUrl,
   STORAGE_BUCKET_DOCUMENTOS,
   STORAGE_BUCKET_MEDIA,
 } from "@/app/lib/storage-buckets";
@@ -25,16 +26,45 @@ async function uploadMediaViaApi(file, fields) {
     formData.append(key, String(value));
   }
 
+  console.log("[upload/media] request", {
+    kind: fields.kind,
+    vertical: fields.vertical,
+    index: fields.index,
+    fileName: file.name,
+    fileSize: file.size,
+    fileType: file.type,
+  });
+
   const res = await fetch("/api/upload/media", {
     method: "POST",
     body: formData,
+    credentials: "same-origin",
   });
   const payload = await res.json().catch(() => ({}));
 
+  console.log("[upload/media] response", {
+    status: res.status,
+    ok: res.ok,
+    bucket: payload.bucket,
+    path: payload.path,
+    url: payload.url,
+    error: payload.error,
+  });
+
   if (!res.ok || !payload.url) {
-    throw new Error(payload.error || "No se pudo subir la imagen");
+    throw new Error(
+      payload.error ||
+        `No se pudo subir la imagen (HTTP ${res.status}). ¿Existe /api/upload/media?`,
+    );
   }
 
+  if (payload.bucket && payload.bucket !== STORAGE_BUCKET_MEDIA) {
+    throw new Error(
+      `El servidor subió al bucket "${payload.bucket}" en vez de "${STORAGE_BUCKET_MEDIA}".`,
+    );
+  }
+
+  assertMediaPublicUrl(payload.url);
   return payload.url;
 }
 
