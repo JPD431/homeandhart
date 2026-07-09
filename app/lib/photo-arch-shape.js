@@ -1,55 +1,67 @@
 /**
  * Forma de arco Home&Heart — puerta/ventana (hogar).
- * Curvatura suave arriba, esquinas inferiores discretas.
- * Ratio top:bottom ≈ 3.2:1 (ajustable en PHOTO_ARCH_RATIO).
+ * Curvatura suave arriba, esquinas inferiores discretas. Valores fijos (no escalan).
  */
-export const PHOTO_ARCH_RATIO = {
-  top: 32,
-  bottom: 10,
+export const PHOTO_ARCH_VARIANTS = {
+  main: { top: 24, bottom: 8 },
+  thumb: { top: 16, bottom: 6 },
+  card: { top: 22, bottom: 12 },
+  mobile: { top: 20, bottom: 8 },
 };
 
-/** Variantes de referencia (px) para afinar por contexto. */
-export const PHOTO_ARCH_VARIANTS = {
-  /** Portada del anuncio (escritorio) */
-  main: { top: 32, bottom: 10, refWidth: 520 },
-  /** Miniaturas del anuncio */
-  thumb: { top: 22, bottom: 8, refWidth: 260 },
-  /** Tarjeta /buscar y wizard (~160px alto) */
-  card: { top: 20, bottom: 6, refWidth: 320 },
-  /** Carrusel móvil del anuncio */
-  mobile: { top: 28, bottom: 9, refWidth: 390 },
+/** Proporciones de contenedor de foto (presentación). */
+export const PHOTO_ASPECT = {
+  /** Portada y carrusel del anuncio */
+  heroMain: "3 / 2",
+  /** Tarjeta /buscar y wizard */
+  card: "4 / 3",
 };
+
+export const PHOTO_SIZE = {
+  heroMaxHeight: 420,
+  cardMaxHeight: 190,
+};
+
+/** Imagen dentro de contenedor con aspect-ratio fijo */
+export const PHOTO_COVER_CLASS =
+  "absolute inset-0 h-full w-full object-cover object-center";
 
 /**
  * @param {'main'|'thumb'|'card'|'mobile'} [variant='main']
- * @param {number|null} [widthPx] — escala la curvatura al ancho real del contenedor
- * @returns {string} valor CSS border-radius (top-left top-right bottom-right bottom-left)
+ * @returns {string}
  */
-export function photoArchBorderRadius(variant = "main", widthPx = null) {
+export function photoArchBorderRadius(variant = "main") {
   const cfg = PHOTO_ARCH_VARIANTS[variant] ?? PHOTO_ARCH_VARIANTS.main;
-  let top = cfg.top;
-  let bottom = cfg.bottom;
-
-  if (widthPx != null && cfg.refWidth > 0) {
-    const scale = widthPx / cfg.refWidth;
-    top = Math.round(cfg.top * scale);
-    bottom = Math.max(4, Math.round(cfg.bottom * scale));
-  }
-
+  const { top, bottom } = cfg;
   return `${top}px ${top}px ${bottom}px ${bottom}px`;
 }
 
 /**
  * @param {'main'|'thumb'|'card'|'mobile'} [variant='main']
- * @param {number|null} [widthPx]
  * @returns {{ borderRadius: string, overflow: 'hidden' }}
  */
-export function photoArchStyle(variant = "main", widthPx = null) {
+export function photoArchStyle(variant = "main") {
   return {
-    borderRadius: photoArchBorderRadius(variant, widthPx),
+    borderRadius: photoArchBorderRadius(variant),
     overflow: "hidden",
   };
 }
 
-/** Clase Tailwind opcional (contenedor con overflow hidden). */
+/**
+ * Estilo de contenedor con aspect-ratio + tope de altura.
+ * @param {'heroMain'|'card'} aspectKey
+ * @param {number} [maxHeightPx]
+ */
+export function photoFrameStyle(aspectKey = "heroMain", maxHeightPx = null) {
+  const maxH =
+    maxHeightPx ??
+    (aspectKey === "card" ? PHOTO_SIZE.cardMaxHeight : PHOTO_SIZE.heroMaxHeight);
+  return {
+    aspectRatio: PHOTO_ASPECT[aspectKey],
+    maxHeight: maxH,
+    width: "100%",
+    position: "relative",
+  };
+}
+
 export const PHOTO_ARCH_CLIP_CLASS = "overflow-hidden";

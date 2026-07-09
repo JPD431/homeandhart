@@ -176,11 +176,13 @@ export default async function AnuncioPage({ params, searchParams }) {
       </header>
 
       <div className="w-full" style={{ borderBottom: "1px solid #e8e4de" }}>
-        <ServicePhotoGalleryHero
-          photos={photos}
-          vertical={service.vertical}
-          className="w-full"
-        />
+        <div className="mx-auto max-w-6xl">
+          <ServicePhotoGalleryHero
+            photos={photos}
+            vertical={service.vertical}
+            className="w-full"
+          />
+        </div>
       </div>
 
       <main className="mx-auto max-w-6xl px-5 py-8">

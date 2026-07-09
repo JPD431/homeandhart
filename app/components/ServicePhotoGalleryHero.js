@@ -3,22 +3,29 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import PhotoArchProgressBar from "@/app/components/PhotoArchProgressBar";
 import { getServiceCardTheme } from "@/app/lib/service-card-display";
-import { photoArchStyle } from "@/app/lib/photo-arch-shape";
+import {
+  PHOTO_COVER_CLASS,
+  PHOTO_SIZE,
+  photoArchStyle,
+  photoFrameStyle,
+} from "@/app/lib/photo-arch-shape";
 
-function ArchPlaceholder({ vertical, style = {}, className = "" }) {
+function ArchPlaceholder({ vertical, className = "" }) {
   const theme = getServiceCardTheme(vertical);
   return (
     <div
-      className={`flex min-h-[200px] w-full items-center justify-center ${className}`}
+      className={`flex w-full items-center justify-center ${className}`}
       style={{
         ...photoArchStyle("main"),
-        background: theme.gradient,
-        maxHeight: "min(55vh, 420px)",
-        ...style,
+        ...photoFrameStyle("heroMain", PHOTO_SIZE.heroMaxHeight),
       }}
       aria-hidden
     >
-      <span className="text-4xl opacity-40">🏠</span>
+      <div
+        className="absolute inset-0"
+        style={{ background: theme.gradient }}
+      />
+      <span className="relative text-4xl opacity-40">🏠</span>
     </div>
   );
 }
@@ -116,7 +123,7 @@ function Lightbox({ photos, index, onClose, onChangeIndex }) {
   );
 }
 
-function MobileCarousel({ photos, vertical, onOpenLightbox }) {
+function MobileCarousel({ photos, vertical, onOpenLightbox, totalCount }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const touchStartX = useRef(null);
   const scrollRef = useRef(null);
@@ -153,7 +160,7 @@ function MobileCarousel({ photos, vertical, onOpenLightbox }) {
         }}
         onScroll={() => {
           const el = scrollRef.current;
-          if (!el || !el.children.length) return;
+          if (!el?.children.length) return;
           const w = el.offsetWidth;
           const idx = Math.round(el.scrollLeft / w);
           if (idx !== activeIndex && idx >= 0 && idx < photos.length) {
@@ -169,16 +176,16 @@ function MobileCarousel({ photos, vertical, onOpenLightbox }) {
             className="relative mx-1 w-[calc(100%-0.5rem)] shrink-0 snap-center first:ml-0 last:mr-0"
             style={{
               ...photoArchStyle("mobile"),
-              height: "min(52vh, 340px)",
+              ...photoFrameStyle("heroMain", 320),
             }}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={url}
-              alt=""
-              className="h-full w-full object-cover"
-              loading={index === 0 ? "eager" : "lazy"}
-            />
+            <img src={url} alt="" className={PHOTO_COVER_CLASS} loading={index === 0 ? "eager" : "lazy"} />
+            {index === 0 ? (
+              <span className="pointer-events-none absolute bottom-2.5 right-2.5 z-[2] rounded-full bg-black/55 px-2.5 py-1 text-[11px] font-semibold text-white">
+                Ver {totalCount} {totalCount === 1 ? "foto" : "fotos"}
+              </span>
+            ) : null}
           </button>
         ))}
       </div>
@@ -198,19 +205,19 @@ function ArchPhotoButton({
   className = "",
   style = {},
   onClick,
-  overlay = null,
+  cornerBadge = null,
   bottomAction = null,
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`relative block h-full w-full ${className}`}
+      className={`relative block h-full w-full min-h-0 ${className}`}
       style={{ ...photoArchStyle(variant), ...style }}
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={url} alt="" className="h-full w-full object-cover" />
-      {overlay}
+      <img src={url} alt="" className={PHOTO_COVER_CLASS} />
+      {cornerBadge}
       {bottomAction}
     </button>
   );
@@ -234,32 +241,27 @@ export default function ServicePhotoGalleryHero({
     setLightboxIndex(null);
   }, []);
 
-  const heroMaxHeight = "min(58vh, 420px)";
-
-  if (!photos.length) {
-    return (
-      <ArchPlaceholder
-        vertical={vertical}
-        className={className}
-        style={{ maxHeight: heroMaxHeight }}
-      />
-    );
-  }
+  const heroRowHeight = PHOTO_SIZE.heroMaxHeight;
 
   const verFotosButton = (
-    <span className="absolute bottom-3 left-1/2 z-[2] -translate-x-1/2 rounded-full bg-white/95 px-4 py-1.5 text-xs font-semibold text-[#1a1a1a] shadow-md">
+    <span className="pointer-events-none absolute bottom-2.5 right-2.5 z-[2] rounded-full bg-black/55 px-2.5 py-1 text-[11px] font-semibold text-white">
       Ver {photos.length} {photos.length === 1 ? "foto" : "fotos"}
     </span>
   );
 
-  if (photos.length === 1) {
+  if (!photos.length) {
+    return <ArchPlaceholder vertical={vertical} className={className} />;
+  }
+
+        if (photos.length === 1) {
     return (
       <>
-        <div className={className} style={{ maxHeight: heroMaxHeight }}>
+        <div className={`mx-auto w-full max-w-6xl px-0 md:px-5 ${className}`}>
           <ArchPhotoButton
             url={photos[0]}
             variant="main"
-            style={{ height: heroMaxHeight, maxHeight: heroMaxHeight }}
+            className="w-full"
+            style={photoFrameStyle("heroMain", heroRowHeight)}
             onClick={() => openLightbox(0)}
             bottomAction={verFotosButton}
           />
@@ -282,17 +284,18 @@ export default function ServicePhotoGalleryHero({
 
   return (
     <>
-      <div className={`md:hidden ${className}`}>
+      <div className={`mx-auto w-full max-w-6xl md:hidden ${className}`}>
         <MobileCarousel
           photos={photos}
           vertical={vertical}
           onOpenLightbox={openLightbox}
+          totalCount={photos.length}
         />
       </div>
 
       <div
-        className={`hidden gap-2 md:grid md:grid-cols-3 ${className}`}
-        style={{ maxHeight: heroMaxHeight, height: heroMaxHeight }}
+        className={`mx-auto hidden w-full max-w-6xl px-0 md:grid md:grid-cols-3 md:gap-2 md:px-5 ${className}`}
+        style={{ height: heroRowHeight, maxHeight: heroRowHeight }}
       >
         <div className="col-span-2 h-full min-h-0">
           <ArchPhotoButton
@@ -322,10 +325,10 @@ export default function ServicePhotoGalleryHero({
                 variant="thumb"
                 className="h-full"
                 onClick={() => openLightbox(2)}
-                overlay={
+                cornerBadge={
                   extraCount > 0 ? (
-                    <span className="absolute inset-0 flex items-center justify-center bg-black/45 text-base font-semibold text-white">
-                      +{extraCount} {extraCount === 1 ? "foto" : "fotos"}
+                    <span className="pointer-events-none absolute bottom-2 right-2 z-[2] rounded-md bg-black/60 px-2 py-0.5 text-[11px] font-semibold text-white">
+                      +{extraCount}
                     </span>
                   ) : null
                 }

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import ServiceCardPhotoCarousel from "@/app/components/ServiceCardPhotoCarousel";
 import { supabase } from "@/app/lib/supabase";
 import {
@@ -18,28 +18,27 @@ import {
   normalizeServiceProfile,
 } from "@/app/lib/service-card-display";
 
+/** Máximo 2 chips visibles, priorizando verificado y tipo de reserva. */
+function pickCardTags(tags, profile, isPreview) {
+  const verificado = tags.find((t) => t.text.includes("Verificado"));
+  const reserva = tags.find(
+    (t) => t.text.includes("Reserva inmediata") || t.text.includes("confirmación"),
+  );
+  const rest = tags.filter((t) => t !== verificado && t !== reserva);
+
+  const badge =
+    !isPreview && profile?.badge_respuesta === "rapido"
+      ? { text: "⚡ Rápido", light: "#e6f4f0", color: "#085041" }
+      : !isPreview && profile?.badge_respuesta === "pocas_horas"
+        ? { text: "🕐 Pocas h", light: "#fdf3e3", color: "#92400e" }
+        : null;
+
+  const ordered = [verificado, reserva, ...rest, badge].filter(Boolean);
+  return ordered.slice(0, 2);
+}
+
 /**
  * Tarjeta de servicio en búsqueda (y vista previa del wizard).
- *
- * @param {object} props
- * @param {object} props.service — fila de services + profiles_public anidado
- * @param {boolean} [props.isPreview]
- * @param {number} [props.index]
- * @param {boolean} [props.isActive]
- * @param {function} [props.onHover]
- * @param {function} [props.onLeave]
- * @param {function} [props.onSelect]
- * @param {object} [props.extra]
- * @param {object} [props.t]
- * @param {string} [props.lang]
- * @param {boolean} [props.bundleMode]
- * @param {function} [props.onBundleAdd]
- * @param {Record<string, { sum: number, count: number }>} [props.ratingsByProveedor]
- * @param {object[]} [props.comparando]
- * @param {function} [props.onToggleComparar]
- * @param {string[]} [props.favoritos]
- * @param {string} [props.fechaBusquedaDesde]
- * @param {string} [props.fechaBusquedaHasta]
  */
 export default function ServiceCard({
   service,
@@ -65,10 +64,24 @@ export default function ServiceCard({
   const profile = service ? normalizeServiceProfile(service) : {};
   const theme = getServiceCardTheme(service?.vertical);
   const zone = service ? getServiceCardZone(service, profile) : "";
-  const tags = service
+  const allTags = service
     ? getServiceCardTags(service, profile, lang, { isPreview })
     : [];
+  const visibleTags = useMemo(
+    () => pickCardTags(allTags, profile, isPreview),
+    [allTags, profile, isPreview],
+  );
   const priceLabel = formatServiceCardPrice(service?.precio, theme.priceSuffix);
+  const reservarLabel =
+    typeof extra?.reservar === "function"
+      ? extra.reservar(
+          service.precio != null && service.precio !== ""
+            ? `${Number(service.precio)}€`
+            : "—",
+          theme.priceSuffix,
+        )
+      : `Reservar · ${priceLabel}`;
+
   const rating = service
     ? ratingsByProveedor?.[service.proveedor_id]
     : undefined;
@@ -99,6 +112,7 @@ export default function ServiceCard({
   const showAnuncioLinks = !isPreview && !bundleMode;
 
   const toggleFavorito = async (e) => {
+    e.preventDefault();
     e.stopPropagation();
     const {
       data: { user },
@@ -135,6 +149,16 @@ export default function ServiceCard({
       ? anuncioHref
       : `/proveedor/${profile.id}`;
 
+  const handleCardClick = (e) => {
+    onSelect?.(index);
+    if (
+      showAnuncioLinks &&
+      !e.target.closest("button, a[href], [data-no-navigate]")
+    ) {
+      router.push(anuncioHref);
+    }
+  };
+
   const cardBody = (
     <>
       <ServiceCardPhotoCarousel
@@ -142,28 +166,27 @@ export default function ServiceCard({
         vertical={service.vertical}
         href={photoHref}
         isPreview={isPreview}
-        height={160}
       >
         <div
           className="pointer-events-none absolute inset-0 z-[1]"
           style={{
             background:
-              "linear-gradient(to bottom, transparent 40%, rgba(0,0,0,.55) 100%)",
+              "linear-gradient(to bottom, transparent 45%, rgba(0,0,0,.5) 100%)",
           }}
           aria-hidden
         />
         <span
-          className="pointer-events-none absolute right-2.5 top-2.5 z-[2] px-2.5 py-1 text-[10px] font-semibold"
+          className="pointer-events-none absolute right-2 top-2 z-[2] px-2 py-0.5 text-[10px] font-semibold"
           style={{
             backgroundColor: "rgba(255,255,255,.92)",
-            borderRadius: 14,
+            borderRadius: 12,
             color: "#2a3a4a",
           }}
         >
           {priceLabel}
         </span>
         <span
-          className="pointer-events-none absolute bottom-2 left-2.5 z-[2] flex h-[22px] w-[22px] items-center justify-center rounded-full text-[8px] font-bold text-white"
+          className="pointer-events-none absolute bottom-2 left-2 z-[2] flex h-5 w-5 items-center justify-center rounded-full text-[7px] font-bold text-white"
           style={{
             backgroundColor: theme.color,
             border: "1.5px solid rgba(255,255,255,.7)",
@@ -176,8 +199,8 @@ export default function ServiceCard({
           <button
             type="button"
             onClick={toggleFavorito}
-            className="absolute right-2 top-2 z-[4] flex h-8 w-8 items-center justify-center rounded-full border-0 bg-white/90 text-sm"
-            style={{ cursor: "pointer" }}
+            className="absolute left-2 top-2 z-[4] flex h-7 w-7 items-center justify-center rounded-full border-0 bg-white/90 text-xs"
+            aria-label={esFavorito ? "Quitar de favoritos" : "Añadir a favoritos"}
           >
             {esFavorito ? "❤️" : "🤍"}
           </button>
@@ -190,39 +213,48 @@ export default function ServiceCard({
               e.stopPropagation();
               if (!compareFull) onToggleComparar?.(service);
             }}
-            className="absolute bottom-2 right-2 z-[2] rounded px-2 py-1 text-[9px] font-semibold text-white transition-opacity hover:opacity-90"
+            className="absolute bottom-2 right-2 z-[2] rounded px-1.5 py-0.5 text-[8px] font-semibold text-white"
             style={{
               backgroundColor: isComparing ? theme.color : "rgba(0,0,0,.55)",
               opacity: compareFull ? 0.5 : 1,
               cursor: compareFull ? "default" : "pointer",
             }}
           >
-            {isComparing ? "✓ Añadido" : "＋ Comparar"}
+            {isComparing ? "✓" : "＋"}
           </button>
         )}
       </ServiceCardPhotoCarousel>
 
-      <div className="px-3 py-2.5">
-        <div className="flex items-center justify-between gap-2">
-          <p className="min-w-0 truncate text-[12px] font-semibold text-[#1a1a1a]">
+      <div className="flex min-h-[108px] flex-1 flex-col px-3 py-2">
+        <div className="flex min-h-[18px] items-center justify-between gap-2">
+          <p className="min-w-0 truncate text-[12px] font-semibold leading-tight text-[#1a1a1a]">
             {isPreview ? (
               <>
-                <span style={{ color: "#2a3a4a", fontWeight: 500 }}>
+                <span className="font-medium text-[#2a3a4a]">
                   {formatServiceCardShortName(profile.nombre, profile.apellido) ||
                     "Proveedor"}
                 </span>
                 <span className="font-normal text-[#888]"> · {zone}</span>
               </>
+            ) : showAnuncioLinks ? (
+              <Link
+                href={anuncioHref}
+                onClick={(e) => e.stopPropagation()}
+                className="no-underline"
+                style={{ color: "inherit" }}
+              >
+                <span className="font-medium text-[#2a3a4a]">
+                  {formatServiceCardShortName(profile.nombre, profile.apellido) ||
+                    "Proveedor"}
+                </span>
+                <span className="font-normal text-[#888]"> · {zone}</span>
+              </Link>
             ) : (
               <>
                 <Link
                   href={`/proveedor/${profile.id}`}
                   onClick={(e) => e.stopPropagation()}
-                  style={{
-                    color: "#2a3a4a",
-                    textDecoration: "none",
-                    fontWeight: 500,
-                  }}
+                  className="font-medium text-[#2a3a4a] no-underline"
                 >
                   {formatServiceCardShortName(profile.nombre, profile.apellido) ||
                     "Proveedor"}
@@ -233,148 +265,112 @@ export default function ServiceCard({
           </p>
           {valoracionMedia ? (
             <span className="shrink-0 text-[10px] text-[#c47d1a]">
-              ★ {valoracionMedia} ({numReviews})
+              ★ {valoracionMedia}
             </span>
           ) : (
-            <span className="shrink-0 text-[10px]" style={{ color: "#bbb" }}>
+            <span className="shrink-0 text-[9px] text-[#ccc]">
               {emptyRatingLabel}
             </span>
           )}
         </div>
 
-        {service.titulo &&
-          (showAnuncioLinks ? (
-            <Link
-              href={anuncioHref}
-              onClick={(e) => e.stopPropagation()}
-              className="mt-0.5 block truncate text-[10px] text-[#aaa] no-underline transition-colors hover:text-[#666]"
-            >
-              {service.titulo}
-            </Link>
-          ) : (
-            <p className="mt-0.5 truncate text-[10px] text-[#aaa]">
-              {service.titulo}
-            </p>
-          ))}
-
-        {(tags.length > 0 ||
-          (!isPreview &&
-            (profile.badge_respuesta === "rapido" ||
-              profile.badge_respuesta === "pocas_horas"))) && (
-          <div className="mt-1.5 flex flex-wrap gap-1">
-            {tags.map((tag) => (
-              <span
-                key={tag.text}
-                className="rounded-full px-2 py-0.5 text-[9px] font-semibold"
-                style={{ backgroundColor: tag.light, color: tag.color }}
-              >
-                {tag.text}
-              </span>
-            ))}
-            {!isPreview && profile.badge_respuesta === "rapido" && (
-              <span
-                className="rct rounded-full px-2 py-0.5 text-[9px] font-semibold"
-                style={{ background: "#e6f4f0", color: "#085041" }}
-              >
-                ⚡ Responde rápido
-              </span>
-            )}
-            {!isPreview && profile.badge_respuesta === "pocas_horas" && (
-              <span
-                className="rct n rounded-full px-2 py-0.5 text-[9px] font-semibold"
-                style={{ background: "#fdf3e3", color: "#92400e" }}
-              >
-                🕐 Responde en pocas horas
-              </span>
-            )}
-          </div>
-        )}
-
-        {!isPreview &&
-          (bundleMode ? (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onBundleAdd?.(service.id);
-              }}
-              className="mt-2 block w-full rounded py-2 text-center text-[11px] font-semibold text-white transition-opacity hover:opacity-90"
-              style={{ backgroundColor: theme.color }}
-            >
-              + Añadir a mi reserva
-            </button>
-          ) : (
-            <>
+        <div className="mt-0.5 h-4 shrink-0">
+          {service.titulo ? (
+            showAnuncioLinks ? (
               <Link
                 href={anuncioHref}
                 onClick={(e) => e.stopPropagation()}
-                className="mt-2 block w-full rounded py-2 text-center text-[11px] font-semibold text-white no-underline transition-opacity hover:opacity-90"
-                style={{ backgroundColor: theme.color }}
+                className="block truncate text-[10px] leading-4 text-[#aaa] no-underline hover:text-[#666]"
               >
-                Ver anuncio
+                {service.titulo}
               </Link>
-              <Link
-                href={`/proveedor/${profile.id}`}
-                onClick={(e) => e.stopPropagation()}
-                className="mt-1.5 block w-full rounded border py-2 text-center text-[11px] font-medium no-underline transition-colors hover:bg-[#f7f5f2]"
-                style={{
-                  borderColor: "#e8e4de",
-                  color: "#666",
-                }}
-              >
-                Ver perfil
-              </Link>
-              <Link
-                href={buildReservarHref(
-                  service.id,
-                  fechaBusquedaDesde,
-                  fechaBusquedaHasta,
-                )}
-                onClick={(e) => e.stopPropagation()}
-                className="mt-1.5 block w-full rounded py-2 text-center text-[11px] font-semibold text-white no-underline transition-opacity hover:opacity-90"
-                style={{ backgroundColor: theme.color }}
-              >
-                {typeof extra?.reservar === "function"
-                  ? extra.reservar(
-                      service.precio != null && service.precio !== ""
-                        ? `${Number(service.precio)}€`
-                        : "—",
-                      theme.priceSuffix,
-                    )
-                  : `Reservar · ${priceLabel}`}
-              </Link>
-            </>
+            ) : (
+              <p className="truncate text-[10px] leading-4 text-[#aaa]">
+                {service.titulo}
+              </p>
+            )
+          ) : null}
+        </div>
+
+        <div className="mt-1 flex h-5 shrink-0 items-center gap-1 overflow-hidden">
+          {visibleTags.map((tag) => (
+            <span
+              key={tag.text}
+              className="shrink-0 rounded-full px-1.5 py-px text-[8px] font-semibold leading-tight"
+              style={{ backgroundColor: tag.light, color: tag.color }}
+            >
+              {tag.text}
+            </span>
           ))}
+        </div>
+
+        <div className="mt-auto pt-2">
+          {!isPreview &&
+            (bundleMode ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onBundleAdd?.(service.id);
+                }}
+                className="block w-full rounded-md py-2 text-center text-[11px] font-semibold text-white"
+                style={{ backgroundColor: theme.color }}
+              >
+                + Añadir a mi reserva
+              </button>
+            ) : (
+              <>
+                <Link
+                  href={buildReservarHref(
+                    service.id,
+                    fechaBusquedaDesde,
+                    fechaBusquedaHasta,
+                  )}
+                  onClick={(e) => e.stopPropagation()}
+                  className="block w-full rounded-md py-2 text-center text-[11px] font-semibold text-white no-underline transition-opacity hover:opacity-90"
+                  style={{ backgroundColor: theme.color }}
+                >
+                  {reservarLabel}
+                </Link>
+                {!isPreview && (
+                  <Link
+                    href={`/proveedor/${profile.id}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="mt-1 block text-center text-[10px] text-[#999] no-underline hover:text-[#666]"
+                  >
+                    Ver perfil del proveedor
+                  </Link>
+                )}
+              </>
+            ))}
+        </div>
       </div>
     </>
   );
 
   if (isPreview) {
     return (
-      <div
-        className="w-full overflow-hidden bg-white text-left"
-        style={{ borderColor: "#e8e4de" }}
-      >
+      <div className="flex h-full w-full flex-col overflow-hidden bg-white text-left">
         {cardBody}
       </div>
     );
   }
 
   return (
-    <li>
+    <li className="h-full">
       <div
         role="button"
         tabIndex={0}
-        onClick={() => onSelect?.(index)}
+        onClick={handleCardClick}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
-            onSelect?.(index);
+            handleCardClick(e);
           }
         }}
         onMouseEnter={() => onHover?.(index)}
         onMouseLeave={() => onLeave?.()}
-        className="w-full cursor-pointer overflow-hidden border-b text-left transition-colors"
+        className="flex h-full min-h-0 w-full cursor-pointer flex-col overflow-hidden border-b text-left transition-colors"
         style={{
           borderColor: "#e8e4de",
           borderLeft: isActive ? "2px solid #1d4f91" : "2px solid transparent",

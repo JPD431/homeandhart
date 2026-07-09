@@ -4,7 +4,12 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import PhotoArchProgressBar from "@/app/components/PhotoArchProgressBar";
 import { getServiceCardTheme } from "@/app/lib/service-card-display";
-import { photoArchStyle } from "@/app/lib/photo-arch-shape";
+import {
+  PHOTO_COVER_CLASS,
+  PHOTO_SIZE,
+  photoArchStyle,
+  photoFrameStyle,
+} from "@/app/lib/photo-arch-shape";
 
 /**
  * Carrusel de fotos para ServiceCard (/buscar + wizard preview).
@@ -16,7 +21,6 @@ export default function ServiceCardPhotoCarousel({
   href = null,
   isPreview = false,
   className = "",
-  height = 160,
   children = null,
 }) {
   const theme = getServiceCardTheme(vertical);
@@ -99,8 +103,7 @@ export default function ServiceCardPhotoCarousel({
 
   const archContainerStyle = {
     ...photoArchStyle("card"),
-    height,
-    position: "relative",
+    ...photoFrameStyle("card", PHOTO_SIZE.cardMaxHeight),
   };
 
   const photoLayer =
@@ -114,7 +117,7 @@ export default function ServiceCardPhotoCarousel({
             alt=""
             loading={i === 0 ? "lazy" : "eager"}
             decoding="async"
-            className="absolute inset-0 h-full w-full object-cover transition-opacity duration-200"
+            className={`${PHOTO_COVER_CLASS} transition-opacity duration-200`}
             style={{
               opacity: i === activeIndex ? 1 : 0,
               pointerEvents: "none",
@@ -127,7 +130,7 @@ export default function ServiceCardPhotoCarousel({
     );
 
   return (
-    <div className={className}>
+    <div className={`shrink-0 ${className}`}>
       <div
         className="group/card-photo relative w-full"
         style={archContainerStyle}
@@ -175,7 +178,7 @@ export default function ServiceCardPhotoCarousel({
           count={count}
           activeIndex={activeIndex}
           vertical={vertical}
-          className="mt-1.5 px-0.5"
+          className="mt-1 px-0.5"
         />
       ) : null}
     </div>
