@@ -1,3 +1,5 @@
+import { VERTICAL_EMOJIS, verticalEmojiLabel } from "@/app/lib/vertical-emojis";
+
 /** Colores, títulos y metadatos por vertical (wizard + editar-perfil). */
 
 export const VERTICAL_COLORS = {
@@ -29,7 +31,7 @@ export const VERTICALES_CARDS = [
     id: "alojamiento",
     nombre: "Alojamiento",
     color: PRIMARY,
-    icono: "🏠",
+    icono: VERTICAL_EMOJIS.alojamiento,
     subtitulo: "Recibe familias en tu espacio",
     precioRef: "desde 45€/noche",
     beneficios: [
@@ -42,7 +44,7 @@ export const VERTICALES_CARDS = [
     id: "ninos",
     nombre: "Niñera",
     color: GREEN,
-    icono: "🧒",
+    icono: VERTICAL_EMOJIS.ninos,
     subtitulo: "Cuida niños con confianza",
     precioRef: "desde 12€/hora",
     beneficios: [
@@ -55,7 +57,7 @@ export const VERTICALES_CARDS = [
     id: "mascotas",
     nombre: "Mascotas",
     color: ORANGE,
-    icono: "🐾",
+    icono: VERTICAL_EMOJIS.mascotas,
     subtitulo: "Cuida mascotas como en casa",
     precioRef: "desde 18€/día",
     beneficios: [
@@ -68,13 +70,13 @@ export const VERTICALES_CARDS = [
 
 /** Lista compacta para editar-perfil (tabs, badges). */
 export const VERTICALS = [
-  { id: "alojamiento", label: "Alojamiento", color: PRIMARY, emoji: "🏠" },
-  { id: "ninos", label: "Niñera", color: GREEN, emoji: "🧒" },
-  { id: "mascotas", label: "Mascotas", color: ORANGE, emoji: "🐾" },
+  { id: "alojamiento", label: "Alojamiento", color: PRIMARY, emoji: VERTICAL_EMOJIS.alojamiento },
+  { id: "ninos", label: "Niñera", color: GREEN, emoji: VERTICAL_EMOJIS.ninos },
+  { id: "mascotas", label: "Mascotas", color: ORANGE, emoji: VERTICAL_EMOJIS.mascotas },
 ];
 
 export const VERTICAL_DOC_LABELS = {
-  alojamiento: "🏠 Alojamiento",
-  ninos: "🧒 Niñera",
-  mascotas: "🐾 Mascotas",
+  alojamiento: verticalEmojiLabel("alojamiento", "Alojamiento"),
+  ninos: verticalEmojiLabel("ninos", "Niñera"),
+  mascotas: verticalEmojiLabel("mascotas", "Mascotas"),
 };

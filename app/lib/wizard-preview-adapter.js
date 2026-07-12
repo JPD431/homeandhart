@@ -1,3 +1,4 @@
+import { verticalEmojiLabel } from "@/app/lib/vertical-emojis";
 import { resolveAmenities } from "@/app/lib/amenities";
 import { getCapacidadDisplayRows, formatCapacidadDisplayRow } from "@/app/lib/capacidad";
 import { normalizeCancelPolicy } from "@/app/lib/cancelacion-politica";
@@ -14,11 +15,15 @@ const CANCEL_LABELS = {
   estricta: "Estricta",
 };
 
-const VERTICAL_HEADINGS = {
-  alojamiento: "🏠 Alojamiento",
-  ninos: "🧒 Niñera",
-  mascotas: "🐾 Mascotas",
-};
+export function getWizardPreviewVerticalHeading(vertical) {
+  const labels = {
+    alojamiento: "Alojamiento",
+    ninos: "Niñera",
+    mascotas: "Mascotas",
+  };
+  const label = labels[vertical];
+  return label ? verticalEmojiLabel(vertical, label) : vertical;
+}
 
 /**
  * Convierte los datos del wizard en el objeto `service` que espera ServiceCard.
@@ -143,8 +148,4 @@ export function getWizardPreviewSummary(vertical, details = {}) {
   });
 
   return items;
-}
-
-export function getWizardPreviewVerticalHeading(vertical) {
-  return VERTICAL_HEADINGS[vertical] || vertical;
 }

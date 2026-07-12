@@ -37,6 +37,12 @@ import {
   getServiceBookabilityIssue,
   isServiceBookable,
 } from "@/app/lib/service-bookable";
+import { verticalEmojiLabel } from "@/app/lib/vertical-emojis";
+import {
+  LodgingIcon,
+  PersonIcon,
+  PetIcon,
+} from "@/app/components/vertical-icons";
 
 const stripePromise = loadStripe(
   process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
@@ -136,7 +142,7 @@ const VERTICALS = {
     unit: "noche",
     color: "#1d4f91",
     light: "#e8f0fb",
-    Icon: HomeIcon,
+    Icon: LodgingIcon,
   },
   ninos: {
     label: "Cuidado de niños",
@@ -205,31 +211,6 @@ const RESERVAR_MAIN_SERVICE_SELECT = `
     cobros_activos
   )
 `;
-
-function HomeIcon({ className, style }) {
-  return (
-    <svg className={className} style={style} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" aria-hidden>
-      <path strokeLinecap="round" strokeLinejoin="round" d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
-    </svg>
-  );
-}
-
-function PersonIcon({ className, style }) {
-  return (
-    <svg className={className} style={style} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" aria-hidden>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
-    </svg>
-  );
-}
-
-function PetIcon({ className, style }) {
-  return (
-    <svg className={className} style={style} width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <circle cx="7" cy="4" r="1.5" /><circle cx="12" cy="3" r="1.5" /><circle cx="17" cy="4" r="1.5" /><circle cx="4.5" cy="8.5" r="1.5" />
-      <path d="M12 22c-3.5 0-7-2-7-6 0-2 1.5-3.5 3-4.5 1-.7 2.5-1 4-1s3 .3 4 1c1.5 1 3 2.5 3 4.5 0 4-3.5 6-7 6z" />
-    </svg>
-  );
-}
 
 function InfoIcon({ className }) {
   return (
@@ -667,9 +648,9 @@ function formatEuro(amount) {
 const GOLD = "#c8922a";
 
 const BUNDLE_TABS = [
-  { id: "alojamiento", label: "🏠 Alojamiento" },
-  { id: "ninos", label: "🧒 Niñera" },
-  { id: "mascotas", label: "🐾 Mascotas" },
+  { id: "alojamiento", label: verticalEmojiLabel("alojamiento", "Alojamiento") },
+  { id: "ninos", label: verticalEmojiLabel("ninos", "Niñera") },
+  { id: "mascotas", label: verticalEmojiLabel("mascotas", "Mascotas") },
 ];
 
 function formatFechaDisplay(dateStr) {

@@ -9,6 +9,7 @@ import {
   formatDateRange,
   getBookingEstado,
 } from "@/app/lib/viajes";
+import { getVerticalEmoji } from "@/app/lib/vertical-emojis";
 import { supabase } from "@/app/lib/supabase";
 
 const PRIMARY = "#1d4f91";
@@ -33,7 +34,7 @@ const LOGROS_DEF = [
   },
   {
     id: "viaje_mascota",
-    emoji: "🐾",
+    emoji: "🐕",
     titulo: "Viaje con mascota",
     descripcion: "Alojamiento + mascotas en el mismo viaje",
     theme: "amber",
@@ -203,9 +204,9 @@ function getViajeEmoji(viaje) {
     const v = vr.bookings?.services?.vertical;
     if (v) verticals.add(v);
   }
-  if (verticals.has("mascotas")) return "🐾";
-  if (verticals.has("ninos")) return "🧒";
-  if (verticals.has("alojamiento")) return "🏠";
+  if (verticals.has("mascotas")) return getVerticalEmoji("mascotas");
+  if (verticals.has("ninos")) return getVerticalEmoji("ninos");
+  if (verticals.has("alojamiento")) return getVerticalEmoji("alojamiento");
   return "🧳";
 }
 

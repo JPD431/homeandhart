@@ -30,6 +30,7 @@ import {
 import {
   PRIMARY,
   VERTICALS,
+  VERTICAL_DOC_LABELS,
   getServiceHeaderTitle,
   getVerticalColor,
   GREEN,
@@ -1197,13 +1198,13 @@ function EditarPerfilContent() {
     ...(tieneServicios
       ? [
           ...verticalsActivos.includes("alojamiento")
-            ? [{ id: "alojamiento", label: "🏠 Alojamiento" }]
+            ? [{ id: "alojamiento", label: VERTICAL_DOC_LABELS.alojamiento }]
             : [],
           ...verticalsActivos.includes("ninos")
-            ? [{ id: "ninos", label: "🧒 Niñera" }]
+            ? [{ id: "ninos", label: VERTICAL_DOC_LABELS.ninos }]
             : [],
           ...verticalsActivos.includes("mascotas")
-            ? [{ id: "mascotas", label: "🐾 Mascotas" }]
+            ? [{ id: "mascotas", label: VERTICAL_DOC_LABELS.mascotas }]
             : [],
           { id: "documentos", label: "Documentos" },
         ]

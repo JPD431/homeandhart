@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useLang } from "@/app/lib/LangContext";
 import { useTranslation } from "@/app/lib/i18n";
 import { computeProveedorRating } from "@/app/lib/reviews";
+import { getVerticalEmoji } from "@/app/lib/vertical-emojis";
 import { supabase } from "@/app/lib/supabase";
 import { BRAND, SERIF } from "./brand";
 
@@ -55,7 +56,7 @@ function VerticalTag({ vertical, label }) {
       className="inline-flex rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-wider"
       style={{ backgroundColor: `${color}14`, color }}
     >
-      {label}
+      {getVerticalEmoji(vertical)} {label}
     </span>
   );
 }

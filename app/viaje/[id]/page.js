@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import Navbar from "@/app/components/Navbar";
+import { VerticalIcon as VerticalGlyph } from "@/app/components/vertical-icons";
 import { BRAND, SERIF } from "@/app/components/brand";
 import { getFamiliaInitials, getFamiliaMiembros } from "@/app/lib/familia";
 import {
@@ -36,55 +37,6 @@ function StatusBadge({ status }) {
     >
       {style.label}
     </span>
-  );
-}
-
-function VerticalIcon({ vertical, color }) {
-  const paths = {
-    alojamiento:
-      "M2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25",
-    ninos:
-      "M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z",
-    mascotas: null,
-  };
-
-  if (vertical === "mascotas") {
-    return (
-      <svg
-        width="20"
-        height="20"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke={color}
-        strokeWidth={1.5}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden
-      >
-        <circle cx="7" cy="4" r="1.5" />
-        <circle cx="12" cy="3" r="1.5" />
-        <circle cx="17" cy="4" r="1.5" />
-        <circle cx="4.5" cy="8.5" r="1.5" />
-        <path d="M12 22c-3.5 0-7-2-7-6 0-2 1.5-3.5 3-4.5 1-.7 2.5-1 4-1s3 .3 4 1c1.5 1 3 2.5 3 4.5 0 4-3.5 6-7 6z" />
-      </svg>
-    );
-  }
-
-  return (
-    <svg
-      className="h-5 w-5"
-      fill="none"
-      viewBox="0 0 24 24"
-      strokeWidth={1.5}
-      stroke={color}
-      aria-hidden
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d={paths[vertical] || paths.alojamiento}
-      />
-    </svg>
   );
 }
 
@@ -399,8 +351,9 @@ export default function ViajePage() {
                             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
                             style={{ backgroundColor: theme.light }}
                           >
-                            <VerticalIcon
+                            <VerticalGlyph
                               vertical={vertical}
+                              className="h-5 w-5"
                               color={theme.color}
                             />
                           </span>

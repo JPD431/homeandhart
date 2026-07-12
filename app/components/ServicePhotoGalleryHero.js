@@ -10,6 +10,8 @@ import {
   photoFrameStyle,
 } from "@/app/lib/photo-arch-shape";
 
+import { getVerticalEmoji } from "@/app/lib/vertical-emojis";
+
 function ArchPlaceholder({ vertical, className = "" }) {
   const theme = getServiceCardTheme(vertical);
   return (
@@ -25,7 +27,7 @@ function ArchPlaceholder({ vertical, className = "" }) {
         className="absolute inset-0"
         style={{ background: theme.gradient }}
       />
-      <span className="relative text-4xl opacity-40">🏠</span>
+      <span className="relative text-4xl opacity-40">{getVerticalEmoji(vertical)}</span>
     </div>
   );
 }
