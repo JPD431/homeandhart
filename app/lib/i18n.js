@@ -25,6 +25,10 @@ export const translations = {
       mascotas: "Mascotas",
       badge: "Marketplace de confianza",
       annadeFecha: "Añade una fecha",
+      proximamenteEnZona: "Próximamente en tu zona",
+      trustGarantia: "Garantía 30 min",
+      trustPago: "Un solo pago",
+      trustSinComisiones: "Sin comisiones ocultas",
     },
     buscar: {
       titulo: "Encuentra tu proveedor de confianza",
@@ -89,30 +93,29 @@ export const translations = {
     activityBar: {
       texto: "María acaba de reservar cuidado de niños en Madrid",
     },
-    reviews: {
+    confianza: {
+      label: "Confianza",
+      titulo: "Por qué confiar en Home&Heart",
+      mensaje:
+        "Construimos una red de confianza real, con personas que cuidan cada detalle. Verificamos a cada proveedor para que tu familia esté segura.",
+      identidadTitulo: "Identidad verificada",
+      identidadDesc: "Todos los usuarios suben su DNI.",
+      antecedentesTitulo: "Antecedentes comprobados",
+      antecedentesDesc:
+        "Los proveedores de niñera y mascotas presentan certificado de antecedentes penales; las niñeras además el certificado de delitos sexuales.",
+      pagoTitulo: "Pago protegido",
+      pagoDesc:
+        "El pago se retiene y no se libera hasta que el servicio se confirma; si hay un problema, se puede reembolsar.",
+      garantiaTitulo: "Garantía Home&Heart",
+      garantiaDesc:
+        "Si tu proveedor cancela con menos de 24 horas, activamos la red de emergencia y te proponemos alternativas verificadas en 30 minutos.",
+      garantiaLink: "Saber más sobre la garantía →",
+    },
+    landingReviews: {
       label: "LO QUE DICEN LAS FAMILIAS",
-      titulo: "580 familias ya lo han resuelto",
-      subtitulo: "Reseñas reales. Sin filtros.",
-      verTodas: "Ver todas las reseñas →",
-      paquete: "PAQUETE COMPLETO",
-      ninera: "NIÑERA",
-      mascota: "MASCOTA",
-      alojamiento: "ALOJAMIENTO",
+      titulo: "Reseñas de familias reales",
       valoracionMedia: "Valoración media",
-      resenasVerificadas: "580 reseñas verificadas",
-      recomendarian: "98% recomendarían H&H",
-      reservas: "1.200+ reservas",
-      resena1:
-        "Reservé el apartamento, la niñera y el cuidador del perro en diez minutos.",
-      resena1destacado: "Por fin alguien lo había pensado.",
-      resena1autor: "Familia francesa · Madrid, agosto 2024",
-      resena2: "Sara habló inglés con nuestros hijos. Por fin cenamos solos.",
-      resena2autor: "Familia Británica",
-      resena3: "Fotos cada pocas horas. Mi perro volvió feliz.",
-      resena4:
-        "Saber que el apartamento tenía todos los papeles fue un alivio enorme.",
-      resena4autor: "Familia Alemana",
-      plataforma: "Plataforma propia",
+      resenas: (n) => `${n} reseña${n === 1 ? "" : "s"}`,
     },
     checkout: {
       label: "RESERVA",
@@ -139,7 +142,8 @@ export const translations = {
       ahora3: "Perfiles verificados",
       antes4: "Varios pagos sin garantía",
       ahora4: "1 pago protegido",
-      reservaDemo: "Tu reserva · Madrid · 15–18 jul",
+      ejemploLabel: "Así funciona una reserva",
+      reservaDemo: "Ejemplo · Madrid · 15–18 jul",
       unPago: "Un único pago · distribuido automáticamente",
       servicios3: "3 servicios · 1 pago",
       disponibilidad: "Disponibilidad confirmada para estas fechas",
@@ -240,6 +244,10 @@ export const translations = {
       mascotas: "Pet sitting",
       badge: "Trusted marketplace",
       annadeFecha: "Add a date",
+      proximamenteEnZona: "Coming soon in your area",
+      trustGarantia: "30 min guarantee",
+      trustPago: "One payment",
+      trustSinComisiones: "No hidden fees",
     },
     buscar: {
       titulo: "Find your trusted provider",
@@ -304,30 +312,29 @@ export const translations = {
     activityBar: {
       texto: "María just booked childcare in Madrid",
     },
-    reviews: {
+    confianza: {
+      label: "Trust",
+      titulo: "Why trust Home&Heart",
+      mensaje:
+        "We are building a network of real trust, with people who care about every detail. We verify every provider so your family is safe.",
+      identidadTitulo: "Verified identity",
+      identidadDesc: "Every user uploads their ID.",
+      antecedentesTitulo: "Background checks",
+      antecedentesDesc:
+        "Childcare and pet care providers submit a criminal record certificate; babysitters also submit a sexual offences certificate.",
+      pagoTitulo: "Protected payment",
+      pagoDesc:
+        "Payment is held and not released until the service is confirmed; if something goes wrong, you can get a refund.",
+      garantiaTitulo: "Home&Heart Guarantee",
+      garantiaDesc:
+        "If your provider cancels with less than 24 hours notice, we activate the emergency network and offer verified alternatives within 30 minutes.",
+      garantiaLink: "Learn more about the guarantee →",
+    },
+    landingReviews: {
       label: "WHAT FAMILIES SAY",
-      titulo: "580 families have already solved it",
-      subtitulo: "Real reviews. No filters.",
-      verTodas: "View all reviews →",
-      paquete: "FULL PACKAGE",
-      ninera: "BABYSITTER",
-      mascota: "PET",
-      alojamiento: "ACCOMMODATION",
+      titulo: "Reviews from real families",
       valoracionMedia: "Average rating",
-      resenasVerificadas: "580 verified reviews",
-      recomendarian: "98% would recommend H&H",
-      reservas: "1,200+ bookings",
-      resena1:
-        "I booked the flat, the babysitter and the dog sitter in ten minutes.",
-      resena1destacado: "Someone had finally thought it through.",
-      resena1autor: "French family · Madrid, August 2024",
-      resena2: "Sara spoke English with our kids. We finally had dinner alone.",
-      resena2autor: "British family",
-      resena3: "Photos every few hours. My dog came back happy.",
-      resena4:
-        "Knowing the flat had all the paperwork was a huge relief.",
-      resena4autor: "German family",
-      plataforma: "Own platform",
+      resenas: (n) => `${n} review${n === 1 ? "" : "s"}`,
     },
     checkout: {
       label: "BOOKING",
@@ -352,7 +359,8 @@ export const translations = {
       ahora3: "Verified profiles",
       antes4: "Multiple payments, no guarantee",
       ahora4: "1 protected payment",
-      reservaDemo: "Your booking · Madrid · 15–18 Jul",
+      ejemploLabel: "How a booking works",
+      reservaDemo: "Example · Madrid · 15–18 Jul",
       unPago: "One payment · distributed automatically",
       servicios3: "3 services · 1 payment",
       disponibilidad: "Availability confirmed for these dates",

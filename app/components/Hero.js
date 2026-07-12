@@ -20,8 +20,6 @@ const VERTICAL_CARDS = [
     borderTop: "#163a6b",
     titleKey: "alojamiento",
     labelKey: "alojamiento",
-    fallbackCount: 124,
-    fallbackPrice: 45,
     priceUnit: { es: "por noche", en: "per night" },
   },
   {
@@ -30,8 +28,6 @@ const VERTICAL_CARDS = [
     borderTop: "#085041",
     titleKey: "ninos",
     labelKey: "ninos",
-    fallbackCount: 86,
-    fallbackPrice: 15,
     priceUnit: { es: "por hora", en: "per hour" },
   },
   {
@@ -40,18 +36,8 @@ const VERTICAL_CARDS = [
     borderTop: "#92400e",
     titleKey: "mascotas",
     labelKey: "mascotas",
-    fallbackCount: 58,
-    fallbackPrice: 20,
     priceUnit: { es: "por día", en: "per day" },
   },
-];
-
-const METRICS = [
-  { value: "340+", key: "proveedores" },
-  { value: "1.200+", key: "reservas" },
-  { value: "4.9", key: "valoracion" },
-  { value: "30min", key: "garantia", isGarantia: true },
-  { value: "98%", key: "satisfaccion" },
 ];
 
 const HERO_EXTRA = {
@@ -60,30 +46,16 @@ const HERO_EXTRA = {
     headlineEm: "aquí.",
     ciudad: "Ciudad",
     buscarBtn: "Buscar →",
-    garantia: "Garantía",
     disponibles: (n) => `${n} disponibles`,
     desde: (n) => `desde ${n}€`,
-    trust: [
-      { color: "#1d4f91", text: "340+ verificados" },
-      { color: "#0e7a5c", text: "Garantía 30 min" },
-      { color: "#c47d1a", text: "Un solo pago" },
-      { color: "#888", text: "Sin comisiones ocultas" },
-    ],
   },
   en: {
     headlineMain: "Everything your family needs, ",
     headlineEm: "here.",
     ciudad: "City",
     buscarBtn: "Search →",
-    garantia: "Guarantee",
     disponibles: (n) => `${n} available`,
     desde: (n) => `from €${n}`,
-    trust: [
-      { color: "#1d4f91", text: "340+ verified" },
-      { color: "#0e7a5c", text: "30 min guarantee" },
-      { color: "#c47d1a", text: "One payment" },
-      { color: "#888", text: "No hidden fees" },
-    ],
   },
 };
 
@@ -156,10 +128,24 @@ function ArrowIcon() {
   );
 }
 
-function VerticalCard({ card, stats, lang, extra, title, label, onClick }) {
-  const count = stats?.count ?? card.fallbackCount;
-  const minPrice = stats?.minPrice ?? card.fallbackPrice;
+function VerticalCard({
+  card,
+  stats,
+  statsLoaded,
+  lang,
+  extra,
+  proximamenteLabel,
+  title,
+  label,
+  onClick,
+}) {
+  const count = stats?.count ?? 0;
+  const minPrice = stats?.minPrice ?? null;
   const priceUnit = card.priceUnit[lang] || card.priceUnit.es;
+  const hasAvailability = statsLoaded && count > 0;
+  const availabilityText = hasAvailability
+    ? extra.disponibles(count)
+    : proximamenteLabel;
 
   return (
     <button
@@ -194,18 +180,22 @@ function VerticalCard({ card, stats, lang, extra, title, label, onClick }) {
       </h3>
 
       <p className="mt-2 text-[11px]" style={{ color: "rgba(255,255,255,.4)" }}>
-        {extra.disponibles(count)}
+        {availabilityText}
       </p>
 
-      <p
-        className="mt-5 leading-none text-white"
-        style={{ fontSize: 28, fontWeight: 200 }}
-      >
-        {extra.desde(minPrice)}
-      </p>
-      <p className="mt-1 text-[10px]" style={{ color: "rgba(255,255,255,.4)" }}>
-        {priceUnit}
-      </p>
+      {hasAvailability && minPrice != null && (
+        <>
+          <p
+            className="mt-5 leading-none text-white"
+            style={{ fontSize: 28, fontWeight: 200 }}
+          >
+            {extra.desde(minPrice)}
+          </p>
+          <p className="mt-1 text-[10px]" style={{ color: "rgba(255,255,255,.4)" }}>
+            {priceUnit}
+          </p>
+        </>
+      )}
     </button>
   );
 }
@@ -224,6 +214,13 @@ export default function Hero() {
   const [fechaHasta, setFechaHasta] = useState("");
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [verticalStats, setVerticalStats] = useState({});
+  const [statsLoaded, setStatsLoaded] = useState(false);
+
+  const trustChips = [
+    { color: "#0e7a5c", text: t.hero.trustGarantia },
+    { color: "#c47d1a", text: t.hero.trustPago },
+    { color: "#888", text: t.hero.trustSinComisiones },
+  ];
 
   const tabs = TAB_IDS.map((id) => ({
     id,
@@ -244,7 +241,10 @@ export default function Hero() {
         .eq("disponible", true)
         .eq("profiles_public.verificado", true);
 
-      if (error || !data?.length) return;
+      if (error || !data?.length) {
+        setStatsLoaded(true);
+        return;
+      }
 
       const grouped = {};
       for (const service of data) {
@@ -266,6 +266,7 @@ export default function Hero() {
       }
 
       setVerticalStats(grouped);
+      setStatsLoaded(true);
     }
 
     loadVerticalStats();
@@ -331,7 +332,6 @@ export default function Hero() {
     <div style={{ backgroundColor: "#f7f5f2" }}>
       <Navbar />
 
-      {/* Headline */}
       <section
         className="mx-auto max-w-6xl text-center"
         style={{ padding: "48px 28px 32px" }}
@@ -377,7 +377,6 @@ export default function Hero() {
         </p>
       </section>
 
-      {/* 3 vertical cards */}
       <section className="mx-auto max-w-6xl">
         <div className="grid grid-cols-1 md:grid-cols-3">
           {VERTICAL_CARDS.map((card) => (
@@ -385,8 +384,10 @@ export default function Hero() {
               key={card.id}
               card={card}
               stats={verticalStats[card.id]}
+              statsLoaded={statsLoaded}
               lang={lang}
               extra={extra}
+              proximamenteLabel={t.hero.proximamenteEnZona}
               title={getCardTitle(card)}
               label={getCardLabel(card)}
               onClick={handleVerticalClick}
@@ -395,7 +396,6 @@ export default function Hero() {
         </div>
       </section>
 
-      {/* Search bar */}
       <div ref={pickerRef} className="relative">
         <form
           onSubmit={handleSearch}
@@ -491,40 +491,12 @@ export default function Hero() {
         )}
       </div>
 
-      {/* Stats bar */}
-      <section
-        style={{ backgroundColor: "#ede9e3" }}
-        aria-label="Estadísticas de la plataforma"
-      >
-        <div className="mx-auto grid max-w-6xl grid-cols-2 gap-6 px-4 py-8 sm:grid-cols-3 lg:grid-cols-5 lg:px-6">
-          {METRICS.map((metric) => (
-            <div key={metric.key} className="text-center">
-              <p
-                className="text-[20px] leading-none"
-                style={{ color: "#1d4f91", fontWeight: 300 }}
-              >
-                {metric.value}
-              </p>
-              <p
-                className="mt-1.5 text-[9px] font-medium uppercase tracking-wide"
-                style={{ color: "#999" }}
-              >
-                {metric.isGarantia
-                  ? extra.garantia
-                  : t.metricsBar[metric.key]}
-              </p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* Trust row */}
       <section
         className="border-t"
         style={{ backgroundColor: "#f7f5f2", borderColor: "#e8e4de" }}
       >
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-x-8 gap-y-3 px-4 py-5 sm:px-6">
-          {extra.trust.map((item) => (
+          {trustChips.map((item) => (
             <div key={item.text} className="flex items-center gap-2">
               <span
                 className="h-1.5 w-1.5 shrink-0 rounded-full"

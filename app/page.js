@@ -1,8 +1,8 @@
-import ActivityBar from "./components/ActivityBar";
 import Hero from "./components/Hero";
 import ProblemSection from "./components/ProblemSection";
 import EcosystemSection from "./components/EcosystemSection";
-import ReviewsSection from "./components/ReviewsSection";
+import TrustSection from "./components/TrustSection";
+import LandingReviewsSection from "./components/LandingReviewsSection";
 import CheckoutSection from "./components/CheckoutSection";
 import RetentionSection from "./components/RetentionSection";
 import NosotrosSection from "./components/NosotrosSection";
@@ -12,11 +12,11 @@ import Footer from "./components/Footer";
 export default function Home() {
   return (
     <main>
-      <ActivityBar />
       <Hero />
       <ProblemSection />
       <EcosystemSection />
-      <ReviewsSection />
+      <TrustSection />
+      <LandingReviewsSection />
       <CheckoutSection />
       <RetentionSection />
       <NosotrosSection />

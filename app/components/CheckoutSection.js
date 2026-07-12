@@ -299,11 +299,21 @@ export default function CheckoutSection() {
             </div>
           </div>
 
-          {/* Columna derecha — panel de reserva */}
+          {/* Columna derecha — panel de ejemplo */}
           <div
             className="overflow-hidden border"
             style={{ borderColor: BRAND.border, borderRadius: "22px" }}
           >
+            <p
+              className="border-b px-5 py-2.5 text-center text-[10px] font-semibold uppercase tracking-wider"
+              style={{
+                borderColor: BRAND.border,
+                backgroundColor: BRAND.warm,
+                color: "#888",
+              }}
+            >
+              {c.ejemploLabel}
+            </p>
             <div
               className="px-5 py-5 sm:px-6"
               style={{ backgroundColor: BRAND.primary }}
