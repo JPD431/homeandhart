@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { BRAND, SERIF } from "@/app/components/brand";
+import FamiliaInviteBanner from "@/app/components/FamiliaInviteBanner";
 import {
   getFamiliaInitials,
   getUserFamiliaActiva,
@@ -165,8 +166,6 @@ function FamiliaPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const aceptarId = searchParams.get("aceptar");
-  const bienvenida = searchParams.get("bienvenida");
-  const bienvenidaFamilia = searchParams.get("familia");
 
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState(null);
@@ -282,57 +281,36 @@ function FamiliaPageContent() {
       setUserId(user.id);
 
       if (aceptarId) {
-        const { data: invitacion } = await supabase
-          .from("familia_miembros")
-          .select("id, estado, email_invitado, perfil_id, familia_id")
-          .eq("id", aceptarId)
-          .maybeSingle();
+        try {
+          const res = await fetch("/api/familia/aceptar", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ invitacion_id: aceptarId }),
+          });
+          const data = await res.json().catch(() => ({}));
 
-        if (invitacion?.estado === "pendiente") {
-          const emailMatch =
-            invitacion.email_invitado?.toLowerCase() ===
-            user.email?.toLowerCase();
-          const perfilMatch =
-            !invitacion.perfil_id || invitacion.perfil_id === user.id;
-
-          if (emailMatch && perfilMatch) {
-            const yaEnFamilia = await getUserFamiliaActiva(supabase, user.id);
-            if (!yaEnFamilia) {
-              await supabase
-                .from("familia_miembros")
-                .update({
-                  perfil_id: user.id,
-                  estado: "activo",
-                  email_invitado: null,
-                })
-                .eq("id", aceptarId);
-              setSuccess("¡Te has unido al grupo familiar!");
-            } else {
-              // Idempotencia / UX: si ya estás en una familia, no rompemos el flujo.
-              setSuccess("Ya formas parte de un grupo familiar.");
-            }
+          if (res.ok) {
+            setSuccess(data.message || "¡Te has unido al grupo familiar!");
+          } else if (data.code === "already_in_family") {
+            setError(data.error || "Ya formas parte de otro grupo familiar.");
+          } else if (data.code === "already_active") {
+            setSuccess(data.message || "Ya formas parte de este grupo familiar.");
+          } else {
+            setError(data.error || "No se pudo aceptar la invitación.");
           }
+        } catch {
+          setError("Error de conexión al aceptar la invitación.");
         }
         router.replace("/familia");
       }
 
       await loadFamilia(user.id);
 
-      if (bienvenida) {
-        const nombre = bienvenidaFamilia?.trim();
-        setSuccess(
-          nombre
-            ? `Te has unido al grupo familiar de ${nombre}.`
-            : "Te has unido al grupo familiar.",
-        );
-        router.replace("/familia");
-      }
-
       setLoading(false);
     }
 
     init();
-  }, [router, aceptarId, loadFamilia, bienvenida, bienvenidaFamilia]);
+  }, [router, aceptarId, loadFamilia]);
 
   async function handleCreateFamilia(e) {
     e.preventDefault();
@@ -381,7 +359,7 @@ function FamiliaPageContent() {
     await loadFamilia(userId);
   }
 
-  async function sendInviteEmail(email, invitacionId) {
+  async function sendInviteEmail(email, invitacionId, tieneCuenta) {
     const { data: invitador } = await supabase
       .from("profiles")
       .select("nombre, apellido")
@@ -392,15 +370,28 @@ function FamiliaPageContent() {
       [invitador?.nombre, invitador?.apellido].filter(Boolean).join(" ") ||
       "Un miembro";
 
+    const baseUrl =
+      typeof window !== "undefined"
+        ? window.location.origin
+        : process.env.NEXT_PUBLIC_URL || "";
+    const encodedEmail = encodeURIComponent(email);
+    const emailTipo = tieneCuenta
+      ? "invitacion_familia_login"
+      : "invitacion_familia_registro";
+    const accionUrl = tieneCuenta
+      ? `${baseUrl}/login?email=${encodedEmail}`
+      : `${baseUrl}/registro?email=${encodedEmail}`;
+
     await fetch("/api/emails", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        tipo: "invitacion_familia",
+        tipo: emailTipo,
         destinatario_email: email,
         invitador_nombre: invitadorNombre,
         familia_nombre: familia.nombre,
-        aceptar_url: `${process.env.NEXT_PUBLIC_URL || ""}/familia?aceptar=${invitacionId}`,
+        accion_url: accionUrl,
+        aceptar_url: `${baseUrl}/familia?aceptar=${invitacionId}`,
       }),
     });
   }
@@ -458,7 +449,11 @@ function FamiliaPageContent() {
     setResendingId(miembro.id);
     setError("");
 
-    await sendInviteEmail(miembro.email_invitado, miembro.id);
+    await sendInviteEmail(
+      miembro.email_invitado,
+      miembro.id,
+      Boolean(miembro.perfil_id),
+    );
 
     setResendingId(null);
     setSuccess("Invitación reenviada correctamente.");
@@ -515,6 +510,14 @@ function FamiliaPageContent() {
         {success && (
           <p className="rounded-lg bg-green-50 px-4 py-3 text-sm text-green-700">{success}</p>
         )}
+
+        <FamiliaInviteBanner
+          onAccepted={(data) => {
+            setSuccess(data.message || "¡Te has unido al grupo familiar!");
+            setError("");
+            if (userId) loadFamilia(userId);
+          }}
+        />
 
         {!familia ? (
           <section

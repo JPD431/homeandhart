@@ -147,15 +147,24 @@ export async function POST(request) {
   const baseUrl =
     process.env.NEXT_PUBLIC_URL || "https://homeandheart.es";
 
+  const familiaNombre = familiaRow?.nombre ?? "Home&Heart";
+  const emailTipo = existingUserId
+    ? "invitacion_familia_login"
+    : "invitacion_familia_registro";
+  const accionUrl = existingUserId
+    ? `${baseUrl}/login?email=${encodeURIComponent(email)}`
+    : `${baseUrl}/registro?email=${encodeURIComponent(email)}`;
+
   try {
     const emailRes = await fetch(`${baseUrl}/api/emails`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        tipo: "invitacion_familia",
+        tipo: emailTipo,
         destinatario_email: email,
         invitador_nombre: invitadorNombre,
-        familia_nombre: familiaRow?.nombre ?? "Home&Heart",
+        familia_nombre: familiaNombre,
+        accion_url: accionUrl,
         aceptar_url: `${baseUrl}/familia?aceptar=${invitacion.id}`,
       }),
     });

@@ -3,6 +3,7 @@ import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Navbar from '@/app/components/Navbar';
+import FamiliaInviteBanner from '@/app/components/FamiliaInviteBanner';
 import ReportarIncidenciaForm from '@/app/components/ReportarIncidenciaForm';
 import { getIngresoProveedorFromBooking } from '@/app/lib/ingresos-proveedor';
 import { puedeReportarIncidencia } from '@/app/lib/booking-incidencia';
@@ -137,6 +138,10 @@ function DashboardContent() {
   return (
     <div style={{background: BRAND.warm, minHeight: '100vh'}}>
       <Navbar />
+
+      <div style={{ padding: '12px 16px 0', maxWidth: 960, margin: '0 auto' }}>
+        <FamiliaInviteBanner compact />
+      </div>
 
       {!stripeBannerDismissed && stripeParam === 'success' && (
         <div

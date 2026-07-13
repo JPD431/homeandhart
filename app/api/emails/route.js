@@ -1922,6 +1922,72 @@ export async function POST(request) {
       return Response.json({ success: true });
     }
 
+    if (tipo === "invitacion_familia_registro") {
+      const accionUrl = data.accion_url || "#";
+      const result = await resend.emails.send({
+        from: FROM,
+        to: data.destinatario_email,
+        subject: `Te han invitado a ${data.familia_nombre ?? "un grupo familiar"} — Home&Heart`,
+        html: emailLayout({
+          title: "Invitación a grupo familiar",
+          bodyHtml: `
+            <h1 style="margin:0 0 16px;font-size:20px;color:${BRAND_PRIMARY};">Te han invitado a unirte 💛</h1>
+            <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#444;">
+              <strong>${data.invitador_nombre ?? "Un miembro"}</strong> te ha invitado a unirte al grupo familiar
+              <strong>${data.familia_nombre ?? "Home&Heart"}</strong> en Home&amp;Heart.
+            </p>
+            <p style="margin:0 0 24px;font-size:14px;line-height:1.6;color:#666;">
+              Crea tu cuenta gratis para ver las reservas del grupo y hacer reservas bajo el mismo grupo familiar.
+            </p>
+            <p style="margin:0;text-align:center;">
+              <a href="${accionUrl}" style="display:inline-block;background-color:${BRAND_PRIMARY};color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:10px;font-size:15px;font-weight:600;">
+                Regístrate para unirte
+              </a>
+            </p>
+          `,
+        }),
+      });
+
+      if (result.error) {
+        return Response.json({ error: result.error.message }, { status: 400 });
+      }
+
+      return Response.json({ success: true });
+    }
+
+    if (tipo === "invitacion_familia_login") {
+      const accionUrl = data.accion_url || "#";
+      const result = await resend.emails.send({
+        from: FROM,
+        to: data.destinatario_email,
+        subject: `Invitación a ${data.familia_nombre ?? "un grupo familiar"} — Home&Heart`,
+        html: emailLayout({
+          title: "Invitación a grupo familiar",
+          bodyHtml: `
+            <h1 style="margin:0 0 16px;font-size:20px;color:${BRAND_PRIMARY};">Tienes una invitación 💛</h1>
+            <p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#444;">
+              <strong>${data.invitador_nombre ?? "Un miembro"}</strong> te ha invitado a unirte al grupo familiar
+              <strong>${data.familia_nombre ?? "Home&Heart"}</strong> en Home&amp;Heart.
+            </p>
+            <p style="margin:0 0 24px;font-size:14px;line-height:1.6;color:#666;">
+              Inicia sesión para ver la invitación y decidir si quieres unirte al grupo.
+            </p>
+            <p style="margin:0;text-align:center;">
+              <a href="${accionUrl}" style="display:inline-block;background-color:${BRAND_PRIMARY};color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:10px;font-size:15px;font-weight:600;">
+                Inicia sesión para unirte
+              </a>
+            </p>
+          `,
+        }),
+      });
+
+      if (result.error) {
+        return Response.json({ error: result.error.message }, { status: 400 });
+      }
+
+      return Response.json({ success: true });
+    }
+
     if (tipo === "invitacion_familia") {
       const aceptarUrl = data.aceptar_url || "#";
       const result = await resend.emails.send({

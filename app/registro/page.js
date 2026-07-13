@@ -248,6 +248,7 @@ function RegistroForm() {
   const searchParams = useSearchParams();
   const refCode = searchParams.get("ref")?.trim() || null;
   const roleParam = searchParams.get("role");
+  const emailParam = searchParams.get("email")?.trim() || null;
 
   const [nombre, setNombre] = useState("");
   const [apellido, setApellido] = useState("");
@@ -267,6 +268,10 @@ function RegistroForm() {
   useEffect(() => {
     if (roleParam === "proveedor") setRole("proveedor");
   }, [roleParam]);
+
+  useEffect(() => {
+    if (emailParam) setEmail(emailParam);
+  }, [emailParam]);
 
   async function handleSubmit(e) {
     e.preventDefault();
