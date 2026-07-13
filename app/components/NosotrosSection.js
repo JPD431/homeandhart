@@ -54,7 +54,7 @@ export default function NosotrosSection() {
               {n.subtitulo}
             </p>
             <a
-              href="#"
+              href="/nuestra-historia"
               className="mt-6 inline-block text-sm transition-opacity hover:opacity-80"
               style={{ color: BRAND.primary, fontWeight: 500 }}
             >

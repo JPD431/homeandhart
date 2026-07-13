@@ -117,6 +117,34 @@ export const translations = {
       valoracionMedia: "Valoración media",
       resenas: (n) => `${n} reseña${n === 1 ? "" : "s"}`,
     },
+    historiaPage: {
+      titulo: "Nuestra historia",
+      fotoAlt: "Nuestra familia",
+      fotoCaption: "Nuestra familia",
+      fotoHint:
+        "Coloca tu foto en /public/nuestra-historia.jpg para que se vea aquí.",
+      s1titulo: "Todo empezó con una sensación.",
+      s1texto:
+        "Durante más de diez años, alquilar alojamientos por internet fue parte de nuestra forma de viajar y de vivir. Usé una de las plataformas más conocidas del mundo, como huésped y como anfitriona, y al principio era una maravilla: el trato cercano, los anfitriones que te recibían como en casa, una atención al cliente justa y humana que cuidaba por igual a ambos lados. Había algo especial, un toque humano y empático que hacía que confiar fuera fácil.\nPero con los años, ese toque se fue perdiendo. Y yo empecé a notar que ya no era lo mismo.",
+      s2titulo: "Entonces llegaron ellos.",
+      s2texto:
+        "Con nuestros hijos —y con Kaia, nuestra hija perruna— descubrimos otro problema: planificar unas vacaciones en familia se había vuelto un rompecabezas. Una app para el alojamiento, otra para encontrar quién cuidara a los niños, otra más para las mascotas... Todo separado, todo engorroso. Y no solo cuando viajábamos: también en nuestra propia ciudad, cuando queríamos una noche en pareja o ayuda para un evento concreto.\nBuscamos ayuda en varias plataformas, y tuvimos malas experiencias. La razón casi siempre era la misma: los perfiles no estaban verificados como deberían. Y cuando se trata de tu familia, eso no es un detalle menor. Es todo.",
+      s3titulo: "Así que decidimos hacer algo al respecto.",
+      s3texto:
+        "En lugar de resignarnos, en familia nos pusimos a trabajar. Durante casi dos años investigamos, estudiamos cada vertical a fondo, definimos qué era lo verdaderamente importante y reunimos toda la información necesaria para hacer las cosas bien. Sin atajos.\nDe ese esfuerzo nació Home&Heart: un ecosistema que reúne las tres cosas que más necesita cualquier familia —alojamiento, cuidado de niños y cuidado de mascotas— en un solo lugar. Puedes usarlo para una sola vertical, para dos o para las tres. Y en todas, con la misma tranquilidad.",
+      s4titulo: 'Qué significa "verificado" para nosotros.',
+      s4texto:
+        "No lo decimos por decir. Cada persona que forma parte de Home&Heart pasa por un proceso real: verificamos la identidad de todos con su documento oficial; los proveedores de cuidado de niños y mascotas presentan su certificado de antecedentes penales; y quienes cuidan de niños aportan además el certificado de delitos sexuales. A eso sumamos pagos protegidos —el importe queda retenido y no se libera hasta que el servicio se confirma— y la Garantía Home&Heart, para acompañarte también si algo no sale como esperabas. Porque queremos que todas las familias se sientan seguras y acompañadas en cada momento.",
+      s5titulo: "Esto también es para ti, si quieres cuidar.",
+      s5texto:
+        "Home&Heart no es solo para las familias que buscan: es también para las personas que quieren ofrecer sus servicios en un entorno serio, donde su trabajo se valora y donde los clientes confían porque saben que detrás hay verificación de verdad. Si tienes algo bueno que ofrecer —tu casa, tu experiencia con niños o tu cariño por los animales— aquí tienes un lugar hecho con cuidado para crecer.",
+      s6titulo: "Quiénes somos.",
+      s6texto:
+        "Me llamo Jesica Deliatisky, y junto a Jordi, Laia, Joel, Martín y Kaia somos Home&Heart. Una familia que ha viajado mucho, que ha vivido en primera persona lo estresante que puede ser organizarlo todo, y que ha construido —con muchísimo esfuerzo y corazón— la solución que a nosotros nos habría encantado tener.\nPorque entendemos el problema. Y la solución, por fin, está aquí.",
+      cierre: "Donde estés, estamos.",
+      ctaBuscar: "Buscar servicios",
+      ctaOfrecer: "Ofrecer mis servicios",
+    },
     checkout: {
       label: "RESERVA",
       titulo: "Un checkout. Todos los servicios.",
@@ -335,6 +363,34 @@ export const translations = {
       titulo: "Reviews from real families",
       valoracionMedia: "Average rating",
       resenas: (n) => `${n} review${n === 1 ? "" : "s"}`,
+    },
+    historiaPage: {
+      titulo: "Our story",
+      fotoAlt: "Our family",
+      fotoCaption: "Our family",
+      fotoHint:
+        "Place your photo at /public/nuestra-historia.jpg to show it here.",
+      s1titulo: "It all started with a feeling.",
+      s1texto:
+        "For more than ten years, booking accommodation online was part of how we travelled and lived. I used one of the world's best-known platforms, as both a guest and a host, and at first it felt wonderful: the close, personal touch, hosts who welcomed you like family, and fair, human customer support that cared for both sides equally. There was something special — a human, empathetic touch that made trust feel easy.\nBut over the years, that touch faded. And I started to notice it wasn't the same anymore.",
+      s2titulo: "Then they arrived.",
+      s2texto:
+        "With our children — and with Kaia, our furry daughter — we discovered another problem: planning a family holiday had become a puzzle. One app for accommodation, another to find someone to care for the kids, another one for pets... Everything separated, everything complicated. And not only when we travelled: also in our own city, when we wanted a date night or help for a specific event.\nWe looked for help across different platforms, and we had bad experiences. The reason was almost always the same: profiles were not verified the way they should be. And when it comes to your family, that is not a small detail. It's everything.",
+      s3titulo: "So we decided to do something about it.",
+      s3texto:
+        "Instead of accepting it, we got to work as a family. For nearly two years we researched, studied each vertical in depth, defined what truly mattered, and gathered all the information needed to do things properly. No shortcuts.\nFrom that effort, Home&Heart was born: an ecosystem that brings together the three things every family needs most — accommodation, childcare, and pet care — in one place. You can use it for one vertical, for two, or for all three. And in all of them, with the same peace of mind.",
+      s4titulo: 'What “verified” means to us.',
+      s4texto:
+        "We don't say it lightly. Everyone who becomes part of Home&Heart goes through a real process: we verify everyone's identity with an official document; childcare and pet care providers submit a criminal record certificate; and those who care for children also provide a sexual offences certificate. On top of that we add protected payments — the amount is held and not released until the service is confirmed — and the Home&Heart Guarantee, to support you even if something doesn't go as expected. Because we want every family to feel safe and supported at every moment.",
+      s5titulo: "This is for you too, if you want to provide care.",
+      s5texto:
+        "Home&Heart is not only for families who are searching: it's also for people who want to offer their services in a serious environment where their work is valued, and where clients trust because they know real verification sits behind it. If you have something good to offer — your home, your experience with children, or your love for animals — here you have a place built with care to grow.",
+      s6titulo: "Who we are.",
+      s6texto:
+        "My name is Jesica Deliatisky, and together with Jordi, Laia, Joel, Martín and Kaia, we are Home&Heart. A family that has travelled a lot, that has lived first-hand how stressful organising everything can be, and that has built — with an enormous amount of effort and heart — the solution we would have loved to have.\nBecause we understand the problem. And the solution, finally, is here.",
+      cierre: "Wherever you are, we are there.",
+      ctaBuscar: "Search services",
+      ctaOfrecer: "Offer my services",
     },
     checkout: {
       label: "BOOKING",
