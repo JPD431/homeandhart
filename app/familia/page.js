@@ -165,6 +165,8 @@ function FamiliaPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const aceptarId = searchParams.get("aceptar");
+  const bienvenida = searchParams.get("bienvenida");
+  const bienvenidaFamilia = searchParams.get("familia");
 
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState(null);
@@ -305,6 +307,9 @@ function FamiliaPageContent() {
                 })
                 .eq("id", aceptarId);
               setSuccess("¡Te has unido al grupo familiar!");
+            } else {
+              // Idempotencia / UX: si ya estás en una familia, no rompemos el flujo.
+              setSuccess("Ya formas parte de un grupo familiar.");
             }
           }
         }
@@ -312,11 +317,22 @@ function FamiliaPageContent() {
       }
 
       await loadFamilia(user.id);
+
+      if (bienvenida) {
+        const nombre = bienvenidaFamilia?.trim();
+        setSuccess(
+          nombre
+            ? `Te has unido al grupo familiar de ${nombre}.`
+            : "Te has unido al grupo familiar.",
+        );
+        router.replace("/familia");
+      }
+
       setLoading(false);
     }
 
     init();
-  }, [router, aceptarId, loadFamilia]);
+  }, [router, aceptarId, loadFamilia, bienvenida, bienvenidaFamilia]);
 
   async function handleCreateFamilia(e) {
     e.preventDefault();

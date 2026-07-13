@@ -7,6 +7,78 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY,
 );
 
+async function tryAutoJoinFamiliaInvite(user) {
+  if (!user?.id || !user?.email_confirmed_at || !user?.email) return null;
+
+  const email = user.email.trim().toLowerCase();
+  if (!email) return null;
+
+  // Seguridad: 1 familia activa por persona. Si ya tiene, no tocar invitaciones.
+  const { data: existingMembership, error: membershipError } =
+    await supabaseAdmin
+      .from("familia_miembros")
+      .select("id, familia_id")
+      .eq("perfil_id", user.id)
+      .eq("estado", "activo")
+      .maybeSingle();
+
+  if (membershipError) {
+    console.error("[auth/callback] Error leyendo familia_miembros:", membershipError);
+    return null;
+  }
+
+  if (existingMembership) return null;
+
+  // Busca invitación pendiente por email (puede existir aunque perfil_id sea null).
+  const { data: pendingInvite, error: pendingError } = await supabaseAdmin
+    .from("familia_miembros")
+    .select("id, familia_id, estado, perfil_id, email_invitado, created_at")
+    .eq("estado", "pendiente")
+    .ilike("email_invitado", email)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (pendingError) {
+    console.error("[auth/callback] Error buscando invitación pendiente:", pendingError);
+    return null;
+  }
+
+  if (!pendingInvite?.id) return null;
+
+  // Idempotencia: si ya se vinculó a alguien, no lo reasignamos.
+  if (pendingInvite.perfil_id && pendingInvite.perfil_id !== user.id) {
+    return null;
+  }
+
+  const { error: updateError } = await supabaseAdmin
+    .from("familia_miembros")
+    .update({
+      perfil_id: user.id,
+      estado: "activo",
+      email_invitado: null,
+    })
+    .eq("id", pendingInvite.id)
+    .eq("estado", "pendiente");
+
+  if (updateError) {
+    console.error("[auth/callback] Error activando invitación:", updateError);
+    return null;
+  }
+
+  const { data: familiaRow } = await supabaseAdmin
+    .from("familias")
+    .select("id, nombre")
+    .eq("id", pendingInvite.familia_id)
+    .maybeSingle();
+
+  return {
+    invitacionId: pendingInvite.id,
+    familiaId: pendingInvite.familia_id,
+    familiaNombre: familiaRow?.nombre || null,
+  };
+}
+
 function createAuthRouteClient(request, response) {
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -62,7 +134,7 @@ async function sendWelcomeEmail(user) {
 
 async function runPostVerificationSideEffects(user) {
   if (!user?.email_confirmed_at || !user.email) {
-    return;
+    return { joinedFamilia: null };
   }
 
   const { data: existingProfile } = await supabaseAdmin
@@ -144,6 +216,16 @@ async function runPostVerificationSideEffects(user) {
   } catch {
     /* no bloquear redirect si falla el email */
   }
+
+  // Auto-aceptar invitación a familia por email (caso: invitado sin cuenta).
+  let joinedFamilia = null;
+  try {
+    joinedFamilia = await tryAutoJoinFamiliaInvite(user);
+  } catch (err) {
+    console.error("[auth/callback] Error en auto-join familia:", err);
+  }
+
+  return { joinedFamilia };
 }
 
 export async function GET(request) {
@@ -178,7 +260,17 @@ export async function GET(request) {
     return NextResponse.redirect(`${origin}/registro?error=verificacion`);
   }
 
-  await runPostVerificationSideEffects(user);
+  const { joinedFamilia } = await runPostVerificationSideEffects(user);
+
+  // Si se unió automáticamente a una familia, llevamos al usuario a /familia con aviso.
+  if (joinedFamilia?.familiaId) {
+    const next = new URL("/familia", request.url);
+    next.searchParams.set("bienvenida", "1");
+    if (joinedFamilia.familiaNombre) {
+      next.searchParams.set("familia", joinedFamilia.familiaNombre);
+    }
+    response = NextResponse.redirect(next);
+  }
 
   return response;
 }
