@@ -3,6 +3,7 @@ import Stripe from "stripe";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getBookingPrecioBase } from "@/app/lib/ingresos-proveedor";
+import { notifyBookingEvent } from "@/app/lib/notifications";
 
 const supabaseAdmin = createServiceClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -320,7 +321,7 @@ export async function POST(request) {
 
   const { data: service, error: serviceError } = await supabaseAdmin
     .from("services")
-    .select("id, proveedor_id, vertical, ciudad")
+    .select("id, proveedor_id, vertical, ciudad, titulo")
     .eq("id", booking.service_id)
     .maybeSingle();
 
@@ -440,6 +441,48 @@ export async function POST(request) {
       "Error activando garantía al cancelar reserva (proveedor):",
       bookingId,
       err?.message ?? err,
+    );
+  }
+
+  try {
+    const finEmail = booking.fecha_fin || booking.fecha_inicio;
+    const { data: proveedorProfile } = await supabaseAdmin
+      .from("profiles")
+      .select("nombre, apellido")
+      .eq("id", service.proveedor_id)
+      .maybeSingle();
+    const proveedorNombre =
+      [proveedorProfile?.nombre, proveedorProfile?.apellido]
+        .filter(Boolean)
+        .join(" ")
+        .trim() || undefined;
+
+    console.log(
+      "[bookings/cancel-proveedor] Creando notificación reserva_cancelada_proveedor",
+      { bookingId, clienteId: booking.cliente_id },
+    );
+
+    const cancelNotif = await notifyBookingEvent(supabaseAdmin, {
+      tipo: "reserva_cancelada_proveedor",
+      bookingId,
+      clienteId: booking.cliente_id,
+      proveedorNombre,
+      servicioTitulo: service.titulo,
+      fechaInicio: booking.fecha_inicio,
+      fechaFin: finEmail,
+    });
+
+    if (!cancelNotif?.ok) {
+      console.error(
+        "[bookings/cancel-proveedor] Notificación reserva_cancelada_proveedor NO creada:",
+        cancelNotif,
+      );
+    }
+  } catch (notifErr) {
+    console.error(
+      "[bookings/cancel-proveedor] Error creando notificación reserva_cancelada_proveedor:",
+      notifErr,
+      { bookingId },
     );
   }
 

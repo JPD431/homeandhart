@@ -16,6 +16,7 @@ import {
   devolverCreditoCliente,
   roundMoney,
 } from "@/app/lib/stripe-reembolso";
+import { notifyBookingEvent } from "@/app/lib/notifications";
 
 const supabaseAdmin = createServiceClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -650,6 +651,53 @@ export async function POST(request) {
     );
 
   await enviarEmailReservaCanceladaCliente(booking, service, reembolso);
+
+  try {
+    const proveedor = getProveedorFromService(service);
+    const proveedorId = service?.proveedor_id;
+    const { data: clienteProfile } = await supabaseAdmin
+      .from("profiles")
+      .select("nombre, apellido")
+      .eq("id", booking.cliente_id)
+      .maybeSingle();
+    const clienteNombre =
+      [clienteProfile?.nombre, clienteProfile?.apellido]
+        .filter(Boolean)
+        .join(" ")
+        .trim() || undefined;
+    const finEmail = booking.fecha_fin || booking.fecha_inicio;
+
+    console.log(
+      "[bookings/cancelar-cliente] Creando notificación reserva_cancelada_cliente",
+      { bookingId, proveedorId },
+    );
+
+    const cancelNotif = await notifyBookingEvent(supabaseAdmin, {
+      tipo: "reserva_cancelada_cliente",
+      bookingId,
+      proveedorId,
+      clienteNombre,
+      proveedorNombre:
+        [proveedor?.nombre, proveedor?.apellido].filter(Boolean).join(" ") ||
+        undefined,
+      servicioTitulo: service?.titulo,
+      fechaInicio: booking.fecha_inicio,
+      fechaFin: finEmail,
+    });
+
+    if (!cancelNotif?.ok) {
+      console.error(
+        "[bookings/cancelar-cliente] Notificación reserva_cancelada_cliente NO creada:",
+        cancelNotif,
+      );
+    }
+  } catch (notifErr) {
+    console.error(
+      "[bookings/cancelar-cliente] Error creando notificación reserva_cancelada_cliente:",
+      notifErr,
+      { bookingId },
+    );
+  }
 
   return NextResponse.json({
     ok: true,

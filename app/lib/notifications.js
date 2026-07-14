@@ -219,6 +219,40 @@ export async function notifyBookingEvent(admin, {
         entity_id: bookingId,
       });
 
+    case "reserva_cancelada_cliente":
+      if (!proveedorId) {
+        console.error(LOG_PREFIX, "reserva_cancelada_cliente sin proveedorId", {
+          bookingId,
+        });
+        return { ok: false, reason: "no_proveedor" };
+      }
+      return createNotification(admin, {
+        user_id: proveedorId,
+        tipo: "reserva_cancelada_cliente",
+        titulo: "Reserva cancelada",
+        mensaje: `${clienteNombre || "Un cliente"} ha cancelado la reserva de ${servicio}${fechasSuffix}.`,
+        href: hrefProveedorReserva,
+        entity_type: "booking",
+        entity_id: bookingId,
+      });
+
+    case "reserva_cancelada_proveedor":
+      if (!clienteId) {
+        console.error(LOG_PREFIX, "reserva_cancelada_proveedor sin clienteId", {
+          bookingId,
+        });
+        return { ok: false, reason: "no_cliente" };
+      }
+      return createNotification(admin, {
+        user_id: clienteId,
+        tipo: "reserva_cancelada_proveedor",
+        titulo: "Reserva cancelada",
+        mensaje: `${proveedorNombre || "El proveedor"} ha cancelado tu reserva de ${servicio}${fechasSuffix}. Hemos activado la Garantía Home&Heart para ayudarte.`,
+        href: hrefClienteReserva,
+        entity_type: "booking",
+        entity_id: bookingId,
+      });
+
     default:
       console.warn(LOG_PREFIX, "tipo de reserva desconocido:", tipo);
       return { ok: false, reason: "unknown_tipo" };
@@ -233,8 +267,14 @@ export function resolveNotificationHref(notification) {
     return `/dashboard?tab=proveedor&booking=${entityId}`;
   }
 
+  if (tipo === "reserva_cancelada_cliente" && entityId) {
+    return `/dashboard?tab=proveedor&booking=${entityId}`;
+  }
+
   if (
-    (tipo === "reserva_confirmada" || tipo === "reserva_rechazada") &&
+    (tipo === "reserva_confirmada" ||
+      tipo === "reserva_rechazada" ||
+      tipo === "reserva_cancelada_proveedor") &&
     entityId
   ) {
     return `/reserva/${entityId}`;
