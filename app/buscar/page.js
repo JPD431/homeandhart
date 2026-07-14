@@ -6,6 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CalendarioRangoFechas from "@/app/components/CalendarioRangoFechas";
 import CiudadAutocompleteInput from "@/app/components/CiudadAutocompleteInput";
+import Navbar from "@/app/components/Navbar";
 import { formatShortDate } from "@/app/components/calendario-shared";
 import { useLang } from "@/app/lib/LangContext";
 import { useTranslation } from "@/app/lib/i18n";
@@ -387,64 +388,6 @@ function SearchIcon({ className }) {
   );
 }
 
-function BuscarNavbar({ user, t, extra }) {
-  return (
-    <header
-      className="border-b"
-      style={{ backgroundColor: "#f7f5f2", borderColor: "#e8e4de" }}
-    >
-      <div className="mx-auto flex max-w-[1600px] items-center justify-between gap-4 px-4 py-4 sm:px-6">
-        <Link href="/" className="shrink-0 no-underline">
-          <p className="text-[18px] leading-none text-[#111]" style={{ fontFamily: SERIF }}>
-            Home<span className="italic" style={{ color: "#1d4f91" }}>&</span>
-            Heart
-          </p>
-          <p className="mt-1 text-[9px]" style={{ color: "#bbb" }}>
-            {t.footer.slogan}
-          </p>
-        </Link>
-
-        <nav className="hidden items-center gap-6 md:flex" aria-label="Principal">
-          <Link href="/buscar" className="no-underline" style={{ color: "#1d4f91", fontSize: 12 }}>
-            {t.navbar.servicios}
-          </Link>
-          <Link href="/garantia" className="no-underline transition-colors hover:text-[#1d4f91]" style={{ color: "#888", fontSize: 12 }}>
-            {t.navbar.garantia}
-          </Link>
-          <Link href="/ser-proveedor" className="no-underline transition-colors hover:text-[#1d4f91]" style={{ color: "#888", fontSize: 12 }}>
-            {t.navbar.serProveedor}
-          </Link>
-        </nav>
-
-        <div className="flex items-center gap-3">
-          {user ? (
-            <Link
-              href="/dashboard"
-              className="px-3.5 py-1.5 text-[12px] font-semibold text-white no-underline transition-opacity hover:opacity-90"
-              style={{ backgroundColor: "#1d4f91", borderRadius: 4 }}
-            >
-              {extra.miCuenta}
-            </Link>
-          ) : (
-            <>
-              <Link href="/login" className="hidden text-[12px] font-medium no-underline sm:inline-block" style={{ color: "#1d4f91" }}>
-                {t.navbar.iniciarSesion}
-              </Link>
-              <Link
-                href="/registro"
-                className="px-3.5 py-1.5 text-[12px] font-semibold text-white no-underline transition-opacity hover:opacity-90"
-                style={{ backgroundColor: "#1d4f91", borderRadius: 4 }}
-              >
-                {t.navbar.registrarse}
-              </Link>
-            </>
-          )}
-        </div>
-      </div>
-    </header>
-  );
-}
-
 function BuscarContent() {
   const router = useRouter();
   const pathname = usePathname();
@@ -471,7 +414,6 @@ function BuscarContent() {
     setPendingVertical(null);
   }, [verticalFromUrl]);
 
-  const [user, setUser] = useState(null);
   const [origenService, setOrigenService] = useState(null);
   const [ciudadInput, setCiudadInput] = useState(ciudadParam);
   const [fechaDesdeInput, setFechaDesdeInput] = useState(fechaBusquedaInicioParam);
@@ -535,7 +477,6 @@ function BuscarContent() {
       const {
         data: { user: authUser },
       } = await supabase.auth.getUser();
-      setUser(authUser ?? null);
       if (authUser) {
         const { data } = await supabase
           .from("favoritos")
@@ -1001,7 +942,7 @@ function BuscarContent() {
       }}
     >
       <div ref={navbarRef} className="shrink-0">
-        <BuscarNavbar user={user} t={t} extra={extra} />
+        <Navbar />
       </div>
 
       {bundleMode && (

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
+import Navbar from "@/app/components/Navbar";
 import { BRAND, SERIF } from "@/app/components/brand";
 import FamiliaInviteBanner from "@/app/components/FamiliaInviteBanner";
 import {
@@ -54,26 +55,6 @@ function formatFamiliaDate(value) {
 function formatPrice(precio) {
   if (precio == null || precio === "") return "—";
   return `${Number(precio).toFixed(2)}€`;
-}
-
-function MiniNavbar() {
-  return (
-    <nav
-      className="flex items-center justify-between border-b bg-white px-6 py-3"
-      style={{ borderColor: BORDER }}
-    >
-      <Link
-        href="/"
-        className="no-underline"
-        style={{ fontFamily: SERIF, fontSize: 18, fontWeight: 600, color: "#1a1a1a" }}
-      >
-        Home<span style={{ fontStyle: "italic", color: PRIMARY }}>&</span>Heart
-      </Link>
-      <Link href="/dashboard" className="text-sm no-underline" style={{ color: "#666" }}>
-        ← Dashboard
-      </Link>
-    </nav>
-  );
 }
 
 function MiembroAvatar({
@@ -490,7 +471,7 @@ function FamiliaPageContent() {
   if (loading) {
     return (
       <div className="min-h-screen font-sans" style={{ backgroundColor: BRAND.warm }}>
-        <MiniNavbar />
+        <Navbar />
         <main className="px-6 py-16 text-center text-sm text-[#666]">Cargando…</main>
       </div>
     );
@@ -501,7 +482,7 @@ function FamiliaPageContent() {
       className="min-h-screen font-sans"
       style={{ backgroundColor: BRAND.warm, color: "#1a1a1a" }}
     >
-      <MiniNavbar />
+      <Navbar />
 
       <main className="mx-auto space-y-5" style={{ padding: 24, maxWidth: 900 }}>
         {error && (
@@ -902,7 +883,7 @@ export default function FamiliaPage() {
     <Suspense
       fallback={
         <div className="min-h-screen font-sans" style={{ backgroundColor: BRAND.warm }}>
-          <MiniNavbar />
+          <Navbar />
           <main className="px-6 py-16 text-center text-sm text-[#666]">Cargando…</main>
         </div>
       }

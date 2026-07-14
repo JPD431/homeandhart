@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import Navbar from "@/app/components/Navbar";
 import { BRAND, SERIF } from "@/app/components/brand";
 import {
   BOOKING_STATUS_STYLES,
@@ -220,26 +221,6 @@ function BookingCard({ booking, reviewed, onCancel, cancelling }) {
   );
 }
 
-function MiniNavbar() {
-  return (
-    <nav
-      className="flex items-center justify-between border-b bg-white px-6 py-3"
-      style={{ borderColor: BORDER }}
-    >
-      <Link
-        href="/"
-        className="no-underline"
-        style={{ fontFamily: SERIF, fontSize: 18, fontWeight: 600, color: "#1a1a1a" }}
-      >
-        Home<span style={{ fontStyle: "italic", color: PRIMARY }}>&</span>Heart
-      </Link>
-      <Link href="/dashboard" className="text-sm no-underline" style={{ color: "#666" }}>
-        ← Dashboard
-      </Link>
-    </nav>
-  );
-}
-
 export default function HistorialPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -400,7 +381,7 @@ export default function HistorialPage() {
   if (loading) {
     return (
       <div className="min-h-screen font-sans" style={{ backgroundColor: BRAND.warm }}>
-        <MiniNavbar />
+        <Navbar />
         <main className="px-7 py-16 text-center text-sm text-[#666]">
           Cargando historial…
         </main>
@@ -413,7 +394,7 @@ export default function HistorialPage() {
       className="min-h-screen font-sans"
       style={{ backgroundColor: BRAND.warm, color: "#1a1a1a" }}
     >
-      <MiniNavbar />
+      <Navbar />
 
       <header className="border-b bg-white px-6 py-6" style={{ borderColor: BORDER }}>
         <div className="mx-auto" style={{ maxWidth: 900 }}>

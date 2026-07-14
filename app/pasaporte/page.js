@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import Navbar from "@/app/components/Navbar";
 import { BRAND, SERIF } from "@/app/components/brand";
 import {
   daysBetween,
@@ -67,26 +68,6 @@ const UNLOCKED_THEMES = {
   green: { bg: "#e6f4f0", border: "#0e7a5c", badgeBg: "#e6f4f0", badgeColor: "#0e7a5c" },
   amber: { bg: "#fdf3e3", border: "#c47d1a", badgeBg: "#fdf3e3", badgeColor: "#c47d1a" },
 };
-
-function MiniNavbar() {
-  return (
-    <nav
-      className="flex items-center justify-between border-b bg-white px-6 py-3"
-      style={{ borderColor: BORDER }}
-    >
-      <Link
-        href="/"
-        className="no-underline"
-        style={{ fontFamily: SERIF, fontSize: 18, fontWeight: 600, color: "#1a1a1a" }}
-      >
-        Home<span style={{ fontStyle: "italic", color: PRIMARY }}>&</span>Heart
-      </Link>
-      <Link href="/dashboard" className="text-sm no-underline" style={{ color: "#666" }}>
-        ← Dashboard
-      </Link>
-    </nav>
-  );
-}
 
 function StatCard({ label, value }) {
   return (
@@ -323,7 +304,7 @@ export default function PasaportePage() {
   if (loading) {
     return (
       <div className="min-h-screen font-sans" style={{ backgroundColor: BRAND.warm }}>
-        <MiniNavbar />
+        <Navbar />
         <main className="px-6 py-16 text-center text-sm text-[#666]">
           Cargando tu pasaporte…
         </main>
@@ -336,7 +317,7 @@ export default function PasaportePage() {
       className="min-h-screen font-sans"
       style={{ backgroundColor: BRAND.warm, color: "#1a1a1a" }}
     >
-      <MiniNavbar />
+      <Navbar />
 
       <main className="mx-auto space-y-5" style={{ padding: 24, maxWidth: 900 }}>
         {/* Tarjeta de pasaporte */}

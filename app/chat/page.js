@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Navbar from "@/app/components/Navbar";
+import { useModo } from "@/app/lib/ModoContext";
 import { supabase } from "@/app/lib/supabase";
 
 const BLUE = "#1d4f91";
@@ -354,6 +355,7 @@ export default function ChatPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const conversationParam = searchParams.get("conversation");
+  const { modo, esClientePuro } = useModo();
 
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState(null);
@@ -384,7 +386,7 @@ export default function ChatPage() {
   );
 
   const messagesEndRef = useRef(null);
-  const isProvider = providerServices.length > 0;
+  const isProvider = modo === "proveedor" && !esClientePuro;
 
   const loadConversations = useCallback(async (uid) => {
     const { data, error } = await supabase
