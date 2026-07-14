@@ -33,7 +33,7 @@ function DashboardContent() {
   const stripeParam = searchParams.get('stripe');
   const tabParam = searchParams.get('tab');
   const bookingHighlight = searchParams.get('booking');
-  const { modo, setModo, puedeAlternarModo } = useModo();
+  const { modo, setModo, puedeAlternarModo, isAdmin } = useModo();
   const [user, setUser] = useState(null);
   const [perfil, setPerfil] = useState(null);
   const [reservas, setReservas] = useState([]);
@@ -85,6 +85,12 @@ function DashboardContent() {
     }
     load();
   }, [router]);
+
+  useEffect(() => {
+    if (isAdmin) {
+      router.replace("/admin");
+    }
+  }, [isAdmin, router]);
 
   useEffect(() => {
     if (bookingHighlight) {

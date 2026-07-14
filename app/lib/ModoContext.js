@@ -11,31 +11,20 @@ import {
 } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { needsProviderOnboarding } from "@/app/lib/onboarding";
+import {
+  readStoredModoClient,
+  writeStoredModoClient,
+} from "@/app/lib/modo-persist";
 import { supabase } from "@/app/lib/supabase";
-
-const STORAGE_KEY = "hh_modo";
-
-/** @typedef {'cliente' | 'proveedor'} Modo */
 
 const ModoContext = createContext(null);
 
 function readStoredModo() {
-  if (typeof window === "undefined") return "cliente";
-  try {
-    const v = localStorage.getItem(STORAGE_KEY);
-    if (v === "proveedor" || v === "cliente") return v;
-  } catch {
-    /* ignore */
-  }
-  return "cliente";
+  return readStoredModoClient() ?? "cliente";
 }
 
 function writeStoredModo(modo) {
-  try {
-    localStorage.setItem(STORAGE_KEY, modo);
-  } catch {
-    /* ignore */
-  }
+  writeStoredModoClient(modo);
 }
 
 export function ModoProvider({ children }) {
@@ -49,6 +38,7 @@ export function ModoProvider({ children }) {
   const [perfil, setPerfil] = useState(null);
   const [servicesCount, setServicesCount] = useState(0);
   const [profileReady, setProfileReady] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const onboardingIncompleto = needsProviderOnboarding(perfil);
   const esProveedorRol = perfil?.role === "proveedor";
@@ -59,7 +49,7 @@ export function ModoProvider({ children }) {
   const esProveedor = puedeActuarComoProveedor;
   const puedeAlternarModo = puedeActuarComoProveedor;
   const enAdmin = pathname?.startsWith("/admin") ?? false;
-  const mostrarSwitch = puedeAlternarModo && !enAdmin;
+  const mostrarSwitch = puedeAlternarModo && !isAdmin;
 
   const loadProfile = useCallback(async (authUser) => {
     if (!authUser) {
@@ -111,6 +101,33 @@ export function ModoProvider({ children }) {
     return () => subscription.unsubscribe();
   }, [loadProfile]);
 
+  useEffect(() => {
+    if (!user) {
+      setIsAdmin(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadAdminFlag() {
+      try {
+        const res = await fetch("/api/auth/is-admin");
+        const data = await res.json().catch(() => ({}));
+        if (!cancelled) {
+          setIsAdmin(!!data?.isAdmin);
+        }
+      } catch {
+        if (!cancelled) setIsAdmin(false);
+      }
+    }
+
+    loadAdminFlag();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
+
   /** Restaurar modo persistido una sola vez tras hidratación + perfil */
   const restoredRef = useRef(false);
 
@@ -133,7 +150,9 @@ export function ModoProvider({ children }) {
     }
 
     const stored = readStoredModo();
-    setModoState(stored === "proveedor" ? "proveedor" : "cliente");
+    const nextModo = stored === "proveedor" ? "proveedor" : "cliente";
+    setModoState(nextModo);
+    writeStoredModo(nextModo);
   }, [hydrated, profileReady, puedeAlternarModo, user, perfil]);
 
   /** Tras bfcache (botón atrás), el snapshot puede tener modo desactualizado */
@@ -167,7 +186,7 @@ export function ModoProvider({ children }) {
       setModoState(nextModo);
       writeStoredModo(nextModo);
 
-      if (redirect && !enAdmin) {
+      if (redirect && !isAdmin) {
         router.push(
           nextModo === "proveedor"
             ? "/dashboard?tab=proveedor"
@@ -175,7 +194,7 @@ export function ModoProvider({ children }) {
         );
       }
     },
-    [puedeAlternarModo, router, enAdmin],
+    [puedeAlternarModo, router, isAdmin],
   );
 
   const value = useMemo(
@@ -193,6 +212,7 @@ export function ModoProvider({ children }) {
       mostrarSwitch,
       onboardingIncompleto,
       enAdmin,
+      isAdmin,
     }),
     [
       modo,
@@ -208,6 +228,7 @@ export function ModoProvider({ children }) {
       mostrarSwitch,
       onboardingIncompleto,
       enAdmin,
+      isAdmin,
     ],
   );
 

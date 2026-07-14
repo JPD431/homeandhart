@@ -1,10 +1,12 @@
 import { createClient as createServiceClient } from "@supabase/supabase-js";
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { isAdminUserId } from "@/lib/auth/admin";
 import {
   getPendingInvitesForUser,
   linkPendingInvitesToProfile,
 } from "@/app/lib/familia-invites";
+import { readStoredModoFromCookies } from "@/app/lib/modo-persist";
 import {
   ONBOARDING_PROFILE_SELECT,
   resolvePostAuthRedirect,
@@ -56,11 +58,15 @@ export async function GET() {
     console.error("[post-login-redirect] Error cargando perfil:", profileError.message);
   }
 
+  const cookieStore = await cookies();
+  const storedModo = readStoredModoFromCookies(cookieStore);
+
   const redirect = profile
-    ? resolvePostAuthRedirect(profile)
-    : resolvePostAuthRedirect({
-        role: user.user_metadata?.role || "cliente",
-      });
+    ? resolvePostAuthRedirect(profile, storedModo)
+    : resolvePostAuthRedirect(
+        { role: user.user_metadata?.role || "cliente" },
+        storedModo,
+      );
 
   return NextResponse.json({ redirect });
 }

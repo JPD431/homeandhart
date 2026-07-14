@@ -240,6 +240,32 @@ function ProveedorDropdownLinks({ mensajesSinLeer, onNavigate }) {
   );
 }
 
+function AdminDropdownLinks({ onNavigate }) {
+  return (
+    <>
+      <SectionLabel>Administración</SectionLabel>
+      <DropdownItem
+        href="/admin"
+        icon="🛡️"
+        label="Panel admin"
+        onNavigate={onNavigate}
+      />
+      <DropdownItem
+        href="/blog"
+        icon="📝"
+        label="Blog"
+        onNavigate={onNavigate}
+      />
+      <DropdownItem
+        href="/"
+        icon="🏠"
+        label="Inicio"
+        onNavigate={onNavigate}
+      />
+    </>
+  );
+}
+
 export default function Navbar() {
   const router = useRouter();
   const pathname = usePathname();
@@ -256,6 +282,7 @@ export default function Navbar() {
     mostrarSwitch,
     onboardingIncompleto,
     enAdmin,
+    isAdmin,
   } = useModo();
 
   const dropdownRef = useRef(null);
@@ -272,7 +299,7 @@ export default function Navbar() {
   const closeMobileMenu = useCallback(() => setMobileMenuOpen(false), []);
 
   const navLinks = useMemo(() => {
-    if (enAdmin) {
+    if (isAdmin) {
       return [
         { href: "/admin", label: "Panel admin", primary: true },
         { href: "/", label: t.navbar.inicio },
@@ -334,6 +361,7 @@ export default function Navbar() {
     esClientePuro,
     onboardingIncompleto,
     enAdmin,
+    isAdmin,
   ]);
 
   const loadMensajesSinLeer = useCallback(async (userId) => {
@@ -428,7 +456,8 @@ export default function Navbar() {
     perfil?.nombre ||
     "Mi cuenta";
   const initials = perfil?.nombre?.[0]?.toUpperCase() || "U";
-  const showDniBanner = user && perfil && !hasDniUploaded(perfil);
+  const showDniBanner =
+    user && perfil && !hasDniUploaded(perfil) && !isAdmin;
   const dniBannerText =
     modo === "proveedor" && !esClientePuro
       ? DNI_BANNER_PROVIDER_MSG
@@ -535,10 +564,12 @@ export default function Navbar() {
 
             {user ? (
               <>
-                <ChatNavButton
-                  unreadCount={mensajesSinLeer}
-                  onNavigate={closeDropdown}
-                />
+                {!isAdmin && (
+                  <ChatNavButton
+                    unreadCount={mensajesSinLeer}
+                    onNavigate={closeDropdown}
+                  />
+                )}
                 <NotificationBell />
 
                 <div ref={dropdownRef} style={{ position: "relative" }}>
@@ -714,7 +745,9 @@ export default function Navbar() {
                       )}
 
                       <div style={{ borderBottom: "0.5px solid #f0ede8" }}>
-                        {modo === "proveedor" && !esClientePuro ? (
+                        {isAdmin ? (
+                          <AdminDropdownLinks onNavigate={closeDropdown} />
+                        ) : modo === "proveedor" && !esClientePuro ? (
                           <ProveedorDropdownLinks
                             mensajesSinLeer={mensajesSinLeer}
                             onNavigate={closeDropdown}
@@ -728,7 +761,7 @@ export default function Navbar() {
                         )}
                       </div>
 
-                      {esClientePuro && (
+                      {!isAdmin && esClientePuro && (
                         <div
                           className="px-4 py-2"
                           style={{ borderBottom: "0.5px solid #f0ede8" }}
@@ -875,23 +908,27 @@ export default function Navbar() {
               >
                 {user ? (
                   <>
-                    <Link
-                      href="/editar-perfil"
-                      onClick={closeMobileMenu}
-                      className="flex min-h-[44px] items-center justify-center rounded-lg border text-sm font-medium text-[#444] no-underline"
-                      style={{ borderColor: BORDER }}
-                    >
-                      Mi perfil
-                    </Link>
-                    <Link
-                      href="/chat"
-                      onClick={closeMobileMenu}
-                      className="flex min-h-[44px] items-center justify-center rounded-lg border text-sm font-medium text-[#444] no-underline"
-                      style={{ borderColor: BORDER }}
-                    >
-                      Mensajes
-                      {mensajesSinLeer > 0 ? ` (${mensajesSinLeer})` : ""}
-                    </Link>
+                    {!isAdmin && (
+                      <Link
+                        href="/editar-perfil"
+                        onClick={closeMobileMenu}
+                        className="flex min-h-[44px] items-center justify-center rounded-lg border text-sm font-medium text-[#444] no-underline"
+                        style={{ borderColor: BORDER }}
+                      >
+                        Mi perfil
+                      </Link>
+                    )}
+                    {!isAdmin && (
+                      <Link
+                        href="/chat"
+                        onClick={closeMobileMenu}
+                        className="flex min-h-[44px] items-center justify-center rounded-lg border text-sm font-medium text-[#444] no-underline"
+                        style={{ borderColor: BORDER }}
+                      >
+                        Mensajes
+                        {mensajesSinLeer > 0 ? ` (${mensajesSinLeer})` : ""}
+                      </Link>
+                    )}
                     <button
                       type="button"
                       onClick={handleSignOut}

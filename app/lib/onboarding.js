@@ -18,16 +18,20 @@ export function needsProviderOnboarding(profile) {
 }
 
 /**
- * Ruta post-login o post-verificación según el perfil.
+ * Ruta post-login o post-verificación según perfil y último modo guardado.
  * @param {object|null|undefined} profile
+ * @param {'cliente' | 'proveedor' | null} [storedModo] — cookie/localStorage hh_modo
  * @returns {string}
  */
-export function resolvePostAuthRedirect(profile) {
+export function resolvePostAuthRedirect(profile, storedModo = null) {
   const role = profile?.role || "cliente";
 
   if (role === "proveedor") {
     if (!profile?.onboarding_completed_at) {
       return "/ser-proveedor";
+    }
+    if (storedModo === "cliente") {
+      return "/buscar";
     }
     return "/dashboard?tab=proveedor";
   }

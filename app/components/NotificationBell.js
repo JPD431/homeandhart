@@ -48,7 +48,7 @@ function formatRelativeTime(iso) {
 
 export default function NotificationBell({ compact = false }) {
   const router = useRouter();
-  const { modo, setModo, puedeAlternarModo } = useModo();
+  const { modo, setModo, puedeAlternarModo, isAdmin } = useModo();
   const rootRef = useRef(null);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -127,6 +127,7 @@ export default function NotificationBell({ compact = false }) {
     setOpen(false);
     const destination = resolveNotificationHref(notification);
     if (
+      !isAdmin &&
       puedeAlternarModo &&
       destination.includes("tab=proveedor")
     ) {
@@ -321,17 +322,21 @@ export default function NotificationBell({ compact = false }) {
             >
               <Link
                 href={
-                  modo === "proveedor" && puedeAlternarModo
-                    ? "/dashboard?tab=proveedor"
-                    : "/dashboard?tab=cliente"
+                  isAdmin
+                    ? "/admin"
+                    : modo === "proveedor" && puedeAlternarModo
+                      ? "/dashboard?tab=proveedor"
+                      : "/dashboard?tab=cliente"
                 }
                 onClick={() => setOpen(false)}
                 className="text-xs font-medium no-underline"
                 style={{ color: PRIMARY }}
               >
-                {modo === "proveedor" && puedeAlternarModo
-                  ? "Ver mi panel →"
-                  : "Ver mis reservas →"}
+                {isAdmin
+                  ? "Ver panel admin →"
+                  : modo === "proveedor" && puedeAlternarModo
+                    ? "Ver mi panel →"
+                    : "Ver mis reservas →"}
               </Link>
             </div>
           )}
