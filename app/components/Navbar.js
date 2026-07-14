@@ -16,6 +16,9 @@ import {
 } from "@/app/lib/dni";
 import { supabase } from "@/app/lib/supabase";
 import NotificationBell from "@/app/components/NotificationBell";
+import OnboardingPendienteBanner, {
+  ContinuarAltaProveedorLink,
+} from "@/app/components/OnboardingPendienteBanner";
 
 const PRIMARY = "#1d4f91";
 const BORDER = "#e8e4de";
@@ -318,14 +321,6 @@ export default function Navbar() {
       ];
     }
 
-    if (onboardingIncompleto) {
-      return [
-        { href: "/ser-proveedor", label: "Continuar registro", primary: true },
-        { href: "/buscar", label: t.navbar.servicios },
-        { href: "/garantia", label: t.navbar.garantia },
-      ];
-    }
-
     if (modo === "proveedor" && !esClientePuro) {
       return [
         { href: "/dashboard?tab=proveedor", label: "Panel", primary: true },
@@ -346,7 +341,7 @@ export default function Navbar() {
       { href: "/garantia", label: t.navbar.garantia },
     ];
 
-    if (esClientePuro) {
+    if (esClientePuro && !onboardingIncompleto) {
       links.push({
         href: "/ser-proveedor",
         label: "Ofrecer mis servicios",
@@ -556,8 +551,10 @@ export default function Navbar() {
               ))}
             </nav>
 
-            {mostrarSwitch && (
-              <ModoSwitch onChanged={closeDropdown} />
+            {onboardingIncompleto && !isAdmin ? (
+              <ContinuarAltaProveedorLink onNavigate={closeDropdown} />
+            ) : (
+              mostrarSwitch && <ModoSwitch onChanged={closeDropdown} />
             )}
 
             <LangSwitcher />
@@ -728,7 +725,21 @@ export default function Navbar() {
                         </div>
                       </div>
 
-                      {mostrarSwitch && (
+                      {onboardingIncompleto && !isAdmin ? (
+                        <div
+                          className="p-3"
+                          style={{
+                            borderBottom: "0.5px solid #f0ede8",
+                            background: "#fdf8f0",
+                          }}
+                        >
+                          <ContinuarAltaProveedorLink
+                            compact
+                            onNavigate={closeDropdown}
+                          />
+                        </div>
+                      ) : (
+                        mostrarSwitch && (
                         <div
                           className="p-3"
                           style={{
@@ -742,6 +753,7 @@ export default function Navbar() {
                             className="w-full"
                           />
                         </div>
+                        )
                       )}
 
                       <div style={{ borderBottom: "0.5px solid #f0ede8" }}>
@@ -761,7 +773,7 @@ export default function Navbar() {
                         )}
                       </div>
 
-                      {!isAdmin && esClientePuro && (
+                      {!isAdmin && esClientePuro && !onboardingIncompleto && (
                         <div
                           className="px-4 py-2"
                           style={{ borderBottom: "0.5px solid #f0ede8" }}
@@ -872,7 +884,19 @@ export default function Navbar() {
                 </button>
               </div>
 
-              {mostrarSwitch && (
+              {onboardingIncompleto && !isAdmin ? (
+                <div
+                  className="border-b px-4 py-3"
+                  style={{ borderColor: "#f0ede8", background: "#fdf8f0" }}
+                >
+                  <ContinuarAltaProveedorLink
+                    compact
+                    onNavigate={closeMobileMenu}
+                    className="w-full"
+                  />
+                </div>
+              ) : (
+                mostrarSwitch && (
                 <div
                   className="border-b px-4 py-3"
                   style={{ borderColor: "#f0ede8", background: "#f7f5f2" }}
@@ -883,6 +907,7 @@ export default function Navbar() {
                     className="w-full"
                   />
                 </div>
+                )
               )}
 
               <nav className="flex flex-col py-2" aria-label="Principal móvil">
@@ -964,6 +989,7 @@ export default function Navbar() {
           </>
         )}
       </header>
+      {onboardingIncompleto && !isAdmin && <OnboardingPendienteBanner />}
       {showDniBanner && (
         <div
           className="border-b px-4 py-2 text-center text-xs leading-relaxed text-[#92400e]"

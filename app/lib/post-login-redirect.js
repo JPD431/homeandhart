@@ -30,10 +30,6 @@ function mergeStoredModoRedirect(serverRedirect) {
     return "/buscar";
   }
 
-  if (stored === "proveedor" && serverRedirect === "/buscar") {
-    return "/dashboard?tab=proveedor";
-  }
-
   return serverRedirect;
 }
 

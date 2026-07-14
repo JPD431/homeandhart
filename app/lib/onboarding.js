@@ -28,7 +28,10 @@ export function resolvePostAuthRedirect(profile, storedModo = null) {
 
   if (role === "proveedor") {
     if (!profile?.onboarding_completed_at) {
-      return "/ser-proveedor";
+      if (clientePerfilCompleto(profile)) {
+        return "/buscar";
+      }
+      return "/completar-perfil";
     }
     if (storedModo === "cliente") {
       return "/buscar";
