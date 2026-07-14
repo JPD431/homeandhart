@@ -1,6 +1,33 @@
 /** Notificaciones in-app (insert con service role; lectura vía RLS del usuario). */
 
+import { createClient } from "@supabase/supabase-js";
+
+const LOG_PREFIX = "[notifications]";
 const DUPLICATE_ERROR_CODES = new Set(["23505"]);
+
+/** Cliente admin dedicado para INSERT (bypass RLS). No reutilizar el cliente de sesión. */
+let notificationsAdmin = null;
+
+function getNotificationsAdmin() {
+  if (notificationsAdmin) return notificationsAdmin;
+
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!url || !key) {
+    console.error(
+      LOG_PREFIX,
+      "Faltan NEXT_PUBLIC_SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY",
+    );
+    return null;
+  }
+
+  notificationsAdmin = createClient(url, key, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+
+  return notificationsAdmin;
+}
 
 function formatFechasReserva(fechaInicio, fechaFin) {
   const fmt = (s) => {
@@ -20,11 +47,21 @@ function formatFechasReserva(fechaInicio, fechaFin) {
   return fin ? `${inicio} — ${fin}` : inicio;
 }
 
+function logInsertError(error, payload) {
+  console.error(LOG_PREFIX, "Error insertando notificación:", {
+    message: error.message,
+    code: error.code,
+    details: error.details,
+    hint: error.hint,
+    payload,
+  });
+}
+
 /**
  * Inserta una notificación de forma idempotente (unique user_id+tipo+entity_id).
- * Nunca lanza: errores se registran y devuelve { ok: false }.
+ * Usa SIEMPRE service role interno. No lanza excepciones.
  */
-export async function createNotification(admin, {
+export async function createNotification(_adminUnused, {
   user_id,
   tipo,
   titulo,
@@ -33,11 +70,7 @@ export async function createNotification(admin, {
   entity_type,
   entity_id,
 }) {
-  if (!admin || !user_id || !tipo || !titulo) {
-    return { ok: false, reason: "missing_fields" };
-  }
-
-  const { error } = await admin.from("notifications").insert({
+  const payload = {
     user_id,
     tipo,
     titulo,
@@ -46,21 +79,68 @@ export async function createNotification(admin, {
     entity_type: entity_type ?? null,
     entity_id: entity_id ?? null,
     leida: false,
+  };
+
+  if (!user_id || !tipo || !titulo) {
+    console.error(LOG_PREFIX, "Campos obligatorios faltantes:", {
+      user_id: user_id ?? null,
+      tipo: tipo ?? null,
+      titulo: titulo ?? null,
+      entity_id: entity_id ?? null,
+    });
+    return { ok: false, reason: "missing_fields" };
+  }
+
+  const admin = getNotificationsAdmin();
+  if (!admin) {
+    return { ok: false, reason: "no_admin_client" };
+  }
+
+  console.log(LOG_PREFIX, "Intentando insert:", {
+    user_id,
+    tipo,
+    entity_type,
+    entity_id,
+    titulo,
   });
+
+  const { data, error } = await admin
+    .from("notifications")
+    .insert(payload)
+    .select("id")
+    .maybeSingle();
 
   if (error) {
     if (DUPLICATE_ERROR_CODES.has(error.code)) {
+      console.log(LOG_PREFIX, "Insert duplicado (idempotente OK):", {
+        user_id,
+        tipo,
+        entity_id,
+      });
       return { ok: true, duplicate: true };
     }
-    console.error("[notifications] Error insertando:", error.message, {
-      tipo,
-      user_id,
-      entity_id,
-    });
-    return { ok: false, error };
+
+    logInsertError(error, payload);
+    return { ok: false, reason: "insert_error", error };
   }
 
-  return { ok: true };
+  if (!data?.id) {
+    console.error(
+      LOG_PREFIX,
+      "Insert sin error pero sin fila devuelta:",
+      payload,
+    );
+    return { ok: false, reason: "no_row_returned" };
+  }
+
+  console.log(LOG_PREFIX, "Notificación creada:", {
+    id: data.id,
+    user_id,
+    tipo,
+    entity_id,
+  });
+
+  return { ok: true, id: data.id };
 }
 
 /** Crea notificación para eventos de reserva (MVP). */
@@ -75,7 +155,13 @@ export async function notifyBookingEvent(admin, {
   fechaInicio,
   fechaFin,
 }) {
-  if (!admin || !bookingId || !tipo) return { ok: false };
+  if (!bookingId || !tipo) {
+    console.error(LOG_PREFIX, "notifyBookingEvent: faltan bookingId o tipo", {
+      bookingId,
+      tipo,
+    });
+    return { ok: false, reason: "missing_booking_or_tipo" };
+  }
 
   const fechas = formatFechasReserva(fechaInicio, fechaFin);
   const servicio = servicioTitulo?.trim() || "Servicio";
@@ -84,7 +170,10 @@ export async function notifyBookingEvent(admin, {
 
   switch (tipo) {
     case "reserva_nueva":
-      if (!proveedorId) return { ok: false, reason: "no_proveedor" };
+      if (!proveedorId) {
+        console.error(LOG_PREFIX, "reserva_nueva sin proveedorId", { bookingId });
+        return { ok: false, reason: "no_proveedor" };
+      }
       return createNotification(admin, {
         user_id: proveedorId,
         tipo: "reserva_nueva",
@@ -96,7 +185,12 @@ export async function notifyBookingEvent(admin, {
       });
 
     case "reserva_confirmada":
-      if (!clienteId) return { ok: false, reason: "no_cliente" };
+      if (!clienteId) {
+        console.error(LOG_PREFIX, "reserva_confirmada sin clienteId", {
+          bookingId,
+        });
+        return { ok: false, reason: "no_cliente" };
+      }
       return createNotification(admin, {
         user_id: clienteId,
         tipo: "reserva_confirmada",
@@ -108,7 +202,12 @@ export async function notifyBookingEvent(admin, {
       });
 
     case "reserva_rechazada":
-      if (!clienteId) return { ok: false, reason: "no_cliente" };
+      if (!clienteId) {
+        console.error(LOG_PREFIX, "reserva_rechazada sin clienteId", {
+          bookingId,
+        });
+        return { ok: false, reason: "no_cliente" };
+      }
       return createNotification(admin, {
         user_id: clienteId,
         tipo: "reserva_rechazada",
@@ -120,7 +219,7 @@ export async function notifyBookingEvent(admin, {
       });
 
     default:
-      console.warn("[notifications] tipo de reserva desconocido:", tipo);
+      console.warn(LOG_PREFIX, "tipo de reserva desconocido:", tipo);
       return { ok: false, reason: "unknown_tipo" };
   }
 }

@@ -396,20 +396,27 @@ async function sendPostCompleteBookingEmails({
         ...buildProveedorIngresoEmailFields(booking, proveedorProfile),
       });
 
-      try {
-        await notifyBookingEvent(supabaseAdmin, {
-          tipo: "reserva_nueva",
-          bookingId: inserted.id,
-          proveedorId: svc.proveedor_id,
-          clienteNombre,
-          servicioTitulo: svc.titulo,
-          fechaInicio,
-          fechaFin: finEmail,
-        });
-      } catch (notifErr) {
+      console.log("[bookings/complete] Creando notificación reserva_nueva", {
+        bookingId: inserted.id,
+        proveedorId: svc.proveedor_id,
+        servicioId: serviceId,
+        reserva_inmediata: svc.reserva_inmediata,
+      });
+
+      const notifResult = await notifyBookingEvent(supabaseAdmin, {
+        tipo: "reserva_nueva",
+        bookingId: inserted.id,
+        proveedorId: svc.proveedor_id,
+        clienteNombre,
+        servicioTitulo: svc.titulo,
+        fechaInicio,
+        fechaFin: finEmail,
+      });
+
+      if (!notifResult?.ok) {
         console.error(
-          "[bookings/complete] Error creando notificación reserva_nueva:",
-          notifErr,
+          "[bookings/complete] Notificación reserva_nueva NO creada:",
+          notifResult,
         );
       }
     }

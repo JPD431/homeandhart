@@ -280,20 +280,25 @@ export async function POST(request) {
           precio_total: Number(booking.precio_total || 0).toFixed(2),
         });
 
-        try {
-          await notifyBookingEvent(supabaseAdmin, {
-            tipo: "reserva_rechazada",
-            bookingId,
-            clienteId: booking.cliente_id,
-            proveedorNombre,
-            servicioTitulo: service.titulo,
-            fechaInicio: booking.fecha_inicio,
-            fechaFin: finEmail,
-          });
-        } catch (notifErr) {
+        console.log("[bookings/respond] Creando notificación reserva_rechazada", {
+          bookingId,
+          clienteId: booking.cliente_id,
+        });
+
+        const rejectNotif = await notifyBookingEvent(supabaseAdmin, {
+          tipo: "reserva_rechazada",
+          bookingId,
+          clienteId: booking.cliente_id,
+          proveedorNombre,
+          servicioTitulo: service.titulo,
+          fechaInicio: booking.fecha_inicio,
+          fechaFin: finEmail,
+        });
+
+        if (!rejectNotif?.ok) {
           console.error(
-            "[bookings/respond] Error notificación reserva_rechazada:",
-            notifErr,
+            "[bookings/respond] Notificación reserva_rechazada NO creada:",
+            rejectNotif,
           );
         }
       }
@@ -425,20 +430,28 @@ export async function POST(request) {
             modalidad: svc.modalidad,
           });
 
-          try {
-            await notifyBookingEvent(supabaseAdmin, {
-              tipo: "reserva_confirmada",
+          console.log(
+            "[bookings/respond] Creando notificación reserva_confirmada",
+            {
               bookingId,
               clienteId: bookingFull.cliente_id,
-              proveedorNombre,
-              servicioTitulo: svc.titulo,
-              fechaInicio: bookingFull.fecha_inicio,
-              fechaFin: finEmail,
-            });
-          } catch (notifErr) {
+            },
+          );
+
+          const confirmNotif = await notifyBookingEvent(supabaseAdmin, {
+            tipo: "reserva_confirmada",
+            bookingId,
+            clienteId: bookingFull.cliente_id,
+            proveedorNombre,
+            servicioTitulo: svc.titulo,
+            fechaInicio: bookingFull.fecha_inicio,
+            fechaFin: finEmail,
+          });
+
+          if (!confirmNotif?.ok) {
             console.error(
-              "[bookings/respond] Error notificación reserva_confirmada:",
-              notifErr,
+              "[bookings/respond] Notificación reserva_confirmada NO creada:",
+              confirmNotif,
             );
           }
 
