@@ -30,6 +30,8 @@ function DashboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const stripeParam = searchParams.get('stripe');
+  const tabParam = searchParams.get('tab');
+  const bookingHighlight = searchParams.get('booking');
   const [user, setUser] = useState(null);
   const [perfil, setPerfil] = useState(null);
   const [reservas, setReservas] = useState([]);
@@ -105,10 +107,16 @@ function DashboardContent() {
   }, [stripeParam]);
 
   useEffect(() => {
-    if (perfil?.role === 'proveedor') {
+    if (tabParam === 'proveedor' || bookingHighlight) {
       setTabActiva('proveedor');
     }
-  }, [perfil]);
+  }, [tabParam, bookingHighlight]);
+
+  useEffect(() => {
+    if (perfil?.role === 'proveedor' && !tabParam && !bookingHighlight) {
+      setTabActiva('proveedor');
+    }
+  }, [perfil, tabParam, bookingHighlight]);
 
   function dismissStripeBanner() {
     setStripeBannerDismissed(true);
@@ -262,7 +270,14 @@ function DashboardContent() {
       {/* CONTENIDO POR TAB */}
       <div style={{padding: '20px 24px'}}>
         {tabActiva === 'cliente' && <TabCliente perfil={perfil} reservas={reservas} favoritos={favoritos} viajes={viajes} router={router} BRAND={BRAND} copiarLink={copiarLink} />}
-        {tabActiva === 'proveedor' && <TabProveedor perfil={perfil} router={router} BRAND={BRAND} />}
+        {tabActiva === 'proveedor' && (
+          <TabProveedor
+            perfil={perfil}
+            router={router}
+            BRAND={BRAND}
+            highlightBookingId={bookingHighlight}
+          />
+        )}
         {tabActiva === 'familia' && <TabFamilia perfil={perfil} router={router} BRAND={BRAND} />}
         {tabActiva === 'pasaporte' && router.push('/pasaporte')}
         {tabActiva === 'referidos' && <TabReferidos perfil={perfil} BRAND={BRAND} copiarLink={copiarLink} />}
@@ -475,7 +490,7 @@ function ProviderStatusBanner({ perfil, BRAND }) {
   );
 }
 
-function TabProveedor({ perfil, router, BRAND }) {
+function TabProveedor({ perfil, router, BRAND, highlightBookingId }) {
   const deudaPendiente = Number(perfil?.deuda_pendiente) || 0;
   const saldoPendienteTransferir =
     Math.round((Number(perfil?.saldo_pendiente_transferir) || 0) * 100) / 100;
@@ -667,7 +682,12 @@ function TabProveedor({ perfil, router, BRAND }) {
         <button onClick={() => router.push('/estadisticas')} style={{ minHeight: 44, background: BRAND.blue, color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 4, fontSize: 12, cursor: 'pointer', marginRight: 8 }}>Ver estadísticas</button>
         <button onClick={() => router.push('/editar-perfil?tab=servicios')} style={{ minHeight: 44, background: '#fff', color: BRAND.blue, border: `1px solid ${BRAND.blue}`, padding: '10px 20px', borderRadius: 4, fontSize: 12, cursor: 'pointer' }}>Editar servicios</button>
       </div>
-      <ReservasRecibidas perfil={perfil} BRAND={BRAND} />
+      <ReservasRecibidas
+        perfil={perfil}
+        BRAND={BRAND}
+        highlightBookingId={highlightBookingId}
+        router={router}
+      />
     </div>
   );
 }
@@ -745,6 +765,7 @@ function ReservaRecibidaCard({
   onCancelProvider,
   canceling,
   onIncidenciaReported,
+  highlighted = false,
 }) {
   const isPendiente = booking.estado === 'pendiente';
   const isConfirmada = booking.estado === 'confirmada';
@@ -754,13 +775,21 @@ function ReservaRecibidaCard({
 
   return (
     <div
+      id={`booking-${booking.id}`}
       style={{
-        background: '#fff',
+        background: highlighted ? '#fffbeb' : '#fff',
         borderRadius: 10,
-        border: `0.5px solid ${isPendiente ? AMBER : BORDER}`,
+        border: highlighted
+          ? `2px solid ${AMBER}`
+          : `0.5px solid ${isPendiente ? AMBER : BORDER}`,
         padding: '14px 16px',
         marginBottom: 10,
-        boxShadow: isPendiente ? '0 1px 4px rgba(196,125,26,0.08)' : 'none',
+        boxShadow: highlighted
+          ? '0 0 0 3px rgba(196,125,26,0.15)'
+          : isPendiente
+            ? '0 1px 4px rgba(196,125,26,0.08)'
+            : 'none',
+        scrollMarginTop: 88,
       }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
@@ -888,7 +917,7 @@ function ReservaRecibidaCard({
   );
 }
 
-function ReservasRecibidas({ perfil, BRAND }) {
+function ReservasRecibidas({ perfil, BRAND, highlightBookingId, router }) {
   const [bookings, setBookings] = useState([]);
   const [serviceMap, setServiceMap] = useState({});
   const [clientNames, setClientNames] = useState({});
@@ -969,6 +998,22 @@ function ReservasRecibidas({ perfil, BRAND }) {
 
     loadReservasRecibidas();
   }, [perfil?.id]);
+
+  useEffect(() => {
+    if (!highlightBookingId || loading) return;
+
+    const timer = setTimeout(() => {
+      const el = document.getElementById(`booking-${highlightBookingId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      if (router) {
+        router.replace('/dashboard?tab=proveedor', { scroll: false });
+      }
+    }, 150);
+
+    return () => clearTimeout(timer);
+  }, [highlightBookingId, loading, bookings, router]);
 
   async function handleRespond(bookingId, action) {
     const confirmMsg =
@@ -1181,6 +1226,7 @@ function ReservasRecibidas({ perfil, BRAND }) {
                   onCancelProvider={handleCancelProvider}
                   canceling={cancelingId === booking.id}
                   onIncidenciaReported={handleIncidenciaReported}
+                  highlighted={booking.id === highlightBookingId}
                 />
               ))}
             </>
@@ -1214,6 +1260,7 @@ function ReservasRecibidas({ perfil, BRAND }) {
                   onCancelProvider={handleCancelProvider}
                   canceling={cancelingId === booking.id}
                   onIncidenciaReported={handleIncidenciaReported}
+                  highlighted={booking.id === highlightBookingId}
                 />
               ))}
             </>

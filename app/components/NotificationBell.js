@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BRAND } from "@/app/components/brand";
+import { resolveNotificationHref } from "@/app/lib/notifications";
 
 const PRIMARY = "#1d4f91";
 const BORDER = "#e8e4de";
@@ -52,6 +53,7 @@ export default function NotificationBell({ compact = false }) {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [markingAll, setMarkingAll] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
 
   const loadNotifications = useCallback(async () => {
     try {
@@ -121,8 +123,37 @@ export default function NotificationBell({ compact = false }) {
     }
 
     setOpen(false);
-    if (notification.href) {
-      router.push(notification.href);
+    const destination = resolveNotificationHref(notification);
+    if (destination) {
+      router.push(destination);
+    }
+  }
+
+  async function handleDeleteNotification(e, notification) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (deletingId) return;
+
+    setDeletingId(notification.id);
+
+    try {
+      const res = await fetch(`/api/notifications/${notification.id}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) {
+        return;
+      }
+
+      setNotifications((prev) => prev.filter((n) => n.id !== notification.id));
+      if (!notification.leida) {
+        setUnreadCount((c) => Math.max(0, c - 1));
+      }
+    } catch {
+      /* silencioso */
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -193,7 +224,12 @@ export default function NotificationBell({ compact = false }) {
                 onClick={handleMarkAllRead}
                 disabled={markingAll}
                 className="text-xs font-medium disabled:opacity-60"
-                style={{ color: PRIMARY, background: "none", border: "none", cursor: "pointer" }}
+                style={{
+                  color: PRIMARY,
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                }}
               >
                 {markingAll ? "Marcando…" : "Marcar todas como leídas"}
               </button>
@@ -220,13 +256,16 @@ export default function NotificationBell({ compact = false }) {
             ) : (
               <ul className="m-0 list-none p-0">
                 {notifications.map((n) => (
-                  <li key={n.id}>
+                  <li
+                    key={n.id}
+                    className="flex items-stretch"
+                    style={{ borderBottom: "0.5px solid #f0ede8" }}
+                  >
                     <button
                       type="button"
                       onClick={() => handleNotificationClick(n)}
-                      className="w-full border-0 px-4 py-3 text-left transition-colors hover:bg-[#f7f5f2]"
+                      className="min-w-0 flex-1 border-0 px-4 py-3 text-left transition-colors hover:bg-[#f7f5f2]"
                       style={{
-                        borderBottom: `0.5px solid #f0ede8`,
                         background: n.leida ? "#fff" : "#f8fafc",
                         cursor: "pointer",
                         borderLeft: n.leida
@@ -251,6 +290,16 @@ export default function NotificationBell({ compact = false }) {
                         </p>
                       )}
                     </button>
+                    <button
+                      type="button"
+                      aria-label="Eliminar notificación"
+                      disabled={deletingId === n.id}
+                      onClick={(e) => handleDeleteNotification(e, n)}
+                      className="flex shrink-0 items-start border-0 bg-transparent px-3 py-3 text-lg leading-none text-[#bbb] transition-colors hover:text-[#666] disabled:opacity-40"
+                      style={{ cursor: "pointer" }}
+                    >
+                      ×
+                    </button>
                   </li>
                 ))}
               </ul>
@@ -263,7 +312,7 @@ export default function NotificationBell({ compact = false }) {
               style={{ borderColor: "#f0ede8", background: "#fafafa" }}
             >
               <Link
-                href="/dashboard"
+                href="/dashboard?tab=proveedor"
                 onClick={() => setOpen(false)}
                 className="text-xs font-medium no-underline"
                 style={{ color: PRIMARY }}

@@ -165,7 +165,8 @@ export async function notifyBookingEvent(admin, {
 
   const fechas = formatFechasReserva(fechaInicio, fechaFin);
   const servicio = servicioTitulo?.trim() || "Servicio";
-  const hrefReserva = `/reserva/${bookingId}`;
+  const hrefClienteReserva = `/reserva/${bookingId}`;
+  const hrefProveedorReserva = `/dashboard?tab=proveedor&booking=${bookingId}`;
   const fechasSuffix = fechas ? ` · ${fechas}` : "";
 
   switch (tipo) {
@@ -179,7 +180,7 @@ export async function notifyBookingEvent(admin, {
         tipo: "reserva_nueva",
         titulo: "Nueva reserva",
         mensaje: `${clienteNombre || "Un cliente"} ha solicitado ${servicio}${fechasSuffix}.`,
-        href: hrefReserva,
+        href: hrefProveedorReserva,
         entity_type: "booking",
         entity_id: bookingId,
       });
@@ -196,7 +197,7 @@ export async function notifyBookingEvent(admin, {
         tipo: "reserva_confirmada",
         titulo: "Reserva confirmada",
         mensaje: `${proveedorNombre || "El proveedor"} ha confirmado tu reserva de ${servicio}${fechasSuffix}.`,
-        href: hrefReserva,
+        href: hrefClienteReserva,
         entity_type: "booking",
         entity_id: bookingId,
       });
@@ -213,7 +214,7 @@ export async function notifyBookingEvent(admin, {
         tipo: "reserva_rechazada",
         titulo: "Reserva rechazada",
         mensaje: `${proveedorNombre || "El proveedor"} no ha podido aceptar tu solicitud de ${servicio}${fechasSuffix}. Puedes buscar otras opciones.`,
-        href: hrefReserva,
+        href: hrefClienteReserva,
         entity_type: "booking",
         entity_id: bookingId,
       });
@@ -222,4 +223,22 @@ export async function notifyBookingEvent(admin, {
       console.warn(LOG_PREFIX, "tipo de reserva desconocido:", tipo);
       return { ok: false, reason: "unknown_tipo" };
   }
+}
+
+/** Destino al pulsar una notificación (corrige href legacy en cliente). */
+export function resolveNotificationHref(notification) {
+  const { tipo, entity_id: entityId, href } = notification ?? {};
+
+  if (tipo === "reserva_nueva" && entityId) {
+    return `/dashboard?tab=proveedor&booking=${entityId}`;
+  }
+
+  if (
+    (tipo === "reserva_confirmada" || tipo === "reserva_rechazada") &&
+    entityId
+  ) {
+    return `/reserva/${entityId}`;
+  }
+
+  return href || "/dashboard";
 }
