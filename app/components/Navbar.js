@@ -15,6 +15,7 @@ import {
   hasDniUploaded,
 } from "@/app/lib/dni";
 import { supabase } from "@/app/lib/supabase";
+import NotificationBell from "@/app/components/NotificationBell";
 
 const PRIMARY = "#1d4f91";
 const BORDER = "#e8e4de";
@@ -53,6 +54,28 @@ function ChatIcon({ className }) {
         d="M8.625 12a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H8.25m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H12m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 0 1-2.555-.337A5.972 5.972 0 0 1 5.41 20.97a5.969 5.969 0 0 1-.474-.065 4.48 4.48 0 0 0 .978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25Z"
       />
     </svg>
+  );
+}
+
+function ChatNavButton({ unreadCount, onNavigate }) {
+  return (
+    <Link
+      href="/chat"
+      onClick={onNavigate}
+      className="relative flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full text-[#444] no-underline transition-colors hover:bg-[#f7f5f2]"
+      style={{ background: "#fff", border: `0.5px solid ${BORDER}` }}
+      aria-label="Mensajes"
+    >
+      <ChatIcon className="h-5 w-5" />
+      {unreadCount > 0 && (
+        <span
+          className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold text-white"
+          style={{ backgroundColor: "#c47d1a" }}
+        >
+          {unreadCount > 9 ? "9+" : unreadCount}
+        </span>
+      )}
+    </Link>
   );
 }
 
@@ -350,7 +373,12 @@ export default function Navbar() {
             </Link>
           )}
           {user && (
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <div className="flex items-center gap-1.5">
+              <ChatNavButton
+                unreadCount={mensajesSinLeer}
+                onNavigate={closeMobileMenu}
+              />
+              <NotificationBell compact />
               <div
                 style={{
                   width: 32,
@@ -408,39 +436,11 @@ export default function Navbar() {
 
           {user ? (
             <>
-              <Link
-                href="/chat"
-                onClick={closeDropdown}
-                className="relative flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full no-underline"
-                style={{
-                  background: "#fff",
-                  border: `0.5px solid ${BORDER}`,
-                }}
-                aria-label="Notificaciones"
-              >
-                🔔
-                {mensajesSinLeer > 0 && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      top: -2,
-                      right: -2,
-                      width: 14,
-                      height: 14,
-                      borderRadius: "50%",
-                      background: "#dc2626",
-                      color: "#fff",
-                      fontSize: 8,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontWeight: 500,
-                    }}
-                  >
-                    {mensajesSinLeer > 9 ? "9+" : mensajesSinLeer}
-                  </div>
-                )}
-              </Link>
+              <ChatNavButton
+                unreadCount={mensajesSinLeer}
+                onNavigate={closeDropdown}
+              />
+              <NotificationBell />
 
               <div ref={dropdownRef} style={{ position: "relative" }}>
                 <div

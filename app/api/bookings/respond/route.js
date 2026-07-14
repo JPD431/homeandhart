@@ -2,6 +2,7 @@ import { createClient as createServiceClient } from "@supabase/supabase-js";
 import Stripe from "stripe";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { notifyBookingEvent } from "@/app/lib/notifications";
 
 const supabaseAdmin = createServiceClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -278,6 +279,23 @@ export async function POST(request) {
           fecha_fin: finEmail,
           precio_total: Number(booking.precio_total || 0).toFixed(2),
         });
+
+        try {
+          await notifyBookingEvent(supabaseAdmin, {
+            tipo: "reserva_rechazada",
+            bookingId,
+            clienteId: booking.cliente_id,
+            proveedorNombre,
+            servicioTitulo: service.titulo,
+            fechaInicio: booking.fecha_inicio,
+            fechaFin: finEmail,
+          });
+        } catch (notifErr) {
+          console.error(
+            "[bookings/respond] Error notificación reserva_rechazada:",
+            notifErr,
+          );
+        }
       }
     } catch (emailErr) {
       console.error(
@@ -406,6 +424,23 @@ export async function POST(request) {
               svc.telefono_contacto || proveedorProfile?.telefono || undefined,
             modalidad: svc.modalidad,
           });
+
+          try {
+            await notifyBookingEvent(supabaseAdmin, {
+              tipo: "reserva_confirmada",
+              bookingId,
+              clienteId: bookingFull.cliente_id,
+              proveedorNombre,
+              servicioTitulo: svc.titulo,
+              fechaInicio: bookingFull.fecha_inicio,
+              fechaFin: finEmail,
+            });
+          } catch (notifErr) {
+            console.error(
+              "[bookings/respond] Error notificación reserva_confirmada:",
+              notifErr,
+            );
+          }
 
           await postBookingEmail(baseUrl, {
             tipo: "reserva_confirmada_proveedor",

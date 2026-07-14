@@ -15,6 +15,7 @@ import {
 } from "@/app/lib/service-bookable";
 import { rewardReferidorPrimeraReserva } from "@/app/lib/referidos";
 import { assertUserHasDni } from "@/app/lib/dni";
+import { notifyBookingEvent } from "@/app/lib/notifications";
 
 const MAX_CREDITO_PORCENTAJE = 0.6;
 
@@ -394,6 +395,23 @@ async function sendPostCompleteBookingEmails({
         booking_id: inserted.id,
         ...buildProveedorIngresoEmailFields(booking, proveedorProfile),
       });
+
+      try {
+        await notifyBookingEvent(supabaseAdmin, {
+          tipo: "reserva_nueva",
+          bookingId: inserted.id,
+          proveedorId: svc.proveedor_id,
+          clienteNombre,
+          servicioTitulo: svc.titulo,
+          fechaInicio,
+          fechaFin: finEmail,
+        });
+      } catch (notifErr) {
+        console.error(
+          "[bookings/complete] Error creando notificación reserva_nueva:",
+          notifErr,
+        );
+      }
     }
   }
 
