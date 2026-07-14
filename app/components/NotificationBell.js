@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BRAND } from "@/app/components/brand";
+import { useModo } from "@/app/lib/ModoContext";
 import { resolveNotificationHref } from "@/app/lib/notifications";
 
 const PRIMARY = "#1d4f91";
@@ -47,6 +48,7 @@ function formatRelativeTime(iso) {
 
 export default function NotificationBell({ compact = false }) {
   const router = useRouter();
+  const { modo, setModo, puedeAlternarModo } = useModo();
   const rootRef = useRef(null);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -124,6 +126,12 @@ export default function NotificationBell({ compact = false }) {
 
     setOpen(false);
     const destination = resolveNotificationHref(notification);
+    if (
+      puedeAlternarModo &&
+      destination.includes("tab=proveedor")
+    ) {
+      setModo("proveedor", { redirect: false });
+    }
     if (destination) {
       router.push(destination);
     }
@@ -312,12 +320,14 @@ export default function NotificationBell({ compact = false }) {
               style={{ borderColor: "#f0ede8", background: "#fafafa" }}
             >
               <Link
-                href="/dashboard?tab=proveedor"
+                href="/dashboard"
                 onClick={() => setOpen(false)}
                 className="text-xs font-medium no-underline"
                 style={{ color: PRIMARY }}
               >
-                Ver mi panel →
+                {modo === "proveedor" && puedeAlternarModo
+                  ? "Ver mi panel →"
+                  : "Ver mis reservas →"}
               </Link>
             </div>
           )}

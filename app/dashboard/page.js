@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Navbar from '@/app/components/Navbar';
 import FamiliaInviteBanner from '@/app/components/FamiliaInviteBanner';
 import ReportarIncidenciaForm from '@/app/components/ReportarIncidenciaForm';
+import { useModo } from '@/app/lib/ModoContext';
 import { getIngresoProveedorFromBooking } from '@/app/lib/ingresos-proveedor';
 import { puedeReportarIncidencia } from '@/app/lib/booking-incidencia';
 import { supabase } from '@/app/lib/supabase';
@@ -32,13 +33,14 @@ function DashboardContent() {
   const stripeParam = searchParams.get('stripe');
   const tabParam = searchParams.get('tab');
   const bookingHighlight = searchParams.get('booking');
+  const { modo, setModo, puedeAlternarModo } = useModo();
   const [user, setUser] = useState(null);
   const [perfil, setPerfil] = useState(null);
   const [reservas, setReservas] = useState([]);
   const [favoritos, setFavoritos] = useState([]);
   const [viajes, setViajes] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [tabActiva, setTabActiva] = useState('cliente');
+  const [clientSubTab, setClientSubTab] = useState('cliente');
   const [stripeBannerDismissed, setStripeBannerDismissed] = useState(false);
 
   useEffect(() => {
@@ -85,6 +87,12 @@ function DashboardContent() {
   }, [router]);
 
   useEffect(() => {
+    if (tabParam === 'proveedor' || bookingHighlight) {
+      setModo('proveedor', { redirect: false });
+    }
+  }, [tabParam, bookingHighlight, setModo]);
+
+  useEffect(() => {
     if (stripeParam !== 'success' && stripeParam !== 'refresh') return;
 
     async function refetchPerfil() {
@@ -95,28 +103,19 @@ function DashboardContent() {
         .select('*')
         .eq('id', authUser.id)
         .single();
-      if (p) {
-        setPerfil(p);
-        if (p.role === 'proveedor') {
-          setTabActiva('proveedor');
-        }
-      }
+      if (p) setPerfil(p);
     }
 
     refetchPerfil();
   }, [stripeParam]);
 
   useEffect(() => {
-    if (tabParam === 'proveedor' || bookingHighlight) {
-      setTabActiva('proveedor');
-    }
-  }, [tabParam, bookingHighlight]);
-
-  useEffect(() => {
-    if (perfil?.role === 'proveedor' && !tabParam && !bookingHighlight) {
-      setTabActiva('proveedor');
-    }
-  }, [perfil, tabParam, bookingHighlight]);
+    if (modo !== 'cliente') return;
+    if (tabParam === 'familia') setClientSubTab('familia');
+    else if (tabParam === 'referidos') setClientSubTab('referidos');
+    else if (tabParam === 'pasaporte') setClientSubTab('pasaporte');
+    else setClientSubTab('cliente');
+  }, [modo, tabParam]);
 
   function dismissStripeBanner() {
     setStripeBannerDismissed(true);
@@ -141,7 +140,8 @@ function DashboardContent() {
   if (loading) return <div style={{background: BRAND.warm, minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center'}}><p style={{color: '#aaa'}}>Cargando...</p></div>;
 
   const nombreMostrar = perfil?.nombre || user?.email?.split('@')[0] || 'usuario';
-  const tabs = ['cliente', 'proveedor', 'familia', 'pasaporte', 'referidos'];
+  const enModoProveedor = modo === 'proveedor' && puedeAlternarModo;
+  const clientTabs = ['cliente', 'familia', 'pasaporte', 'referidos'];
 
   return (
     <div style={{background: BRAND.warm, minHeight: '100vh'}}>
@@ -151,7 +151,7 @@ function DashboardContent() {
         <FamiliaInviteBanner compact />
       </div>
 
-      {!stripeBannerDismissed && stripeParam === 'success' && (
+      {!stripeBannerDismissed && enModoProveedor && stripeParam === 'success' && (
         <div
           style={{
             background: '#e6f4f0',
@@ -187,7 +187,7 @@ function DashboardContent() {
         </div>
       )}
 
-      {!stripeBannerDismissed && stripeParam === 'refresh' && (
+      {!stripeBannerDismissed && enModoProveedor && stripeParam === 'refresh' && (
         <div
           style={{
             background: '#fdf4e7',
@@ -223,23 +223,24 @@ function DashboardContent() {
         </div>
       )}
       
-      {/* TABS */}
+      {/* TABS — solo en modo cliente */}
+      {!enModoProveedor && (
       <div
         className="flex overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
         style={{ background: '#fff', borderBottom: `0.5px solid ${BRAND.border}`, padding: '0 16px' }}
       >
-        {tabs.map(t => (
+        {clientTabs.map(t => (
           <button
             key={t}
-            onClick={() => setTabActiva(t)}
+            onClick={() => setClientSubTab(t)}
             className="shrink-0"
             style={{
               minHeight: 44,
               padding: '12px 20px',
               fontSize: 12,
-              color: tabActiva === t ? BRAND.blue : '#888',
-              borderBottom: tabActiva === t ? `2px solid ${BRAND.blue}` : '2px solid transparent',
-              fontWeight: tabActiva === t ? 500 : 400,
+              color: clientSubTab === t ? BRAND.blue : '#888',
+              borderBottom: clientSubTab === t ? `2px solid ${BRAND.blue}` : '2px solid transparent',
+              fontWeight: clientSubTab === t ? 500 : 400,
               background: 'none',
               border: 'none',
               cursor: 'pointer',
@@ -251,6 +252,7 @@ function DashboardContent() {
           </button>
         ))}
       </div>
+      )}
 
       {/* HEADER */}
       <div
@@ -259,28 +261,40 @@ function DashboardContent() {
       >
         <div>
           <div style={{ fontSize: 'clamp(22px, 4vw, 26px)', fontWeight: 300, color: BRAND.dark, fontFamily: 'Georgia, serif' }}>Hola, <em style={{color: BRAND.blue}}>{nombreMostrar}.</em></div>
-          <div style={{fontSize: 12, color: '#aaa', marginTop: 4}}>Bienvenida a tu panel · Home&Heart</div>
+          <div style={{fontSize: 12, color: '#aaa', marginTop: 4}}>
+            {enModoProveedor ? 'Panel de proveedor · Home&Heart' : 'Bienvenida a tu panel · Home&Heart'}
+          </div>
         </div>
         <div className="flex flex-wrap gap-2">
           <button onClick={() => router.push('/editar-perfil')} style={{ minHeight: 44, background: '#fff', color: BRAND.blue, border: `1px solid ${BRAND.blue}`, padding: '10px 18px', borderRadius: 4, fontSize: 12, cursor: 'pointer' }}>Editar perfil</button>
-          <button onClick={() => router.push('/buscar')} style={{ minHeight: 44, background: BRAND.blue, color: '#fff', border: 'none', padding: '10px 18px', borderRadius: 4, fontSize: 12, cursor: 'pointer', fontWeight: 500 }}>Buscar proveedores</button>
+          {enModoProveedor ? (
+            <>
+              <button onClick={() => router.push('/estadisticas')} style={{ minHeight: 44, background: BRAND.blue, color: '#fff', border: 'none', padding: '10px 18px', borderRadius: 4, fontSize: 12, cursor: 'pointer', fontWeight: 500 }}>Ver estadísticas</button>
+              <button onClick={() => router.push('/editar-perfil?tab=servicios')} style={{ minHeight: 44, background: '#fff', color: BRAND.blue, border: `1px solid ${BRAND.blue}`, padding: '10px 18px', borderRadius: 4, fontSize: 12, cursor: 'pointer' }}>Mis servicios</button>
+            </>
+          ) : (
+            <button onClick={() => router.push('/buscar')} style={{ minHeight: 44, background: BRAND.blue, color: '#fff', border: 'none', padding: '10px 18px', borderRadius: 4, fontSize: 12, cursor: 'pointer', fontWeight: 500 }}>Buscar proveedores</button>
+          )}
         </div>
       </div>
 
-      {/* CONTENIDO POR TAB */}
+      {/* CONTENIDO POR MODO */}
       <div style={{padding: '20px 24px'}}>
-        {tabActiva === 'cliente' && <TabCliente perfil={perfil} reservas={reservas} favoritos={favoritos} viajes={viajes} router={router} BRAND={BRAND} copiarLink={copiarLink} />}
-        {tabActiva === 'proveedor' && (
+        {enModoProveedor ? (
           <TabProveedor
             perfil={perfil}
             router={router}
             BRAND={BRAND}
             highlightBookingId={bookingHighlight}
           />
+        ) : (
+          <>
+            {clientSubTab === 'cliente' && <TabCliente perfil={perfil} reservas={reservas} favoritos={favoritos} viajes={viajes} router={router} BRAND={BRAND} copiarLink={copiarLink} />}
+            {clientSubTab === 'familia' && <TabFamilia perfil={perfil} router={router} BRAND={BRAND} />}
+            {clientSubTab === 'pasaporte' && router.push('/pasaporte')}
+            {clientSubTab === 'referidos' && <TabReferidos perfil={perfil} BRAND={BRAND} copiarLink={copiarLink} />}
+          </>
         )}
-        {tabActiva === 'familia' && <TabFamilia perfil={perfil} router={router} BRAND={BRAND} />}
-        {tabActiva === 'pasaporte' && router.push('/pasaporte')}
-        {tabActiva === 'referidos' && <TabReferidos perfil={perfil} BRAND={BRAND} copiarLink={copiarLink} />}
       </div>
     </div>
   );

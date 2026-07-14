@@ -5,9 +5,9 @@ import { useRouter, usePathname } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLang } from "@/app/lib/LangContext";
 import { useTranslation } from "@/app/lib/i18n";
+import { ModoSwitch, useModo } from "@/app/lib/ModoContext";
 import { getBookingEstado } from "@/app/lib/viajes";
 import { BRAND } from "./brand";
-import { needsProviderOnboarding } from "@/app/lib/onboarding";
 import {
   DNI_BANNER_CLIENT_MSG,
   DNI_BANNER_PROVIDER_MSG,
@@ -117,8 +117,9 @@ function calcPorcentajePerfil(perfil, servicesCount) {
   return pct;
 }
 
-function getRolLabel(isProveedor) {
-  return isProveedor ? "Ambos" : "Cliente";
+function getModoLabel(modo, esAmbos) {
+  if (!esAmbos) return "Cliente";
+  return modo === "proveedor" ? "Modo proveedor" : "Modo cliente";
 }
 
 function DropdownItem({ href, icon, label, badge, badgeStyle, onNavigate }) {
@@ -159,26 +160,111 @@ function getReservasSinComisionCliente(perfil) {
   return Number(perfil?.reservas_sin_comision_cliente) || 0;
 }
 
+function ClienteDropdownLinks({
+  reservasActivas,
+  sinComision,
+  onNavigate,
+}) {
+  return (
+    <>
+      <SectionLabel>Modo cliente</SectionLabel>
+      <DropdownItem
+        href="/dashboard"
+        icon="📅"
+        label="Mis reservas"
+        badge={reservasActivas > 0 ? `${reservasActivas} activas` : null}
+        badgeStyle={{ backgroundColor: "#e8f0fb", color: PRIMARY }}
+        onNavigate={onNavigate}
+      />
+      <DropdownItem
+        href="/historial"
+        icon="🧾"
+        label="Historial y facturas"
+        onNavigate={onNavigate}
+      />
+      <DropdownItem
+        href="/familia"
+        icon="👨‍👩‍👧"
+        label="Mi familia"
+        onNavigate={onNavigate}
+      />
+      <DropdownItem
+        href="/pasaporte"
+        icon="🛂"
+        label="Mi pasaporte"
+        onNavigate={onNavigate}
+      />
+      <DropdownItem
+        href="/dashboard"
+        icon="🎁"
+        label="Referidos"
+        badge={sinComision > 0 ? `${sinComision} sin comisión` : null}
+        badgeStyle={{ backgroundColor: "#e6f4f0", color: "#0e7a5c" }}
+        onNavigate={onNavigate}
+      />
+    </>
+  );
+}
+
+function ProveedorDropdownLinks({ mensajesSinLeer, onNavigate }) {
+  return (
+    <>
+      <SectionLabel>Modo proveedor</SectionLabel>
+      <DropdownItem
+        href="/dashboard"
+        icon="📋"
+        label="Panel de reservas"
+        onNavigate={onNavigate}
+      />
+      <DropdownItem
+        href="/estadisticas"
+        icon="📊"
+        label="Ingresos y estadísticas"
+        onNavigate={onNavigate}
+      />
+      <DropdownItem
+        href="/editar-perfil?tab=servicios"
+        icon="✏️"
+        label="Mis servicios"
+        onNavigate={onNavigate}
+      />
+      <DropdownItem
+        href="/chat"
+        icon="💬"
+        label="Mensajes"
+        badge={mensajesSinLeer > 0 ? String(mensajesSinLeer) : null}
+        badgeStyle={{ backgroundColor: "#fdf3e3", color: "#c47d1a" }}
+        onNavigate={onNavigate}
+      />
+    </>
+  );
+}
+
 export default function Navbar() {
   const router = useRouter();
   const pathname = usePathname();
   const { lang } = useLang();
   const t = useTranslation(lang);
 
-  const dropdownRef = useRef(null);
+  const {
+    modo,
+    perfil,
+    user,
+    servicesCount,
+    esClientePuro,
+    esAmbos,
+    mostrarSwitch,
+    onboardingIncompleto,
+    enAdmin,
+  } = useModo();
 
-  const [user, setUser] = useState(null);
-  const [perfil, setPerfil] = useState(null);
-  const [servicesCount, setServicesCount] = useState(0);
+  const dropdownRef = useRef(null);
   const [reservasActivas, setReservasActivas] = useState(0);
   const [mensajesSinLeer, setMensajesSinLeer] = useState(0);
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [vistaModo, setVistaModo] = useState("cliente");
   const [signingOut, setSigningOut] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const isProveedor = perfil?.role === "proveedor";
-  const onboardingIncompleto = needsProviderOnboarding(perfil);
   const porcentajePerfil = calcPorcentajePerfil(perfil, servicesCount);
   const sinComision = getReservasSinComisionCliente(perfil);
 
@@ -186,23 +272,69 @@ export default function Navbar() {
   const closeMobileMenu = useCallback(() => setMobileMenuOpen(false), []);
 
   const navLinks = useMemo(() => {
-    const base = [
-      { href: "/", label: t.navbar.inicio, primary: true },
-      { href: "/buscar", label: t.navbar.servicios },
-      { href: "/blog", label: "Blog" },
+    if (enAdmin) {
+      return [
+        { href: "/admin", label: "Panel admin", primary: true },
+        { href: "/", label: t.navbar.inicio },
+        { href: "/blog", label: "Blog" },
+      ];
+    }
+
+    if (!user) {
+      return [
+        { href: "/", label: t.navbar.inicio, primary: true },
+        { href: "/buscar", label: t.navbar.servicios },
+        { href: "/blog", label: "Blog" },
+        { href: "/garantia", label: t.navbar.garantia },
+        { href: "/#como-funciona", label: t.navbar.comoFunciona },
+        { href: "/ser-proveedor", label: t.navbar.serProveedor },
+      ];
+    }
+
+    if (onboardingIncompleto) {
+      return [
+        { href: "/ser-proveedor", label: "Continuar registro", primary: true },
+        { href: "/buscar", label: t.navbar.servicios },
+        { href: "/garantia", label: t.navbar.garantia },
+      ];
+    }
+
+    if (modo === "proveedor" && !esClientePuro) {
+      return [
+        { href: "/dashboard", label: "Panel", primary: true },
+        { href: "/estadisticas", label: "Ingresos" },
+        {
+          href: "/editar-perfil?tab=servicios",
+          label: "Mis servicios",
+        },
+        { href: "/chat", label: "Mensajes" },
+      ];
+    }
+
+    const links = [
+      { href: "/buscar", label: t.navbar.servicios, primary: true },
+      { href: "/dashboard", label: "Mis reservas" },
+      { href: "/historial", label: "Historial" },
+      { href: "/familia", label: "Familia" },
       { href: "/garantia", label: t.navbar.garantia },
-      { href: "/#como-funciona", label: t.navbar.comoFunciona },
-      {
-        href: "/ser-proveedor",
-        label:
-          user && isProveedor && onboardingIncompleto
-            ? "Continuar registro"
-            : t.navbar.serProveedor,
-        primary: !!(user && isProveedor && onboardingIncompleto),
-      },
     ];
-    return base;
-  }, [t, user, isProveedor, onboardingIncompleto]);
+
+    if (esClientePuro) {
+      links.push({
+        href: "/ser-proveedor",
+        label: "Ofrecer mis servicios",
+      });
+    }
+
+    return links;
+  }, [
+    t,
+    user,
+    modo,
+    esClientePuro,
+    onboardingIncompleto,
+    enAdmin,
+  ]);
 
   const loadMensajesSinLeer = useCallback(async (userId) => {
     const { data: conversations } = await supabase
@@ -226,72 +358,34 @@ export default function Navbar() {
     setMensajesSinLeer(count ?? 0);
   }, []);
 
-  const loadUserData = useCallback(
-    async (authUser) => {
-      const { data: profileData } = await supabase
-        .from("profiles")
-        .select(
-          "nombre, apellido, role, descripcion, idiomas, foto_perfil, reservas_sin_comision_cliente, onboarding_completed_at, doc_dni_url",
-        )
-        .eq("id", authUser.id)
-        .single();
-
-      setPerfil(profileData);
-
-      const { count: svcCount } = await supabase
-        .from("services")
-        .select("id", { count: "exact", head: true })
-        .eq("proveedor_id", authUser.id);
-
-      setServicesCount(svcCount ?? 0);
-
+  const loadNavCounters = useCallback(
+    async (userId) => {
       const { data: bookings } = await supabase
         .from("bookings")
         .select("estado")
-        .eq("cliente_id", authUser.id);
+        .eq("cliente_id", userId);
 
       const activas = (bookings ?? []).filter((b) =>
         ["confirmada", "pendiente", "en_curso"].includes(getBookingEstado(b)),
       ).length;
       setReservasActivas(activas);
 
-      await loadMensajesSinLeer(authUser.id);
+      await loadMensajesSinLeer(userId);
     },
     [loadMensajesSinLeer],
   );
 
   useEffect(() => {
-    async function init() {
-      const {
-        data: { user: authUser },
-      } = await supabase.auth.getUser();
-      setUser(authUser);
-      if (authUser) await loadUserData(authUser);
+    if (!user?.id) {
+      setReservasActivas(0);
+      setMensajesSinLeer(0);
+      return;
     }
-
-    init();
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      const authUser = session?.user ?? null;
-      setUser(authUser);
-      if (authUser) {
-        loadUserData(authUser);
-      } else {
-        setPerfil(null);
-        setServicesCount(0);
-        setReservasActivas(0);
-        setMensajesSinLeer(0);
-        setDropdownOpen(false);
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, [loadUserData]);
+    loadNavCounters(user.id);
+  }, [user?.id, loadNavCounters]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user?.id) return;
 
     const channel = supabase
       .channel("navbar-unread")
@@ -305,7 +399,7 @@ export default function Navbar() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user, loadMensajesSinLeer]);
+  }, [user?.id, loadMensajesSinLeer]);
 
   useEffect(() => {
     if (!dropdownOpen) return;
@@ -325,6 +419,7 @@ export default function Navbar() {
     await supabase.auth.signOut();
     setSigningOut(false);
     setDropdownOpen(false);
+    closeMobileMenu();
     router.push("/");
   }
 
@@ -335,588 +430,518 @@ export default function Navbar() {
   const initials = perfil?.nombre?.[0]?.toUpperCase() || "U";
   const showDniBanner = user && perfil && !hasDniUploaded(perfil);
   const dniBannerText =
-    perfil?.role === "proveedor"
+    modo === "proveedor" && !esClientePuro
       ? DNI_BANNER_PROVIDER_MSG
       : DNI_BANNER_CLIENT_MSG;
   const dniBannerHref = `${DNI_SUBIR_RUTA}?next=${encodeURIComponent(pathname || "/")}`;
 
   return (
     <>
-    <header
-      className="sticky top-0 z-50 border-b bg-white/90 backdrop-blur-md"
-      style={{ borderColor: BRAND.border }}
-    >
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
-        <Link href="/" className="shrink-0 no-underline">
-          <Logo />
-        </Link>
+      <header
+        className="sticky top-0 z-50 border-b bg-white/90 backdrop-blur-md"
+        style={{ borderColor: BRAND.border }}
+      >
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
+          <Link href="/" className="shrink-0 no-underline">
+            <Logo />
+          </Link>
 
-        {/* MÓVIL */}
-        <div className="flex items-center gap-2 md:hidden">
-          {!user && (
-            <Link href="/registro" className="no-underline">
-              <button
-                type="button"
-                style={{
-                  background: "#1d4f91",
-                  color: "#fff",
-                  border: "none",
-                  padding: "8px 14px",
-                  borderRadius: 6,
-                  fontSize: 12,
-                  fontWeight: 500,
-                  minHeight: 44,
-                }}
-              >
-                {t.navbar.registrarse}
-              </button>
-            </Link>
-          )}
-          {user && (
-            <div className="flex items-center gap-1.5">
-              <ChatNavButton
-                unreadCount={mensajesSinLeer}
-                onNavigate={closeMobileMenu}
-              />
-              <NotificationBell compact />
-              <div
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: "50%",
-                  background: "#1d4f91",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: 11,
-                  color: "#fff",
-                  fontWeight: 500,
-                }}
-              >
-                {initials}
-              </div>
-            </div>
-          )}
-          <button
-            type="button"
-            onClick={() => setMobileMenuOpen(true)}
-            aria-label="Abrir menú"
-            aria-expanded={mobileMenuOpen}
-            style={{
-              minHeight: 44,
-              minWidth: 44,
-              background: "none",
-              border: "none",
-              fontSize: 20,
-              cursor: "pointer",
-            }}
-          >
-            ☰
-          </button>
-        </div>
-
-        <div className="hidden items-center gap-4 md:flex">
-          <nav
-            className="flex items-center gap-8 text-sm font-medium text-[#444]"
-            aria-label="Principal"
-          >
-            {navLinks.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className="no-underline transition-colors hover:text-[#1d4f91]"
-                style={link.primary ? { color: BRAND.primary } : undefined}
-              >
-                {link.label}
-              </Link>
-            ))}
-          </nav>
-
-          <LangSwitcher />
-
-          {user ? (
-            <>
-              <ChatNavButton
-                unreadCount={mensajesSinLeer}
-                onNavigate={closeDropdown}
-              />
-              <NotificationBell />
-
-              <div ref={dropdownRef} style={{ position: "relative" }}>
-                <div
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => setDropdownOpen((o) => !o)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      setDropdownOpen((o) => !o);
-                    }
-                  }}
-                  className="relative flex min-h-[44px] cursor-pointer items-center gap-2 rounded-full border px-3"
+          {/* MÓVIL */}
+          <div className="flex items-center gap-2 md:hidden">
+            {!user && (
+              <Link href="/registro" className="no-underline">
+                <button
+                  type="button"
                   style={{
-                    borderColor: BORDER,
-                    background: "#fff",
+                    background: "#1d4f91",
+                    color: "#fff",
+                    border: "none",
+                    padding: "8px 14px",
+                    borderRadius: 6,
+                    fontSize: 12,
+                    fontWeight: 500,
+                    minHeight: 44,
                   }}
-                  aria-expanded={dropdownOpen}
-                  aria-haspopup="true"
                 >
-                  <div style={{ position: "relative" }}>
-                    <div
-                      style={{
-                        width: 28,
-                        height: 28,
-                        borderRadius: "50%",
-                        background: PRIMARY,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontSize: 10,
-                        fontWeight: 500,
-                        color: "#fff",
-                      }}
-                    >
-                      {initials}
-                    </div>
-                    <div
-                      style={{
-                        position: "absolute",
-                        bottom: 0,
-                        right: 0,
-                        width: 8,
-                        height: 8,
-                        borderRadius: "50%",
-                        background: "#0e7a5c",
-                        border: "1.5px solid #fff",
-                      }}
-                    />
-                  </div>
-                  <span className="hidden max-w-[100px] truncate text-xs font-medium text-[#2a3a4a] sm:inline">
-                    {perfil?.nombre || "Mi cuenta"}
-                  </span>
-                  <span style={{ fontSize: 10, color: "#bbb" }}>▾</span>
+                  {t.navbar.registrarse}
+                </button>
+              </Link>
+            )}
+            {user && (
+              <div className="flex items-center gap-1.5">
+                <ChatNavButton
+                  unreadCount={mensajesSinLeer}
+                  onNavigate={closeMobileMenu}
+                />
+                <NotificationBell compact />
+                <div
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: "50%",
+                    background: "#1d4f91",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 11,
+                    color: "#fff",
+                    fontWeight: 500,
+                  }}
+                >
+                  {initials}
                 </div>
-
-                {dropdownOpen && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      top: "calc(100% + 8px)",
-                      right: 0,
-                      width: 260,
-                      background: "#fff",
-                      borderRadius: 12,
-                      border: `0.5px solid ${BORDER}`,
-                      boxShadow: "0 8px 32px rgba(0,0,0,0.1)",
-                      overflow: "hidden",
-                      zIndex: 100,
-                    }}
-                  >
-                    {/* Header */}
-                    <div
-                      className="flex items-center gap-3 px-4 py-4"
-                      style={{ borderBottom: `0.5px solid #f0ede8` }}
-                    >
-                      <div
-                        style={{
-                          width: 40,
-                          height: 40,
-                          borderRadius: "50%",
-                          background: PRIMARY,
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          fontSize: 14,
-                          fontWeight: 500,
-                          color: "#fff",
-                          flexShrink: 0,
-                        }}
-                      >
-                        {initials}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-[#1a1a1a]">
-                          {displayName}
-                        </p>
-                        <p className="truncate text-[11px] text-[#888]">
-                          {user.email}
-                        </p>
-                        <span
-                          className="mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold"
-                          style={{
-                            backgroundColor: isProveedor ? "#e6f4f0" : "#e8f0fb",
-                            color: isProveedor ? "#0e7a5c" : PRIMARY,
-                          }}
-                        >
-                          {getRolLabel(isProveedor)}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Progreso perfil */}
-                    <div
-                      style={{
-                        padding: "10px 16px",
-                        borderBottom: "0.5px solid #f0ede8",
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          fontSize: 9,
-                          color: "#bbb",
-                          marginBottom: 4,
-                        }}
-                      >
-                        <span>Perfil completado</span>
-                        <span>{porcentajePerfil}%</span>
-                      </div>
-                      <div
-                        style={{
-                          height: 4,
-                          background: "#f7f5f2",
-                          borderRadius: 2,
-                          overflow: "hidden",
-                        }}
-                      >
-                        <div
-                          style={{
-                            height: "100%",
-                            background: PRIMARY,
-                            borderRadius: 2,
-                            width: `${porcentajePerfil}%`,
-                          }}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Toggle cliente/proveedor */}
-                    {isProveedor && (
-                      <div
-                        className="flex gap-1 p-2"
-                        style={{
-                          borderBottom: "0.5px solid #f0ede8",
-                          background: "#f7f5f2",
-                        }}
-                      >
-                        {["cliente", "proveedor"].map((modo) => (
-                          <button
-                            key={modo}
-                            type="button"
-                            onClick={() => setVistaModo(modo)}
-                            className="min-h-[44px] flex-1 rounded-lg py-2 text-xs font-semibold capitalize transition-colors"
-                            style={{
-                              background:
-                                vistaModo === modo ? "#fff" : "transparent",
-                              color: vistaModo === modo ? PRIMARY : "#888",
-                              boxShadow:
-                                vistaModo === modo
-                                  ? "0 1px 4px rgba(0,0,0,0.08)"
-                                  : "none",
-                              border: "none",
-                              cursor: "pointer",
-                            }}
-                          >
-                            {modo}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Como cliente */}
-                    {(!isProveedor || vistaModo === "cliente") && (
-                      <div style={{ borderBottom: "0.5px solid #f0ede8" }}>
-                        <SectionLabel>Como cliente</SectionLabel>
-                        <DropdownItem
-                          href="/dashboard"
-                          icon="📅"
-                          label="Mis reservas"
-                          badge={
-                            reservasActivas > 0
-                              ? `${reservasActivas} activas`
-                              : null
-                          }
-                          badgeStyle={{
-                            backgroundColor: "#e8f0fb",
-                            color: PRIMARY,
-                          }}
-                          onNavigate={closeDropdown}
-                        />
-                        <DropdownItem
-                          href="/dashboard"
-                          icon="❤️"
-                          label="Mis favoritos"
-                          onNavigate={closeDropdown}
-                        />
-                        <DropdownItem
-                          href="/historial"
-                          icon="🧾"
-                          label="Historial y facturas"
-                          onNavigate={closeDropdown}
-                        />
-                        <DropdownItem
-                          href="/dashboard"
-                          icon="✈️"
-                          label="Mis viajes"
-                          onNavigate={closeDropdown}
-                        />
-                        <DropdownItem
-                          href="/familia"
-                          icon="👨‍👩‍👧"
-                          label="Mi familia"
-                          onNavigate={closeDropdown}
-                        />
-                        <DropdownItem
-                          href="/pasaporte"
-                          icon="🛂"
-                          label="Mi pasaporte"
-                          onNavigate={closeDropdown}
-                        />
-                        <DropdownItem
-                          href="/dashboard"
-                          icon="🎁"
-                          label="Referidos"
-                          badge={
-                            sinComision > 0 ? `${sinComision} sin comisión` : null
-                          }
-                          badgeStyle={{
-                            backgroundColor: "#e6f4f0",
-                            color: "#0e7a5c",
-                          }}
-                          onNavigate={closeDropdown}
-                        />
-                      </div>
-                    )}
-
-                    {/* Como proveedor */}
-                    {isProveedor && vistaModo === "proveedor" && (
-                      <div style={{ borderBottom: "0.5px solid #f0ede8" }}>
-                        <SectionLabel>Como proveedor</SectionLabel>
-                        <DropdownItem
-                          href="/estadisticas"
-                          icon="📊"
-                          label="Estadísticas"
-                          onNavigate={closeDropdown}
-                        />
-                        <DropdownItem
-                          href="/editar-perfil?tab=servicios"
-                          icon="✏️"
-                          label="Editar mis servicios"
-                          onNavigate={closeDropdown}
-                        />
-                        <DropdownItem
-                          href="/chat"
-                          icon="💬"
-                          label="Mis mensajes"
-                          badge={
-                            mensajesSinLeer > 0
-                              ? String(mensajesSinLeer)
-                              : null
-                          }
-                          badgeStyle={{
-                            backgroundColor: "#fdf3e3",
-                            color: "#c47d1a",
-                          }}
-                          onNavigate={closeDropdown}
-                        />
-                      </div>
-                    )}
-
-                    {/* Cuenta */}
-                    <div style={{ borderBottom: "0.5px solid #f0ede8" }}>
-                      <SectionLabel>Cuenta</SectionLabel>
-                      <DropdownItem
-                        href="/editar-perfil"
-                        icon="👤"
-                        label="Mi perfil"
-                        onNavigate={closeDropdown}
-                      />
-                      <DropdownItem
-                        href="/recuperar-contrasena"
-                        icon="🔒"
-                        label="Cambiar contraseña"
-                        onNavigate={closeDropdown}
-                      />
-                    </div>
-
-                    {/* Cerrar sesión */}
-                    <div className="p-3">
-                      <button
-                        type="button"
-                        onClick={handleSignOut}
-                        disabled={signingOut}
-                        className="min-h-[44px] w-full rounded-lg border py-3 text-sm font-medium transition-colors disabled:opacity-60"
-                        style={{
-                          borderColor: BORDER,
-                          background: "#fff",
-                          color: "#666",
-                          cursor: "pointer",
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.borderColor = "#dc2626";
-                          e.currentTarget.style.color = "#dc2626";
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.borderColor = BORDER;
-                          e.currentTarget.style.color = "#666";
-                        }}
-                      >
-                        {signingOut ? "Cerrando sesión…" : "Cerrar sesión"}
-                      </button>
-                    </div>
-                  </div>
-                )}
               </div>
-            </>
-          ) : (
-            <>
-              <Link
-                href="/chat"
-                className="relative flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-[#444] no-underline transition-colors hover:bg-[#f7f5f2]"
-                aria-label="Mensajes"
-              >
-                <ChatIcon className="h-5 w-5" />
-              </Link>
-              <Link
-                href="/login"
-                className="inline-flex min-h-[44px] items-center rounded-lg px-4 text-sm font-medium text-[#444] no-underline transition-colors hover:bg-[#f7f5f2]"
-              >
-                {t.navbar.iniciarSesion}
-              </Link>
-              <Link
-                href="/registro"
-                className="inline-flex min-h-[44px] items-center rounded-lg px-4 text-sm font-medium text-white no-underline transition-opacity hover:opacity-90"
-                style={{ backgroundColor: BRAND.primary }}
-              >
-                {t.navbar.registrarse}
-              </Link>
-            </>
-          )}
-        </div>
-      </div>
-
-      {mobileMenuOpen && (
-        <>
-          <button
-            type="button"
-            className="fixed inset-0 z-[60] bg-black/30 md:hidden"
-            aria-label="Cerrar menú"
-            onClick={closeMobileMenu}
-          />
-          <div
-            className="fixed inset-x-0 top-0 z-[70] max-h-[90vh] overflow-y-auto border-b bg-white shadow-lg md:hidden"
-            style={{ borderColor: BORDER }}
-            role="dialog"
-            aria-modal="true"
-            aria-label="Menú de navegación"
-          >
-            <div
-              className="flex min-h-[44px] items-center justify-between border-b px-4"
-              style={{ borderColor: BORDER }}
+            )}
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(true)}
+              aria-label="Abrir menú"
+              aria-expanded={mobileMenuOpen}
+              style={{
+                minHeight: 44,
+                minWidth: 44,
+                background: "none",
+                border: "none",
+                fontSize: 20,
+                cursor: "pointer",
+              }}
             >
-              <span className="text-sm font-semibold text-[#2a3a4a]">Menú</span>
-              <button
-                type="button"
-                onClick={closeMobileMenu}
-                className="flex min-h-[44px] min-w-[44px] items-center justify-center text-xl text-[#666]"
-                aria-label="Cerrar"
-              >
-                ×
-              </button>
-            </div>
-            <nav className="flex flex-col py-2" aria-label="Principal móvil">
+              ☰
+            </button>
+          </div>
+
+          <div className="hidden items-center gap-3 md:flex">
+            <nav
+              className="flex items-center gap-6 text-sm font-medium text-[#444]"
+              aria-label="Principal"
+            >
               {navLinks.map((link) => (
                 <Link
-                  key={link.href}
+                  key={`${link.href}-${link.label}`}
                   href={link.href}
-                  onClick={closeMobileMenu}
-                  className="flex min-h-[44px] items-center border-b px-5 text-[15px] font-medium text-[#2a3a4a] no-underline transition-colors hover:bg-[#f7f5f2]"
-                  style={{
-                    borderColor: "#f0ede8",
-                    color: link.primary ? BRAND.primary : "#2a3a4a",
-                  }}
+                  className="no-underline transition-colors hover:text-[#1d4f91]"
+                  style={link.primary ? { color: BRAND.primary } : undefined}
                 >
                   {link.label}
                 </Link>
               ))}
             </nav>
-            <div
-              className="flex flex-col gap-2 border-t p-4"
-              style={{ borderColor: BORDER }}
-            >
-              {user ? (
-                <>
-                  <Link
-                    href="/dashboard"
-                    onClick={closeMobileMenu}
-                    className="flex min-h-[44px] items-center justify-center rounded-lg border text-sm font-medium text-[#444] no-underline"
-                    style={{ borderColor: BORDER }}
-                  >
-                    Mi cuenta
-                  </Link>
-                  <Link
-                    href="/chat"
-                    onClick={closeMobileMenu}
-                    className="flex min-h-[44px] items-center justify-center rounded-lg border text-sm font-medium text-[#444] no-underline"
-                    style={{ borderColor: BORDER }}
-                  >
-                    Mensajes
-                    {mensajesSinLeer > 0 ? ` (${mensajesSinLeer})` : ""}
-                  </Link>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      closeMobileMenu();
-                      handleSignOut();
+
+            {mostrarSwitch && (
+              <ModoSwitch onChanged={closeDropdown} />
+            )}
+
+            <LangSwitcher />
+
+            {user ? (
+              <>
+                <ChatNavButton
+                  unreadCount={mensajesSinLeer}
+                  onNavigate={closeDropdown}
+                />
+                <NotificationBell />
+
+                <div ref={dropdownRef} style={{ position: "relative" }}>
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setDropdownOpen((o) => !o)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setDropdownOpen((o) => !o);
+                      }
                     }}
-                    disabled={signingOut}
-                    className="min-h-[44px] rounded-lg border text-sm font-medium text-[#666] disabled:opacity-60"
-                    style={{ borderColor: BORDER }}
+                    className="relative flex min-h-[44px] cursor-pointer items-center gap-2 rounded-full border px-3"
+                    style={{
+                      borderColor: BORDER,
+                      background: "#fff",
+                    }}
+                    aria-expanded={dropdownOpen}
+                    aria-haspopup="true"
                   >
-                    {signingOut ? "Cerrando sesión…" : "Cerrar sesión"}
-                  </button>
-                </>
-              ) : (
-                <>
-                  <Link
-                    href="/login"
-                    onClick={closeMobileMenu}
-                    className="flex min-h-[44px] items-center justify-center rounded-lg border text-sm font-medium text-[#444] no-underline"
-                    style={{ borderColor: BORDER }}
-                  >
-                    {t.navbar.iniciarSesion}
-                  </Link>
-                  <Link
-                    href="/registro"
-                    onClick={closeMobileMenu}
-                    className="flex min-h-[44px] items-center justify-center rounded-lg text-sm font-medium text-white no-underline"
-                    style={{ backgroundColor: BRAND.primary }}
-                  >
-                    {t.navbar.registrarse}
-                  </Link>
-                </>
-              )}
-            </div>
+                    <div style={{ position: "relative" }}>
+                      <div
+                        style={{
+                          width: 28,
+                          height: 28,
+                          borderRadius: "50%",
+                          background: PRIMARY,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: 10,
+                          fontWeight: 500,
+                          color: "#fff",
+                        }}
+                      >
+                        {initials}
+                      </div>
+                      <div
+                        style={{
+                          position: "absolute",
+                          bottom: 0,
+                          right: 0,
+                          width: 8,
+                          height: 8,
+                          borderRadius: "50%",
+                          background:
+                            modo === "proveedor" && !esClientePuro
+                              ? "#c47d1a"
+                              : "#0e7a5c",
+                          border: "1.5px solid #fff",
+                        }}
+                      />
+                    </div>
+                    <span className="hidden max-w-[100px] truncate text-xs font-medium text-[#2a3a4a] sm:inline">
+                      {perfil?.nombre || "Mi cuenta"}
+                    </span>
+                    <span style={{ fontSize: 10, color: "#bbb" }}>▾</span>
+                  </div>
+
+                  {dropdownOpen && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: "calc(100% + 8px)",
+                        right: 0,
+                        width: 280,
+                        background: "#fff",
+                        borderRadius: 12,
+                        border: `0.5px solid ${BORDER}`,
+                        boxShadow: "0 8px 32px rgba(0,0,0,0.1)",
+                        overflow: "hidden",
+                        zIndex: 100,
+                      }}
+                    >
+                      <div
+                        className="flex items-center gap-3 px-4 py-4"
+                        style={{ borderBottom: `0.5px solid #f0ede8` }}
+                      >
+                        <div
+                          style={{
+                            width: 40,
+                            height: 40,
+                            borderRadius: "50%",
+                            background: PRIMARY,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontSize: 14,
+                            fontWeight: 500,
+                            color: "#fff",
+                            flexShrink: 0,
+                          }}
+                        >
+                          {initials}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-[#1a1a1a]">
+                            {displayName}
+                          </p>
+                          <p className="truncate text-[11px] text-[#888]">
+                            {user.email}
+                          </p>
+                          <span
+                            className="mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                            style={{
+                              backgroundColor:
+                                modo === "proveedor" && !esClientePuro
+                                  ? "#fdf3e3"
+                                  : "#e8f0fb",
+                              color:
+                                modo === "proveedor" && !esClientePuro
+                                  ? "#c47d1a"
+                                  : PRIMARY,
+                            }}
+                          >
+                            {getModoLabel(modo, esAmbos)}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div
+                        style={{
+                          padding: "10px 16px",
+                          borderBottom: "0.5px solid #f0ede8",
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            fontSize: 9,
+                            color: "#bbb",
+                            marginBottom: 4,
+                          }}
+                        >
+                          <span>Perfil completado</span>
+                          <span>{porcentajePerfil}%</span>
+                        </div>
+                        <div
+                          style={{
+                            height: 4,
+                            background: "#f7f5f2",
+                            borderRadius: 2,
+                            overflow: "hidden",
+                          }}
+                        >
+                          <div
+                            style={{
+                              height: "100%",
+                              background: PRIMARY,
+                              borderRadius: 2,
+                              width: `${porcentajePerfil}%`,
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      {mostrarSwitch && (
+                        <div
+                          className="p-3"
+                          style={{
+                            borderBottom: "0.5px solid #f0ede8",
+                            background: "#f7f5f2",
+                          }}
+                        >
+                          <ModoSwitch
+                            compact
+                            onChanged={closeDropdown}
+                            className="w-full"
+                          />
+                        </div>
+                      )}
+
+                      <div style={{ borderBottom: "0.5px solid #f0ede8" }}>
+                        {modo === "proveedor" && !esClientePuro ? (
+                          <ProveedorDropdownLinks
+                            mensajesSinLeer={mensajesSinLeer}
+                            onNavigate={closeDropdown}
+                          />
+                        ) : (
+                          <ClienteDropdownLinks
+                            reservasActivas={reservasActivas}
+                            sinComision={sinComision}
+                            onNavigate={closeDropdown}
+                          />
+                        )}
+                      </div>
+
+                      {esClientePuro && (
+                        <div
+                          className="px-4 py-2"
+                          style={{ borderBottom: "0.5px solid #f0ede8" }}
+                        >
+                          <Link
+                            href="/ser-proveedor"
+                            onClick={closeDropdown}
+                            className="text-xs font-medium no-underline"
+                            style={{ color: PRIMARY }}
+                          >
+                            Ofrecer mis servicios →
+                          </Link>
+                        </div>
+                      )}
+
+                      <div style={{ borderBottom: "0.5px solid #f0ede8" }}>
+                        <SectionLabel>Cuenta</SectionLabel>
+                        <DropdownItem
+                          href="/editar-perfil"
+                          icon="👤"
+                          label="Mi perfil"
+                          onNavigate={closeDropdown}
+                        />
+                        <DropdownItem
+                          href="/recuperar-contrasena"
+                          icon="🔒"
+                          label="Cambiar contraseña"
+                          onNavigate={closeDropdown}
+                        />
+                      </div>
+
+                      <div className="p-3">
+                        <button
+                          type="button"
+                          onClick={handleSignOut}
+                          disabled={signingOut}
+                          className="min-h-[44px] w-full rounded-lg border py-3 text-sm font-medium transition-colors disabled:opacity-60"
+                          style={{
+                            borderColor: BORDER,
+                            background: "#fff",
+                            color: "#666",
+                            cursor: "pointer",
+                          }}
+                        >
+                          {signingOut ? "Cerrando sesión…" : "Cerrar sesión"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                <Link
+                  href="/chat"
+                  className="relative flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-[#444] no-underline transition-colors hover:bg-[#f7f5f2]"
+                  aria-label="Mensajes"
+                >
+                  <ChatIcon className="h-5 w-5" />
+                </Link>
+                <Link
+                  href="/login"
+                  className="inline-flex min-h-[44px] items-center rounded-lg px-4 text-sm font-medium text-[#444] no-underline transition-colors hover:bg-[#f7f5f2]"
+                >
+                  {t.navbar.iniciarSesion}
+                </Link>
+                <Link
+                  href="/registro"
+                  className="inline-flex min-h-[44px] items-center rounded-lg px-4 text-sm font-medium text-white no-underline transition-opacity hover:opacity-90"
+                  style={{ backgroundColor: BRAND.primary }}
+                >
+                  {t.navbar.registrarse}
+                </Link>
+              </>
+            )}
           </div>
-        </>
-      )}
-    </header>
-    {showDniBanner && (
-      <div
-        className="border-b px-4 py-2 text-center text-xs leading-relaxed text-[#92400e]"
-        style={{ borderColor: BRAND.border, backgroundColor: "#fdf4e7" }}
-      >
-        {dniBannerText}{" "}
-        <Link
-          href={dniBannerHref}
-          className="font-semibold no-underline hover:underline"
-          style={{ color: PRIMARY }}
+        </div>
+
+        {mobileMenuOpen && (
+          <>
+            <button
+              type="button"
+              className="fixed inset-0 z-[60] bg-black/30 md:hidden"
+              aria-label="Cerrar menú"
+              onClick={closeMobileMenu}
+            />
+            <div
+              className="fixed inset-x-0 top-0 z-[70] max-h-[90vh] overflow-y-auto border-b bg-white shadow-lg md:hidden"
+              style={{ borderColor: BORDER }}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Menú de navegación"
+            >
+              <div
+                className="flex min-h-[44px] items-center justify-between border-b px-4"
+                style={{ borderColor: BORDER }}
+              >
+                <span className="text-sm font-semibold text-[#2a3a4a]">
+                  Menú
+                </span>
+                <button
+                  type="button"
+                  onClick={closeMobileMenu}
+                  className="flex min-h-[44px] min-w-[44px] items-center justify-center text-xl text-[#666]"
+                  aria-label="Cerrar"
+                >
+                  ×
+                </button>
+              </div>
+
+              {mostrarSwitch && (
+                <div
+                  className="border-b px-4 py-3"
+                  style={{ borderColor: "#f0ede8", background: "#f7f5f2" }}
+                >
+                  <ModoSwitch
+                    compact
+                    onChanged={closeMobileMenu}
+                    className="w-full"
+                  />
+                </div>
+              )}
+
+              <nav className="flex flex-col py-2" aria-label="Principal móvil">
+                {navLinks.map((link) => (
+                  <Link
+                    key={`${link.href}-${link.label}`}
+                    href={link.href}
+                    onClick={closeMobileMenu}
+                    className="flex min-h-[44px] items-center border-b px-5 text-[15px] font-medium text-[#2a3a4a] no-underline transition-colors hover:bg-[#f7f5f2]"
+                    style={{
+                      borderColor: "#f0ede8",
+                      color: link.primary ? BRAND.primary : "#2a3a4a",
+                    }}
+                  >
+                    {link.label}
+                  </Link>
+                ))}
+              </nav>
+
+              <div
+                className="flex flex-col gap-2 border-t p-4"
+                style={{ borderColor: BORDER }}
+              >
+                {user ? (
+                  <>
+                    <Link
+                      href="/editar-perfil"
+                      onClick={closeMobileMenu}
+                      className="flex min-h-[44px] items-center justify-center rounded-lg border text-sm font-medium text-[#444] no-underline"
+                      style={{ borderColor: BORDER }}
+                    >
+                      Mi perfil
+                    </Link>
+                    <Link
+                      href="/chat"
+                      onClick={closeMobileMenu}
+                      className="flex min-h-[44px] items-center justify-center rounded-lg border text-sm font-medium text-[#444] no-underline"
+                      style={{ borderColor: BORDER }}
+                    >
+                      Mensajes
+                      {mensajesSinLeer > 0 ? ` (${mensajesSinLeer})` : ""}
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={handleSignOut}
+                      disabled={signingOut}
+                      className="min-h-[44px] rounded-lg border text-sm font-medium text-[#666] disabled:opacity-60"
+                      style={{ borderColor: BORDER }}
+                    >
+                      {signingOut ? "Cerrando sesión…" : "Cerrar sesión"}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <Link
+                      href="/login"
+                      onClick={closeMobileMenu}
+                      className="flex min-h-[44px] items-center justify-center rounded-lg border text-sm font-medium text-[#444] no-underline"
+                      style={{ borderColor: BORDER }}
+                    >
+                      {t.navbar.iniciarSesion}
+                    </Link>
+                    <Link
+                      href="/registro"
+                      onClick={closeMobileMenu}
+                      className="flex min-h-[44px] items-center justify-center rounded-lg text-sm font-medium text-white no-underline"
+                      style={{ backgroundColor: BRAND.primary }}
+                    >
+                      {t.navbar.registrarse}
+                    </Link>
+                  </>
+                )}
+              </div>
+            </div>
+          </>
+        )}
+      </header>
+      {showDniBanner && (
+        <div
+          className="border-b px-4 py-2 text-center text-xs leading-relaxed text-[#92400e]"
+          style={{ borderColor: BRAND.border, backgroundColor: "#fdf4e7" }}
         >
-          Subir DNI →
-        </Link>
-      </div>
-    )}
+          {dniBannerText}{" "}
+          <Link
+            href={dniBannerHref}
+            className="font-semibold no-underline hover:underline"
+            style={{ color: PRIMARY }}
+          >
+            Subir DNI →
+          </Link>
+        </div>
+      )}
     </>
   );
 }

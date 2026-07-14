@@ -1,7 +1,7 @@
 import { Geist, Geist_Mono } from "next/font/google";
+import AppProviders from "@/app/components/AppProviders";
 import CookieBanner from "@/app/components/CookieBanner";
 import InstallPWA from "@/app/components/InstallPWA";
-import { LangProvider } from "@/app/lib/LangContext";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -96,11 +96,11 @@ export default function RootLayout({ children }) {
         <meta name="apple-mobile-web-app-title" content="Home&Heart" />
       </head>
       <body className="min-h-full flex flex-col">
-        <LangProvider>
+        <AppProviders>
           {children}
           <CookieBanner />
           <InstallPWA />
-        </LangProvider>
+        </AppProviders>
       </body>
     </html>
   );
