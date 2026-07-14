@@ -306,6 +306,43 @@ function proveedorSinActividadHtml(data) {
   });
 }
 
+function proveedorOnboardingPendiente1Html(data) {
+  const nombre = data.nombre || "proveedor";
+  return marketingEmailLayout({
+    title: sequences.proveedor_onboarding_pendiente_1.asunto,
+    headerHtml: `<p style="margin:0;font-size:14px;color:rgba(255,255,255,0.85);">Tu alta de proveedor</p>`,
+    bodyHtml: `
+      <h1 style="margin:0;font-size:22px;font-weight:400;color:#1a1a1a;font-family:Georgia,serif;text-align:center;">Estás a un paso</h1>
+      <p style="margin:16px 0 0;font-size:14px;color:#444;line-height:1.7;text-align:center;">
+        Hola <strong>${nombre}</strong>, estás a un paso de ofrecer tus servicios en Home&amp;Heart.
+        Continúa tu alta cuando quieras.
+      </p>
+      <div style="margin:20px 0 0;padding:18px;background:${BRAND_LIGHT};border-radius:8px;">
+        <p style="margin:0;font-size:14px;color:#444;line-height:1.7;text-align:center;">
+          No hay prisa: retoma el proceso en el punto exacto en el que lo dejaste.
+        </p>
+      </div>
+      ${ctaButton(`${BASE_URL}/ser-proveedor`, "Continuar mi alta")}`,
+  });
+}
+
+function proveedorOnboardingPendiente2Html(data) {
+  const nombre = data.nombre || "proveedor";
+  return marketingEmailLayout({
+    title: sequences.proveedor_onboarding_pendiente_2.asunto,
+    headerHtml: `<p style="margin:0;font-size:14px;color:rgba(255,255,255,0.85);">Sin presión</p>`,
+    bodyHtml: `
+      <h1 style="margin:0;font-size:22px;font-weight:400;color:#1a1a1a;font-family:Georgia,serif;text-align:center;">¿Retomamos tu alta de proveedor?</h1>
+      <p style="margin:16px 0 0;font-size:14px;color:#444;line-height:1.7;text-align:center;">
+        Hola <strong>${nombre}</strong>, ¿retomamos tu alta de proveedor? Estamos aquí cuando quieras.
+      </p>
+      <p style="margin:16px 0 0;font-size:14px;color:#666;line-height:1.7;">
+        Este es nuestro último recordatorio sobre este tema. Si prefieres seguir solo como cliente, no te enviaremos más emails de este tipo.
+      </p>
+      ${ctaButton(`${BASE_URL}/ser-proveedor`, "Retomar mi alta")}`,
+  });
+}
+
 const MARKETING_HTML_BUILDERS = {
   cliente_bienvenida: clienteBienvenidaHtml,
   cliente_activacion: clienteActivacionHtml,
@@ -314,6 +351,8 @@ const MARKETING_HTML_BUILDERS = {
   proveedor_bienvenida: proveedorBienvenidaHtml,
   proveedor_verificado: proveedorVerificadoHtml,
   proveedor_sin_actividad: proveedorSinActividadHtml,
+  proveedor_onboarding_pendiente_1: proveedorOnboardingPendiente1Html,
+  proveedor_onboarding_pendiente_2: proveedorOnboardingPendiente2Html,
 };
 
 async function logMarketingEmail(userId, tipo) {

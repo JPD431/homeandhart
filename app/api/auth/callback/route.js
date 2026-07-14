@@ -85,20 +85,23 @@ async function runPostVerificationSideEffects(user) {
         .padEnd(4, "X") +
       Math.floor(Math.random() * 9000 + 1000);
 
+    const profilePayload = {
+      id: user.id,
+      nombre,
+      apellido,
+      role,
+      codigo_referido: codigoReferidoPropio,
+      reservas_sin_comision_cliente: 3,
+      reservas_sin_comision_proveedor: 3,
+    };
+
+    if (role === "proveedor") {
+      profilePayload.onboarding_started_at = new Date().toISOString();
+    }
+
     const { error: profileError } = await supabaseAdmin
       .from("profiles")
-      .upsert(
-        {
-          id: user.id,
-          nombre,
-          apellido,
-          role,
-          codigo_referido: codigoReferidoPropio,
-          reservas_sin_comision_cliente: 3,
-          reservas_sin_comision_proveedor: 3,
-        },
-        { onConflict: "id" },
-      );
+      .upsert(profilePayload, { onConflict: "id" });
 
     if (profileError) {
       console.error("Error creando perfil:", profileError);

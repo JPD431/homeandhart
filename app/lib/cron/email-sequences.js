@@ -33,6 +33,17 @@ async function logSent(userId, tipo) {
   await supabase.from("email_logs").insert({ user_id: userId, tipo });
 }
 
+/** role=proveedor y onboarding sin completar */
+async function isProveedorOnboardingPendiente(userId) {
+  const { data } = await supabase
+    .from("profiles")
+    .select("role, onboarding_completed_at")
+    .eq("id", userId)
+    .maybeSingle();
+
+  return data?.role === "proveedor" && !data?.onboarding_completed_at;
+}
+
 async function sendSequenceEmail(payload) {
   const response = await fetch(`${BASE_URL}/api/emails`, {
     method: "POST",
@@ -128,6 +139,8 @@ export async function runEmailSequences() {
     cliente_primera_reserva: 0,
     cliente_reactivacion: 0,
     proveedor_sin_actividad: 0,
+    proveedor_onboarding_pendiente_1: 0,
+    proveedor_onboarding_pendiente_2: 0,
     errors: [],
   };
 
@@ -282,6 +295,87 @@ export async function runEmailSequences() {
       stats.proveedor_sin_actividad += 1;
     } catch (err) {
       stats.errors.push(`proveedor_sin_actividad:${proveedor.id}:${err.message}`);
+    }
+  }
+
+  const wOnboarding24h = windowIso(48, 24);
+  const { data: onboardingPendienteUsers } = await supabase
+    .from("profiles")
+    .select("id, nombre, onboarding_started_at")
+    .eq("role", "proveedor")
+    .is("onboarding_completed_at", null)
+    .not("onboarding_started_at", "is", null)
+    .gte("onboarding_started_at", wOnboarding24h.from)
+    .lte("onboarding_started_at", wOnboarding24h.to);
+
+  for (const user of onboardingPendienteUsers || []) {
+    if (await alreadySent(user.id, "proveedor_onboarding_pendiente_1")) continue;
+    if (!(await isProveedorOnboardingPendiente(user.id))) continue;
+
+    const email = await resolverEmailUsuario(user.id);
+    if (!email) {
+      console.warn(
+        `[email-sequences] Sin email para ${user.id}, skip proveedor_onboarding_pendiente_1`,
+      );
+      continue;
+    }
+
+    try {
+      await sendSequenceEmail({
+        tipo: "proveedor_onboarding_pendiente_1",
+        user_id: user.id,
+        nombre: user.nombre,
+      });
+      await logSent(user.id, "proveedor_onboarding_pendiente_1");
+      stats.proveedor_onboarding_pendiente_1 += 1;
+    } catch (err) {
+      stats.errors.push(
+        `proveedor_onboarding_pendiente_1:${user.id}:${err.message}`,
+      );
+    }
+  }
+
+  const hace4d = new Date(Date.now() - 4 * DAY_MS).toISOString();
+  const { data: onboardingEmail1Logs } = await supabase
+    .from("email_logs")
+    .select("user_id, enviado_at")
+    .eq("tipo", "proveedor_onboarding_pendiente_1")
+    .lte("enviado_at", hace4d);
+
+  for (const log of onboardingEmail1Logs || []) {
+    if (await alreadySent(log.user_id, "proveedor_onboarding_pendiente_2")) {
+      continue;
+    }
+    if (!(await isProveedorOnboardingPendiente(log.user_id))) continue;
+
+    const { data: proveedor } = await supabase
+      .from("profiles")
+      .select("id, nombre")
+      .eq("id", log.user_id)
+      .maybeSingle();
+
+    if (!proveedor) continue;
+
+    const email = await resolverEmailUsuario(proveedor.id);
+    if (!email) {
+      console.warn(
+        `[email-sequences] Sin email para ${proveedor.id}, skip proveedor_onboarding_pendiente_2`,
+      );
+      continue;
+    }
+
+    try {
+      await sendSequenceEmail({
+        tipo: "proveedor_onboarding_pendiente_2",
+        user_id: proveedor.id,
+        nombre: proveedor.nombre,
+      });
+      await logSent(proveedor.id, "proveedor_onboarding_pendiente_2");
+      stats.proveedor_onboarding_pendiente_2 += 1;
+    } catch (err) {
+      stats.errors.push(
+        `proveedor_onboarding_pendiente_2:${proveedor.id}:${err.message}`,
+      );
     }
   }
 

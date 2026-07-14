@@ -67,6 +67,12 @@ export async function saveOnboardingStep(userId, stepId) {
 
 export async function saveVerticalesStep(userId, verticales, stepId) {
   const uniqueVerticales = [...new Set(verticales)];
+  const { data: existing } = await supabase
+    .from("profiles")
+    .select("onboarding_started_at")
+    .eq("id", userId)
+    .maybeSingle();
+
   const { error } = await supabase
     .from("profiles")
     .upsert({
@@ -74,6 +80,8 @@ export async function saveVerticalesStep(userId, verticales, stepId) {
       role: "proveedor",
       onboarding_verticales: uniqueVerticales,
       onboarding_step: String(stepId),
+      onboarding_started_at:
+        existing?.onboarding_started_at || new Date().toISOString(),
     });
   if (error) throw error;
 }
@@ -97,6 +105,12 @@ export async function saveProfileStep(userId, fields, stepId) {
     fotoUrl = await uploadProfilePhoto(userId, profilePhotoFile);
   }
 
+  const { data: existing } = await supabase
+    .from("profiles")
+    .select("onboarding_started_at")
+    .eq("id", userId)
+    .maybeSingle();
+
   const { error } = await supabase.from("profiles").upsert({
     id: userId,
     nombre: nombre.trim(),
@@ -108,6 +122,8 @@ export async function saveProfileStep(userId, fields, stepId) {
     anos_experiencia: anosExperiencia ? Number(anosExperiencia) : null,
     role: "proveedor",
     onboarding_step: String(stepId),
+    onboarding_started_at:
+      existing?.onboarding_started_at || new Date().toISOString(),
   });
 
   if (error) throw error;

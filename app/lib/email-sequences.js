@@ -27,6 +27,14 @@ export const sequences = {
     asunto: "Consejos para conseguir más reservas",
     delay: 7 * 24 * 60 * 60 * 1000,
   },
+  proveedor_onboarding_pendiente_1: {
+    asunto: "Estás a un paso de ofrecer tus servicios · Home&Heart",
+    delay: 24 * 60 * 60 * 1000,
+  },
+  proveedor_onboarding_pendiente_2: {
+    asunto: "¿Retomamos tu alta de proveedor? · Home&Heart",
+    delay: 4 * 24 * 60 * 60 * 1000,
+  },
 };
 
 export const MARKETING_SEQUENCE_TYPES = Object.keys(sequences);
