@@ -119,15 +119,12 @@ export function ModoProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    if (!hydrated || !profileReady) return;
-
-    if (!user) {
-      restoredRef.current = false;
-      setModoState("cliente");
-      return;
-    }
+    if (!hydrated || !profileReady || !user) return;
 
     if (restoredRef.current) return;
+
+    if (!perfil) return;
+
     restoredRef.current = true;
 
     if (!puedeAlternarModo) {
@@ -137,7 +134,28 @@ export function ModoProvider({ children }) {
 
     const stored = readStoredModo();
     setModoState(stored === "proveedor" ? "proveedor" : "cliente");
-  }, [hydrated, profileReady, puedeAlternarModo, user]);
+  }, [hydrated, profileReady, puedeAlternarModo, user, perfil]);
+
+  /** Tras bfcache (botón atrás), el snapshot puede tener modo desactualizado */
+  useEffect(() => {
+    if (!hydrated || !puedeAlternarModo) return;
+
+    function onPageShow(event) {
+      if (!event.persisted) return;
+      const stored = readStoredModo();
+      setModoState(stored === "proveedor" ? "proveedor" : "cliente");
+    }
+
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
+  }, [hydrated, puedeAlternarModo]);
+
+  useEffect(() => {
+    if (!user) {
+      restoredRef.current = false;
+      setModoState("cliente");
+    }
+  }, [user]);
 
   const setModo = useCallback(
     (nextModo, options = {}) => {
@@ -150,7 +168,11 @@ export function ModoProvider({ children }) {
       writeStoredModo(nextModo);
 
       if (redirect && !enAdmin) {
-        router.push(nextModo === "proveedor" ? "/dashboard" : "/buscar");
+        router.push(
+          nextModo === "proveedor"
+            ? "/dashboard?tab=proveedor"
+            : "/buscar",
+        );
       }
     },
     [puedeAlternarModo, router, enAdmin],

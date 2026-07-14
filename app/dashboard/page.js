@@ -102,8 +102,24 @@ function DashboardContent() {
       tabParam === "pasaporte"
     ) {
       setModo("cliente", { redirect: false });
+      return;
     }
+    // Sin tab ni booking en la URL: no tocar el modo (ModoContext/localStorage manda)
   }, [tabParam, bookingHighlight, setModo]);
+
+  useEffect(() => {
+    if (modo !== "proveedor" || !puedeAlternarModo) return;
+    if (tabParam || bookingHighlight) return;
+    router.replace("/dashboard?tab=proveedor", { scroll: false });
+  }, [modo, puedeAlternarModo, tabParam, bookingHighlight, router]);
+
+  useEffect(() => {
+    if (modo !== "cliente") return;
+    if (tabParam === "familia") setClientSubTab("familia");
+    else if (tabParam === "referidos") setClientSubTab("referidos");
+    else if (tabParam === "pasaporte") setClientSubTab("pasaporte");
+    else if (tabParam === "cliente") setClientSubTab("cliente");
+  }, [modo, tabParam]);
 
   useEffect(() => {
     if (stripeParam !== 'success' && stripeParam !== 'refresh') return;
@@ -122,17 +138,13 @@ function DashboardContent() {
     refetchPerfil();
   }, [stripeParam]);
 
-  useEffect(() => {
-    if (modo !== 'cliente') return;
-    if (tabParam === 'familia') setClientSubTab('familia');
-    else if (tabParam === 'referidos') setClientSubTab('referidos');
-    else if (tabParam === 'pasaporte') setClientSubTab('pasaporte');
-    else setClientSubTab('cliente');
-  }, [modo, tabParam]);
-
   function dismissStripeBanner() {
     setStripeBannerDismissed(true);
-    router.replace('/dashboard');
+    const dest =
+      modo === "proveedor" && puedeAlternarModo
+        ? "/dashboard?tab=proveedor"
+        : "/dashboard?tab=cliente";
+    router.replace(dest);
   }
 
   const copiarLink = (codigo) => {

@@ -222,7 +222,7 @@ export default function EstadisticasPage() {
         .single();
 
       if (profile?.role !== "proveedor") {
-        router.replace("/dashboard");
+        router.replace("/dashboard?tab=cliente");
         return;
       }
 
