@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { usePathname, useRouter } from "next/navigation";
@@ -110,13 +111,24 @@ export function ModoProvider({ children }) {
     return () => subscription.unsubscribe();
   }, [loadProfile]);
 
-  /** Restaurar modo persistido tras hidratación (localStorage solo en cliente) */
+  /** Restaurar modo persistido una sola vez tras hidratación + perfil */
+  const restoredRef = useRef(false);
+
   useEffect(() => {
     setHydrated(true);
   }, []);
 
   useEffect(() => {
     if (!hydrated || !profileReady) return;
+
+    if (!user) {
+      restoredRef.current = false;
+      setModoState("cliente");
+      return;
+    }
+
+    if (restoredRef.current) return;
+    restoredRef.current = true;
 
     if (!puedeAlternarModo) {
       setModoState("cliente");
@@ -125,7 +137,7 @@ export function ModoProvider({ children }) {
 
     const stored = readStoredModo();
     setModoState(stored === "proveedor" ? "proveedor" : "cliente");
-  }, [hydrated, profileReady, puedeAlternarModo]);
+  }, [hydrated, profileReady, puedeAlternarModo, user]);
 
   const setModo = useCallback(
     (nextModo, options = {}) => {

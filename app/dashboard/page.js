@@ -87,8 +87,21 @@ function DashboardContent() {
   }, [router]);
 
   useEffect(() => {
-    if (tabParam === 'proveedor' || bookingHighlight) {
-      setModo('proveedor', { redirect: false });
+    if (bookingHighlight) {
+      setModo("proveedor", { redirect: false });
+      return;
+    }
+    if (tabParam === "proveedor") {
+      setModo("proveedor", { redirect: false });
+      return;
+    }
+    if (
+      tabParam === "cliente" ||
+      tabParam === "familia" ||
+      tabParam === "referidos" ||
+      tabParam === "pasaporte"
+    ) {
+      setModo("cliente", { redirect: false });
     }
   }, [tabParam, bookingHighlight, setModo]);
 
@@ -334,7 +347,30 @@ function TabCliente({ perfil, reservas, favoritos, viajes, router, BRAND, copiar
           <span style={{fontSize: 9, padding: '2px 7px', borderRadius: 8, background: '#e8f0fb', color: '#163a6b'}}>{reservas.filter(r => ['confirmada','pendiente','en_curso'].includes(r.estado)).length} activas</span>
         </div>
         <div style={{padding: '13px 16px'}}>
-          {reservas.length === 0 && <p style={{fontSize: 12, color: '#bbb', textAlign: 'center', padding: '16px 0'}}>No tienes reservas todavía</p>}
+          {reservas.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '20px 0' }}>
+              <p style={{ fontSize: 13, color: '#888', margin: '0 0 12px' }}>
+                Aún no tienes reservas como cliente.
+              </p>
+              <button
+                type="button"
+                onClick={() => router.push('/buscar')}
+                style={{
+                  minHeight: 44,
+                  background: BRAND.blue,
+                  color: '#fff',
+                  border: 'none',
+                  padding: '10px 18px',
+                  borderRadius: 4,
+                  fontSize: 12,
+                  cursor: 'pointer',
+                  fontWeight: 500,
+                }}
+              >
+                Buscar un servicio
+              </button>
+            </div>
+          )}
           {reservas.slice(0, 5).map(r => (
             <div key={r.id} style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '0.5px solid #f5f3f0'}}>
               <div>
@@ -1021,13 +1057,10 @@ function ReservasRecibidas({ perfil, BRAND, highlightBookingId, router }) {
       if (el) {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
-      if (router) {
-        router.replace('/dashboard?tab=proveedor', { scroll: false });
-      }
     }, 150);
 
     return () => clearTimeout(timer);
-  }, [highlightBookingId, loading, bookings, router]);
+  }, [highlightBookingId, loading, bookings]);
 
   async function handleRespond(bookingId, action) {
     const confirmMsg =

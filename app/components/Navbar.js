@@ -169,7 +169,7 @@ function ClienteDropdownLinks({
     <>
       <SectionLabel>Modo cliente</SectionLabel>
       <DropdownItem
-        href="/dashboard"
+        href="/dashboard?tab=cliente"
         icon="📅"
         label="Mis reservas"
         badge={reservasActivas > 0 ? `${reservasActivas} activas` : null}
@@ -195,7 +195,7 @@ function ClienteDropdownLinks({
         onNavigate={onNavigate}
       />
       <DropdownItem
-        href="/dashboard"
+        href="/dashboard?tab=referidos"
         icon="🎁"
         label="Referidos"
         badge={sinComision > 0 ? `${sinComision} sin comisión` : null}
@@ -211,7 +211,7 @@ function ProveedorDropdownLinks({ mensajesSinLeer, onNavigate }) {
     <>
       <SectionLabel>Modo proveedor</SectionLabel>
       <DropdownItem
-        href="/dashboard"
+        href="/dashboard?tab=proveedor"
         icon="📋"
         label="Panel de reservas"
         onNavigate={onNavigate}
@@ -301,7 +301,7 @@ export default function Navbar() {
 
     if (modo === "proveedor" && !esClientePuro) {
       return [
-        { href: "/dashboard", label: "Panel", primary: true },
+        { href: "/dashboard?tab=proveedor", label: "Panel", primary: true },
         { href: "/estadisticas", label: "Ingresos" },
         {
           href: "/editar-perfil?tab=servicios",
@@ -313,7 +313,7 @@ export default function Navbar() {
 
     const links = [
       { href: "/buscar", label: t.navbar.servicios, primary: true },
-      { href: "/dashboard", label: "Mis reservas" },
+      { href: "/dashboard?tab=cliente", label: "Mis reservas" },
       { href: "/historial", label: "Historial" },
       { href: "/familia", label: "Familia" },
       { href: "/garantia", label: t.navbar.garantia },

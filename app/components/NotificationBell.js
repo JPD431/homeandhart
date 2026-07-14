@@ -320,7 +320,11 @@ export default function NotificationBell({ compact = false }) {
               style={{ borderColor: "#f0ede8", background: "#fafafa" }}
             >
               <Link
-                href="/dashboard"
+                href={
+                  modo === "proveedor" && puedeAlternarModo
+                    ? "/dashboard?tab=proveedor"
+                    : "/dashboard?tab=cliente"
+                }
                 onClick={() => setOpen(false)}
                 className="text-xs font-medium no-underline"
                 style={{ color: PRIMARY }}
