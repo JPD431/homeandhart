@@ -7,6 +7,7 @@ import {
   canLeaveReview,
   reviewEligibilityMessage,
 } from "@/app/lib/reviews";
+import { buildLoginUrl } from "@/app/lib/auth-redirect";
 import { supabase } from "@/app/lib/supabase";
 
 const INACTIVE = "#e0e0e0";
@@ -177,7 +178,7 @@ export default function ResenaPage() {
       } = await supabase.auth.getUser();
 
       if (userError || !user) {
-        router.replace("/login");
+        router.replace(buildLoginUrl(`/resena/${bookingId}`));
         return;
       }
 

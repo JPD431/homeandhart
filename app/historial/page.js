@@ -17,6 +17,7 @@ import {
   getCancelRefundBreakdown,
 } from "@/app/lib/booking-display";
 import { canLeaveReview } from "@/app/lib/reviews";
+import { buildLoginUrl } from "@/app/lib/auth-redirect";
 import { supabase } from "@/app/lib/supabase";
 
 const PRIMARY = "#1d4f91";
@@ -252,7 +253,7 @@ export default function HistorialPage() {
       } = await supabase.auth.getUser();
 
       if (userError || !user) {
-        router.replace("/login");
+        router.replace(buildLoginUrl("/historial"));
         return;
       }
 

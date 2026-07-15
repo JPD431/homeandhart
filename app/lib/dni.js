@@ -33,16 +33,16 @@ export function hasDniUploaded(profile) {
   return String(raw).trim().length > 0;
 }
 
+import { isValidInternalRedirect } from "@/app/lib/auth-redirect";
+
 /**
  * @param {string | null | undefined} path
  * @returns {string | null}
  */
 export function sanitizeInternalRedirect(path) {
-  if (!path || typeof path !== "string") return null;
-  const trimmed = path.trim();
-  if (!trimmed.startsWith("/") || trimmed.startsWith("//")) return null;
-  if (trimmed.startsWith("/subir-dni")) return null;
-  return trimmed;
+  const base = isValidInternalRedirect(path);
+  if (!base || base.startsWith("/subir-dni")) return null;
+  return base;
 }
 
 /**

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { fetchPostLoginRedirect } from "@/app/lib/post-login-redirect";
+import { consumeAuthRedirect } from "@/app/lib/auth-redirect";
 import { supabase } from "@/app/lib/supabase";
 
 export default function VerificadoPage() {
@@ -27,7 +28,8 @@ export default function VerificadoPage() {
         return;
       }
 
-      const path = await fetchPostLoginRedirect();
+      const stored = consumeAuthRedirect();
+      const path = stored || (await fetchPostLoginRedirect());
       if (!cancelled) {
         setRedirectTo(path);
         setReady(true);

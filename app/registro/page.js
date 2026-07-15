@@ -4,6 +4,12 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { fetchPostLoginRedirect } from "@/app/lib/post-login-redirect";
+import {
+  buildLoginUrl,
+  getRedirectFromSearchParams,
+  persistAuthRedirect,
+  resolveAuthRedirect,
+} from "@/app/lib/auth-redirect";
 import { supabase } from "@/app/lib/supabase";
 
 const PRIMARY = "#1d4f91";
@@ -273,6 +279,14 @@ function RegistroForm() {
     if (emailParam) setEmail(emailParam);
   }, [emailParam]);
 
+  useEffect(() => {
+    const intended = getRedirectFromSearchParams(searchParams);
+    if (intended) persistAuthRedirect(intended);
+  }, [searchParams]);
+
+  const intendedRedirect = getRedirectFromSearchParams(searchParams);
+  const loginHref = buildLoginUrl(intendedRedirect);
+
   async function handleSubmit(e) {
     e.preventDefault();
     setError("");
@@ -304,6 +318,9 @@ function RegistroForm() {
     }
 
     setLoading(true);
+
+    const intended = getRedirectFromSearchParams(searchParams);
+    if (intended) persistAuthRedirect(intended);
 
     console.log("Datos registro:", { nombre, apellido, role, email });
 
@@ -337,7 +354,10 @@ function RegistroForm() {
     }
 
     if (data.user) {
-      const redirectTo = await fetchPostLoginRedirect();
+      const redirectTo = await resolveAuthRedirect(
+        searchParams,
+        fetchPostLoginRedirect,
+      );
       router.push(redirectTo);
       return;
     }
@@ -734,7 +754,7 @@ function RegistroForm() {
           }}
         >
           ¿Ya tienes cuenta?{" "}
-          <Link href="/login" style={{ color: PRIMARY, textDecoration: "none" }}>
+          <Link href={loginHref} style={{ color: PRIMARY, textDecoration: "none" }}>
             Iniciar sesión
           </Link>
         </p>

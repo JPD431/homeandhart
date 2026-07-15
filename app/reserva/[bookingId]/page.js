@@ -17,6 +17,7 @@ import {
   getCancelRefundBreakdown,
 } from "@/app/lib/booking-display";
 import { puedeReportarIncidencia } from "@/app/lib/booking-incidencia";
+import { buildLoginUrl } from "@/app/lib/auth-redirect";
 import { canLeaveReview } from "@/app/lib/reviews";
 import { supabase } from "@/app/lib/supabase";
 
@@ -77,7 +78,7 @@ export default function ReservaDetallePage() {
       } = await supabase.auth.getUser();
 
       if (userError || !user) {
-        router.replace("/login");
+        router.replace(buildLoginUrl(`/reserva/${bookingId}`));
         return;
       }
 

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { BRAND, SERIF } from "@/app/components/brand";
+import { buildLoginUrl } from "@/app/lib/auth-redirect";
 import {
   DNI_SUBIR_RUTA,
   hasDniUploaded,
@@ -13,6 +14,14 @@ import {
 import { resolvePostAuthRedirect } from "@/app/lib/onboarding";
 import { persistUserDni } from "@/app/lib/provider-uploads";
 import { supabase } from "@/app/lib/supabase";
+
+function subirDniLoginUrl(nextParam) {
+  const next = sanitizeInternalRedirect(nextParam);
+  const returnPath = next
+    ? `${DNI_SUBIR_RUTA}?next=${encodeURIComponent(next)}`
+    : DNI_SUBIR_RUTA;
+  return buildLoginUrl(returnPath);
+}
 
 function resolveSkipHref(profile, nextParam) {
   const next = sanitizeInternalRedirect(nextParam);
@@ -55,7 +64,7 @@ function SubirDniForm() {
       if (cancelled) return;
 
       if (userError || !user) {
-        router.replace(`/login?next=${encodeURIComponent(DNI_SUBIR_RUTA)}`);
+        router.replace(subirDniLoginUrl(nextParam));
         return;
       }
 
@@ -109,7 +118,7 @@ function SubirDniForm() {
       } = await supabase.auth.getUser();
 
       if (userError || !user) {
-        router.replace(`/login?next=${encodeURIComponent(DNI_SUBIR_RUTA)}`);
+        router.replace(subirDniLoginUrl(nextParam));
         return;
       }
 

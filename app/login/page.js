@@ -4,6 +4,12 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { fetchPostLoginRedirect } from "@/app/lib/post-login-redirect";
+import {
+  buildRegistroUrl,
+  getRedirectFromSearchParams,
+  persistAuthRedirect,
+  resolveAuthRedirect,
+} from "@/app/lib/auth-redirect";
 import { supabase } from "@/app/lib/supabase";
 
 const PRIMARY = "#1d4f91";
@@ -273,6 +279,17 @@ function LoginForm() {
     if (emailParam) setEmail(emailParam);
   }, [emailParam]);
 
+  useEffect(() => {
+    const intended = getRedirectFromSearchParams(searchParams);
+    if (intended) persistAuthRedirect(intended);
+  }, [searchParams]);
+
+  const intendedRedirect = getRedirectFromSearchParams(searchParams);
+  const registroHref = buildRegistroUrl(intendedRedirect);
+  const registroProveedorHref = buildRegistroUrl(intendedRedirect, {
+    role: "proveedor",
+  });
+
   async function handleSubmit(e) {
     e.preventDefault();
     setError("");
@@ -291,7 +308,7 @@ function LoginForm() {
     }
 
     const redirectTo = signInData.user
-      ? await fetchPostLoginRedirect()
+      ? await resolveAuthRedirect(searchParams, fetchPostLoginRedirect)
       : "/dashboard";
 
     setLoading(false);
@@ -408,7 +425,7 @@ function LoginForm() {
 
         <p style={{ fontSize: 12, color: "#888", textAlign: "center", margin: 0 }}>
           ¿No tienes cuenta?{" "}
-          <Link href="/registro" style={{ color: PRIMARY, textDecoration: "none" }}>
+          <Link href={registroHref} style={{ color: PRIMARY, textDecoration: "none" }}>
             Regístrate gratis
           </Link>
         </p>
@@ -422,7 +439,7 @@ function LoginForm() {
         >
           ¿Quieres ser proveedor?{" "}
           <Link
-            href="/registro?role=proveedor"
+            href={registroProveedorHref}
             style={{ color: PRIMARY, textDecoration: "none" }}
           >
             Únete aquí

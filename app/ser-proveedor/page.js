@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import { buildLoginUrl } from "@/app/lib/auth-redirect";
 import { supabase } from "@/app/lib/supabase";
 import AmenitiesPicker from "@/app/components/AmenitiesPicker";
 import BanoTipoSelector from "@/app/components/BanoTipoSelector";
@@ -446,7 +447,7 @@ export default function SerProveedorPage() {
       if (cancelled) return;
 
       if (authError || !user) {
-        router.replace("/login?next=/ser-proveedor");
+        router.replace(buildLoginUrl("/ser-proveedor"));
         return;
       }
 
