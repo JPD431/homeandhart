@@ -17,6 +17,7 @@ import {
   getCancelRefundBreakdown,
 } from "@/app/lib/booking-display";
 import { puedeReportarIncidencia } from "@/app/lib/booking-incidencia";
+import { canLeaveReview } from "@/app/lib/reviews";
 import { supabase } from "@/app/lib/supabase";
 
 const PRIMARY = "#1d4f91";
@@ -377,11 +378,18 @@ export default function ReservaDetallePage() {
                   <ActionButton href={`/api/facturas/${booking.id}`} primary>
                     Descargar factura
                   </ActionButton>
-                  {!reviewed && (
+                  {reviewed ? (
+                    <span
+                      className="inline-flex items-center rounded-lg px-4 py-2 text-sm font-semibold"
+                      style={{ backgroundColor: "#f0f4f8", color: "#0e7a5c" }}
+                    >
+                      Reseñada ✓
+                    </span>
+                  ) : canLeaveReview(booking, { hasReview: false }).ok ? (
                     <ActionButton href={`/resena/${booking.id}`} primary>
-                      Dejar reseña
+                      Deja tu reseña
                     </ActionButton>
-                  )}
+                  ) : null}
                 </>
               )}
 

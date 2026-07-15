@@ -3,6 +3,10 @@
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { BRAND, SERIF } from "@/app/components/brand";
+import {
+  canLeaveReview,
+  reviewEligibilityMessage,
+} from "@/app/lib/reviews";
 import { supabase } from "@/app/lib/supabase";
 
 const INACTIVE = "#e0e0e0";
@@ -184,19 +188,25 @@ export default function ResenaPage() {
         .single();
 
       if (bookingError || !booking) {
-        setErrorMessage("No se encontró la reserva.");
+        setErrorMessage(reviewEligibilityMessage("not_found"));
         setLoading(false);
         return;
       }
 
-      if (booking.cliente_id !== user.id) {
-        setErrorMessage("No tienes permiso para valorar esta reserva.");
-        setLoading(false);
-        return;
-      }
+      const { data: review } = await supabase
+        .from("reviews")
+        .select("*")
+        .eq("booking_id", bookingId)
+        .maybeSingle();
 
-      if (booking.estado !== "completada") {
-        setErrorMessage("Solo puedes valorar reservas completadas.");
+      const eligibility = canLeaveReview(booking, {
+        hasReview: Boolean(review),
+        userId: user.id,
+      });
+
+      // Sin permiso / no completada / fuera de plazo: mensaje y salir (salvo ya reseñada).
+      if (!eligibility.ok && eligibility.reason !== "already_reviewed") {
+        setErrorMessage(reviewEligibilityMessage(eligibility.reason));
         setLoading(false);
         return;
       }
@@ -213,16 +223,11 @@ export default function ResenaPage() {
         .eq("id", service?.proveedor_id)
         .single();
 
-      const { data: review } = await supabase
-        .from("reviews")
-        .select("*")
-        .eq("booking_id", bookingId)
-        .maybeSingle();
-
       setBookingMeta({
         clienteId: user.id,
         proveedorId: service?.proveedor_id,
         serviceId: service?.id,
+        canSubmit: eligibility.ok,
       });
       setProveedorNombre(
         formatShortName(proveedor?.nombre, proveedor?.apellido) || "Proveedor",
@@ -244,7 +249,12 @@ export default function ResenaPage() {
     e.preventDefault();
     setErrorMessage("");
 
-    if (!bookingMeta || valoracion < 1) {
+    if (!bookingMeta?.canSubmit) {
+      setErrorMessage("No se puede dejar reseña ahora.");
+      return;
+    }
+
+    if (valoracion < 1) {
       setErrorMessage("Selecciona una valoración de 1 a 5.");
       return;
     }
@@ -263,13 +273,21 @@ export default function ResenaPage() {
     setSubmitting(false);
 
     if (error) {
+      if (error.code === "23505") {
+        setErrorMessage("Ya has valorado este servicio.");
+        setExistingReview({
+          valoracion,
+          comentario: comentario.trim() || null,
+        });
+        return;
+      }
       setErrorMessage(error.message);
       return;
     }
 
     setSuccessMessage("¡Gracias por tu valoración!");
     setTimeout(() => {
-      router.push("/dashboard");
+      router.push("/historial");
     }, 2000);
   }
 
@@ -296,7 +314,16 @@ export default function ResenaPage() {
         <Logo />
 
         {errorMessage && !existingReview && !successMessage ? (
-          <p className="mt-8 text-center text-sm text-red-600">{errorMessage}</p>
+          <div className="mt-8 text-center">
+            <p className="text-sm leading-relaxed text-[#666]">{errorMessage}</p>
+            <a
+              href="/historial"
+              className="mt-6 inline-block text-sm font-semibold no-underline"
+              style={{ color: BRAND.primary }}
+            >
+              Volver al historial
+            </a>
+          </div>
         ) : existingReview ? (
           <div className="mt-8 text-center">
             <h1

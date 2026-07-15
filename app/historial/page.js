@@ -16,6 +16,7 @@ import {
   getBookingMonthLabel,
   getCancelRefundBreakdown,
 } from "@/app/lib/booking-display";
+import { canLeaveReview } from "@/app/lib/reviews";
 import { supabase } from "@/app/lib/supabase";
 
 const PRIMARY = "#1d4f91";
@@ -116,6 +117,9 @@ function BookingCard({ booking, reviewed, onCancel, cancelling }) {
   const metaParts = [getBookingDateRangeLabel(booking), duration, personas].filter(Boolean);
   const extraTags = getExtraTags(service, vertical);
   const refundBreakdown = getCancelRefundBreakdown(booking);
+  const reviewEligible =
+    estado === "completada" &&
+    canLeaveReview(booking, { hasReview: reviewed }).ok;
 
   return (
     <article
@@ -184,15 +188,23 @@ function BookingCard({ booking, reviewed, onCancel, cancelling }) {
               >
                 Descargar factura
               </a>
-              {!reviewed && (
+              {reviewed ? (
+                <span
+                  className="inline-flex items-center rounded-md px-3 py-1.5 text-[11px] font-medium"
+                  style={{ backgroundColor: "#f0f4f8", color: "#0e7a5c" }}
+                >
+                  Reseñada ✓
+                </span>
+              ) : reviewEligible ? (
                 <Link
                   href={`/resena/${booking.id}`}
                   className="rounded-md px-3 py-1.5 text-[11px] font-medium text-white no-underline"
                   style={{ backgroundColor: PRIMARY }}
                 >
-                  Dejar reseña
+                  Deja tu reseña
                 </Link>
-              )}
+              ) : null}
+              <GrayButton href={`/reserva/${booking.id}`}>Ver detalle</GrayButton>
             </>
           )}
 
