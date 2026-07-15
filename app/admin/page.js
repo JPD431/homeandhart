@@ -27,6 +27,7 @@ const TABS = [
   { id: "incidencias", label: "Incidencias" },
   { id: "ingresos", label: "Ingresos" },
   { id: "blog", label: "Blog" },
+  { id: "herramientas", label: "Herramientas" },
 ];
 
 function formatFechasReserva(inc) {
@@ -227,6 +228,8 @@ export default function AdminPage() {
   const [blogFormOpen, setBlogFormOpen] = useState(false);
   const [blogForm, setBlogForm] = useState(EMPTY_BLOG_FORM);
   const [blogTagInput, setBlogTagInput] = useState("");
+  const [cronRunning, setCronRunning] = useState(false);
+  const [cronResult, setCronResult] = useState(null);
   const [blogSaving, setBlogSaving] = useState(false);
   const [blogSeeding, setBlogSeeding] = useState(false);
   const [usuariosSummary, setUsuariosSummary] = useState({ pendientes: 0, sin_dni: 0 });
@@ -871,6 +874,47 @@ export default function AdminPage() {
     }
   }
 
+  async function handleRunCronDiario() {
+    setCronRunning(true);
+    setCronResult(null);
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    try {
+      const response = await fetch("/api/admin/run-cron", { method: "POST" });
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        setErrorMessage(payload.error || "No se pudo ejecutar el cron diario.");
+        setCronResult({ ok: false, summary: payload.error || "Error" });
+        return;
+      }
+
+      const summary =
+        payload.summary ||
+        (payload.success
+          ? "Cron ejecutado correctamente"
+          : "Cron terminó con errores");
+      setCronResult({
+        ok: payload.success !== false,
+        summary,
+        tasks: payload.tasks,
+        started_at: payload.started_at,
+        finished_at: payload.finished_at,
+      });
+      if (payload.success !== false) {
+        setSuccessMessage(summary);
+      } else {
+        setErrorMessage(summary);
+      }
+    } catch {
+      setErrorMessage("Error de conexión al ejecutar el cron diario.");
+      setCronResult({ ok: false, summary: "Error de conexión" });
+    } finally {
+      setCronRunning(false);
+    }
+  }
+
   function openNewBlogPost() {
     setBlogForm(EMPTY_BLOG_FORM);
     setBlogTagInput("");
@@ -1076,15 +1120,17 @@ export default function AdminPage() {
                 }}
               >
                 {tab.label}
-                <span
-                  className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-bold"
-                  style={{
-                    backgroundColor: isActive ? BRAND.primary : "#eee",
-                    color: isActive ? "#fff" : "#666",
-                  }}
-                >
-                  {counts[tab.id]}
-                </span>
+                {tab.id !== "herramientas" && (
+                  <span
+                    className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-bold"
+                    style={{
+                      backgroundColor: isActive ? BRAND.primary : "#eee",
+                      color: isActive ? "#fff" : "#666",
+                    }}
+                  >
+                    {counts[tab.id]}
+                  </span>
+                )}
               </button>
             );
           })}
@@ -2285,6 +2331,60 @@ export default function AdminPage() {
                 </table>
               </div>
             )}
+          </div>
+        ) : activeTab === "herramientas" ? (
+          <div className="mt-6">
+            <div
+              className="rounded-2xl border bg-white p-6"
+              style={{ borderColor: BRAND.border }}
+            >
+              <h2
+                className="text-lg font-semibold text-[#1a1a1a]"
+                style={{ fontFamily: SERIF }}
+              >
+                Mantenimiento
+              </h2>
+              <p className="mt-2 text-sm leading-relaxed text-[#666]">
+                Ejecuta a mano la misma lógica del cron diario (actualizar
+                estados de reservas, secuencias de email, tiempos de respuesta).
+                Es seguro reejecutarlo: emails y notificaciones son idempotentes.
+              </p>
+              <button
+                type="button"
+                disabled={cronRunning}
+                onClick={handleRunCronDiario}
+                className="mt-5 rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                style={{ backgroundColor: BRAND.primary }}
+              >
+                {cronRunning
+                  ? "Ejecutando…"
+                  : "Ejecutar cron diario ahora"}
+              </button>
+
+              {cronResult && (
+                <div
+                  className="mt-5 rounded-xl border px-4 py-3 text-sm"
+                  style={{
+                    borderColor: cronResult.ok ? "#b7dfd2" : "#fecaca",
+                    backgroundColor: cronResult.ok ? "#f0faf6" : "#fef2f2",
+                    color: cronResult.ok ? "#085041" : "#b91c1c",
+                  }}
+                >
+                  <p className="font-semibold">
+                    {cronResult.ok
+                      ? "Cron ejecutado correctamente"
+                      : "Cron con errores"}
+                  </p>
+                  <p className="mt-1 leading-relaxed">{cronResult.summary}</p>
+                  {cronResult.finished_at && (
+                    <p className="mt-2 text-xs opacity-70">
+                      Finalizado:{" "}
+                      {new Date(cronResult.finished_at).toLocaleString("es-ES")}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         ) : filteredProviders.length === 0 ? (
           <p
