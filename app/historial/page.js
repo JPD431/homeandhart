@@ -501,6 +501,10 @@ export default function HistorialPage() {
           </p>
         ) : (
           <div className="flex flex-col gap-8">
+            <p className="text-[11px] leading-relaxed text-[#888]">
+              Los importes incluyen gastos de gestión (salvo reservas sin comisión).
+              El detalle completo está en cada reserva.
+            </p>
             {groupedByMonth.map(([monthKey, monthBookings]) => (
               <section key={monthKey}>
                 <div className="mb-4 flex items-center gap-3">

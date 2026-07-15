@@ -15,6 +15,7 @@ import {
   getBookingDurationLabel,
   getBookingEstado,
   getCancelRefundBreakdown,
+  getClientPriceFootnote,
 } from "@/app/lib/booking-display";
 import { puedeReportarIncidencia } from "@/app/lib/booking-incidencia";
 import { buildLoginUrl } from "@/app/lib/auth-redirect";
@@ -206,6 +207,7 @@ export default function ReservaDetallePage() {
   const duration = getBookingDurationLabel(booking, vertical);
   const refundBreakdown = getCancelRefundBreakdown(booking);
   const creditoAplicado = Number(booking.credito_aplicado) || 0;
+  const priceFootnote = getClientPriceFootnote(booking);
   const showContact = canShowProviderContact(estado);
   const telefono = service.telefono_contacto || null;
 
@@ -281,6 +283,19 @@ export default function ReservaDetallePage() {
                     Total reserva:{" "}
                     <span className="font-medium">{formatBookingPrice(booking.precio_total)}</span>
                   </p>
+                  {priceFootnote && (
+                    <p
+                      className="text-[11px]"
+                      style={{
+                        color:
+                          priceFootnote.kind === "sin_gestion" ? "#0e7a5c" : "#888",
+                      }}
+                    >
+                      {priceFootnote.kind === "sin_gestion"
+                        ? `🎁 ${priceFootnote.text}`
+                        : `(${priceFootnote.text})`}
+                    </p>
+                  )}
                   <p style={{ color: "#0e7a5c" }}>
                     Devolución: {formatBookingPrice(refundBreakdown.reembolsoTotal)} (
                     {refundBreakdown.reembolsoPct}%)
@@ -299,6 +314,19 @@ export default function ReservaDetallePage() {
                   <p className="text-lg font-semibold" style={{ color: PRIMARY }}>
                     {formatBookingPrice(booking.precio_total)}
                   </p>
+                  {priceFootnote && (
+                    <p
+                      className="mt-0.5 text-[11px]"
+                      style={{
+                        color:
+                          priceFootnote.kind === "sin_gestion" ? "#0e7a5c" : "#888",
+                      }}
+                    >
+                      {priceFootnote.kind === "sin_gestion"
+                        ? `🎁 ${priceFootnote.text}`
+                        : `(${priceFootnote.text})`}
+                    </p>
+                  )}
                   {creditoAplicado > 0 && (
                     <p className="mt-0.5 text-xs text-[#888]">
                       Incluye {formatBookingPrice(creditoAplicado)} de crédito aplicado

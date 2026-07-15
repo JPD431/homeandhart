@@ -55,6 +55,30 @@ export function formatBookingPrice(precio) {
   return `${Number(precio).toFixed(2)}€`;
 }
 
+/**
+ * Leyenda de precio para la vista del cliente (mismo criterio que checkout /reservar).
+ * - sin comisión → "Sin gastos de gestión"
+ * - con crédito → null (el crédito se explica aparte; no añadir "incluidos")
+ * - resto → "gastos de gestión incluidos"
+ *
+ * @param {{ cliente_sin_comision?: boolean, credito_aplicado?: number|string|null } | null | undefined} booking
+ * @returns {{ kind: "incluidos" | "sin_gestion", text: string } | null}
+ */
+export function getClientPriceFootnote(booking) {
+  if (!booking) return null;
+
+  if (booking.cliente_sin_comision === true) {
+    return { kind: "sin_gestion", text: "Sin gastos de gestión" };
+  }
+
+  const credito = Number(booking.credito_aplicado) || 0;
+  if (credito > 0) {
+    return null;
+  }
+
+  return { kind: "incluidos", text: "gastos de gestión incluidos" };
+}
+
 export function formatBookingDateShort(dateStr) {
   if (!dateStr) return "";
   const [y, m, d] = dateStr.split("-").map(Number);
