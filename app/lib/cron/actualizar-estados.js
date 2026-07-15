@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { capturarYTransferirPago } from "@/app/lib/capturar-y-transferir";
+import { createNotification } from "@/app/lib/notifications";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -47,7 +48,9 @@ export async function runActualizarEstados() {
 
   const { data: paraCompletar } = await supabase
     .from("bookings")
-    .select("id, cliente_id, service_id, payment_intent_id, precio_total")
+    .select(
+      "id, cliente_id, service_id, payment_intent_id, precio_total, services:service_id(titulo)",
+    )
     .eq("estado", "en_curso")
     .is("confirmacion_cliente", null)
     .or(buildEffectiveEndDateLteFilter(hoy));
@@ -58,15 +61,43 @@ export async function runActualizarEstados() {
       .update({ estado: "completada", completada_at: ahora })
       .eq("id", booking.id);
 
-    await fetch(`${process.env.NEXT_PUBLIC_URL}/api/emails`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        tipo: "servicio_completado",
-        booking_id: booking.id,
-        cliente_id: booking.cliente_id,
-      }),
-    });
+    try {
+      await fetch(`${process.env.NEXT_PUBLIC_URL}/api/emails`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tipo: "servicio_completado",
+          booking_id: booking.id,
+          cliente_id: booking.cliente_id,
+        }),
+      });
+    } catch (emailErr) {
+      console.error(
+        "[cron/actualizar-estados] Error email servicio_completado",
+        booking.id,
+        emailErr?.message ?? emailErr,
+      );
+    }
+
+    try {
+      const servicioTitulo =
+        booking.services?.titulo?.trim() || "tu servicio";
+      await createNotification(null, {
+        user_id: booking.cliente_id,
+        tipo: "deja_resena",
+        titulo: "¿Cómo fue tu servicio?",
+        mensaje: `Cuéntanos cómo fue ${servicioTitulo} y ayuda a otras familias.`,
+        href: `/resena/${booking.id}`,
+        entity_type: "booking",
+        entity_id: booking.id,
+      });
+    } catch (notifErr) {
+      console.error(
+        "[cron/actualizar-estados] Error notificación deja_resena",
+        booking.id,
+        notifErr?.message ?? notifErr,
+      );
+    }
   }
 
   const { data: conProblema } = await supabase

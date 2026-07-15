@@ -35,6 +35,10 @@ export const sequences = {
     asunto: "¿Retomamos tu alta de proveedor? · Home&Heart",
     delay: 4 * 24 * 60 * 60 * 1000,
   },
+  resena_recordatorio_1: {
+    asunto: "¿Nos cuentas cómo fue? Deja tu reseña · Home&Heart",
+    delay: 3 * 24 * 60 * 60 * 1000,
+  },
 };
 
 export const MARKETING_SEQUENCE_TYPES = Object.keys(sequences);

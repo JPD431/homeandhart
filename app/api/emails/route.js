@@ -343,6 +343,29 @@ function proveedorOnboardingPendiente2Html(data) {
   });
 }
 
+function resenaRecordatorio1Html(data) {
+  const nombre = data.nombre || "Cliente";
+  const servicio = data.servicio_titulo || "tu servicio";
+  const bookingId = data.booking_id;
+  const resenaUrl = bookingId
+    ? `${BASE_URL}/resena/${bookingId}`
+    : `${BASE_URL}/historial`;
+
+  return marketingEmailLayout({
+    title: sequences.resena_recordatorio_1.asunto,
+    headerHtml: `<p style="margin:0;font-size:14px;color:rgba(255,255,255,0.85);">Tu opinión cuenta</p>`,
+    bodyHtml: `
+      <h1 style="margin:0;font-size:22px;font-weight:400;color:#1a1a1a;font-family:Georgia,serif;text-align:center;">¿Nos cuentas cómo fue?</h1>
+      <p style="margin:16px 0 0;font-size:14px;color:#444;line-height:1.7;text-align:center;">
+        Hola <strong>${nombre}</strong>, tu opinión sobre <strong>${servicio}</strong> ayuda a otras familias a elegir con confianza.
+      </p>
+      <p style="margin:16px 0 0;font-size:14px;color:#666;line-height:1.7;text-align:center;">
+        Si tienes un momento, deja tu reseña. Solo te pedimos esto una vez.
+      </p>
+      ${ctaButton(resenaUrl, "Deja tu reseña")}`,
+  });
+}
+
 const MARKETING_HTML_BUILDERS = {
   cliente_bienvenida: clienteBienvenidaHtml,
   cliente_activacion: clienteActivacionHtml,
@@ -353,9 +376,10 @@ const MARKETING_HTML_BUILDERS = {
   proveedor_sin_actividad: proveedorSinActividadHtml,
   proveedor_onboarding_pendiente_1: proveedorOnboardingPendiente1Html,
   proveedor_onboarding_pendiente_2: proveedorOnboardingPendiente2Html,
+  resena_recordatorio_1: resenaRecordatorio1Html,
 };
 
-async function logMarketingEmail(userId, tipo) {
+async function logMarketingEmail(userId, tipo, bookingId = null) {
   if (!userId || !process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
     return;
   }
@@ -365,7 +389,17 @@ async function logMarketingEmail(userId, tipo) {
     process.env.SUPABASE_SERVICE_ROLE_KEY,
   );
 
-  await supabaseAdmin.from("email_logs").insert({ user_id: userId, tipo });
+  const row = { user_id: userId, tipo };
+  if (bookingId) row.booking_id = bookingId;
+
+  const { error } = await supabaseAdmin.from("email_logs").insert(row);
+  if (error && error.code !== "23505") {
+    console.error("[emails] Error logMarketingEmail:", error.message, {
+      userId,
+      tipo,
+      bookingId,
+    });
+  }
 }
 
 async function sendMarketingSequenceEmail(data) {
@@ -403,7 +437,7 @@ async function sendMarketingSequenceEmail(data) {
   }
 
   if (userId) {
-    await logMarketingEmail(userId, tipo);
+    await logMarketingEmail(userId, tipo, data.booking_id || null);
   }
 
   return { success: true };

@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { sequences } from "@/app/lib/email-sequences";
 import { resolverEmailUsuario } from "@/app/lib/email-usuario";
+import { canLeaveReview } from "@/app/lib/reviews";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -18,19 +19,33 @@ function windowIso(hoursAgoStart, hoursAgoEnd) {
   };
 }
 
-async function alreadySent(userId, tipo) {
-  const { data } = await supabase
+async function alreadySent(userId, tipo, bookingId = null) {
+  let query = supabase
     .from("email_logs")
     .select("id")
     .eq("user_id", userId)
-    .eq("tipo", tipo)
-    .maybeSingle();
+    .eq("tipo", tipo);
 
+  if (bookingId) {
+    query = query.eq("booking_id", bookingId);
+  }
+
+  const { data } = await query.maybeSingle();
   return Boolean(data);
 }
 
-async function logSent(userId, tipo) {
-  await supabase.from("email_logs").insert({ user_id: userId, tipo });
+async function logSent(userId, tipo, bookingId = null) {
+  const row = { user_id: userId, tipo };
+  if (bookingId) row.booking_id = bookingId;
+
+  const { error } = await supabase.from("email_logs").insert(row);
+  if (error && error.code !== "23505") {
+    console.error("[email-sequences] Error logSent:", error.message, {
+      userId,
+      tipo,
+      bookingId,
+    });
+  }
 }
 
 /** role=proveedor y onboarding sin completar */
@@ -141,6 +156,7 @@ export async function runEmailSequences() {
     proveedor_sin_actividad: 0,
     proveedor_onboarding_pendiente_1: 0,
     proveedor_onboarding_pendiente_2: 0,
+    resena_recordatorio_1: 0,
     errors: [],
   };
 
@@ -375,6 +391,80 @@ export async function runEmailSequences() {
     } catch (err) {
       stats.errors.push(
         `proveedor_onboarding_pendiente_2:${proveedor.id}:${err.message}`,
+      );
+    }
+  }
+
+  // Recordatorio reseña ~3 días tras completarse (uno por reserva, plazo 14 días).
+  const wResena3d = windowIso(24 * 4, 24 * 3);
+  const { data: bookingsSinResena } = await supabase
+    .from("bookings")
+    .select(
+      "id, cliente_id, estado, completada_at, fecha_fin, fecha_inicio, services:service_id(titulo)",
+    )
+    .eq("estado", "completada")
+    .not("completada_at", "is", null)
+    .gte("completada_at", wResena3d.from)
+    .lte("completada_at", wResena3d.to);
+
+  for (const booking of bookingsSinResena || []) {
+    try {
+      if (
+        await alreadySent(
+          booking.cliente_id,
+          "resena_recordatorio_1",
+          booking.id,
+        )
+      ) {
+        continue;
+      }
+
+      const { data: existingReview } = await supabase
+        .from("reviews")
+        .select("id")
+        .eq("booking_id", booking.id)
+        .maybeSingle();
+
+      // Condición de parada: ya reseñó o fuera del plazo de 14 días.
+      if (
+        !canLeaveReview(booking, {
+          hasReview: Boolean(existingReview),
+          userId: booking.cliente_id,
+        }).ok
+      ) {
+        continue;
+      }
+
+      const email = await resolverEmailUsuario(booking.cliente_id);
+      if (!email) {
+        console.warn(
+          `[email-sequences] Sin email para ${booking.cliente_id}, skip resena_recordatorio_1`,
+        );
+        continue;
+      }
+
+      const { data: cliente } = await supabase
+        .from("profiles")
+        .select("nombre")
+        .eq("id", booking.cliente_id)
+        .maybeSingle();
+
+      await sendSequenceEmail({
+        tipo: "resena_recordatorio_1",
+        user_id: booking.cliente_id,
+        booking_id: booking.id,
+        nombre: cliente?.nombre,
+        servicio_titulo: booking.services?.titulo || "tu servicio",
+      });
+      await logSent(
+        booking.cliente_id,
+        "resena_recordatorio_1",
+        booking.id,
+      );
+      stats.resena_recordatorio_1 += 1;
+    } catch (err) {
+      stats.errors.push(
+        `resena_recordatorio_1:${booking.id}:${err.message}`,
       );
     }
   }

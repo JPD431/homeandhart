@@ -280,5 +280,9 @@ export function resolveNotificationHref(notification) {
     return `/reserva/${entityId}`;
   }
 
+  if (tipo === "deja_resena" && entityId) {
+    return `/resena/${entityId}`;
+  }
+
   return href || "/dashboard";
 }
