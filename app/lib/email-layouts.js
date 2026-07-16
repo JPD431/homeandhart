@@ -11,14 +11,17 @@ export const BASE_URL =
   process.env.NEXT_PUBLIC_URL || "https://homeandheart.es";
 
 const EMAIL_LOGO_URL = `${BASE_URL}/email-logo.png`;
+const EMAIL_LOGO_LIGHT_URL = `${BASE_URL}/email-logo-light.png`;
 const EMAIL_LOGO_HEIGHT = 56;
 
 /**
- * Cabecera de marca: icono (email-logo.png) + wordmark tipográfico debajo.
+ * Cabecera de marca: icono + wordmark tipográfico debajo.
+ * Marketing (fondo azul) → logo claro; transaccional (fondo blanco) → logo azul.
  * @param {"marketing" | "transactional"} variant
  */
 export function brandHeaderHtml(variant = "transactional") {
   const isMarketing = variant === "marketing";
+  const logoUrl = isMarketing ? EMAIL_LOGO_LIGHT_URL : EMAIL_LOGO_URL;
   const wordmark = isMarketing
     ? `<p style="margin:10px 0 0;font-size:20px;font-weight:600;color:#ffffff;letter-spacing:-0.02em;line-height:1.2;">
         Home<span style="font-style:italic;">&amp;</span>Heart
@@ -29,7 +32,7 @@ export function brandHeaderHtml(variant = "transactional") {
 
   return `<a href="${BASE_URL}" style="text-decoration:none;color:inherit;display:inline-block;">
       <img
-        src="${EMAIL_LOGO_URL}"
+        src="${logoUrl}"
         alt="Home&amp;Heart"
         height="${EMAIL_LOGO_HEIGHT}"
         style="height:${EMAIL_LOGO_HEIGHT}px;width:auto;max-width:80px;display:block;margin:0 auto;border:0;outline:none;"
@@ -138,7 +141,7 @@ export function previewEmailHtml(tipo) {
         <h1 style="margin:0;font-size:22px;font-weight:400;color:#1a1a1a;font-family:Georgia,serif;text-align:center;">Cabecera marketing</h1>
         <p style="margin:16px 0 0;font-size:14px;color:#444;line-height:1.7;text-align:center;">
           Este es un email de ejemplo. Revisa el logo sobre el fondo azul de la cabecera.
-          Logo: <code style="font-size:12px;">${EMAIL_LOGO_URL}</code>
+          Logo: <code style="font-size:12px;">${EMAIL_LOGO_LIGHT_URL}</code>
         </p>`,
     });
   }
