@@ -18,20 +18,20 @@ const BRAND_GREEN = "#0e7a5c";
 const BRAND_WARM = "#f7f5f2";
 const BRAND_BORDER = "#e8e4de";
 const BASE_URL = process.env.NEXT_PUBLIC_URL || "https://homeandheart.es";
-const EMAIL_LOGO_URL = `${BASE_URL}/logoapp.png`;
-const EMAIL_LOGO_HEIGHT = 48;
+const EMAIL_LOGO_URL = `${BASE_URL}/email-logo.png`;
+const EMAIL_LOGO_HEIGHT = 56;
 
 /**
- * Cabecera de marca para emails: logo (URL absoluta) + wordmark tipográfico de respaldo.
+ * Cabecera de marca: icono (email-logo.png) + wordmark tipográfico debajo.
  * @param {"marketing" | "transactional"} variant
  */
 function brandHeaderHtml(variant = "transactional") {
   const isMarketing = variant === "marketing";
   const wordmark = isMarketing
-    ? `<p style="margin:10px 0 0;font-size:20px;font-weight:600;color:#ffffff;letter-spacing:-0.02em;">
+    ? `<p style="margin:10px 0 0;font-size:20px;font-weight:600;color:#ffffff;letter-spacing:-0.02em;line-height:1.2;">
         Home<span style="font-style:italic;">&amp;</span>Heart
       </p>`
-    : `<p style="margin:10px 0 0;font-size:20px;font-weight:600;letter-spacing:-0.02em;">
+    : `<p style="margin:10px 0 0;font-size:20px;font-weight:600;letter-spacing:-0.02em;line-height:1.2;">
         <span style="color:#111111;">Home</span><span style="color:${BRAND_PRIMARY};font-style:italic;">&amp;</span><span style="color:#111111;">Heart</span>
       </p>`;
 
@@ -40,7 +40,7 @@ function brandHeaderHtml(variant = "transactional") {
         src="${EMAIL_LOGO_URL}"
         alt="Home&amp;Heart"
         height="${EMAIL_LOGO_HEIGHT}"
-        style="height:${EMAIL_LOGO_HEIGHT}px;width:auto;max-width:180px;display:block;margin:0 auto;border:0;outline:none;"
+        style="height:${EMAIL_LOGO_HEIGHT}px;width:auto;max-width:80px;display:block;margin:0 auto;border:0;outline:none;"
       />
       ${wordmark}
     </a>`;
