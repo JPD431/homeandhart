@@ -18,6 +18,33 @@ const BRAND_GREEN = "#0e7a5c";
 const BRAND_WARM = "#f7f5f2";
 const BRAND_BORDER = "#e8e4de";
 const BASE_URL = process.env.NEXT_PUBLIC_URL || "https://homeandheart.es";
+const EMAIL_LOGO_URL = `${BASE_URL}/logoapp.png`;
+const EMAIL_LOGO_HEIGHT = 48;
+
+/**
+ * Cabecera de marca para emails: logo (URL absoluta) + wordmark tipográfico de respaldo.
+ * @param {"marketing" | "transactional"} variant
+ */
+function brandHeaderHtml(variant = "transactional") {
+  const isMarketing = variant === "marketing";
+  const wordmark = isMarketing
+    ? `<p style="margin:10px 0 0;font-size:20px;font-weight:600;color:#ffffff;letter-spacing:-0.02em;">
+        Home<span style="font-style:italic;">&amp;</span>Heart
+      </p>`
+    : `<p style="margin:10px 0 0;font-size:20px;font-weight:600;letter-spacing:-0.02em;">
+        <span style="color:#111111;">Home</span><span style="color:${BRAND_PRIMARY};font-style:italic;">&amp;</span><span style="color:#111111;">Heart</span>
+      </p>`;
+
+  return `<a href="${BASE_URL}" style="text-decoration:none;color:inherit;display:inline-block;">
+      <img
+        src="${EMAIL_LOGO_URL}"
+        alt="Home&amp;Heart"
+        height="${EMAIL_LOGO_HEIGHT}"
+        style="height:${EMAIL_LOGO_HEIGHT}px;width:auto;max-width:180px;display:block;margin:0 auto;border:0;outline:none;"
+      />
+      ${wordmark}
+    </a>`;
+}
 
 function marketingFooter() {
   return `<div style="margin-top:32px;padding-top:20px;border-top:1px solid ${BRAND_BORDER};text-align:center;">
@@ -58,9 +85,7 @@ function marketingEmailLayout({ title, headerHtml, bodyHtml, headerBg }) {
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;background-color:#ffffff;border-radius:12px;border:1px solid ${BRAND_BORDER};overflow:hidden;">
           <tr>
             <td style="${headerStyle}padding:28px 32px;text-align:center;">
-              <p style="margin:0 0 8px;font-size:22px;font-weight:600;color:#ffffff;letter-spacing:-0.02em;">
-                Home<span style="font-style:italic;">&amp;</span>Heart
-              </p>
+              ${brandHeaderHtml("marketing")}
               ${headerHtml || ""}
             </td>
           </tr>
@@ -458,9 +483,7 @@ function emailLayout({ title, bodyHtml }) {
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background-color:#ffffff;border-radius:12px;border:1px solid #e8e4de;overflow:hidden;">
           <tr>
             <td style="padding:28px 32px 8px;text-align:center;">
-              <p style="margin:0;font-size:22px;font-weight:600;letter-spacing:-0.02em;">
-                <span style="color:#111111;">Home</span><span style="color:${BRAND_PRIMARY};font-style:italic;">&amp;</span><span style="color:#111111;">Heart</span>
-              </p>
+              ${brandHeaderHtml("transactional")}
             </td>
           </tr>
           <tr>
