@@ -7,100 +7,26 @@ import {
 } from "@/app/lib/email-usuario";
 import { getIngresoProveedorFromBooking } from "@/app/lib/ingresos-proveedor";
 import { firmarTokenConfirmacion } from "@/app/lib/confirmar-token";
+import {
+  BASE_URL,
+  BRAND_PRIMARY,
+  BRAND_LIGHT,
+  BRAND_DARK,
+  BRAND_GREEN,
+  BRAND_WARM,
+  BRAND_BORDER,
+  emailLayout,
+  marketingEmailLayout,
+} from "@/app/lib/email-layouts";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 const FROM = "soporte@homeandheart.es";
-const BRAND_PRIMARY = "#1d4f91";
-const BRAND_LIGHT = "#e8f0fb";
-const BRAND_DARK = "#163a6b";
-const BRAND_GREEN = "#0e7a5c";
-const BRAND_WARM = "#f7f5f2";
-const BRAND_BORDER = "#e8e4de";
-const BASE_URL = process.env.NEXT_PUBLIC_URL || "https://homeandheart.es";
-const EMAIL_LOGO_URL = `${BASE_URL}/email-logo.png`;
-const EMAIL_LOGO_HEIGHT = 56;
-
-/**
- * Cabecera de marca: icono (email-logo.png) + wordmark tipográfico debajo.
- * @param {"marketing" | "transactional"} variant
- */
-function brandHeaderHtml(variant = "transactional") {
-  const isMarketing = variant === "marketing";
-  const wordmark = isMarketing
-    ? `<p style="margin:10px 0 0;font-size:20px;font-weight:600;color:#ffffff;letter-spacing:-0.02em;line-height:1.2;">
-        Home<span style="font-style:italic;">&amp;</span>Heart
-      </p>`
-    : `<p style="margin:10px 0 0;font-size:20px;font-weight:600;letter-spacing:-0.02em;line-height:1.2;">
-        <span style="color:#111111;">Home</span><span style="color:${BRAND_PRIMARY};font-style:italic;">&amp;</span><span style="color:#111111;">Heart</span>
-      </p>`;
-
-  return `<a href="${BASE_URL}" style="text-decoration:none;color:inherit;display:inline-block;">
-      <img
-        src="${EMAIL_LOGO_URL}"
-        alt="Home&amp;Heart"
-        height="${EMAIL_LOGO_HEIGHT}"
-        style="height:${EMAIL_LOGO_HEIGHT}px;width:auto;max-width:80px;display:block;margin:0 auto;border:0;outline:none;"
-      />
-      ${wordmark}
-    </a>`;
-}
-
-function marketingFooter() {
-  return `<div style="margin-top:32px;padding-top:20px;border-top:1px solid ${BRAND_BORDER};text-align:center;">
-    <p style="margin:0;font-size:11px;color:#999;line-height:1.6;">
-      <a href="${BASE_URL}/legal/privacidad" style="color:#999;text-decoration:none;">Privacidad</a> ·
-      <a href="${BASE_URL}/legal/terminos" style="color:#999;text-decoration:none;">Términos</a> ·
-      <a href="${BASE_URL}/legal/cookies" style="color:#999;text-decoration:none;">Cookies</a>
-    </p>
-    <p style="margin:8px 0 0;font-size:11px;color:#bbb;">
-      <a href="${BASE_URL}/editar-perfil" style="color:#bbb;text-decoration:none;">Darse de baja</a>
-    </p>
-    <p style="margin:12px 0 0;font-size:11px;color:#bbb;">Home&amp;Heart · Donde estés, estamos.</p>
-  </div>`;
-}
 
 function ctaButton(href, label) {
   return `<p style="margin:28px 0 0;text-align:center;">
     <a href="${href}" style="display:inline-block;background:${BRAND_PRIMARY};color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:12px 24px;border-radius:6px;">${label}</a>
   </p>`;
-}
-
-function marketingEmailLayout({ title, headerHtml, bodyHtml, headerBg }) {
-  const headerStyle =
-    headerBg ||
-    `background:linear-gradient(160deg, ${BRAND_PRIMARY} 0%, ${BRAND_DARK} 100%);`;
-
-  return `<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${title}</title>
-</head>
-<body style="margin:0;padding:0;background-color:${BRAND_WARM};font-family:Georgia,'Times New Roman',Times,serif;">
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:${BRAND_WARM};padding:32px 16px;">
-    <tr>
-      <td align="center">
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;background-color:#ffffff;border-radius:12px;border:1px solid ${BRAND_BORDER};overflow:hidden;">
-          <tr>
-            <td style="${headerStyle}padding:28px 32px;text-align:center;">
-              ${brandHeaderHtml("marketing")}
-              ${headerHtml || ""}
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:32px;">
-              ${bodyHtml}
-              ${marketingFooter()}
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`;
 }
 
 function cardBlock({ emoji, title, text, href }) {
@@ -466,40 +392,6 @@ async function sendMarketingSequenceEmail(data) {
   }
 
   return { success: true };
-}
-
-function emailLayout({ title, bodyHtml }) {
-  return `<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${title}</title>
-</head>
-<body style="margin:0;padding:0;background-color:#f7f5f2;font-family:Georgia,'Times New Roman',Times,serif;color:#222;">
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#f7f5f2;padding:32px 16px;">
-    <tr>
-      <td align="center">
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background-color:#ffffff;border-radius:12px;border:1px solid #e8e4de;overflow:hidden;">
-          <tr>
-            <td style="padding:28px 32px 8px;text-align:center;">
-              ${brandHeaderHtml("transactional")}
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:8px 32px 32px;">
-              ${bodyHtml}
-              <p style="margin:28px 0 0;font-size:13px;color:#666;line-height:1.5;">
-                El equipo de Home&amp;Heart · Donde estés, estamos.
-              </p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`;
 }
 
 function formatModalidad(modalidad) {
