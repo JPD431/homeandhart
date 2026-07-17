@@ -198,6 +198,9 @@ const EMPTY_SERVICE_DETAILS = {
     proveedor_emergencia: false,
     descuentos_duracion_activa: false,
     descuentos_duracion: [{ minDias: "", descuento: "" }],
+    capacidad_maxima: "2",
+    huespedes_incluidos: "1",
+    precio_huesped_extra: "",
     fotos: [],
     foto_url: "",
   },
@@ -228,6 +231,9 @@ const EMPTY_SERVICE_DETAILS = {
     proveedor_emergencia: false,
     descuentos_duracion_activa: false,
     descuentos_duracion: [{ minDias: "", descuento: "" }],
+    capacidad_maxima: "2",
+    huespedes_incluidos: "1",
+    precio_huesped_extra: "",
     fotos: [],
     foto_url: "",
   },
@@ -797,11 +803,21 @@ export default function SerProveedorPage() {
         setErrorMessage("Completa título y precio del servicio de niñera.");
         return false;
       }
+      const unidadesError = validateHuespedesPrecio(d, "ninos");
+      if (unidadesError) {
+        setErrorMessage(unidadesError);
+        return false;
+      }
     }
     if (stepKey === STEP_KEY.SERVICIO_MASCOTAS) {
       const d = serviceDetails.mascotas;
       if (!d.titulo.trim() || !d.precio) {
         setErrorMessage("Completa título y precio del servicio de mascotas.");
+        return false;
+      }
+      const unidadesError = validateHuespedesPrecio(d, "mascotas");
+      if (unidadesError) {
+        setErrorMessage(unidadesError);
         return false;
       }
     }
@@ -1176,6 +1192,7 @@ export default function SerProveedorPage() {
           />
           <HuespedesPrecioFields
             className="mt-6"
+            vertical="alojamiento"
             details={d}
             onChange={(next) => updateServiceDetails("alojamiento", next)}
           />
@@ -1269,6 +1286,12 @@ export default function SerProveedorPage() {
             </div>
             <DireccionContactoFields d={d} upd={upd} vertical="ninos" />
           </div>
+          <HuespedesPrecioFields
+            className="mt-6"
+            vertical="ninos"
+            details={d}
+            onChange={(next) => updateServiceDetails("ninos", next)}
+          />
           <NinosServiceFields
             details={d}
             onChange={(next) => updateServiceDetails("ninos", next)}
@@ -1371,6 +1394,12 @@ export default function SerProveedorPage() {
             </div>
             <DireccionContactoFields d={d} upd={upd} vertical="mascotas" />
           </div>
+          <HuespedesPrecioFields
+            className="mt-6"
+            vertical="mascotas"
+            details={d}
+            onChange={(next) => updateServiceDetails("mascotas", next)}
+          />
           <MascotasServiceFields
             details={d}
             onChange={(next) => updateServiceDetails("mascotas", next)}

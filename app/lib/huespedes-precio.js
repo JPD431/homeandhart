@@ -1,11 +1,73 @@
 /**
- * Precio por huésped (alojamiento): configuración del anuncio + cálculo de reserva.
- * Campos NULL / precio_huesped_extra 0 = precio plano (retrocompatible).
+ * Precio por unidad (alojamiento / niñera / mascotas):
+ * capacidad_maxima + huespedes_incluidos + precio_huesped_extra
+ * (nombres históricos; semántica = unidades según vertical).
+ *
+ * NULL / precio_huesped_extra 0 = precio plano (retrocompatible).
+ *
+ * CÁLCULO DE RESERVA (Paso 2): solo activo en alojamiento por ahora
+ * (serviceHasHuespedesModelo). ninos/mascotas: config + anuncio en Paso 1;
+ * el precio de reserva sigue plano hasta su Paso 2.
  */
 
+export const VERTICALES_UNIDADES_PRECIO = ["alojamiento", "ninos", "mascotas"];
+
+/** Copy / etiquetas por vertical (UI + anuncio). */
+export const UNIDADES_PRECIO_COPY = {
+  alojamiento: {
+    unitSingular: "huésped",
+    unitPlural: "huéspedes",
+    priceUnit: "noche",
+    title: "Capacidad y precio por huésped",
+    maxLabel: "Capacidad máxima de huéspedes",
+    incluidosLabel: "Incluidos en el precio base",
+    extraLabel: "Precio por huésped adicional (€)",
+    maxGteIncluidos:
+      "La capacidad máxima debe ser mayor o igual que los huéspedes incluidos en el precio.",
+    incluidosRequired:
+      "Indica cuántos huéspedes incluye el precio base.",
+    extraNegativo:
+      "El precio por huésped adicional no puede ser negativo.",
+  },
+  ninos: {
+    unitSingular: "niño",
+    unitPlural: "niños",
+    priceUnit: "hora",
+    title: "Capacidad y precio por niño",
+    maxLabel: "Máximo de niños",
+    incluidosLabel: "Niños incluidos en el precio base",
+    extraLabel: "Precio por niño adicional (€/hora)",
+    maxGteIncluidos:
+      "El máximo de niños debe ser mayor o igual que los niños incluidos en el precio.",
+    incluidosRequired: "Indica cuántos niños incluye el precio base.",
+    extraNegativo: "El precio por niño adicional no puede ser negativo.",
+  },
+  mascotas: {
+    unitSingular: "mascota",
+    unitPlural: "mascotas",
+    priceUnit: "día",
+    title: "Capacidad y precio por mascota",
+    maxLabel: "Máximo de mascotas",
+    incluidosLabel: "Mascotas incluidas en el precio base",
+    extraLabel: "Precio por mascota adicional (€/día)",
+    maxGteIncluidos:
+      "El máximo de mascotas debe ser mayor o igual que las mascotas incluidas en el precio.",
+    incluidosRequired: "Indica cuántas mascotas incluye el precio base.",
+    extraNegativo: "El precio por mascota adicional no puede ser negativo.",
+  },
+};
+
+export function supportsUnidadesPrecio(vertical) {
+  return VERTICALES_UNIDADES_PRECIO.includes(vertical);
+}
+
+export function getUnidadesPrecioCopy(vertical) {
+  return UNIDADES_PRECIO_COPY[vertical] ?? UNIDADES_PRECIO_COPY.alojamiento;
+}
+
 /**
- * True solo si el servicio tiene el modelo base + suplemento por huésped extra.
- * Sin modelo → precio exactamente como antes (plano × noches × 1.14).
+ * True solo si el servicio tiene el modelo base + suplemento (cálculo reserva).
+ * Paso 1 ninos/mascotas: config sí, cálculo reserva aún no → solo alojamiento.
  */
 export function serviceHasHuespedesModelo(svc) {
   if (!svc || svc.vertical !== "alojamiento") return false;
@@ -26,7 +88,7 @@ export function serviceHasHuespedesModelo(svc) {
 
 /**
  * Suplemento €/noche por huéspedes por encima de los incluidos.
- * Sin modelo → 0 (no altera el precio).
+ * Sin modelo → 0 (no altera el precio). Solo alojamiento (Paso 2).
  */
 export function getHuespedesSuplementoPorNoche(svc, numHuespedes) {
   if (!serviceHasHuespedesModelo(svc)) return 0;
@@ -55,7 +117,7 @@ export function resolveNumHuespedesValue(svc, numHuespedes) {
 }
 
 /**
- * Valida num_huespedes para un servicio con modelo.
+ * Valida num_huespedes para un servicio con modelo (reserva alojamiento).
  * @returns {{ ok: true, num: number|null } | { ok: false, error: string }}
  */
 export function validateNumHuespedesParaReserva(svc, numHuespedes) {
@@ -91,7 +153,7 @@ export function validateNumHuespedesParaReserva(svc, numHuespedes) {
 }
 
 /**
- * Desglose legible para el cliente, ej.
+ * Desglose legible para el cliente (reserva alojamiento), ej.
  * "2 huéspedes incluidos · +2 huéspedes × 5€ = +10€/noche"
  */
 export function formatHuespedesPrecioDesglose(svc, numHuespedes) {
@@ -127,8 +189,8 @@ export function parseHuespedesPrecioFromDb(row) {
   if (maxRaw != null && maxRaw !== "") {
     const n = Number(maxRaw);
     if (Number.isFinite(n) && n > 0) capacidad_maxima = String(Math.floor(n));
-  } else {
-    // Fallback visual desde capacidad.personas (jsonb informativo)
+  } else if (row?.vertical === "alojamiento" || row?.vertical == null) {
+    // Fallback visual solo alojamiento (capacidad.personas jsonb)
     const personas = row?.capacidad?.personas;
     if (personas != null && personas !== "") {
       const n = Number(personas);
@@ -158,12 +220,11 @@ export function parseHuespedesPrecioFromDb(row) {
 }
 
 /**
- * Serializa para INSERT/UPDATE en services (solo alojamiento).
- * @param {object} details
- * @param {string} vertical
+ * Serializa para INSERT/UPDATE en services (alojamiento, ninos, mascotas).
+ * Otras verticales → NULL.
  */
 export function serializeHuespedesPrecioForDb(details, vertical) {
-  if (vertical !== "alojamiento") {
+  if (!supportsUnidadesPrecio(vertical)) {
     return {
       capacidad_maxima: null,
       huespedes_incluidos: null,
@@ -198,12 +259,13 @@ function parseOptionalNonNegativeNumber(value) {
 }
 
 /**
- * Validación de formulario (alojamiento).
+ * Validación de formulario (alojamiento / ninos / mascotas).
  * @returns {string|null} mensaje de error o null si OK
  */
 export function validateHuespedesPrecio(details, vertical) {
-  if (vertical !== "alojamiento") return null;
+  if (!supportsUnidadesPrecio(vertical)) return null;
 
+  const copy = getUnidadesPrecioCopy(vertical);
   const max = parseOptionalPositiveInt(details?.capacidad_maxima);
   const incluidos = parseOptionalPositiveInt(details?.huespedes_incluidos);
   const extraRaw = details?.precio_huesped_extra;
@@ -211,29 +273,37 @@ export function validateHuespedesPrecio(details, vertical) {
   if (extraRaw != null && extraRaw !== "") {
     const n = Number(extraRaw);
     if (!Number.isFinite(n) || n < 0) {
-      return "El precio por huésped adicional no puede ser negativo.";
+      return copy.extraNegativo;
     }
   }
 
   if (max != null && incluidos != null && max < incluidos) {
-    return "La capacidad máxima debe ser mayor o igual que los huéspedes incluidos en el precio.";
+    return copy.maxGteIncluidos;
   }
 
-  if (incluidos == null && max != null && extraRaw != null && extraRaw !== "" && Number(extraRaw) > 0) {
-    return "Indica cuántos huéspedes incluye el precio base.";
+  if (
+    incluidos == null &&
+    max != null &&
+    extraRaw != null &&
+    extraRaw !== "" &&
+    Number(extraRaw) > 0
+  ) {
+    return copy.incluidosRequired;
   }
 
   return null;
 }
 
 /**
- * Texto informativo para el anuncio (sin afectar precio aún).
+ * Texto informativo para el anuncio (sin afectar precio de reserva en ninos/mascotas aún).
  * @param {object} service
  * @returns {string|null}
  */
 export function formatHuespedesPrecioInfo(service) {
-  if (service?.vertical && service.vertical !== "alojamiento") return null;
+  const vertical = service?.vertical || "alojamiento";
+  if (!supportsUnidadesPrecio(vertical)) return null;
 
+  const copy = getUnidadesPrecioCopy(vertical);
   const max =
     service?.capacidad_maxima != null
       ? Number(service.capacidad_maxima)
@@ -255,19 +325,19 @@ export function formatHuespedesPrecioInfo(service) {
 
   const parts = [];
   if (hasMax) {
-    parts.push(
-      `Hasta ${Math.floor(max)} huésped${max === 1 ? "" : "es"}`,
-    );
+    const n = Math.floor(max);
+    const word = n === 1 ? copy.unitSingular : copy.unitPlural;
+    parts.push(`Hasta ${n} ${word}`);
   }
   if (hasInc) {
-    parts.push(
-      `incluye ${Math.floor(incluidos)}`,
-    );
+    parts.push(`incluye ${Math.floor(incluidos)}`);
   }
   if (hasExtra) {
     const euro =
       Number.isInteger(extra) ? String(extra) : extra.toFixed(2).replace(/\.?0+$/, "");
-    parts.push(`+${euro}€ por huésped adicional`);
+    parts.push(
+      `+${euro}€/${copy.priceUnit} por ${copy.unitSingular} adicional`,
+    );
   }
 
   return parts.join(" · ");

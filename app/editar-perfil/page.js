@@ -810,7 +810,11 @@ function ServiceEditForm({ vertical, details: rawDetails, onChange, userId, serv
             />
           </div>
           <div className="sm:col-span-2">
-            <HuespedesPrecioFields details={details} onChange={onChange} />
+            <HuespedesPrecioFields
+              vertical="alojamiento"
+              details={details}
+              onChange={onChange}
+            />
           </div>
           <AlojamientoServiceFields
             className="sm:col-span-2"
@@ -828,22 +832,40 @@ function ServiceEditForm({ vertical, details: rawDetails, onChange, userId, serv
         </>
       )}
       {vertical === "ninos" && (
-        <NinosServiceFields
-          className="sm:col-span-2"
-          details={details}
-          onChange={onChange}
-          accentColor={GREEN}
-          showAnosExperiencia={false}
-        />
+        <>
+          <div className="sm:col-span-2">
+            <HuespedesPrecioFields
+              vertical="ninos"
+              details={details}
+              onChange={onChange}
+            />
+          </div>
+          <NinosServiceFields
+            className="sm:col-span-2"
+            details={details}
+            onChange={onChange}
+            accentColor={GREEN}
+            showAnosExperiencia={false}
+          />
+        </>
       )}
       {vertical === "mascotas" && (
-        <MascotasServiceFields
-          className="sm:col-span-2"
-          details={details}
-          onChange={onChange}
-          accentColor={ORANGE}
-          showAnosExperiencia={false}
-        />
+        <>
+          <div className="sm:col-span-2">
+            <HuespedesPrecioFields
+              vertical="mascotas"
+              details={details}
+              onChange={onChange}
+            />
+          </div>
+          <MascotasServiceFields
+            className="sm:col-span-2"
+            details={details}
+            onChange={onChange}
+            accentColor={ORANGE}
+            showAnosExperiencia={false}
+          />
+        </>
       )}
       <ServiceOperationalFields
         vertical={vertical}
@@ -1334,24 +1356,23 @@ function EditarPerfilContent() {
 
     try {
       for (const service of services) {
-        if (service.vertical !== "alojamiento") continue;
-        const huespedesError = validateHuespedesPrecio(
+        const unidadesError = validateHuespedesPrecio(
           service.details,
-          "alojamiento",
+          service.vertical,
         );
-        if (huespedesError) {
-          setErrorMessage(huespedesError);
+        if (unidadesError) {
+          setErrorMessage(unidadesError);
           setSubmitting(false);
           return;
         }
       }
-      if (addingService && newVertical === "alojamiento") {
-        const huespedesError = validateHuespedesPrecio(
+      if (addingService) {
+        const unidadesError = validateHuespedesPrecio(
           newServiceDetails,
-          "alojamiento",
+          newVertical,
         );
-        if (huespedesError) {
-          setErrorMessage(huespedesError);
+        if (unidadesError) {
+          setErrorMessage(unidadesError);
           setSubmitting(false);
           return;
         }

@@ -87,8 +87,11 @@ export default function ServiceAnuncioContent({
     showCapacidad && vertical === "alojamiento"
       ? getCapacidadDisplayRows(service)
       : [];
-  const huespedesInfo =
-    showCapacidad && vertical === "alojamiento"
+  const unidadesPrecioInfo =
+    showCapacidad &&
+    (vertical === "alojamiento" ||
+      vertical === "ninos" ||
+      vertical === "mascotas")
       ? formatHuespedesPrecioInfo(service)
       : null;
   const amenityGroups =
@@ -112,12 +115,12 @@ export default function ServiceAnuncioContent({
         </p>
       ) : null}
 
-      {huespedesInfo && (
+      {unidadesPrecioInfo && (
         <p
           className="rounded-lg px-3 py-2 text-[11px] leading-relaxed text-[#444]"
           style={{ backgroundColor: "#f7f5f2" }}
         >
-          {huespedesInfo}
+          {unidadesPrecioInfo}
         </p>
       )}
 
