@@ -26,9 +26,17 @@ export function serializeCapacidad(details, vertical) {
   if (vertical !== "alojamiento") return null;
 
   const cap = details?.capacidad ?? {};
+  const maxFromPricing = Number(details?.capacidad_maxima);
+  const personasFromPricing =
+    Number.isFinite(maxFromPricing) && maxFromPricing > 0
+      ? Math.floor(maxFromPricing)
+      : null;
+
   return {
     personas: clampCapacidadValue(
-      cap.personas ?? DEFAULT_CAPACIDAD_ALOJAMIENTO.personas,
+      personasFromPricing ??
+        cap.personas ??
+        DEFAULT_CAPACIDAD_ALOJAMIENTO.personas,
     ),
     habitaciones: clampCapacidadValue(
       cap.habitaciones ?? DEFAULT_CAPACIDAD_ALOJAMIENTO.habitaciones,
@@ -75,6 +83,11 @@ function readCapacidadObject(service) {
 }
 
 export function getCapacidadPersonas(service) {
+  if (service?.capacidad_maxima != null && service.capacidad_maxima !== "") {
+    const fromCol = Number(service.capacidad_maxima);
+    if (Number.isFinite(fromCol) && fromCol > 0) return Math.floor(fromCol);
+  }
+
   const capData = readCapacidadObject(service);
   if (!capData) return null;
 

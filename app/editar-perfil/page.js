@@ -39,8 +39,9 @@ import {
 import {
   DEFAULT_CAPACIDAD_ALOJAMIENTO,
   parseCapacidadFromDb,
-  serializeCapacidad,
 } from "@/app/lib/capacidad";
+import { parseHuespedesPrecioFromDb, validateHuespedesPrecio } from "@/app/lib/huespedes-precio";
+import HuespedesPrecioFields from "@/app/components/provider/HuespedesPrecioFields";
 import {
   normalizeDescuentosDuracion,
   serializeDescuentosDuracionForDb,
@@ -199,6 +200,9 @@ function emptyServiceDetails() {
     fotos: [],
     foto_url: "",
     capacidad: { ...DEFAULT_CAPACIDAD_ALOJAMIENTO },
+    capacidad_maxima: "",
+    huespedes_incluidos: "2",
+    precio_huesped_extra: "",
     nru: "",
     normas: { ...DEFAULT_NORMAS },
     check_in: "15:00",
@@ -235,6 +239,9 @@ function mergeServiceDetails(rawDetails, vertical) {
     merged.anos_experiencia != null ? String(merged.anos_experiencia) : "";
   merged.nru = merged.nru || "";
   merged.capacidad = merged.capacidad ?? { ...DEFAULT_CAPACIDAD_ALOJAMIENTO };
+  merged.capacidad_maxima = merged.capacidad_maxima ?? "";
+  merged.huespedes_incluidos = merged.huespedes_incluidos ?? "";
+  merged.precio_huesped_extra = merged.precio_huesped_extra ?? "";
   merged.fotos = parseFotosFromDb({ fotos: merged.fotos, foto_url: merged.foto_url });
   merged.foto_url = merged.fotos[0] || merged.foto_url || "";
 
@@ -285,6 +292,7 @@ function mapServiceFromDb(row) {
     fotos: parseFotosFromDb(row),
     foto_url: parseFotosFromDb(row)[0] || "",
     capacidad: parseCapacidadFromDb(row),
+    ...parseHuespedesPrecioFromDb(row),
     direccion_exacta: row.direccion_exacta || "",
     telefono_contacto: row.telefono_contacto || "",
     nru: row.nru || "",
@@ -620,8 +628,14 @@ function ServiceEditForm({ vertical, details: rawDetails, onChange, userId, serv
   }
 
   const capacidad = details.capacidad ?? { ...DEFAULT_CAPACIDAD_ALOJAMIENTO };
-  const updCap = (key, val) =>
-    onChange({ ...details, capacidad: { ...capacidad, [key]: val } });
+  const updCap = (key, val) => {
+    const nextCap = { ...capacidad, [key]: val };
+    const next = { ...details, capacidad: nextCap };
+    if (key === "personas") {
+      next.capacidad_maxima = val != null && val !== "" ? String(val) : "";
+    }
+    onChange(next);
+  };
 
   return (
     <>
@@ -794,6 +808,9 @@ function ServiceEditForm({ vertical, details: rawDetails, onChange, userId, serv
               onChange={(v) => updCap("bano_tipo", v)}
               accentColor={BRAND.primary}
             />
+          </div>
+          <div className="sm:col-span-2">
+            <HuespedesPrecioFields details={details} onChange={onChange} />
           </div>
           <AlojamientoServiceFields
             className="sm:col-span-2"
@@ -1316,6 +1333,30 @@ function EditarPerfilContent() {
     setSuccessMessage("");
 
     try {
+      for (const service of services) {
+        if (service.vertical !== "alojamiento") continue;
+        const huespedesError = validateHuespedesPrecio(
+          service.details,
+          "alojamiento",
+        );
+        if (huespedesError) {
+          setErrorMessage(huespedesError);
+          setSubmitting(false);
+          return;
+        }
+      }
+      if (addingService && newVertical === "alojamiento") {
+        const huespedesError = validateHuespedesPrecio(
+          newServiceDetails,
+          "alojamiento",
+        );
+        if (huespedesError) {
+          setErrorMessage(huespedesError);
+          setSubmitting(false);
+          return;
+        }
+      }
+
       let fotoUrl = fotoPerfil;
       if (profilePhotoFile) {
         console.log("[editar-perfil] subiendo foto perfil");

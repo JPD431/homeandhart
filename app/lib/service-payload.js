@@ -1,4 +1,5 @@
 import { serializeCapacidad } from "@/app/lib/capacidad";
+import { serializeHuespedesPrecioForDb } from "@/app/lib/huespedes-precio";
 import { serializeDescuentosDuracionForDb } from "@/app/lib/descuentosDuracion";
 import { parseFotosFromDb, syncServicePhotos } from "@/app/lib/service-photos";
 
@@ -263,6 +264,7 @@ export function buildServicePayload(details, vertical, ciudad, proveedorId, disp
     proveedor_emergencia: details.proveedor_emergencia === true,
     amenities: details.amenities || [],
     capacidad: serializeCapacidad(details, vertical),
+    ...serializeHuespedesPrecioForDb(details, vertical),
   };
 
   syncServicePhotos(

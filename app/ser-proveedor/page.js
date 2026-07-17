@@ -7,11 +7,13 @@ import { supabase } from "@/app/lib/supabase";
 import AmenitiesPicker from "@/app/components/AmenitiesPicker";
 import BanoTipoSelector from "@/app/components/BanoTipoSelector";
 import AlojamientoServiceFields from "@/app/components/provider/AlojamientoServiceFields";
+import HuespedesPrecioFields from "@/app/components/provider/HuespedesPrecioFields";
 import NinosServiceFields from "@/app/components/provider/NinosServiceFields";
 import MascotasServiceFields from "@/app/components/provider/MascotasServiceFields";
 import ToggleRow from "@/app/components/provider/ToggleRow";
 import ServiceOperationalFields from "@/app/components/ServiceOperationalFields";
 import { BRAND, SERIF } from "@/app/components/brand";
+import { validateHuespedesPrecio } from "@/app/lib/huespedes-precio";
 import {
   loadProviderDocuments,
   persistProviderDocument,
@@ -154,6 +156,9 @@ const EMPTY_SERVICE_DETAILS = {
     antelacion_minima: 24,
     dias_disponibles: [...DIAS_DISPONIBLES_DEFAULT],
     capacidad: { personas: 2, habitaciones: 1, camas: 1, banos: 1, bano_tipo: null },
+    capacidad_maxima: "2",
+    huespedes_incluidos: "2",
+    precio_huesped_extra: "",
     amenities: [],
     direccion_exacta: "",
     telefono_contacto: "",
@@ -780,6 +785,11 @@ export default function SerProveedorPage() {
         setErrorMessage("El NRU es obligatorio para alojamiento.");
         return false;
       }
+      const huespedesError = validateHuespedesPrecio(d, "alojamiento");
+      if (huespedesError) {
+        setErrorMessage(huespedesError);
+        return false;
+      }
     }
     if (stepKey === STEP_KEY.SERVICIO_NINOS) {
       const d = serviceDetails.ninos;
@@ -1080,8 +1090,16 @@ export default function SerProveedorPage() {
     if (currentStepKey === STEP_KEY.SERVICIO_ALOJAMIENTO) {
       const d = serviceDetails.alojamiento;
       const upd = (field, val) => updateServiceDetails("alojamiento", { ...d, [field]: val });
-      const updCap = (key, val) =>
-        updateServiceDetails("alojamiento", { ...d, capacidad: { ...d.capacidad, [key]: val } });
+      const updCap = (key, val) => {
+        const next = {
+          ...d,
+          capacidad: { ...d.capacidad, [key]: val },
+        };
+        if (key === "personas") {
+          next.capacidad_maxima = val != null && val !== "" ? String(val) : "";
+        }
+        updateServiceDetails("alojamiento", next);
+      };
       const alojDocs = getDocsForVertical("alojamiento");
 
       return (
@@ -1155,6 +1173,11 @@ export default function SerProveedorPage() {
             value={d.capacidad.bano_tipo ?? null}
             onChange={(v) => updCap("bano_tipo", v)}
             accentColor={PRIMARY}
+          />
+          <HuespedesPrecioFields
+            className="mt-6"
+            details={d}
+            onChange={(next) => updateServiceDetails("alojamiento", next)}
           />
           <AlojamientoServiceFields
             details={d}
