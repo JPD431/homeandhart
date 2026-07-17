@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getBookingPrecioBase } from "@/app/lib/ingresos-proveedor";
 import { notifyBookingEvent } from "@/app/lib/notifications";
+import { registrarCancelacion } from "@/app/lib/cancelaciones";
 
 const supabaseAdmin = createServiceClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -389,6 +390,21 @@ export async function POST(request) {
 
   if (updateError) {
     return NextResponse.json({ error: updateError.message }, { status: 500 });
+  }
+
+  try {
+    await registrarCancelacion({
+      bookingId,
+      usuarioId: user.id,
+      rolCancelador: "proveedor",
+      motivo: typeof body?.motivo === "string" ? body.motivo : null,
+    });
+  } catch (regErr) {
+    console.error(
+      "[bookings/cancel-proveedor] Error registrando cancelación:",
+      regErr?.message || regErr,
+      { bookingId },
+    );
   }
 
   try {

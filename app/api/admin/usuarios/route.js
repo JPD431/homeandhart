@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { getAdminUser } from "@/lib/auth/requireAdmin";
 import { hasDniUploaded } from "@/app/lib/dni";
+import { countCancelacionesNoExentasByUsers } from "@/app/lib/cancelaciones";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -108,8 +109,17 @@ export async function GET(request) {
     }),
   );
 
+  const cancelCounts = await countCancelacionesNoExentasByUsers(
+    enriched.map((u) => u.id),
+  );
+
+  const withCancels = enriched.map((u) => ({
+    ...u,
+    cancelaciones_count: cancelCounts[u.id] || 0,
+  }));
+
   const usuarios = q
-    ? enriched.filter((u) => {
+    ? withCancels.filter((u) => {
         const haystack = [
           u.nombre,
           u.apellido,
@@ -121,7 +131,7 @@ export async function GET(request) {
           .toLowerCase();
         return haystack.includes(q);
       })
-    : enriched;
+    : withCancels;
 
   const meta = {
     total: usuarios.length,

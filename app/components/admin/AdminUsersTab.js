@@ -225,6 +225,7 @@ export default function AdminUsersTab({ onSuccess, onError }) {
               >
                 <th className="px-4 py-3">Usuario</th>
                 <th className="px-4 py-3">Rol</th>
+                <th className="px-4 py-3">Cancelaciones</th>
                 <th className="px-4 py-3">DNI subido</th>
                 <th className="px-4 py-3">Estado DNI</th>
                 <th className="px-4 py-3">Registro</th>
@@ -258,6 +259,18 @@ export default function AdminUsersTab({ onSuccess, onError }) {
                       >
                         {user.rol_label}
                       </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span
+                        className="text-sm font-medium"
+                        style={{
+                          color:
+                            (user.cancelaciones_count || 0) > 0 ? AMBER : "#666",
+                        }}
+                      >
+                        {user.cancelaciones_count || 0}
+                      </span>
+                      <p className="text-[10px] text-[#aaa]">no exentas</p>
                     </td>
                     <td className="px-4 py-3">
                       {user.dni_subido ? (

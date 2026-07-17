@@ -7,6 +7,7 @@ import AdminProviderDocuments, {
   getMissingMandatoryDocumentsSummary,
 } from "@/app/components/admin/AdminProviderDocuments";
 import AdminUsersTab from "@/app/components/admin/AdminUsersTab";
+import AdminCancelacionesTab from "@/app/components/admin/AdminCancelacionesTab";
 import { BRAND, SERIF } from "@/app/components/brand";
 import { articulosIniciales, slugify } from "@/app/lib/blog-seed";
 import { getIngresoProveedorFromBooking } from "@/app/lib/ingresos-proveedor";
@@ -20,6 +21,7 @@ import { supabase } from "@/app/lib/supabase";
 
 const TABS = [
   { id: "usuarios", label: "Usuarios" },
+  { id: "cancelaciones", label: "Cancelaciones" },
   { id: "pendientes", label: "Pendientes de verificar" },
   { id: "verificados", label: "Verificados" },
   { id: "rechazados", label: "Rechazados" },
@@ -261,6 +263,7 @@ function AdminPageInner() {
   const [blogSaving, setBlogSaving] = useState(false);
   const [blogSeeding, setBlogSeeding] = useState(false);
   const [usuariosSummary, setUsuariosSummary] = useState({ pendientes: 0, sin_dni: 0 });
+  const [cancelacionesActivas, setCancelacionesActivas] = useState(0);
 
   const loadData = useCallback(async () => {
     setErrorMessage("");
@@ -334,6 +337,16 @@ function AdminPageInner() {
       const usuariosPayload = await usuariosRes.json().catch(() => ({}));
       if (usuariosRes.ok && usuariosPayload.meta?.summary) {
         setUsuariosSummary(usuariosPayload.meta.summary);
+      }
+
+      try {
+        const cancRes = await fetch("/api/admin/cancelaciones?filtro=activas&limit=1");
+        const cancPayload = await cancRes.json().catch(() => ({}));
+        if (cancRes.ok) {
+          setCancelacionesActivas(cancPayload.meta?.activas ?? 0);
+        }
+      } catch {
+        /* tabla puede no existir aún */
       }
 
       const { data: bookingsData, error: bookingsError } = await supabase
@@ -442,6 +455,7 @@ function AdminPageInner() {
   const counts = useMemo(() => {
     const result = {
       usuarios: usuariosSummary.pendientes,
+      cancelaciones: cancelacionesActivas,
       pendientes: 0,
       verificados: 0,
       rechazados: 0,
@@ -458,7 +472,7 @@ function AdminPageInner() {
     result.ingresos = completedBookings.length;
     result.blog = blogPosts.length;
     return result;
-  }, [providers, completedBookings, reports, incidencias, blogPosts, usuariosSummary]);
+  }, [providers, completedBookings, reports, incidencias, blogPosts, usuariosSummary, cancelacionesActivas]);
 
   const pendingReports = useMemo(
     () => reports.filter((r) => r.estado === "pendiente"),
@@ -1219,6 +1233,23 @@ function AdminPageInner() {
                 .then((r) => r.json())
                 .then((payload) => {
                   if (payload.meta?.summary) setUsuariosSummary(payload.meta.summary);
+                })
+                .catch(() => {});
+            }}
+            onError={(msg) => {
+              setErrorMessage(msg);
+              setSuccessMessage("");
+            }}
+          />
+        ) : activeTab === "cancelaciones" ? (
+          <AdminCancelacionesTab
+            onSuccess={(msg) => {
+              setSuccessMessage(msg);
+              setErrorMessage("");
+              fetch("/api/admin/cancelaciones?filtro=activas&limit=1")
+                .then((r) => r.json())
+                .then((payload) => {
+                  if (payload.meta) setCancelacionesActivas(payload.meta.activas ?? 0);
                 })
                 .catch(() => {});
             }}

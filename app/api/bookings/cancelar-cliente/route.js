@@ -17,6 +17,7 @@ import {
   roundMoney,
 } from "@/app/lib/stripe-reembolso";
 import { notifyBookingEvent } from "@/app/lib/notifications";
+import { registrarCancelacion } from "@/app/lib/cancelaciones";
 
 const supabaseAdmin = createServiceClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -635,6 +636,21 @@ export async function POST(request) {
 
   if (updateError) {
     return NextResponse.json({ error: updateError.message }, { status: 500 });
+  }
+
+  try {
+    await registrarCancelacion({
+      bookingId,
+      usuarioId: user.id,
+      rolCancelador: "cliente",
+      motivo: typeof body?.motivo === "string" ? body.motivo : null,
+    });
+  } catch (regErr) {
+    console.error(
+      "[bookings/cancelar-cliente] Error registrando cancelación:",
+      regErr?.message || regErr,
+      { bookingId },
+    );
   }
 
   await liberarFechasReserva(bookingId);
