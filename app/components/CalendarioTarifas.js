@@ -15,6 +15,10 @@ import {
 
 const PRIMARY = "#1d4f91";
 const GREEN = "#0e7a5c";
+const BLOCK_BG = "#fef3c7";
+const BLOCK_BORDER = "#f59e0b";
+const RESERVA_BG = "#fde8e8";
+const RESERVA_BORDER = "#f5c6c6";
 
 function getMonthBounds(viewDate) {
   const year = viewDate.getFullYear();
@@ -38,8 +42,10 @@ function MonthTarifasGrid({
   precioBase,
   tarifasMap,
   ocupadasSet,
+  bloqueadasSet,
   selectedDays,
-  onToggleDay,
+  showPrecios,
+  onDayClick,
 }) {
   const cells = buildMonthGrid(viewDate);
   const monthLabel = `${MONTH_NAMES[viewDate.getMonth()]} ${viewDate.getFullYear()}`;
@@ -63,24 +69,38 @@ function MonthTarifasGrid({
           }
 
           const isPast = dateStr < hoyStr;
-          const isOcupado = ocupadasSet.has(dateStr);
+          const isReserva = ocupadasSet.has(dateStr);
+          const isBloqueo = bloqueadasSet.has(dateStr);
           const isToday = dateStr === hoyStr;
           const isSelected = selectedDays.has(dateStr);
           const customPrecio = tarifasMap[dateStr];
           const hasCustom =
-            customPrecio != null && Number(customPrecio) > 0;
+            showPrecios && customPrecio != null && Number(customPrecio) > 0;
           const displayPrecio = hasCustom ? customPrecio : precioBase;
-          const selectable = !isPast && !isOcupado;
+
+          const clickable = !isPast && !isReserva;
 
           let bg = "#fff";
           let borderColor = BRAND.border;
           let boxShadow;
           let textDecoration = "none";
+          let dayColor = isPast ? "#ccc" : "#1a1a1a";
+          let subLabel = null;
+          let subColor = "#888";
 
-          if (isOcupado) {
-            bg = "#fde8e8";
-            borderColor = "#f5c6c6";
+          if (isReserva) {
+            bg = RESERVA_BG;
+            borderColor = RESERVA_BORDER;
             textDecoration = "line-through";
+            dayColor = "#c0392b";
+            subLabel = "Reserva";
+            subColor = "#c0392b";
+          } else if (isBloqueo) {
+            bg = BLOCK_BG;
+            borderColor = BLOCK_BORDER;
+            dayColor = "#92400e";
+            subLabel = "Bloqueado";
+            subColor = "#92400e";
           } else if (isPast) {
             bg = "#f5f5f5";
           } else if (isSelected) {
@@ -88,7 +108,7 @@ function MonthTarifasGrid({
             borderColor = PRIMARY;
           }
 
-          if (isToday && selectable) {
+          if (isToday && clickable) {
             boxShadow = `inset 0 0 0 2px ${PRIMARY}`;
           }
 
@@ -96,39 +116,40 @@ function MonthTarifasGrid({
             <button
               key={dateStr}
               type="button"
-              disabled={!selectable}
-              onClick={() => selectable && onToggleDay(dateStr)}
+              disabled={!clickable}
+              onClick={() => clickable && onDayClick(dateStr)}
               className="flex aspect-square flex-col items-center justify-center rounded-lg border px-0.5 py-1 text-center transition-colors hover:enabled:bg-[#f7f7f7] disabled:cursor-not-allowed"
               style={{
                 backgroundColor: bg,
                 borderColor,
                 boxShadow,
-                opacity: isPast && !isOcupado ? 0.55 : 1,
+                opacity: isPast && !isReserva && !isBloqueo ? 0.55 : 1,
               }}
               aria-label={
-                isOcupado
-                  ? `${dateStr}, reservado`
-                  : `${dateStr}, ${formatPrecio(displayPrecio)} euros`
+                isReserva
+                  ? `${dateStr}, ocupado por reserva`
+                  : isBloqueo
+                    ? `${dateStr}, bloqueado por mí`
+                    : showPrecios
+                      ? `${dateStr}, ${formatPrecio(displayPrecio)} euros`
+                      : `${dateStr}, disponible`
               }
-              aria-pressed={isSelected}
+              aria-pressed={isSelected || isBloqueo}
             >
               <span
                 className="text-xs font-semibold leading-none"
-                style={{
-                  color: isOcupado ? "#c0392b" : isPast ? "#ccc" : "#1a1a1a",
-                  textDecoration,
-                }}
+                style={{ color: dayColor, textDecoration }}
               >
                 {parseDateStr(dateStr).getDate()}
               </span>
-              {isOcupado ? (
+              {subLabel ? (
                 <span
                   className="mt-0.5 text-[8px] font-semibold uppercase leading-tight tracking-wide"
-                  style={{ color: "#c0392b" }}
+                  style={{ color: subColor }}
                 >
-                  Reservado
+                  {subLabel}
                 </span>
-              ) : (
+              ) : showPrecios ? (
                 <span
                   className="mt-0.5 text-[9px] font-medium leading-tight"
                   style={{
@@ -136,6 +157,10 @@ function MonthTarifasGrid({
                   }}
                 >
                   {formatPrecio(displayPrecio)}€
+                </span>
+              ) : (
+                <span className="mt-0.5 text-[8px] font-medium leading-tight text-[#aaa]">
+                  Libre
                 </span>
               )}
             </button>
@@ -146,7 +171,21 @@ function MonthTarifasGrid({
   );
 }
 
-export default function CalendarioTarifas({ serviceId, precioBase, unidad }) {
+/**
+ * @param {{
+ *   serviceId: string|null,
+ *   precioBase?: number,
+ *   unidad?: string,
+ *   soloBloqueo?: boolean,
+ * }} props
+ */
+export default function CalendarioTarifas({
+  serviceId,
+  precioBase,
+  unidad,
+  soloBloqueo = false,
+}) {
+  const showPrecios = !soloBloqueo;
   const hoy = useMemo(() => new Date(), []);
   const hoyStr = getHoyStr();
   const minViewMonth = useMemo(
@@ -159,7 +198,9 @@ export default function CalendarioTarifas({ serviceId, precioBase, unidad }) {
   );
   const [tarifasMap, setTarifasMap] = useState({});
   const [ocupadasSet, setOcupadasSet] = useState(() => new Set());
+  const [bloqueadasSet, setBloqueadasSet] = useState(() => new Set());
   const [selectedDays, setSelectedDays] = useState(() => new Set());
+  const [modo, setModo] = useState(soloBloqueo ? "bloqueo" : "precios");
   const [precioInput, setPrecioInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -170,11 +211,13 @@ export default function CalendarioTarifas({ serviceId, precioBase, unidad }) {
   const selectedCount = selectedDays.size;
   const baseLabel = Number(precioBase) || 0;
   const unidadLabel = unidad || "noche";
+  const effectiveModo = soloBloqueo ? "bloqueo" : modo;
 
-  const loadTarifas = useCallback(async () => {
+  const loadMonth = useCallback(async () => {
     if (!serviceId) {
       setTarifasMap({});
       setOcupadasSet(new Set());
+      setBloqueadasSet(new Set());
       return;
     }
 
@@ -183,43 +226,57 @@ export default function CalendarioTarifas({ serviceId, precioBase, unidad }) {
     setErrorMessage("");
 
     try {
-      const params = new URLSearchParams({
-        service_id: serviceId,
-        desde,
-        hasta,
-      });
-      const res = await fetch(`/api/tarifas?${params.toString()}`);
-      const data = await res.json().catch(() => ({}));
-
-      if (!res.ok) {
-        throw new Error(data.error || "No se pudieron cargar las tarifas");
+      if (showPrecios) {
+        const params = new URLSearchParams({
+          service_id: serviceId,
+          desde,
+          hasta,
+        });
+        const res = await fetch(`/api/tarifas?${params.toString()}`);
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(data.error || "No se pudieron cargar las tarifas");
+        }
+        const map = {};
+        for (const row of data.tarifas ?? []) {
+          const fecha =
+            typeof row.fecha === "string" ? row.fecha.slice(0, 10) : row.fecha;
+          if (fecha) map[fecha] = Number(row.precio);
+        }
+        setTarifasMap(map);
+        setOcupadasSet(new Set(data.ocupadas ?? []));
+        setBloqueadasSet(new Set(data.bloqueadas ?? []));
+      } else {
+        const params = new URLSearchParams({ desde, hasta });
+        const res = await fetch(
+          `/api/services/${serviceId}/bloqueos?${params.toString()}`,
+        );
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(data.error || "No se pudo cargar la disponibilidad");
+        }
+        setTarifasMap({});
+        setOcupadasSet(new Set(data.ocupadas ?? []));
+        setBloqueadasSet(new Set(data.bloqueadas ?? []));
       }
-
-      const map = {};
-      for (const row of data.tarifas ?? []) {
-        const fecha =
-          typeof row.fecha === "string" ? row.fecha.slice(0, 10) : row.fecha;
-        if (fecha) map[fecha] = Number(row.precio);
-      }
-      setTarifasMap(map);
-      setOcupadasSet(new Set(data.ocupadas ?? []));
     } catch (err) {
-      setErrorMessage(err.message || "Error al cargar las tarifas");
+      setErrorMessage(err.message || "Error al cargar el calendario");
       setTarifasMap({});
       setOcupadasSet(new Set());
+      setBloqueadasSet(new Set());
     } finally {
       setLoading(false);
     }
-  }, [serviceId, viewMonth]);
+  }, [serviceId, viewMonth, showPrecios]);
 
   useEffect(() => {
-    loadTarifas();
-  }, [loadTarifas]);
+    loadMonth();
+  }, [loadMonth]);
 
   useEffect(() => {
     setSelectedDays(new Set());
     setSuccessMessage("");
-  }, [viewMonth, serviceId]);
+  }, [viewMonth, serviceId, effectiveModo]);
 
   function shiftMonth(delta) {
     setViewMonth((prev) => {
@@ -231,8 +288,46 @@ export default function CalendarioTarifas({ serviceId, precioBase, unidad }) {
     });
   }
 
-  function toggleDay(dateStr) {
+  async function toggleBloqueoDia(dateStr) {
     if (dateStr < hoyStr || ocupadasSet.has(dateStr)) return;
+
+    setSaving(true);
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    const yaBloqueado = bloqueadasSet.has(dateStr);
+    try {
+      const res = await fetch(`/api/services/${serviceId}/bloqueos`, {
+        method: yaBloqueado ? "DELETE" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fecha: dateStr }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || "No se pudo actualizar el bloqueo");
+      }
+      await loadMonth();
+      setSuccessMessage(
+        yaBloqueado ? "Fecha desbloqueada" : "Fecha bloqueada",
+      );
+    } catch (err) {
+      setErrorMessage(err.message || "Error al actualizar el bloqueo");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function handleDayClick(dateStr) {
+    if (dateStr < hoyStr || ocupadasSet.has(dateStr)) return;
+
+    if (effectiveModo === "bloqueo" || bloqueadasSet.has(dateStr)) {
+      // En modo bloqueo, o clic en un día ya bloqueado → toggle bloqueo
+      toggleBloqueoDia(dateStr);
+      return;
+    }
+
+    // Modo precios: selección múltiple (no se puede seleccionar un bloqueado)
+    if (bloqueadasSet.has(dateStr)) return;
     setSelectedDays((prev) => {
       const next = new Set(prev);
       if (next.has(dateStr)) next.delete(dateStr);
@@ -270,7 +365,7 @@ export default function CalendarioTarifas({ serviceId, precioBase, unidad }) {
         throw new Error(data.error || "No se pudieron guardar las tarifas");
       }
 
-      await loadTarifas();
+      await loadMonth();
       setSelectedDays(new Set());
       setPrecioInput("");
       setSuccessMessage("Precios actualizados");
@@ -303,7 +398,7 @@ export default function CalendarioTarifas({ serviceId, precioBase, unidad }) {
         throw new Error(data.error || "No se pudieron restablecer las tarifas");
       }
 
-      await loadTarifas();
+      await loadMonth();
       setSelectedDays(new Set());
       setSuccessMessage("Precios actualizados");
     } catch (err) {
@@ -313,10 +408,35 @@ export default function CalendarioTarifas({ serviceId, precioBase, unidad }) {
     }
   }
 
+  async function handleBloquearSeleccion() {
+    if (selectedCount === 0) return;
+    setSaving(true);
+    setErrorMessage("");
+    setSuccessMessage("");
+    try {
+      const res = await fetch(`/api/services/${serviceId}/bloqueos`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fechas: [...selectedDays] }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || "No se pudieron bloquear las fechas");
+      }
+      await loadMonth();
+      setSelectedDays(new Set());
+      setSuccessMessage("Fechas bloqueadas");
+    } catch (err) {
+      setErrorMessage(err.message || "Error al bloquear");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   if (!serviceId) {
     return (
       <p className="text-sm text-[#888]">
-        Guarda el servicio antes de configurar precios por fecha.
+        Guarda el servicio antes de configurar el calendario.
       </p>
     );
   }
@@ -326,13 +446,83 @@ export default function CalendarioTarifas({ serviceId, precioBase, unidad }) {
       className="rounded-xl border bg-white p-4 sm:p-5"
       style={{ borderColor: BRAND.border }}
     >
-      <p className="text-xs leading-relaxed text-[#666]">
-        Los días sin precio personalizado usan tu precio base de{" "}
-        <span className="font-semibold text-[#1a1a1a]">
-          {formatPrecio(baseLabel)}€/{unidadLabel}
+      {showPrecios ? (
+        <p className="text-xs leading-relaxed text-[#666]">
+          Los días sin precio personalizado usan tu precio base de{" "}
+          <span className="font-semibold text-[#1a1a1a]">
+            {formatPrecio(baseLabel)}€/{unidadLabel}
+          </span>
+          . También puedes bloquear días en los que no estás disponible.
+        </p>
+      ) : (
+        <p className="text-xs leading-relaxed text-[#666]">
+          Marca los días en los que no estás disponible. Las familias no podrán
+          reservarlos. Pulsa de nuevo un día bloqueado para liberarlo.
+        </p>
+      )}
+
+      {showPrecios && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setModo("precios")}
+            className="rounded-full border px-3 py-1.5 text-xs font-semibold"
+            style={{
+              borderColor: effectiveModo === "precios" ? PRIMARY : BRAND.border,
+              backgroundColor: effectiveModo === "precios" ? "#e8f0fb" : "#fff",
+              color: effectiveModo === "precios" ? PRIMARY : "#666",
+            }}
+          >
+            Poner precios
+          </button>
+          <button
+            type="button"
+            onClick={() => setModo("bloqueo")}
+            className="rounded-full border px-3 py-1.5 text-xs font-semibold"
+            style={{
+              borderColor: effectiveModo === "bloqueo" ? BLOCK_BORDER : BRAND.border,
+              backgroundColor:
+                effectiveModo === "bloqueo" ? BLOCK_BG : "#fff",
+              color: effectiveModo === "bloqueo" ? "#92400e" : "#666",
+            }}
+          >
+            Bloquear fechas
+          </button>
+        </div>
+      )}
+
+      <div className="mt-3 flex flex-wrap gap-3 text-[11px] text-[#666]">
+        <span className="inline-flex items-center gap-1.5">
+          <span
+            className="inline-block h-3 w-3 rounded border"
+            style={{ backgroundColor: "#fff", borderColor: BRAND.border }}
+          />
+          Disponible
         </span>
-        .
-      </p>
+        {showPrecios && (
+          <span className="inline-flex items-center gap-1.5">
+            <span
+              className="inline-block h-3 w-3 rounded border"
+              style={{ backgroundColor: RANGE_HIGHLIGHT, borderColor: PRIMARY }}
+            />
+            Precio especial
+          </span>
+        )}
+        <span className="inline-flex items-center gap-1.5">
+          <span
+            className="inline-block h-3 w-3 rounded border"
+            style={{ backgroundColor: BLOCK_BG, borderColor: BLOCK_BORDER }}
+          />
+          Bloqueado por mí
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span
+            className="inline-block h-3 w-3 rounded border"
+            style={{ backgroundColor: RESERVA_BG, borderColor: RESERVA_BORDER }}
+          />
+          Ocupado por reserva
+        </span>
+      </div>
 
       <div className="mt-4 flex items-center justify-between gap-2">
         <button
@@ -346,7 +536,11 @@ export default function CalendarioTarifas({ serviceId, precioBase, unidad }) {
           <ChevronIcon direction="left" />
         </button>
         <span className="text-xs text-[#888]">
-          {loading ? "Cargando tarifas…" : "Selecciona días y asigna un precio"}
+          {loading
+            ? "Cargando…"
+            : effectiveModo === "bloqueo"
+              ? "Pulsa un día para bloquear o desbloquear"
+              : "Selecciona días y asigna un precio"}
         </span>
         <button
           type="button"
@@ -367,73 +561,86 @@ export default function CalendarioTarifas({ serviceId, precioBase, unidad }) {
           precioBase={baseLabel}
           tarifasMap={tarifasMap}
           ocupadasSet={ocupadasSet}
+          bloqueadasSet={bloqueadasSet}
           selectedDays={selectedDays}
-          onToggleDay={toggleDay}
+          showPrecios={showPrecios}
+          onDayClick={handleDayClick}
         />
       </div>
 
-      <div
-        className="mt-5 rounded-lg border p-4"
-        style={{ borderColor: BRAND.border, backgroundColor: "#faf9f7" }}
-      >
-        <p className="mb-3 text-xs font-medium text-[#444]">
-          {selectedCount === 0
-            ? "Selecciona uno o más días en el calendario"
-            : `${selectedCount} día${selectedCount > 1 ? "s" : ""} seleccionado${selectedCount > 1 ? "s" : ""}`}
-        </p>
-
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-          <div className="flex-1">
-            <label
-              htmlFor="calendario-tarifas-precio"
-              className="mb-1.5 block text-xs font-medium text-[#444]"
-            >
-              Precio (€)
-            </label>
-            <input
-              id="calendario-tarifas-precio"
-              type="number"
-              min="0"
-              step="0.01"
-              value={precioInput}
-              onChange={(e) => setPrecioInput(e.target.value)}
-              placeholder={String(baseLabel || "")}
-              disabled={saving}
-              className="w-full rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#1d4f91]/30"
-              style={{ borderColor: BRAND.border }}
-            />
-          </div>
-          <button
-            type="button"
-            onClick={handleAplicar}
-            disabled={selectedCount === 0 || saving}
-            className="shrink-0 rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-            style={{ backgroundColor: PRIMARY }}
-          >
-            {saving
-              ? "Guardando…"
-              : `Aplicar a ${selectedCount} día${selectedCount === 1 ? "" : "s"} seleccionado${selectedCount === 1 ? "" : "s"}`}
-          </button>
-          <button
-            type="button"
-            onClick={handleRestablecer}
-            disabled={selectedCount === 0 || saving}
-            className="shrink-0 rounded-lg border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
-            style={{ borderColor: GREEN, color: GREEN }}
-          >
-            Restablecer al precio base
-          </button>
-        </div>
-
-        {successMessage && (
-          <p className="mt-3 text-xs font-medium" style={{ color: GREEN }}>
-            {successMessage}
+      {effectiveModo === "precios" && showPrecios && (
+        <div
+          className="mt-5 rounded-lg border p-4"
+          style={{ borderColor: BRAND.border, backgroundColor: "#faf9f7" }}
+        >
+          <p className="mb-3 text-xs font-medium text-[#444]">
+            {selectedCount === 0
+              ? "Selecciona uno o más días en el calendario"
+              : `${selectedCount} día${selectedCount > 1 ? "s" : ""} seleccionado${selectedCount > 1 ? "s" : ""}`}
           </p>
-        )}
-        {errorMessage && (
-          <p className="mt-3 text-xs text-red-600">{errorMessage}</p>
-        )}
-      </div>
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            <div className="flex-1">
+              <label
+                htmlFor="calendario-tarifas-precio"
+                className="mb-1.5 block text-xs font-medium text-[#444]"
+              >
+                Precio (€)
+              </label>
+              <input
+                id="calendario-tarifas-precio"
+                type="number"
+                min="0"
+                step="0.01"
+                value={precioInput}
+                onChange={(e) => setPrecioInput(e.target.value)}
+                placeholder={String(baseLabel || "")}
+                disabled={saving}
+                className="w-full rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#1d4f91]/30"
+                style={{ borderColor: BRAND.border }}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={handleAplicar}
+              disabled={selectedCount === 0 || saving}
+              className="shrink-0 rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+              style={{ backgroundColor: PRIMARY }}
+            >
+              {saving
+                ? "Guardando…"
+                : `Aplicar a ${selectedCount} día${selectedCount === 1 ? "" : "s"}`}
+            </button>
+            <button
+              type="button"
+              onClick={handleRestablecer}
+              disabled={selectedCount === 0 || saving}
+              className="shrink-0 rounded-lg border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+              style={{ borderColor: GREEN, color: GREEN }}
+            >
+              Restablecer al precio base
+            </button>
+            <button
+              type="button"
+              onClick={handleBloquearSeleccion}
+              disabled={selectedCount === 0 || saving}
+              className="shrink-0 rounded-lg border px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+              style={{ borderColor: BLOCK_BORDER, color: "#92400e" }}
+            >
+              Bloquear seleccionados
+            </button>
+          </div>
+        </div>
+      )}
+
+      {successMessage && (
+        <p className="mt-3 text-xs font-medium" style={{ color: GREEN }}>
+          {successMessage}
+        </p>
+      )}
+      {errorMessage && (
+        <p className="mt-3 text-xs text-red-600">{errorMessage}</p>
+      )}
     </div>
   );
 }

@@ -125,7 +125,7 @@ export async function GET(request) {
 
   const { data: bloqueos, error: bloqueosError } = await supabaseAdmin
     .from("disponibilidad")
-    .select("fecha_inicio, fecha_fin")
+    .select("fecha_inicio, fecha_fin, booking_id, tipo")
     .eq("service_id", serviceId)
     .lte("fecha_inicio", hasta)
     .gte("fecha_fin", desde);
@@ -134,9 +134,17 @@ export async function GET(request) {
     return NextResponse.json({ error: bloqueosError.message }, { status: 500 });
   }
 
-  const ocupadas = expandDisponibilidadAFechas(bloqueos, desde, hasta);
+  const reservas = [];
+  const manuales = [];
+  for (const row of bloqueos ?? []) {
+    if (row.tipo === "bloqueo_manual") manuales.push(row);
+    else reservas.push(row);
+  }
 
-  return NextResponse.json({ tarifas, ocupadas });
+  const ocupadas = expandDisponibilidadAFechas(reservas, desde, hasta);
+  const bloqueadas = expandDisponibilidadAFechas(manuales, desde, hasta);
+
+  return NextResponse.json({ tarifas, ocupadas, bloqueadas });
 }
 
 export async function POST(request) {

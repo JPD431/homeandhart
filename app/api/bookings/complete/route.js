@@ -775,6 +775,7 @@ async function finalizeInsertedBookings({
         fecha_inicio: fechaInicio,
         fecha_fin: finDisponibilidad,
         booking_id: booking.id,
+        tipo: "reserva",
       })),
     );
 
@@ -1579,6 +1580,7 @@ export async function POST(request) {
           fecha_inicio: fecha_inicio,
           fecha_fin: finDisponibilidad,
           booking_id: booking.id,
+          tipo: "reserva",
         })),
       );
 

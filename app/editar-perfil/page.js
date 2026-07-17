@@ -720,6 +720,32 @@ function ServiceEditForm({ vertical, details: rawDetails, onChange, userId, serv
           />
         </div>
       )}
+
+      <div className="sm:col-span-2">
+        <p className="mb-1 text-sm font-semibold text-[#1a1a1a]">
+          {vertical === "ninos"
+            ? "Calendario: disponibilidad"
+            : "Calendario: precios y disponibilidad"}
+        </p>
+        <p className="mb-3 text-xs text-[#666]">
+          {vertical === "ninos"
+            ? "Bloquea los días en los que no puedes cuidar."
+            : "Define precios especiales por fecha y bloquea días no disponibles."}
+        </p>
+        <CalendarioTarifas
+          serviceId={serviceId}
+          precioBase={Number(details.precio) || 0}
+          unidad={
+            vertical === "alojamiento"
+              ? "noche"
+              : vertical === "mascotas"
+                ? "día"
+                : "hora"
+          }
+          soloBloqueo={vertical === "ninos"}
+        />
+      </div>
+
       {vertical === "alojamiento" ? (
         <div className="sm:col-span-2">
           <p className="mb-2 text-xs font-medium text-[#444]">{SERVICE_LABELS.tipoAlojamiento}</p>
@@ -2113,16 +2139,6 @@ function EditarPerfilContent() {
               onUploadError={setErrorMessage}
             />
           </Card>
-          {(service.vertical === "alojamiento" ||
-            service.vertical === "mascotas") && (
-            <Card title="Precios por fecha">
-              <CalendarioTarifas
-                serviceId={service.id}
-                precioBase={Number(service.details?.precio) || 0}
-                unidad={service.vertical === "alojamiento" ? "noche" : "día"}
-              />
-            </Card>
-          )}
         </>
       );
     }
