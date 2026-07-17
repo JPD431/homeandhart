@@ -19,6 +19,7 @@ import {
   parseFotosFromDb,
   syncServicePhotos,
 } from "@/app/lib/service-photos";
+import { getServiceCompleteness } from "@/app/lib/service-revision";
 import { supabase } from "@/app/lib/supabase";
 
 export const REVISION_BORRADOR = "borrador";
@@ -131,15 +132,17 @@ export async function saveProfileStep(userId, fields, stepId) {
   return fotoUrl;
 }
 
-async function findDraftServiceId(userId, vertical) {
+async function findOnboardingServiceRow(userId, vertical) {
   const { data } = await supabase
     .from("services")
-    .select("id")
+    .select("id, revision_estado")
     .eq("proveedor_id", userId)
     .eq("vertical", vertical)
-    .eq("revision_estado", REVISION_BORRADOR)
+    .in("revision_estado", [REVISION_BORRADOR, REVISION_EN_REVISION])
+    .order("created_at", { ascending: false })
+    .limit(1)
     .maybeSingle();
-  return data?.id ?? null;
+  return data ?? null;
 }
 
 export async function upsertDraftService(
@@ -176,33 +179,61 @@ export async function upsertDraftService(
     [...existingFotos, ...uploadedUrls],
   ).slice(0, limit);
 
+  let draftId = knownDraftId;
+  if (!draftId) {
+    const found = await findOnboardingServiceRow(userId, vertical);
+    if (found) draftId = found.id;
+  }
+
+  // Wizard: completo → en_revision (cola admin); incompleto → borrador.
+  const completeness = getServiceCompleteness(servicioData, vertical, {
+    ciudad,
+  });
+  const revision_estado = completeness.complete
+    ? REVISION_EN_REVISION
+    : REVISION_BORRADOR;
+  const revisionMeta = {
+    revision_estado,
+    complete: completeness.complete,
+    missing: completeness.missing,
+    keptPublished: false,
+  };
+
   const payload = {
     ...buildServicePayload(servicioData, vertical, ciudad, userId, false),
     ...locationFields,
-    revision_estado: REVISION_BORRADOR,
+    revision_estado,
   };
   syncServicePhotos(payload, allFotos);
-
-  const draftId = knownDraftId ?? (await findDraftServiceId(userId, vertical));
 
   if (draftId) {
     const { data, error } = await supabase
       .from("services")
       .update(payload)
       .eq("id", draftId)
-      .select("id, fotos, foto_url")
+      .select("id, fotos, foto_url, revision_estado")
       .single();
     if (error) throw error;
-    return { id: data.id, fotos: parseFotosFromDb(data) };
+    return {
+      id: data.id,
+      fotos: parseFotosFromDb(data),
+      revision_estado: data.revision_estado,
+      revisionMeta,
+    };
   }
 
   const { data, error } = await supabase
     .from("services")
     .insert(payload)
-    .select("id, fotos, foto_url")
+    .select("id, fotos, foto_url, revision_estado")
     .single();
   if (error) throw error;
-  return { id: data.id, fotos: parseFotosFromDb(data) };
+  return {
+    id: data.id,
+    fotos: parseFotosFromDb(data),
+    revision_estado: data.revision_estado,
+    revisionMeta,
+  };
 }
 
 export function mapDraftRowToServiceDetails(row) {
@@ -281,7 +312,7 @@ export async function loadOnboardingState(userId) {
     .from("services")
     .select("*")
     .eq("proveedor_id", userId)
-    .eq("revision_estado", REVISION_BORRADOR);
+    .in("revision_estado", [REVISION_BORRADOR, REVISION_EN_REVISION]);
 
   if (draftsError) throw draftsError;
 

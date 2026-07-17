@@ -89,6 +89,11 @@ import {
   resolveDisponibleForSave,
   REVISION_PENDIENTE_MSG,
 } from "@/app/lib/provider-publicacion";
+import {
+  buildServicesSaveFeedback,
+  getServiceRevisionDisplay,
+  resolveRevisionEstadoOnSave,
+} from "@/app/lib/service-revision";
 
 const SERVICE_VERTICAL_TABS = ["alojamiento", "ninos", "mascotas"];
 
@@ -355,10 +360,22 @@ function ServiceDisponibleRow({
   const activo = service.disponible;
   const puedeActivar = puedeActivarServicio(service, perfil, documentContext);
   const switchBlocked = !activo && !puedeActivar;
+  const revisionUi = getServiceRevisionDisplay(service.revision_estado);
   const visibilidad = getServiceVisibilidadEstado(perfil, activo, {
     service,
     documentContext,
   });
+  // Prioriza el estado real de revisión; si está publicado pero en pausa, lo indica.
+  const statusLabel =
+    revisionUi.label === "Publicado" && !activo
+      ? "Publicado (en pausa)"
+      : revisionUi.label;
+  const statusColor =
+    revisionUi.label === "Publicado" && !activo ? "#666" : revisionUi.color;
+  const statusSubtitle =
+    revisionUi.label === "Publicado" && !activo
+      ? visibilidad.subtitle
+      : revisionUi.subtitle;
 
   const switchControl = (
     <button
@@ -389,9 +406,9 @@ function ServiceDisponibleRow({
       <div className="flex shrink-0 items-center gap-2">
         <span
           className="text-xs font-semibold"
-          style={{ color: visibilidad.color }}
+          style={{ color: statusColor }}
         >
-          {visibilidad.label}
+          {statusLabel}
         </span>
         {switchControl}
       </div>
@@ -406,11 +423,11 @@ function ServiceDisponibleRow({
       <div>
         <p
           className="text-sm font-semibold"
-          style={{ color: visibilidad.color }}
+          style={{ color: statusColor }}
         >
-          {visibilidad.label}
+          {statusLabel}
         </p>
-        <p className="text-xs text-[#888]">{visibilidad.subtitle}</p>
+        <p className="text-xs text-[#888]">{statusSubtitle}</p>
       </div>
       {switchControl}
     </div>
@@ -1416,11 +1433,22 @@ function EditarPerfilContent() {
 
       if (profileError) throw profileError;
 
+      const revisionOutcomes = [];
+
       for (const service of services) {
         const locationFields = await getServiceLocationFields(
           service.details,
           service.vertical,
         );
+        const revisionMeta = resolveRevisionEstadoOnSave({
+          details: service.details,
+          vertical: service.vertical,
+          ciudad,
+          currentRevisionEstado: service.revision_estado,
+          isNew: service.isNew === true,
+        });
+        revisionOutcomes.push(revisionMeta);
+
         const payload = {
           ...buildServicePayload(
             service.details,
@@ -1430,19 +1458,26 @@ function EditarPerfilContent() {
             resolveDisponibleForSave(service, perfil, documentContext),
           ),
           ...locationFields,
+          revision_estado: revisionMeta.revision_estado,
         };
 
         console.log("[editar-perfil] guardar — payload servicio", {
           serviceId: service.id,
           vertical: service.vertical,
+          revision_estado: payload.revision_estado,
           fotosCount: Array.isArray(payload.fotos) ? payload.fotos.length : 0,
           fotos: payload.fotos,
           foto_url: payload.foto_url,
         });
 
         if (service.isNew) {
-          const { error } = await supabase.from("services").insert(payload);
+          const { data: inserted, error } = await supabase
+            .from("services")
+            .insert(payload)
+            .select("*")
+            .single();
           if (error) throw error;
+          revisionMeta.savedRow = inserted;
         } else {
           const expectedFotos = parseFotosFromDb({
             fotos: payload.fotos,
@@ -1453,7 +1488,7 @@ function EditarPerfilContent() {
             .from("services")
             .update(payload)
             .eq("id", service.id)
-            .select("id, fotos, foto_url")
+            .select("id, fotos, foto_url, revision_estado")
             .single();
 
           if (error) throw error;
@@ -1465,6 +1500,7 @@ function EditarPerfilContent() {
             fotosCountWithFallback: parseFotosFromDb(updated).length,
             fotos: updated?.fotos,
             foto_url: updated?.foto_url,
+            revision_estado: updated?.revision_estado,
           });
 
           if (savedFotos.length !== expectedFotos.length) {
@@ -1499,10 +1535,21 @@ function EditarPerfilContent() {
         }
       }
 
-      let servicesAfterSave = services.map((s) => ({
-        ...s,
-        disponible: resolveDisponibleForSave(s, perfil, documentContext),
-      }));
+      let servicesAfterSave = services.map((s, index) => {
+        const meta = revisionOutcomes[index];
+        if (meta?.savedRow) {
+          return mapServiceFromDb(meta.savedRow);
+        }
+        return {
+          ...s,
+          isNew: false,
+          revision_estado:
+            meta?.revision_estado !== undefined
+              ? meta.revision_estado
+              : s.revision_estado,
+          disponible: resolveDisponibleForSave(s, perfil, documentContext),
+        };
+      });
 
       if (addingService && newServiceDetails.titulo.trim()) {
         const nuevoServicio = {
@@ -1520,6 +1567,14 @@ function EditarPerfilContent() {
             },
           ],
         };
+        const revisionMeta = resolveRevisionEstadoOnSave({
+          details: newServiceDetails,
+          vertical: newVertical,
+          ciudad,
+          currentRevisionEstado: null,
+          isNew: true,
+        });
+        revisionOutcomes.push(revisionMeta);
         const locationFields = await getServiceLocationFields(
           newServiceDetails,
           newVertical,
@@ -1533,6 +1588,7 @@ function EditarPerfilContent() {
             puedeActivarServicio(nuevoServicio, perfil, nuevoContext),
           ),
           ...locationFields,
+          revision_estado: revisionMeta.revision_estado,
         };
         const { data, error } = await supabase
           .from("services")
@@ -1564,6 +1620,8 @@ function EditarPerfilContent() {
       setEditingId(null);
       setDirty(false);
 
+      const revisionFeedback = buildServicesSaveFeedback(revisionOutcomes);
+
       if (savedFromVertical) {
         const postSaveContext = {
           ...documentContext,
@@ -1584,13 +1642,13 @@ function EditarPerfilContent() {
           setActiveTab("documentos");
           router.replace(buildEditarPerfilTabHref("documentos"), { scroll: false });
           setSuccessMessage(
-            buildPublishReminderMessage(savedFromVertical, missingPublishDocs),
+            `${revisionFeedback} ${buildPublishReminderMessage(savedFromVertical, missingPublishDocs)}`,
           );
           return;
         }
       }
 
-      setSuccessMessage("Cambios guardados correctamente ✓");
+      setSuccessMessage(revisionFeedback);
     } catch (err) {
       console.error("[editar-perfil] error al guardar", err);
       setErrorMessage(err.message || "Error al guardar los cambios.");

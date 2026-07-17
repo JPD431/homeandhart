@@ -39,6 +39,7 @@ import {
   saveVerticalesStep,
   upsertDraftService,
 } from "@/app/lib/onboarding-persist";
+import { buildServicesSaveFeedback } from "@/app/lib/service-revision";
 import {
   buildVisibleSteps,
   getStepIndex,
@@ -598,7 +599,7 @@ export default function SerProveedorPage() {
       );
       applyDraftSaveResult("alojamiento", result);
       await saveOnboardingStep(userId, stepKey);
-      return;
+      return { revisionMeta: result.revisionMeta };
     }
 
     if (
@@ -615,7 +616,7 @@ export default function SerProveedorPage() {
       );
       applyDraftSaveResult("ninos", result);
       await saveOnboardingStep(userId, stepKey);
-      return;
+      return { revisionMeta: result.revisionMeta };
     }
 
     if (
@@ -632,7 +633,7 @@ export default function SerProveedorPage() {
       );
       applyDraftSaveResult("mascotas", result);
       await saveOnboardingStep(userId, stepKey);
-      return;
+      return { revisionMeta: result.revisionMeta };
     }
 
     if (
@@ -840,8 +841,14 @@ export default function SerProveedorPage() {
     if (!validateStep(currentStepKey)) return;
     setSavingStep(true);
     setErrorMessage("");
+    setSuccessMessage("");
     try {
-      await persistStepData(currentStepKey);
+      const persistResult = await persistStepData(currentStepKey);
+      if (persistResult?.revisionMeta) {
+        setSuccessMessage(
+          buildServicesSaveFeedback([persistResult.revisionMeta]),
+        );
+      }
       const idx = getStepIndex(visibleSteps, currentStepKey);
       if (idx < visibleSteps.length - 1) {
         const nextKey = visibleSteps[idx + 1].key;
@@ -1790,6 +1797,11 @@ export default function SerProveedorPage() {
         {errorMessage && !isConfirmStep && (
           <p className="mb-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
             {errorMessage}
+          </p>
+        )}
+        {successMessage && !isConfirmStep && (
+          <p className="mb-4 rounded-xl bg-green-50 px-4 py-3 text-sm text-green-700">
+            {successMessage}
           </p>
         )}
         {renderStep()}
