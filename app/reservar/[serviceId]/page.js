@@ -13,9 +13,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CalendarioRangoFechas from "@/app/components/CalendarioRangoFechas";
 import { BRAND, SERIF } from "@/app/components/brand";
 import {
-  DNI_REQUIRED_CLIENT_MSG,
   DNI_SUBIR_RUTA,
-  hasDniUploaded,
+  getClienteReservaDniBlockMessage,
+  getDniRevisionEstado,
+  isClienteVerificado,
 } from "@/app/lib/dni";
 import { getUserFamiliaActiva } from "@/app/lib/familia";
 import { getHoyDateStr, getPrecioEfectivo, isOfertaActiva } from "@/app/lib/ofertas";
@@ -1654,7 +1655,7 @@ export default function ReservarPage() {
       const { data: perfilClienteData } = await supabase
         .from("profiles")
         .select(
-          "nombre, apellido, stripe_customer_id, reservas_sin_comision_cliente, credito_disponible, doc_dni_url",
+          "nombre, apellido, stripe_customer_id, reservas_sin_comision_cliente, credito_disponible, doc_dni_url, dni_estado",
         )
         .eq("id", user.id)
         .single();
@@ -1921,12 +1922,16 @@ export default function ReservarPage() {
     return null;
   }, [selectedServices]);
 
-  const clienteSinDni = !hasDniUploaded(perfilCliente);
+  const clienteNoVerificado = !isClienteVerificado(perfilCliente);
+  const dniRevisionEstado = getDniRevisionEstado(perfilCliente);
+  const dniBlockMessage = getClienteReservaDniBlockMessage(perfilCliente);
   const dniSubirHref = useMemo(() => {
     const qs = searchParams?.toString();
     const current = qs ? `${pathname}?${qs}` : pathname;
     return `${DNI_SUBIR_RUTA}?next=${encodeURIComponent(current)}`;
   }, [pathname, searchParams]);
+  const showDniUploadLink =
+    dniRevisionEstado === "sin_dni" || dniRevisionEstado === "rechazado";
 
   useEffect(() => {
     if (!fechaInicio || !service || selectedServices.length === 0) {
@@ -2287,7 +2292,7 @@ export default function ReservarPage() {
       return;
     }
 
-    if (clienteSinDni) {
+    if (clienteNoVerificado) {
       setClientSecret(null);
       setPaymentIntentId(null);
       setGrupoReserva(null);
@@ -2379,7 +2384,7 @@ export default function ReservarPage() {
     vertical,
     fechaInicio,
     hora,
-    clienteSinDni,
+    clienteNoVerificado,
     calendarioError,
     disponibilidadChecking,
     selectedServices.length,
@@ -3475,19 +3480,38 @@ export default function ReservarPage() {
                 🛡️ Pago retenido hasta que el servicio se completa. Reembolso total si algo falla.
               </div>
 
-              {clienteSinDni && (
+              {clienteNoVerificado && dniBlockMessage && (
                 <div
                   className="mt-4 rounded-lg px-3 py-2.5 text-[12px] leading-relaxed text-[#92400e]"
                   style={{ backgroundColor: "#fef3c7" }}
                 >
-                  {DNI_REQUIRED_CLIENT_MSG}{" "}
-                  <Link
-                    href={dniSubirHref}
-                    className="font-semibold no-underline hover:underline"
-                    style={{ color: "#1d4f91" }}
-                  >
-                    Subir DNI →
-                  </Link>
+                  {dniBlockMessage}
+                  {showDniUploadLink && (
+                    <>
+                      {" "}
+                      <Link
+                        href={dniSubirHref}
+                        className="font-semibold no-underline hover:underline"
+                        style={{ color: "#1d4f91" }}
+                      >
+                        {dniRevisionEstado === "rechazado"
+                          ? "Volver a subir →"
+                          : "Subir DNI →"}
+                      </Link>
+                    </>
+                  )}
+                  {dniRevisionEstado === "pendiente" && (
+                    <>
+                      {" "}
+                      <Link
+                        href={dniSubirHref}
+                        className="font-semibold no-underline hover:underline"
+                        style={{ color: "#1d4f91" }}
+                      >
+                        Ver estado →
+                      </Link>
+                    </>
+                  )}
                 </div>
               )}
 
@@ -3500,7 +3524,7 @@ export default function ReservarPage() {
                 </p>
               )}
 
-              {precioListo && priceSummary.total > 0 && !bookabilityBlock && !clienteSinDni ? (
+              {precioListo && priceSummary.total > 0 && !bookabilityBlock && !clienteNoVerificado ? (
                 isBundle ? (
                   paymentMethodsLoading ? (
                     <p className="mt-4 text-center text-[11px] text-[#666]">

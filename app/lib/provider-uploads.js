@@ -93,6 +93,7 @@ export async function uploadDocumentToStorage(userId, storageKey, file) {
 
 /**
  * Sube DNI/NIE/pasaporte y persiste la ruta en profiles.doc_dni_url.
+ * Deja el documento en revisión admin (dni_estado = pendiente).
  * @param {string} userId
  * @param {File} file
  * @returns {Promise<string>} Ruta relativa en Storage (no URL pública)
@@ -101,7 +102,12 @@ export async function persistUserDni(userId, file) {
   const storagePath = await uploadDocumentToStorage(userId, "doc_dni_url", file);
   const { error } = await supabase
     .from("profiles")
-    .update({ doc_dni_url: storagePath })
+    .update({
+      doc_dni_url: storagePath,
+      dni_estado: "pendiente",
+      dni_verificado_at: null,
+      dni_verificado_por: null,
+    })
     .eq("id", userId);
   if (error) throw error;
   return storagePath;

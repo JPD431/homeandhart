@@ -10,9 +10,12 @@ import { getBookingEstado } from "@/app/lib/viajes";
 import { BRAND } from "./brand";
 import {
   DNI_BANNER_CLIENT_MSG,
+  DNI_BANNER_PENDING_MSG,
   DNI_BANNER_PROVIDER_MSG,
+  DNI_REJECTED_MSG,
   DNI_SUBIR_RUTA,
-  hasDniUploaded,
+  getDniRevisionEstado,
+  isClienteVerificado,
 } from "@/app/lib/dni";
 import { supabase } from "@/app/lib/supabase";
 import NotificationBell from "@/app/components/NotificationBell";
@@ -451,12 +454,20 @@ export default function Navbar() {
     perfil?.nombre ||
     "Mi cuenta";
   const initials = perfil?.nombre?.[0]?.toUpperCase() || "U";
+  const dniRevisionEstado = getDniRevisionEstado(perfil);
   const showDniBanner =
-    user && perfil && !hasDniUploaded(perfil) && !isAdmin;
-  const dniBannerText =
-    modo === "proveedor" && !esClientePuro
-      ? DNI_BANNER_PROVIDER_MSG
-      : DNI_BANNER_CLIENT_MSG;
+    user && perfil && !isAdmin && !isClienteVerificado(perfil);
+  let dniBannerText = DNI_BANNER_CLIENT_MSG;
+  let dniBannerCta = "Subir DNI →";
+  if (dniRevisionEstado === "pendiente") {
+    dniBannerText = DNI_BANNER_PENDING_MSG;
+    dniBannerCta = "Ver estado →";
+  } else if (dniRevisionEstado === "rechazado") {
+    dniBannerText = DNI_REJECTED_MSG;
+    dniBannerCta = "Volver a subir →";
+  } else if (modo === "proveedor" && !esClientePuro) {
+    dniBannerText = DNI_BANNER_PROVIDER_MSG;
+  }
   const dniBannerHref = `${DNI_SUBIR_RUTA}?next=${encodeURIComponent(pathname || "/")}`;
 
   return (
@@ -1001,7 +1012,7 @@ export default function Navbar() {
             className="font-semibold no-underline hover:underline"
             style={{ color: PRIMARY }}
           >
-            Subir DNI →
+            {dniBannerCta}
           </Link>
         </div>
       )}

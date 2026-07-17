@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Navbar from "@/app/components/Navbar";
+import ClienteVerificadoBadge from "@/app/components/ClienteVerificadoBadge";
 import { useModo } from "@/app/lib/ModoContext";
 import { supabase } from "@/app/lib/supabase";
 
@@ -340,12 +341,14 @@ function getOtherParticipant(conversation, userId) {
       id: conversation.participant_b_id,
       nombre: conversation.other_nombre,
       apellido: conversation.other_apellido,
+      dni_verificado: conversation.other_dni_verificado === true,
     };
   }
   return {
     id: conversation.participant_a_id,
     nombre: conversation.other_nombre,
     apellido: conversation.other_apellido,
+    dni_verificado: conversation.other_dni_verificado === true,
   };
 }
 
@@ -415,7 +418,7 @@ export default function ChatPage() {
     if (otherIds.length > 0) {
       const { data: profiles } = await supabase
         .from("profiles_public")
-        .select("id, nombre, apellido")
+        .select("id, nombre, apellido, dni_verificado")
         .in("id", otherIds);
 
       profilesMap = Object.fromEntries((profiles ?? []).map((p) => [p.id, p]));
@@ -449,6 +452,7 @@ export default function ChatPage() {
         ...conversation,
         other_nombre: otherProfile.nombre,
         other_apellido: otherProfile.apellido,
+        other_dni_verificado: otherProfile.dni_verificado === true,
         last_message: lastByConversation[conversation.id] ?? null,
       };
     });
@@ -1113,15 +1117,21 @@ export default function ChatPage() {
                       />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-2">
-                          <p
-                            className="truncate text-xs font-medium"
-                            style={{ color: DARK }}
-                          >
-                            {formatShortName(
-                              conversation.other_nombre,
-                              conversation.other_apellido,
-                            ) || "Usuario"}
-                          </p>
+                          <div className="flex min-w-0 items-center gap-1.5">
+                            <p
+                              className="truncate text-xs font-medium"
+                              style={{ color: DARK }}
+                            >
+                              {formatShortName(
+                                conversation.other_nombre,
+                                conversation.other_apellido,
+                              ) || "Usuario"}
+                            </p>
+                            {isProvider &&
+                              conversation.other_dni_verificado && (
+                                <ClienteVerificadoBadge compact />
+                              )}
+                          </div>
                           {conversation.last_message && (
                             <span className="shrink-0 text-[9px] text-[#bbb]">
                               {formatListTime(
@@ -1189,12 +1199,17 @@ export default function ChatPage() {
                     showOnline={isOtherOnline}
                   />
                   <div className="min-w-0">
-                    <p className="truncate text-xs font-medium" style={{ color: DARK }}>
-                      {formatShortName(
-                        otherParticipant?.nombre,
-                        otherParticipant?.apellido,
-                      ) || "Usuario"}
-                    </p>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <p className="truncate text-xs font-medium" style={{ color: DARK }}>
+                        {formatShortName(
+                          otherParticipant?.nombre,
+                          otherParticipant?.apellido,
+                        ) || "Usuario"}
+                      </p>
+                      {isProvider && otherParticipant?.dni_verificado && (
+                        <ClienteVerificadoBadge compact />
+                      )}
+                    </div>
                     <p className="text-[10px] text-[#aaa]">
                       {VERTICAL_LABELS[serviceVertical] || "Servicio"} ·{" "}
                       {formatLastSeen(

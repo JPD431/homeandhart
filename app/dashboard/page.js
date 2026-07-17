@@ -6,6 +6,7 @@ import Navbar from '@/app/components/Navbar';
 import OnboardingPendienteBanner from '@/app/components/OnboardingPendienteBanner';
 import FamiliaInviteBanner from '@/app/components/FamiliaInviteBanner';
 import ReportarIncidenciaForm from '@/app/components/ReportarIncidenciaForm';
+import ClienteVerificadoBadge from '@/app/components/ClienteVerificadoBadge';
 import { useModo } from '@/app/lib/ModoContext';
 import { getIngresoProveedorFromBooking } from '@/app/lib/ingresos-proveedor';
 import { puedeReportarIncidencia } from '@/app/lib/booking-incidencia';
@@ -830,6 +831,7 @@ function ReservaRecibidaCard({
   booking,
   serviceTitulo,
   clienteNombre,
+  clienteVerificado = false,
   sinComisionProveedor,
   onRespond,
   responding,
@@ -866,7 +868,20 @@ function ReservaRecibidaCard({
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: '#2a3a4a' }}>{serviceTitulo}</div>
-          <div style={{ fontSize: 11, color: '#888', marginTop: 4 }}>{clienteNombre}</div>
+          <div
+            style={{
+              fontSize: 11,
+              color: '#888',
+              marginTop: 4,
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              gap: 6,
+            }}
+          >
+            <span>{clienteNombre}</span>
+            {clienteVerificado && <ClienteVerificadoBadge compact />}
+          </div>
           <div style={{ fontSize: 11, color: '#666', marginTop: 4 }}>{formatReservaFechas(booking)}</div>
           <div style={{ fontSize: 13, fontWeight: 500, color: PRIMARY, marginTop: 6 }}>
             {importeReserva.label} {importeReserva.amount}
@@ -992,6 +1007,7 @@ function ReservasRecibidas({ perfil, BRAND, highlightBookingId, router }) {
   const [bookings, setBookings] = useState([]);
   const [serviceMap, setServiceMap] = useState({});
   const [clientNames, setClientNames] = useState({});
+  const [clientVerified, setClientVerified] = useState({});
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [actionError, setActionError] = useState('');
@@ -1028,6 +1044,7 @@ function ReservasRecibidas({ perfil, BRAND, highlightBookingId, router }) {
       if (serviceIds.length === 0) {
         setBookings([]);
         setClientNames({});
+        setClientVerified({});
         setLoading(false);
         return;
       }
@@ -1051,17 +1068,25 @@ function ReservasRecibidas({ perfil, BRAND, highlightBookingId, router }) {
       if (clienteIds.length > 0) {
         const { data: profiles, error: profilesError } = await supabase
           .from('profiles_public')
-          .select('id, nombre, apellido')
+          .select('id, nombre, apellido, dni_verificado')
           .in('id', clienteIds);
 
+        if (profilesError) {
+          console.error('[ReservasRecibidas] Error perfiles cliente:', profilesError.message);
+        }
+
         const names = {};
+        const verified = {};
         for (const p of profiles ?? []) {
           const full = [p.nombre, p.apellido].filter(Boolean).join(' ').trim();
           names[p.id] = full || 'Cliente';
+          verified[p.id] = p.dni_verificado === true;
         }
         setClientNames(names);
+        setClientVerified(verified);
       } else {
         setClientNames({});
+        setClientVerified({});
       }
 
       setLoading(false);
@@ -1288,6 +1313,7 @@ function ReservasRecibidas({ perfil, BRAND, highlightBookingId, router }) {
                   booking={booking}
                   serviceTitulo={serviceMap[booking.service_id] || 'Servicio'}
                   clienteNombre={clientNames[booking.cliente_id] || 'Cliente'}
+                  clienteVerificado={clientVerified[booking.cliente_id] === true}
                   sinComisionProveedor={sinComisionProveedor}
                   onRespond={handleRespond}
                   responding={respondingId === booking.id}
@@ -1322,6 +1348,7 @@ function ReservasRecibidas({ perfil, BRAND, highlightBookingId, router }) {
                   booking={booking}
                   serviceTitulo={serviceMap[booking.service_id] || 'Servicio'}
                   clienteNombre={clientNames[booking.cliente_id] || 'Cliente'}
+                  clienteVerificado={clientVerified[booking.cliente_id] === true}
                   sinComisionProveedor={sinComisionProveedor}
                   onRespond={handleRespond}
                   responding={respondingId === booking.id}

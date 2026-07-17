@@ -14,7 +14,7 @@ import {
   getProveedorFromService,
 } from "@/app/lib/service-bookable";
 import { rewardReferidorPrimeraReserva } from "@/app/lib/referidos";
-import { assertUserHasDni } from "@/app/lib/dni";
+import { assertUserIsDniVerified } from "@/app/lib/dni";
 import { notifyBookingEvent } from "@/app/lib/notifications";
 
 const MAX_CREDITO_PORCENTAJE = 0.6;
@@ -1174,7 +1174,7 @@ export async function POST(request) {
 
     const userId = user.id;
 
-    const dniCheck = await assertUserHasDni(supabaseAdmin, userId);
+    const dniCheck = await assertUserIsDniVerified(supabaseAdmin, userId);
     if (!dniCheck.ok) {
       return NextResponse.json(dniCheck.body, { status: dniCheck.status });
     }

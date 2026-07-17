@@ -62,7 +62,7 @@ export function ModoProvider({ children }) {
     const { data: profileData } = await supabase
       .from("profiles")
       .select(
-        "nombre, apellido, role, descripcion, idiomas, foto_perfil, reservas_sin_comision_cliente, reservas_sin_comision_proveedor, onboarding_completed_at, doc_dni_url",
+        "nombre, apellido, role, descripcion, idiomas, foto_perfil, reservas_sin_comision_cliente, reservas_sin_comision_proveedor, onboarding_completed_at, doc_dni_url, dni_estado",
       )
       .eq("id", authUser.id)
       .single();
