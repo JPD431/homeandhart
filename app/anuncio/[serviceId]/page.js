@@ -93,10 +93,10 @@ export async function generateMetadata({ params, searchParams }) {
     "Servicio";
   const ciudad = service.ciudad || profile.ciudad || "";
 
-  if (mode === "owner-preview") {
+  if (mode === "owner-preview" || mode === "admin-preview") {
     return {
       title: `Vista previa · ${titulo}`,
-      description: "Vista previa de tu anuncio en Home&Heart.",
+      description: "Vista previa de anuncio en Home&Heart.",
       robots: { index: false, follow: false },
     };
   }
@@ -123,7 +123,7 @@ export default async function AnuncioPage({ params, searchParams }) {
     notFound();
   }
 
-  const isOwnerPreview = mode === "owner-preview";
+  const isOwnerPreview = mode === "owner-preview" || mode === "admin-preview";
 
   const [bloqueosCalendario, proveedorRating] = await Promise.all([
     loadServiceBloqueos(serviceId),

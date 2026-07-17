@@ -8,6 +8,7 @@ import AdminProviderDocuments, {
 } from "@/app/components/admin/AdminProviderDocuments";
 import AdminUsersTab from "@/app/components/admin/AdminUsersTab";
 import AdminCancelacionesTab from "@/app/components/admin/AdminCancelacionesTab";
+import AdminServiciosRevisionTab from "@/app/components/admin/AdminServiciosRevisionTab";
 import { BRAND, SERIF } from "@/app/components/brand";
 import { articulosIniciales, slugify } from "@/app/lib/blog-seed";
 import { getIngresoProveedorFromBooking } from "@/app/lib/ingresos-proveedor";
@@ -22,6 +23,7 @@ import { supabase } from "@/app/lib/supabase";
 const TABS = [
   { id: "usuarios", label: "Usuarios" },
   { id: "cancelaciones", label: "Cancelaciones" },
+  { id: "servicios-revision", label: "Servicios pendientes de revisión" },
   { id: "pendientes", label: "Pendientes de verificar" },
   { id: "verificados", label: "Verificados" },
   { id: "rechazados", label: "Rechazados" },
@@ -263,6 +265,7 @@ function AdminPageInner() {
   const [blogSaving, setBlogSaving] = useState(false);
   const [blogSeeding, setBlogSeeding] = useState(false);
   const [usuariosSummary, setUsuariosSummary] = useState({ pendientes: 0, sin_dni: 0 });
+  const [serviciosRevisionPendientes, setServiciosRevisionPendientes] = useState(0);
   const [cancelacionesActivas, setCancelacionesActivas] = useState(0);
 
   const loadData = useCallback(async () => {
@@ -337,6 +340,19 @@ function AdminPageInner() {
       const usuariosPayload = await usuariosRes.json().catch(() => ({}));
       if (usuariosRes.ok && usuariosPayload.meta?.summary) {
         setUsuariosSummary(usuariosPayload.meta.summary);
+      }
+
+      try {
+        const svcRevRes = await fetch("/api/admin/servicios/revision");
+        const svcRevPayload = await svcRevRes.json().catch(() => ({}));
+        if (svcRevRes.ok) {
+          setServiciosRevisionPendientes(
+            svcRevPayload.meta?.pendientes ??
+              (svcRevPayload.servicios ?? []).length,
+          );
+        }
+      } catch {
+        /* ignore */
       }
 
       try {
@@ -456,6 +472,7 @@ function AdminPageInner() {
     const result = {
       usuarios: usuariosSummary.pendientes,
       cancelaciones: cancelacionesActivas,
+      "servicios-revision": serviciosRevisionPendientes,
       pendientes: 0,
       verificados: 0,
       rechazados: 0,
@@ -472,7 +489,7 @@ function AdminPageInner() {
     result.ingresos = completedBookings.length;
     result.blog = blogPosts.length;
     return result;
-  }, [providers, completedBookings, reports, incidencias, blogPosts, usuariosSummary, cancelacionesActivas]);
+  }, [providers, completedBookings, reports, incidencias, blogPosts, usuariosSummary, cancelacionesActivas, serviciosRevisionPendientes]);
 
   const pendingReports = useMemo(
     () => reports.filter((r) => r.estado === "pendiente"),
@@ -1163,6 +1180,26 @@ function AdminPageInner() {
           </button>
         )}
 
+        {serviciosRevisionPendientes > 0 && (
+          <button
+            type="button"
+            onClick={() => setActiveTab("servicios-revision")}
+            className="mb-4 flex w-full items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left transition-opacity hover:opacity-90"
+            style={{
+              borderColor: "#f59e0b",
+              backgroundColor: "#fffbeb",
+              color: "#92400e",
+            }}
+          >
+            <span className="text-sm font-semibold">
+              Servicios pendientes ({serviciosRevisionPendientes})
+            </span>
+            <span className="shrink-0 text-xs font-medium underline">
+              Revisar servicios →
+            </span>
+          </button>
+        )}
+
         <div className="flex flex-wrap gap-2">
           {TABS.map((tab) => {
             const isActive = activeTab === tab.id;
@@ -1191,13 +1228,19 @@ function AdminPageInner() {
                     className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-bold"
                     style={{
                       backgroundColor:
-                        tab.id === "usuarios" && usuariosSummary.pendientes > 0 && !isActive
+                        (tab.id === "usuarios" && usuariosSummary.pendientes > 0 && !isActive) ||
+                        (tab.id === "servicios-revision" &&
+                          serviciosRevisionPendientes > 0 &&
+                          !isActive)
                           ? "#fef3c7"
                           : isActive
                             ? BRAND.primary
                             : "#eee",
                       color:
-                        tab.id === "usuarios" && usuariosSummary.pendientes > 0 && !isActive
+                        (tab.id === "usuarios" && usuariosSummary.pendientes > 0 && !isActive) ||
+                        (tab.id === "servicios-revision" &&
+                          serviciosRevisionPendientes > 0 &&
+                          !isActive)
                           ? "#92400e"
                           : isActive
                             ? "#fff"
@@ -1240,6 +1283,18 @@ function AdminPageInner() {
               setErrorMessage(msg);
               setSuccessMessage("");
             }}
+          />
+        ) : activeTab === "servicios-revision" ? (
+          <AdminServiciosRevisionTab
+            onSuccess={(msg) => {
+              setSuccessMessage(msg);
+              setErrorMessage("");
+            }}
+            onError={(msg) => {
+              setErrorMessage(msg);
+              setSuccessMessage("");
+            }}
+            onCountChange={(n) => setServiciosRevisionPendientes(n)}
           />
         ) : activeTab === "cancelaciones" ? (
           <AdminCancelacionesTab

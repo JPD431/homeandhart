@@ -6,6 +6,7 @@ import {
   REVISION_EN_REVISION,
 } from "@/app/lib/onboarding-persist";
 import { servicioRevisionAprobada } from "@/app/lib/provider-publicacion";
+import { resolveServicioPendienteNotifications } from "@/app/lib/service-revision-notify";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -49,6 +50,19 @@ export async function POST(_request, { params }) {
     return NextResponse.json({ error: profileError.message }, { status: 500 });
   }
 
+  const { data: servicesInReview, error: fetchInReviewError } = await supabaseAdmin
+    .from("services")
+    .select("id")
+    .eq("proveedor_id", id)
+    .eq("revision_estado", REVISION_EN_REVISION);
+
+  if (fetchInReviewError) {
+    console.error(
+      "[approve] No se pudieron listar servicios en revisión:",
+      fetchInReviewError,
+    );
+  }
+
   const { error: revisionError } = await supabaseAdmin
     .from("services")
     .update({ revision_estado: REVISION_APROBADO })
@@ -60,6 +74,17 @@ export async function POST(_request, { params }) {
       "[approve] No se pudo marcar servicios como aprobados:",
       revisionError,
     );
+  } else {
+    for (const svc of servicesInReview ?? []) {
+      try {
+        await resolveServicioPendienteNotifications(svc.id);
+      } catch (err) {
+        console.error(
+          "[approve] resolve notif servicio:",
+          err?.message || err,
+        );
+      }
+    }
   }
 
   let serviciosActivados = false;

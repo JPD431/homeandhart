@@ -612,7 +612,7 @@ function BuscarContent() {
         `,
         )
         .eq("disponible", true)
-        .or("revision_estado.is.null,revision_estado.neq.borrador")
+        .or("revision_estado.is.null,revision_estado.eq.aprobado")
         .eq("profiles_public.verificado", true);
 
       if (activeVertical && activeVertical !== "todo") {

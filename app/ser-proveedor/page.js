@@ -38,6 +38,7 @@ import {
   saveProfileStep,
   saveVerticalesStep,
   upsertDraftService,
+  REVISION_EN_REVISION,
 } from "@/app/lib/onboarding-persist";
 import { buildServicesSaveFeedback } from "@/app/lib/service-revision";
 import {
@@ -599,6 +600,7 @@ export default function SerProveedorPage() {
       );
       applyDraftSaveResult("alojamiento", result);
       await saveOnboardingStep(userId, stepKey);
+      await notifyAdminsServiceInReview(result.id, result.revisionMeta);
       return { revisionMeta: result.revisionMeta };
     }
 
@@ -616,6 +618,7 @@ export default function SerProveedorPage() {
       );
       applyDraftSaveResult("ninos", result);
       await saveOnboardingStep(userId, stepKey);
+      await notifyAdminsServiceInReview(result.id, result.revisionMeta);
       return { revisionMeta: result.revisionMeta };
     }
 
@@ -633,6 +636,7 @@ export default function SerProveedorPage() {
       );
       applyDraftSaveResult("mascotas", result);
       await saveOnboardingStep(userId, stepKey);
+      await notifyAdminsServiceInReview(result.id, result.revisionMeta);
       return { revisionMeta: result.revisionMeta };
     }
 
@@ -678,6 +682,21 @@ export default function SerProveedorPage() {
       ...prev,
       [vertical]: syncDetailsPhotos({ ...prev[vertical], fotos }),
     }));
+  }
+
+  async function notifyAdminsServiceInReview(serviceId, revisionMeta) {
+    if (!serviceId || revisionMeta?.revision_estado !== REVISION_EN_REVISION) {
+      return;
+    }
+    try {
+      await fetch("/api/services/revision-notify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ service_id: serviceId }),
+      });
+    } catch (err) {
+      console.error("[ser-proveedor] revision-notify", err);
+    }
   }
 
   async function handleOpenFullAnuncioPreview(vertical) {
@@ -925,6 +944,19 @@ export default function SerProveedorPage() {
       setDraftServiceIds(finalDraftIds);
 
       await finalizeOnboarding(uid, verticalesSeleccionados, finalDraftIds);
+
+      const notifyIds = Object.values(finalDraftIds).filter(Boolean);
+      if (notifyIds.length > 0) {
+        try {
+          await fetch("/api/services/revision-notify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ service_ids: notifyIds }),
+          });
+        } catch (notifyErr) {
+          console.error("[ser-proveedor] revision-notify final:", notifyErr);
+        }
+      }
 
       await fetch("/api/emails", {
         method: "POST",

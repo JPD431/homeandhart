@@ -2085,6 +2085,139 @@ export async function POST(request) {
       return Response.json({ success: true });
     }
 
+    if (tipo === "admin_servicio_pendiente") {
+      const adminEmail = process.env.ADMIN_EMAIL || FROM;
+      const baseUrl = process.env.NEXT_PUBLIC_URL || "https://homeandheart.es";
+      const adminUrl = `${baseUrl}/admin?tab=servicios-revision`;
+      const nombre = (data.nombre || "Proveedor").replace(/</g, "&lt;");
+      const titulo = (data.titulo || "Servicio").replace(/</g, "&lt;");
+
+      const result = await resend.emails.send({
+        from: FROM,
+        to: adminEmail,
+        subject: `Servicio pendiente de revisar — ${data.titulo || "Servicio"}`,
+        html: emailLayout({
+          title: "Servicio pendiente de revisar",
+          bodyHtml: `
+            <h1 style="margin:0 0 16px;font-size:20px;color:${BRAND_PRIMARY};">Servicio pendiente de revisar</h1>
+            <p style="margin:0 0 12px;font-size:14px;line-height:1.6;color:#444;">
+              <strong>${nombre}</strong> ha enviado el servicio <strong>«${titulo}»</strong> a revisión.
+            </p>
+            <p style="margin:0 0 24px;font-size:14px;line-height:1.6;color:#444;">
+              Incluye servicios de proveedores ya verificados: conviene revisarlos uno a uno.
+            </p>
+            <p style="margin:0;text-align:center;">
+              <a href="${adminUrl}" style="display:inline-block;background-color:${BRAND_PRIMARY};color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:8px;font-size:15px;font-weight:600;">
+                Revisar servicios →
+              </a>
+            </p>
+          `,
+        }),
+      });
+
+      if (result.error) {
+        return Response.json({ error: result.error.message }, { status: 400 });
+      }
+
+      return Response.json({ success: true });
+    }
+
+    if (tipo === "servicio_publicado") {
+      const userId = data.user_id || data.proveedor_id;
+      const email =
+        data.email || (userId ? await resolverEmailUsuario(userId) : null);
+      if (!email) {
+        return Response.json(
+          { error: "No se encontró el email del destinatario" },
+          { status: 400 },
+        );
+      }
+      const baseUrl = process.env.NEXT_PUBLIC_URL || "https://homeandheart.es";
+      const nombre = (data.nombre || "proveedor").replace(/</g, "&lt;");
+      const titulo = (data.titulo || "Tu servicio").replace(/</g, "&lt;");
+      const anuncioUrl = data.service_id
+        ? `${baseUrl}/anuncio/${data.service_id}`
+        : `${baseUrl}/editar-perfil`;
+
+      const result = await resend.emails.send({
+        from: FROM,
+        to: email,
+        subject: "Tu servicio ya está publicado · Home&Heart",
+        html: emailLayout({
+          title: "Tu servicio ya está publicado",
+          bodyHtml: `
+            <h1 style="margin:0 0 16px;font-size:20px;color:${BRAND_PRIMARY};">Tu servicio ya está publicado</h1>
+            <p style="margin:0 0 12px;font-size:14px;line-height:1.6;color:#444;">
+              Hola <strong>${nombre}</strong>, hemos aprobado <strong>«${titulo}»</strong>.
+              Ya es visible para las familias en la búsqueda.
+            </p>
+            <p style="margin:0;text-align:center;">
+              <a href="${anuncioUrl}" style="display:inline-block;background-color:${BRAND_PRIMARY};color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:8px;font-size:15px;font-weight:600;">
+                Ver mi anuncio →
+              </a>
+            </p>
+          `,
+        }),
+      });
+
+      if (result.error) {
+        return Response.json({ error: result.error.message }, { status: 400 });
+      }
+
+      return Response.json({ success: true });
+    }
+
+    if (tipo === "servicio_rechazado") {
+      const userId = data.user_id || data.proveedor_id;
+      const email =
+        data.email || (userId ? await resolverEmailUsuario(userId) : null);
+      if (!email) {
+        return Response.json(
+          { error: "No se encontró el email del destinatario" },
+          { status: 400 },
+        );
+      }
+      const baseUrl = process.env.NEXT_PUBLIC_URL || "https://homeandheart.es";
+      const nombre = (data.nombre || "proveedor").replace(/</g, "&lt;");
+      const titulo = (data.titulo || "Tu servicio").replace(/</g, "&lt;");
+      const motivo = (data.motivo || "").replace(/</g, "&lt;").trim();
+
+      const result = await resend.emails.send({
+        from: FROM,
+        to: email,
+        subject: "Tu servicio necesita cambios · Home&Heart",
+        html: emailLayout({
+          title: "Tu servicio necesita cambios",
+          bodyHtml: `
+            <h1 style="margin:0 0 16px;font-size:20px;color:${BRAND_PRIMARY};">Tu servicio necesita cambios</h1>
+            <p style="margin:0 0 12px;font-size:14px;line-height:1.6;color:#444;">
+              Hola <strong>${nombre}</strong>, hemos revisado <strong>«${titulo}»</strong>
+              y aún no puede publicarse.
+            </p>
+            ${
+              motivo
+                ? `<p style="margin:0 0 12px;font-size:14px;line-height:1.6;color:#444;"><strong>Motivo:</strong> ${motivo}</p>`
+                : ""
+            }
+            <p style="margin:0 0 24px;font-size:14px;line-height:1.6;color:#444;">
+              Edita el servicio y guárdalo de nuevo para enviarlo otra vez a revisión.
+            </p>
+            <p style="margin:0;text-align:center;">
+              <a href="${baseUrl}/editar-perfil" style="display:inline-block;background-color:${BRAND_PRIMARY};color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:8px;font-size:15px;font-weight:600;">
+                Editar mi servicio →
+              </a>
+            </p>
+          `,
+        }),
+      });
+
+      if (result.error) {
+        return Response.json({ error: result.error.message }, { status: 400 });
+      }
+
+      return Response.json({ success: true });
+    }
+
     if (tipo === "incidencia") {
       const adminEmail = process.env.ADMIN_EMAIL || FROM;
       const result = await resend.emails.send({

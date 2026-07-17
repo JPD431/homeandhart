@@ -94,6 +94,7 @@ import {
   getServiceRevisionDisplay,
   resolveRevisionEstadoOnSave,
 } from "@/app/lib/service-revision";
+import { REVISION_EN_REVISION } from "@/app/lib/onboarding-persist";
 
 const SERVICE_VERTICAL_TABS = ["alojamiento", "ninos", "mascotas"];
 
@@ -1602,6 +1603,21 @@ function EditarPerfilContent() {
       }
 
       setServices(servicesAfterSave);
+
+      const pendingReviewIds = servicesAfterSave
+        .filter((s) => s.revision_estado === REVISION_EN_REVISION && s.id)
+        .map((s) => s.id);
+      if (pendingReviewIds.length > 0) {
+        try {
+          await fetch("/api/services/revision-notify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ service_ids: pendingReviewIds }),
+          });
+        } catch (notifyErr) {
+          console.error("[editar-perfil] revision-notify", notifyErr);
+        }
+      }
 
       const savedFromVertical = SERVICE_VERTICAL_TABS.includes(activeTab)
         ? activeTab

@@ -1,4 +1,5 @@
 import { supabase } from "@/app/lib/supabase";
+import { isAdminUserId } from "@/lib/auth/admin";
 
 const SERVICE_PUBLIC_SELECT = `
   *,
@@ -19,7 +20,7 @@ const SERVICE_PUBLIC_SELECT = `
 
 /**
  * Servicio visible en búsqueda / anuncio público.
- * Mismos filtros que /buscar.
+ * Mismos filtros que /buscar: solo aprobado (o legacy null).
  */
 export async function loadPublicServiceById(serviceId) {
   if (!serviceId) return null;
@@ -30,7 +31,7 @@ export async function loadPublicServiceById(serviceId) {
     .eq("id", serviceId)
     .eq("disponible", true)
     .eq("profiles_public.verificado", true)
-    .or("revision_estado.is.null,revision_estado.neq.borrador")
+    .or("revision_estado.is.null,revision_estado.eq.aprobado")
     .maybeSingle();
 
   if (error || !data) return null;
@@ -44,10 +45,10 @@ const OWNER_PROFILE_SELECT =
  * Servicio del proveedor autenticado para vista previa (sin filtros públicos).
  * Solo devuelve datos si proveedor_id === userId (comprobado en la query).
  */
-export async function loadOwnerServiceForPreview(serviceId, userId, supabase) {
-  if (!serviceId || !userId || !supabase) return null;
+export async function loadOwnerServiceForPreview(serviceId, userId, supabaseClient) {
+  if (!serviceId || !userId || !supabaseClient) return null;
 
-  const { data: service, error } = await supabase
+  const { data: service, error } = await supabaseClient
     .from("services")
     .select("*")
     .eq("id", serviceId)
@@ -56,7 +57,7 @@ export async function loadOwnerServiceForPreview(serviceId, userId, supabase) {
 
   if (error || !service) return null;
 
-  const { data: profile } = await supabase
+  const { data: profile } = await supabaseClient
     .from("profiles")
     .select(OWNER_PROFILE_SELECT)
     .eq("id", userId)
@@ -69,24 +70,64 @@ export async function loadOwnerServiceForPreview(serviceId, userId, supabase) {
 }
 
 /**
- * Carga anuncio público o, con preview autorizado, el borrador del dueño.
+ * Vista previa admin de cualquier servicio (moderación).
+ */
+export async function loadAdminServiceForPreview(serviceId, supabaseClient) {
+  if (!serviceId || !supabaseClient) return null;
+
+  const { data: service, error } = await supabaseClient
+    .from("services")
+    .select("*")
+    .eq("id", serviceId)
+    .maybeSingle();
+
+  if (error || !service) return null;
+
+  const { data: profile } = await supabaseClient
+    .from("profiles")
+    .select(OWNER_PROFILE_SELECT)
+    .eq("id", service.proveedor_id)
+    .maybeSingle();
+
+  return {
+    ...service,
+    profiles_public: profile ?? {},
+  };
+}
+
+/**
+ * Carga anuncio público o, con preview autorizado, borrador del dueño / admin.
  *
- * @returns {{ service: object|null, mode: 'public'|'owner-preview'|null }}
+ * @returns {{ service: object|null, mode: 'public'|'owner-preview'|'admin-preview'|null }}
  */
 export async function loadAnuncioService(
   serviceId,
-  { previewRequested = false, userId = null, supabase = null } = {},
+  {
+    previewRequested = false,
+    userId = null,
+    supabase: supabaseClient = null,
+  } = {},
 ) {
   const publicService = await loadPublicServiceById(serviceId);
   if (publicService) {
     return { service: publicService, mode: "public" };
   }
 
-  if (previewRequested && userId && supabase) {
+  if (previewRequested && userId && supabaseClient) {
+    if (isAdminUserId(userId)) {
+      const adminService = await loadAdminServiceForPreview(
+        serviceId,
+        supabaseClient,
+      );
+      if (adminService) {
+        return { service: adminService, mode: "admin-preview" };
+      }
+    }
+
     const ownerService = await loadOwnerServiceForPreview(
       serviceId,
       userId,
-      supabase,
+      supabaseClient,
     );
     if (ownerService) {
       return { service: ownerService, mode: "owner-preview" };
