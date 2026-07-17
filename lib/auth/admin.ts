@@ -5,6 +5,8 @@ function getAdminUserIds(): string[] {
     .filter(Boolean);
 }
 
+export { getAdminUserIds };
+
 export function isAdminUserId(userId: string): boolean {
   return getAdminUserIds().includes(userId);
 }

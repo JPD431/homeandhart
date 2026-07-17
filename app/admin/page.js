@@ -1,7 +1,7 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import Navbar from "@/app/components/Navbar";
 import AdminProviderDocuments, {
   getMissingMandatoryDocumentsSummary,
@@ -29,6 +29,14 @@ const TABS = [
   { id: "blog", label: "Blog" },
   { id: "herramientas", label: "Herramientas" },
 ];
+
+const VALID_TAB_IDS = new Set(TABS.map((t) => t.id));
+
+function initialTabFromSearch(searchParams) {
+  const tab = searchParams?.get("tab");
+  if (tab && VALID_TAB_IDS.has(tab)) return tab;
+  return "pendientes";
+}
 
 function formatFechasReserva(inc) {
   if (!inc.fecha_inicio) return "—";
@@ -195,11 +203,31 @@ function fullName(profile) {
 }
 
 export default function AdminPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen font-sans" style={{ backgroundColor: BRAND.warm }}>
+          <Navbar />
+          <main className="mx-auto max-w-5xl px-4 py-16 text-center text-sm text-[#666]">
+            Cargando panel de administración…
+          </main>
+        </div>
+      }
+    >
+      <AdminPageInner />
+    </Suspense>
+  );
+}
+
+function AdminPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [providers, setProviders] = useState([]);
   const [servicesByProvider, setServicesByProvider] = useState({});
-  const [activeTab, setActiveTab] = useState("pendientes");
+  const [activeTab, setActiveTab] = useState(() =>
+    initialTabFromSearch(searchParams),
+  );
   const [rejectingId, setRejectingId] = useState(null);
   const [rejectReason, setRejectReason] = useState("");
   const [requestingDocsId, setRequestingDocsId] = useState(null);
@@ -406,6 +434,10 @@ export default function AdminPage() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    setActiveTab(initialTabFromSearch(searchParams));
+  }, [searchParams]);
 
   const counts = useMemo(() => {
     const result = {
@@ -1097,6 +1129,26 @@ export default function AdminPage() {
       </header>
 
       <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
+        {usuariosSummary.pendientes > 0 && (
+          <button
+            type="button"
+            onClick={() => setActiveTab("usuarios")}
+            className="mb-4 flex w-full items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left transition-opacity hover:opacity-90"
+            style={{
+              borderColor: "#f59e0b",
+              backgroundColor: "#fffbeb",
+              color: "#92400e",
+            }}
+          >
+            <span className="text-sm font-semibold">
+              DNIs pendientes de revisar ({usuariosSummary.pendientes})
+            </span>
+            <span className="shrink-0 text-xs font-medium underline">
+              Ir a Usuarios →
+            </span>
+          </button>
+        )}
+
         <div className="flex flex-wrap gap-2">
           {TABS.map((tab) => {
             const isActive = activeTab === tab.id;
@@ -1124,8 +1176,18 @@ export default function AdminPage() {
                   <span
                     className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-bold"
                     style={{
-                      backgroundColor: isActive ? BRAND.primary : "#eee",
-                      color: isActive ? "#fff" : "#666",
+                      backgroundColor:
+                        tab.id === "usuarios" && usuariosSummary.pendientes > 0 && !isActive
+                          ? "#fef3c7"
+                          : isActive
+                            ? BRAND.primary
+                            : "#eee",
+                      color:
+                        tab.id === "usuarios" && usuariosSummary.pendientes > 0 && !isActive
+                          ? "#92400e"
+                          : isActive
+                            ? "#fff"
+                            : "#666",
                     }}
                   >
                     {counts[tab.id]}

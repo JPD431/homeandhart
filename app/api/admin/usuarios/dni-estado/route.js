@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { getAdminUser } from "@/lib/auth/requireAdmin";
 import { hasDniUploaded } from "@/app/lib/dni";
+import { resolveDniPendienteNotifications } from "@/app/lib/dni-admin-notify";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -75,6 +76,12 @@ export async function POST(request) {
 
   if (updateError) {
     return NextResponse.json({ error: updateError.message }, { status: 500 });
+  }
+
+  try {
+    await resolveDniPendienteNotifications(userId);
+  } catch (err) {
+    console.error("[dni-estado] resolve notificaciones:", err?.message || err);
   }
 
   return NextResponse.json({ ok: true, profile: updated });

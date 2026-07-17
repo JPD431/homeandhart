@@ -94,6 +94,7 @@ export async function uploadDocumentToStorage(userId, storageKey, file) {
 /**
  * Sube DNI/NIE/pasaporte y persiste la ruta en profiles.doc_dni_url.
  * Deja el documento en revisión admin (dni_estado = pendiente).
+ * Avisa al admin (in-app + email) sin bloquear la subida si el aviso falla.
  * @param {string} userId
  * @param {File} file
  * @returns {Promise<string>} Ruta relativa en Storage (no URL pública)
@@ -110,6 +111,23 @@ export async function persistUserDni(userId, file) {
     })
     .eq("id", userId);
   if (error) throw error;
+
+  try {
+    const res = await fetch("/api/dni/pendiente-notify", { method: "POST" });
+    if (!res.ok) {
+      const payload = await res.json().catch(() => ({}));
+      console.error(
+        "[persistUserDni] Aviso admin falló:",
+        payload.error || res.status,
+      );
+    }
+  } catch (notifyErr) {
+    console.error(
+      "[persistUserDni] Aviso admin excepción:",
+      notifyErr?.message || notifyErr,
+    );
+  }
+
   return storagePath;
 }
 
