@@ -90,9 +90,11 @@ export function applyClientPrice(baseSubtotal) {
 
 /**
  * Precio base del servicio (sin comisión cliente 14%).
- * Alojamiento con modelo por huésped:
- *   precio_por_noche = precio (+ tarifas) + max(0, huespedes - incluidos) × extra
- *   precio_servicio  = precio_por_noche × noches
+ *
+ * Con modelo por unidad (capacidad_maxima + incluidos + extra > 0):
+ *   alojamiento: (base + extra×huéspedes_extra) × noches
+ *   ninos:       (base + extra×niños_extra) × horas
+ *   mascotas:    (base + extra×mascotas_extra) × días
  * Sin modelo: idéntico al cálculo histórico (retrocompatible).
  *
  * @param {object} ctx — { fechaInicio, fechaFin, duracionHoras, mainVertical, numHuespedes? }
@@ -112,8 +114,8 @@ export function calculateServiceBasePrice(
 
   const v = svc.vertical;
   const dateContext = { fechaInicio, fechaFin, duracionHoras, mainVertical };
-  // Solo alojamiento con modelo aplica suplemento; resto = 0 (sin cambio de céntimos).
-  const suplementoNoche = getHuespedesSuplementoPorNoche(svc, numHuespedes);
+  // Sin modelo → 0; con modelo → max(0, elegidos - incluidos) × extra
+  const suplementoPeriodo = getHuespedesSuplementoPorNoche(svc, numHuespedes);
 
   function finalizeBase(subtotal, detail, ready, duration) {
     if (useOverride) {
@@ -154,7 +156,8 @@ export function calculateServiceBasePrice(
         discountSource: null,
       };
     }
-    const subtotal = unitPrice * hours;
+    // precio_por_hora = base + suplemento; × horas
+    const subtotal = (unitPrice + suplementoPeriodo) * hours;
     const duration = getServiceDuration(svc, dateContext);
     return finalizeBase(
       subtotal,
@@ -176,15 +179,16 @@ export function calculateServiceBasePrice(
       discountSource: null,
     };
   }
+  // alojamiento = noches; mascotas = días (mismo conteo daysBetween)
   const unit = v === "alojamiento" ? "noche" : "día";
   const fechasEstancia = getNochesEstancia(start, end, v);
   const subtotal = useOverride
-    ? (unitPrice + suplementoNoche) * days
+    ? (unitPrice + suplementoPeriodo) * days
     : subtotalPorEstancia(
         unitPrice,
         fechasEstancia,
         tarifasPorFecha,
-        suplementoNoche,
+        suplementoPeriodo,
       );
   const duration = getServiceDuration(svc, dateContext);
   return finalizeBase(

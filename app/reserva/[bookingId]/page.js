@@ -273,8 +273,18 @@ export default function ReservaDetallePage() {
               )}
               {booking.num_huespedes != null && (
                 <p className="mt-0.5 text-xs text-[#888]">
-                  {booking.num_huespedes} huésped
-                  {booking.num_huespedes === 1 ? "" : "es"}
+                  {booking.num_huespedes}{" "}
+                  {booking.num_huespedes === 1
+                    ? service?.vertical === "ninos"
+                      ? "niño"
+                      : service?.vertical === "mascotas"
+                        ? "mascota"
+                        : "huésped"
+                    : service?.vertical === "ninos"
+                      ? "niños"
+                      : service?.vertical === "mascotas"
+                        ? "mascotas"
+                        : "huéspedes"}
                 </p>
               )}
             </section>

@@ -29,6 +29,7 @@ import {
 } from "@/app/lib/pricing-reserva";
 import {
   formatHuespedesPrecioDesglose,
+  getUnidadesPrecioCopy,
   serviceHasHuespedesModelo,
 } from "@/app/lib/huespedes-precio";
 import {
@@ -2888,7 +2889,7 @@ export default function ReservarPage() {
                     htmlFor="num-huespedes"
                     className="mb-1 block text-[8px] font-medium uppercase tracking-wide text-[#bbb]"
                   >
-                    Huéspedes
+                    {getUnidadesPrecioCopy(service.vertical).selectorLabel}
                   </label>
                   <select
                     id="num-huespedes"
@@ -2900,11 +2901,15 @@ export default function ReservarPage() {
                     {Array.from(
                       { length: Math.floor(Number(service.capacidad_maxima)) },
                       (_, i) => i + 1,
-                    ).map((n) => (
-                      <option key={n} value={n}>
-                        {n} huésped{n === 1 ? "" : "es"}
-                      </option>
-                    ))}
+                    ).map((n) => {
+                      const copy = getUnidadesPrecioCopy(service.vertical);
+                      const word = n === 1 ? copy.unitSingular : copy.unitPlural;
+                      return (
+                        <option key={n} value={n}>
+                          {n} {word}
+                        </option>
+                      );
+                    })}
                   </select>
                   {formatHuespedesPrecioDesglose(service, numHuespedes) && (
                     <p className="mt-1.5 text-[11px] leading-snug text-[#666]">
