@@ -2218,6 +2218,78 @@ export async function POST(request) {
       return Response.json({ success: true });
     }
 
+    if (tipo === "pago_liberado_proveedor") {
+      const userId = data.user_id || data.proveedor_id;
+      const bookingId = data.booking_id || null;
+      const email =
+        data.email || (userId ? await resolverEmailUsuario(userId) : null);
+      if (!email) {
+        return Response.json(
+          { error: "No se encontró el email del destinatario" },
+          { status: 400 },
+        );
+      }
+
+      if (userId && bookingId) {
+        const supabaseAdmin = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL,
+          process.env.SUPABASE_SERVICE_ROLE_KEY,
+        );
+        const { data: existingLog } = await supabaseAdmin
+          .from("email_logs")
+          .select("id")
+          .eq("user_id", userId)
+          .eq("tipo", "pago_liberado_proveedor")
+          .eq("booking_id", bookingId)
+          .maybeSingle();
+        if (existingLog) {
+          return Response.json({ success: true, already_sent: true });
+        }
+      }
+
+      const baseUrl = process.env.NEXT_PUBLIC_URL || "https://homeandheart.es";
+      const nombre = (data.nombre || "proveedor").replace(/</g, "&lt;");
+      const titulo = (data.titulo || "tu servicio").replace(/</g, "&lt;");
+      const importe = String(data.importe || "—").replace(/</g, "&lt;");
+      const dashboardUrl = `${baseUrl}/dashboard?tab=proveedor`;
+
+      const result = await resend.emails.send({
+        from: FROM,
+        to: email,
+        subject: `Has recibido un pago de ${data.importe || "—"} · Home&Heart`,
+        html: emailLayout({
+          title: "Has recibido un pago",
+          bodyHtml: `
+            <h1 style="margin:0 0 16px;font-size:20px;color:${BRAND_PRIMARY};">Has recibido un pago</h1>
+            <p style="margin:0 0 12px;font-size:14px;line-height:1.6;color:#444;">
+              Hola <strong>${nombre}</strong>, tu pago de <strong>${importe}</strong> por
+              <strong>«${titulo}»</strong> está en camino a tu cuenta.
+            </p>
+            <p style="margin:0 0 12px;font-size:14px;line-height:1.6;color:#444;">
+              El importe ya está liberado en Home&Heart y se transfiere a tu cuenta de Stripe Connect.
+              Desde ahí, Stripe lo enviará a tu cuenta bancaria según su calendario de payouts
+              (no es un ingreso inmediato en tu banco).
+            </p>
+            <p style="margin:0;text-align:center;">
+              <a href="${dashboardUrl}" style="display:inline-block;background-color:${BRAND_PRIMARY};color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:8px;font-size:15px;font-weight:600;">
+                Ver mi panel →
+              </a>
+            </p>
+          `,
+        }),
+      });
+
+      if (result.error) {
+        return Response.json({ error: result.error.message }, { status: 400 });
+      }
+
+      if (userId) {
+        await logMarketingEmail(userId, "pago_liberado_proveedor", bookingId);
+      }
+
+      return Response.json({ success: true });
+    }
+
     if (tipo === "incidencia") {
       const adminEmail = process.env.ADMIN_EMAIL || FROM;
       const result = await resend.emails.send({

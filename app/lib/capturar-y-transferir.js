@@ -7,6 +7,7 @@ import {
 import { calcularCapturaRepartoCents, validarCapturaRepartoStripe } from "@/app/lib/incidencia-reparto-bote";
 import { ejecutarTransferProveedorConDeudaSaldo } from "@/app/lib/transfer-proveedor";
 import { CANCELABLE_PI_STATUSES } from "@/app/lib/stripe-reembolso";
+import { notifyProveedoresPagosLiberados } from "@/app/lib/pago-liberado-notify";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
@@ -187,6 +188,18 @@ export async function capturarYTransferirPago(
     existingBookings?.length > 0 &&
     existingBookings.every((b) => b.pago_liberado_at != null)
   ) {
+    // Reintento idempotente: si el aviso falló la primera vez, se envía ahora.
+    try {
+      await notifyProveedoresPagosLiberados(
+        existingBookings.map((b) => b.id),
+        logPrefix,
+      );
+    } catch (notifyErr) {
+      console.error(
+        `${logPrefix} Aviso pago liberado (already_processed) falló; pago no afectado:`,
+        notifyErr?.message ?? notifyErr,
+      );
+    }
     return { success: true, already_processed: true };
   }
 
@@ -400,6 +413,18 @@ export async function capturarYTransferirPago(
         `${logPrefix} Error marcando pago_liberado_at:`,
         liberarError.message,
       );
+    } else {
+      try {
+        await notifyProveedoresPagosLiberados(
+          bookingIdsLiberados,
+          logPrefix,
+        );
+      } catch (notifyErr) {
+        console.error(
+          `${logPrefix} Aviso pago liberado falló; pago no afectado:`,
+          notifyErr?.message ?? notifyErr,
+        );
+      }
     }
   }
 
