@@ -142,7 +142,7 @@ export function resolveRevisionEstadoOnSave({
   };
 }
 
-/** Etiqueta de estado real para la lista del proveedor. */
+/** Etiqueta de estado real para la lista del proveedor (solo revisión). */
 export function getServiceRevisionDisplay(revisionEstado) {
   if (revisionEstado === REVISION_BORRADOR) {
     return {
@@ -171,6 +171,29 @@ export function getServiceRevisionDisplay(revisionEstado) {
     subtitle: "Aprobado y visible cuando esté activo",
     color: "#0e7a5c",
   };
+}
+
+/**
+ * Etiqueta de publicación para cabecera (revision_estado + disponible).
+ * - aprobado/null + disponible → Publicado
+ * - aprobado/null + !disponible → En pausa
+ * - en_revision / rechazado / borrador → solo estado de revisión
+ */
+export function getServiceAvailabilityDisplay(revisionEstado, disponible) {
+  if (revisionEstado === REVISION_BORRADOR) {
+    return { label: "Borrador", color: "#666" };
+  }
+  if (revisionEstado === REVISION_EN_REVISION) {
+    return { label: "En revisión", color: "#c47d1a" };
+  }
+  if (revisionEstado === REVISION_RECHAZADO) {
+    return { label: "Rechazado", color: "#b91c1c" };
+  }
+  // aprobado o null
+  if (disponible) {
+    return { label: "Publicado", color: "#0e7a5c" };
+  }
+  return { label: "En pausa", color: "#666" };
 }
 
 /**

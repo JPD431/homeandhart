@@ -83,15 +83,15 @@ import {
   COBROS_REQUERIDOS_MSG,
   getActivacionBloqueoMensaje,
   getProviderAnuncioHref,
-  getServiceVisibilidadEstado,
   puedeActivarServicio,
   proveedorPuedePublicar,
   resolveDisponibleForSave,
   REVISION_PENDIENTE_MSG,
+  servicioRevisionAprobada,
 } from "@/app/lib/provider-publicacion";
 import {
   buildServicesSaveFeedback,
-  getServiceRevisionDisplay,
+  getServiceAvailabilityDisplay,
   resolveRevisionEstadoOnSave,
 } from "@/app/lib/service-revision";
 import { REVISION_EN_REVISION } from "@/app/lib/onboarding-persist";
@@ -351,86 +351,71 @@ function SectionLabel({ number, title }) {
   );
 }
 
-function ServiceDisponibleRow({
+function ServiceAvailabilityHeader({
   service,
-  perfil,
-  documentContext,
   onToggle,
-  compact = false,
+  toggling = false,
+  showMeta = false,
+  metaLabel = "",
+  actions = null,
 }) {
-  const activo = service.disponible;
-  const puedeActivar = puedeActivarServicio(service, perfil, documentContext);
-  const switchBlocked = !activo && !puedeActivar;
-  const revisionUi = getServiceRevisionDisplay(service.revision_estado);
-  const visibilidad = getServiceVisibilidadEstado(perfil, activo, {
-    service,
-    documentContext,
-  });
-  // Prioriza el estado real de revisión; si está publicado pero en pausa, lo indica.
-  const statusLabel =
-    revisionUi.label === "Publicado" && !activo
-      ? "Publicado (en pausa)"
-      : revisionUi.label;
-  const statusColor =
-    revisionUi.label === "Publicado" && !activo ? "#666" : revisionUi.color;
-  const statusSubtitle =
-    revisionUi.label === "Publicado" && !activo
-      ? visibilidad.subtitle
-      : revisionUi.subtitle;
-
-  const switchControl = (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={activo}
-      aria-label={activo ? "Desactivar servicio" : "Activar servicio"}
-      aria-disabled={switchBlocked}
-      onClick={() => onToggle(service.id)}
-      className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${
-        switchBlocked ? "cursor-not-allowed opacity-50" : ""
-      }`}
-      style={{
-        backgroundColor: activo ? SERVICE_ACTIVE_GREEN : "#d1d5db",
-      }}
-    >
-      <span
-        className="absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform"
-        style={{
-          left: activo ? "calc(100% - 1.625rem)" : "0.125rem",
-        }}
-      />
-    </button>
+  const status = getServiceAvailabilityDisplay(
+    service.revision_estado,
+    service.disponible,
   );
-
-  if (compact) {
-    return (
-      <div className="flex shrink-0 items-center gap-2">
-        <span
-          className="text-xs font-semibold"
-          style={{ color: statusColor }}
-        >
-          {statusLabel}
-        </span>
-        {switchControl}
-      </div>
-    );
-  }
+  const canToggle = servicioRevisionAprobada(service.revision_estado);
+  const activo = service.disponible === true;
+  const titulo = service.details?.titulo?.trim() || "Sin título";
 
   return (
-    <div
-      className="mt-3 flex items-center justify-between gap-4 border-t pt-3"
-      style={{ borderColor: BRAND.border }}
-    >
-      <div>
-        <p
-          className="text-sm font-semibold"
-          style={{ color: statusColor }}
-        >
-          {statusLabel}
-        </p>
-        <p className="text-xs text-[#888]">{statusSubtitle}</p>
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex min-w-0 flex-1 items-center gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="truncate text-sm font-semibold text-[#1a1a1a]">
+              {titulo}
+            </p>
+            <span
+              className="shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-semibold"
+              style={{
+                backgroundColor: `${status.color}18`,
+                color: status.color,
+              }}
+            >
+              {status.label}
+            </span>
+          </div>
+          {showMeta && metaLabel ? (
+            <p className="mt-0.5 text-xs text-[#888]">{metaLabel}</p>
+          ) : null}
+        </div>
       </div>
-      {switchControl}
+
+      <div className="flex shrink-0 items-center gap-2">
+        {actions}
+        {canToggle ? (
+          <button
+            type="button"
+            role="switch"
+            aria-checked={activo}
+            aria-label={activo ? "Pausar servicio" : "Activar servicio"}
+            disabled={toggling || service.isNew}
+            onClick={() => onToggle(service.id)}
+            className="relative h-7 w-12 shrink-0 rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+            style={{
+              backgroundColor: activo ? SERVICE_ACTIVE_GREEN : "#d1d5db",
+            }}
+            title={activo ? "Pausar (ocultar de búsqueda)" : "Activar (mostrar en búsqueda)"}
+          >
+            <span
+              className="absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform"
+              style={{
+                left: activo ? "calc(100% - 1.625rem)" : "0.125rem",
+              }}
+            />
+          </button>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -1043,6 +1028,7 @@ function EditarPerfilContent() {
   const [services, setServices] = useState([]);
   const [editingId, setEditingId] = useState(null);
   const [addingService, setAddingService] = useState(false);
+  const [togglingDisponibleId, setTogglingDisponibleId] = useState(null);
   const [newVertical, setNewVertical] = useState("alojamiento");
   const [newServiceDetails, setNewServiceDetails] = useState(emptyServiceDetails());
   const [submitting, setSubmitting] = useState(false);
@@ -1220,12 +1206,20 @@ function EditarPerfilContent() {
 
   const puedePublicarServicios = proveedorPuedePublicar(perfil);
 
-  function toggleServiceDisponible(serviceId) {
+  async function toggleServiceDisponible(serviceId) {
     const target = services.find((s) => s.id === serviceId);
-    if (!target) return;
+    if (!target || target.isNew) return;
+    if (!servicioRevisionAprobada(target.revision_estado)) return;
+    if (togglingDisponibleId) return;
 
-    if (!target.disponible) {
-      const bloqueo = getActivacionBloqueoMensaje(perfil, target, documentContext);
+    const nextDisponible = !target.disponible;
+
+    if (nextDisponible) {
+      const bloqueo = getActivacionBloqueoMensaje(
+        perfil,
+        target,
+        documentContext,
+      );
       if (bloqueo) {
         setErrorMessage(bloqueo);
         return;
@@ -1233,12 +1227,53 @@ function EditarPerfilContent() {
     }
 
     setErrorMessage("");
-    markDirty();
-    setServices((prev) =>
-      prev.map((s) =>
-        s.id === serviceId ? { ...s, disponible: !s.disponible } : s,
-      ),
-    );
+    setSuccessMessage("");
+    setTogglingDisponibleId(serviceId);
+
+    try {
+      const res = await fetch(`/api/services/${serviceId}/disponible`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ disponible: nextDisponible }),
+      });
+      const payload = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        setErrorMessage(
+          payload.error || "No se pudo actualizar la disponibilidad.",
+        );
+        return;
+      }
+
+      if (typeof payload.disponible !== "boolean") {
+        setErrorMessage("La API no confirmó el nuevo estado.");
+        return;
+      }
+
+      setServices((prev) =>
+        prev.map((s) =>
+          s.id === serviceId
+            ? {
+                ...s,
+                disponible: payload.disponible,
+                disponibleOnLoad: payload.disponible,
+              }
+            : s,
+        ),
+      );
+      setSuccessMessage(
+        payload.disponible
+          ? "Servicio activado. Ya es visible en la búsqueda."
+          : "Servicio en pausa. Ya no aparece en la búsqueda.",
+      );
+    } catch (err) {
+      setErrorMessage(
+        err.message || "No se pudo actualizar la disponibilidad.",
+      );
+    } finally {
+      setTogglingDisponibleId(null);
+    }
   }
 
   function toggleIdioma(lang) {
@@ -1942,37 +1977,38 @@ function EditarPerfilContent() {
                 const isEditing = editingId === service.id;
                 return (
                   <li key={service.id} className="rounded-xl border p-4" style={{ borderColor: BRAND.border }}>
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: v?.color || PRIMARY }} />
-                        <div>
-                          <p className="text-sm font-semibold text-[#1a1a1a]">{service.details.titulo || "Sin título"}</p>
-                          <p className="text-xs text-[#888]">{v?.label} · {service.details.precio ? `${service.details.precio}€` : "—"}</p>
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        <a
-                          href={getProviderAnuncioHref(service, perfil, documentContext)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="rounded-lg border px-3 py-1.5 text-xs font-semibold no-underline transition-colors hover:bg-[#f7f5f2]"
-                          style={{ borderColor: BRAND.border, color: PRIMARY }}
-                        >
-                          Vista previa
-                        </a>
-                        <button type="button" onClick={() => setEditingId(isEditing ? null : service.id)} className="rounded-lg border px-3 py-1.5 text-xs font-semibold" style={{ borderColor: BRAND.border, color: PRIMARY }}>
-                          {isEditing ? "Cerrar" : "Editar"}
-                        </button>
-                      </div>
-                    </div>
-                    <ServiceDisponibleRow
+                    <ServiceAvailabilityHeader
                       service={service}
-                      perfil={perfil}
-                      documentContext={documentContext}
                       onToggle={toggleServiceDisponible}
+                      toggling={togglingDisponibleId === service.id}
+                      showMeta
+                      metaLabel={`${v?.label || service.vertical} · ${service.details.precio ? `${service.details.precio}€` : "—"}`}
+                      actions={
+                        <div className="flex gap-2">
+                          <a
+                            href={getProviderAnuncioHref(service, perfil, documentContext)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="rounded-lg border px-3 py-1.5 text-xs font-semibold no-underline transition-colors hover:bg-[#f7f5f2]"
+                            style={{ borderColor: BRAND.border, color: PRIMARY }}
+                          >
+                            Vista previa
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => setEditingId(isEditing ? null : service.id)}
+                            className="rounded-lg border px-3 py-1.5 text-xs font-semibold"
+                            style={{ borderColor: BRAND.border, color: PRIMARY }}
+                          >
+                            {isEditing ? "Cerrar" : "Editar"}
+                          </button>
+                        </div>
+                      }
                     />
                     {isEditing && (
-                      <ServiceEditForm vertical={service.vertical} details={service.details} userId={userId} serviceId={service.isNew ? null : service.id} onChange={(details) => updateServiceDetails(service.id, details)} onUploadError={setErrorMessage} />
+                      <div className="mt-4 border-t pt-4" style={{ borderColor: BRAND.border }}>
+                        <ServiceEditForm vertical={service.vertical} details={service.details} userId={userId} serviceId={service.isNew ? null : service.id} onChange={(details) => updateServiceDetails(service.id, details)} onUploadError={setErrorMessage} />
+                      </div>
                     )}
                   </li>
                 );
@@ -2060,17 +2096,14 @@ function EditarPerfilContent() {
       }
       return (
         <>
-          <Card
-            headerRight={
-              <ServiceDisponibleRow
-                compact
+          <Card>
+            <div className="mb-4 border-b pb-4" style={{ borderColor: BRAND.border }}>
+              <ServiceAvailabilityHeader
                 service={service}
-                perfil={perfil}
-                documentContext={documentContext}
                 onToggle={toggleServiceDisponible}
+                toggling={togglingDisponibleId === service.id}
               />
-            }
-          >
+            </div>
             <ServiceEditForm
               vertical={service.vertical}
               details={service.details}
