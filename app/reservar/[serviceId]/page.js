@@ -28,6 +28,10 @@ import {
   getServiceDuration,
 } from "@/app/lib/pricing-reserva";
 import {
+  formatHuespedesPrecioDesglose,
+  serviceHasHuespedesModelo,
+} from "@/app/lib/huespedes-precio";
+import {
   getRefundPercent,
   getServiceStartDateTime,
   normalizeCancelPolicy,
@@ -187,7 +191,10 @@ const RESERVAR_SERVICE_COLUMNS = `
   proveedor_id,
   oferta_descuento,
   oferta_valida_hasta,
-  descuentos_duracion
+  descuentos_duracion,
+  capacidad_maxima,
+  huespedes_incluidos,
+  precio_huesped_extra
 `;
 
 const RESERVAR_SERVICE_SELECT = `
@@ -1572,6 +1579,7 @@ export default function ReservarPage() {
   const [fechaFin, setFechaFin] = useState("");
   const [hora, setHora] = useState("");
   const [duracionHoras, setDuracionHoras] = useState("");
+  const [numHuespedes, setNumHuespedes] = useState(null);
   const [mensaje, setMensaje] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [successVariant, setSuccessVariant] = useState("green");
@@ -1723,6 +1731,12 @@ export default function ReservarPage() {
       }
 
       setService(data);
+
+      if (serviceHasHuespedesModelo(data)) {
+        setNumHuespedes(Math.floor(Number(data.huespedes_incluidos)));
+      } else {
+        setNumHuespedes(null);
+      }
 
       const { data: ratings } = await supabase
         .from("reviews")
@@ -2024,7 +2038,13 @@ export default function ReservarPage() {
       };
     }
 
-    const dateContext = { fechaInicio, fechaFin, duracionHoras, mainVertical: vertical };
+    const dateContext = {
+      fechaInicio,
+      fechaFin,
+      duracionHoras,
+      mainVertical: vertical,
+      numHuespedes,
+    };
     const clienteSinComision = getReservasSinComisionCliente(perfilCliente) > 0;
     const lines = selectedServices.map((svc) => {
       const unitOverride =
@@ -2115,6 +2135,7 @@ export default function ReservarPage() {
     fechaInicio,
     fechaFin,
     duracionHoras,
+    numHuespedes,
     precioEspecialChat,
     perfilCliente,
     tarifasPorServicio,
@@ -2417,6 +2438,9 @@ export default function ReservarPage() {
             reservarComoFamilia && familiaInfo?.id ? familiaInfo.id : null,
           precio_especial: precioEspecialChat,
           valida_hasta: validaHastaParam || null,
+          num_huespedes: serviceHasHuespedesModelo(service)
+            ? numHuespedes
+            : null,
         }),
       });
 
@@ -2438,6 +2462,7 @@ export default function ReservarPage() {
       fechaFin,
       hora,
       duracionHoras,
+      numHuespedes,
       mensaje,
       router,
       reservarComoFamilia,
@@ -2475,6 +2500,9 @@ export default function ReservarPage() {
             reservarComoFamilia && familiaInfo?.id ? familiaInfo.id : null,
           precio_especial: precioEspecialChat,
           valida_hasta: validaHastaParam || null,
+          num_huespedes: serviceHasHuespedesModelo(service)
+            ? numHuespedes
+            : null,
         }),
       });
 
@@ -2496,6 +2524,7 @@ export default function ReservarPage() {
       fechaFin,
       hora,
       duracionHoras,
+      numHuespedes,
       mensaje,
       router,
       reservarComoFamilia,
@@ -2641,7 +2670,13 @@ export default function ReservarPage() {
           if (!fechaInicio || !service) return Number(service?.precio) || 0;
           const calc = calculateServiceBasePrice(
             service,
-            { fechaInicio, fechaFin, duracionHoras, mainVertical: vertical },
+            {
+              fechaInicio,
+              fechaFin,
+              duracionHoras,
+              mainVertical: vertical,
+              numHuespedes,
+            },
             precioEspecialChat,
             tarifasPorServicio[service.id] ?? {},
           );
@@ -2658,6 +2693,7 @@ export default function ReservarPage() {
         fechaFin,
         duracionHoras,
         mainVertical: vertical,
+        numHuespedes,
       },
       null,
       tarifasPorServicio[comp.id] ?? {},
@@ -2843,6 +2879,38 @@ export default function ReservarPage() {
                       style={{ borderColor: "#e8e4de", borderRadius: 6 }}
                     />
                   </div>
+                </div>
+              )}
+
+              {serviceHasHuespedesModelo(service) && (
+                <div className="mt-3">
+                  <label
+                    htmlFor="num-huespedes"
+                    className="mb-1 block text-[8px] font-medium uppercase tracking-wide text-[#bbb]"
+                  >
+                    Huéspedes
+                  </label>
+                  <select
+                    id="num-huespedes"
+                    value={numHuespedes ?? ""}
+                    onChange={(e) => setNumHuespedes(Number(e.target.value))}
+                    className={inputClass}
+                    style={{ borderColor: "#e8e4de", borderRadius: 6 }}
+                  >
+                    {Array.from(
+                      { length: Math.floor(Number(service.capacidad_maxima)) },
+                      (_, i) => i + 1,
+                    ).map((n) => (
+                      <option key={n} value={n}>
+                        {n} huésped{n === 1 ? "" : "es"}
+                      </option>
+                    ))}
+                  </select>
+                  {formatHuespedesPrecioDesglose(service, numHuespedes) && (
+                    <p className="mt-1.5 text-[11px] leading-snug text-[#666]">
+                      {formatHuespedesPrecioDesglose(service, numHuespedes)}
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -3368,6 +3436,13 @@ export default function ReservarPage() {
                       {mainPriceLine ? formatEuro(mainPriceLine.total) : "—"}
                     </span>
                   </div>
+
+                  {serviceHasHuespedesModelo(service) &&
+                    formatHuespedesPrecioDesglose(service, numHuespedes) && (
+                      <p className="mt-1.5 text-[10px] leading-snug text-[#888]">
+                        {formatHuespedesPrecioDesglose(service, numHuespedes)}
+                      </p>
+                    )}
 
                   {bundleLines.map((line) => {
                     const lineConfig = VERTICALS[line.vertical] ?? verticalConfig;

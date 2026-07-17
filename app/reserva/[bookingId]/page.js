@@ -271,6 +271,12 @@ export default function ReservaDetallePage() {
               {duration && (
                 <p className="mt-0.5 text-xs text-[#888]">Duración: {duration}</p>
               )}
+              {booking.num_huespedes != null && (
+                <p className="mt-0.5 text-xs text-[#888]">
+                  {booking.num_huespedes} huésped
+                  {booking.num_huespedes === 1 ? "" : "es"}
+                </p>
+              )}
             </section>
 
             <section className="mt-5">

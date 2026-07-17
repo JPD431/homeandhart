@@ -16,6 +16,7 @@ import {
 import { rewardReferidorPrimeraReserva } from "@/app/lib/referidos";
 import { assertUserIsDniVerified } from "@/app/lib/dni";
 import { notifyBookingEvent } from "@/app/lib/notifications";
+import { validateNumHuespedesParaReserva } from "@/app/lib/huespedes-precio";
 
 const MAX_CREDITO_PORCENTAJE = 0.6;
 
@@ -82,6 +83,9 @@ const SERVICE_SELECT = `
   direccion_exacta,
   telefono_contacto,
   modalidad,
+  capacidad_maxima,
+  huespedes_incluidos,
+  precio_huesped_extra,
   profiles!proveedor_id (
     nombre,
     verificado,
@@ -111,6 +115,28 @@ function getPrecioEspecialOverride(precioEspecial, validaHasta) {
 
 function roundMoney(amount) {
   return Math.round(amount * 100) / 100;
+}
+
+/**
+ * Valida capacidad y resuelve num_huespedes por servicio.
+ * Sin modelo por huésped → null (precio plano, retrocompatible).
+ */
+function resolveNumHuespedesPorServicio(services, numHuespedesRaw) {
+  const map = new Map();
+  for (const svc of services) {
+    const validated = validateNumHuespedesParaReserva(svc, numHuespedesRaw);
+    if (!validated.ok) {
+      return {
+        ok: false,
+        response: NextResponse.json(
+          { error: validated.error, service_id: svc.id },
+          { status: 400 },
+        ),
+      };
+    }
+    map.set(svc.id, validated.num);
+  }
+  return { ok: true, map };
 }
 
 function buildServicePricing(calcBase, clienteSinComision) {
@@ -491,6 +517,7 @@ function buildBookingRow({
   grupoReserva,
   paymentIntentId,
   familiaId,
+  numHuespedes = null,
 }) {
   const v = svc.vertical;
   const isImmediate = svc.reserva_inmediata === true;
@@ -515,6 +542,7 @@ function buildBookingRow({
     grupo_reserva: grupoReserva,
     payment_intent_id: paymentIntentId,
     familia_id: familiaId || null,
+    num_huespedes: numHuespedes,
   };
 }
 
@@ -856,6 +884,7 @@ async function completePerServicePayments(userId, body) {
     familia_id = null,
     precio_especial = null,
     valida_hasta = null,
+    num_huespedes = null,
   } = body ?? {};
 
   if (!grupo_reserva || typeof grupo_reserva !== "string") {
@@ -910,6 +939,13 @@ async function completePerServicePayments(userId, body) {
     return NextResponse.json({ error: bookability.error }, { status: 409 });
   }
 
+  const huespedesResolved = resolveNumHuespedesPorServicio(
+    services,
+    num_huespedes,
+  );
+  if (!huespedesResolved.ok) return huespedesResolved.response;
+  const numHuespedesPorServicio = huespedesResolved.map;
+
   const { data: perfilCliente, error: perfilError } = await supabaseAdmin
     .from("profiles")
     .select("reservas_sin_comision_cliente, credito_disponible, nombre")
@@ -960,7 +996,10 @@ async function completePerServicePayments(userId, body) {
 
     const calc = calculateServiceBasePrice(
       svc,
-      dateContext,
+      {
+        ...dateContext,
+        numHuespedes: numHuespedesPorServicio.get(serviceId),
+      },
       unitOverride,
       tarifasPorServicio[serviceId] ?? {},
     );
@@ -1117,6 +1156,7 @@ async function completePerServicePayments(userId, body) {
       grupoReserva: grupo_reserva,
       paymentIntentId: paymentsByService.get(serviceId),
       familiaId: familia_id,
+      numHuespedes: numHuespedesPorServicio.get(serviceId) ?? null,
     });
   });
 
@@ -1212,6 +1252,7 @@ export async function POST(request) {
       familia_id = null,
       precio_especial = null,
       valida_hasta = null,
+      num_huespedes = null,
     } = body ?? {};
 
     if (!payment_intent_id || typeof payment_intent_id !== "string") {
@@ -1276,6 +1317,13 @@ export async function POST(request) {
       return NextResponse.json({ error: bookability.error }, { status: 409 });
     }
 
+    const huespedesResolved = resolveNumHuespedesPorServicio(
+      services,
+      num_huespedes,
+    );
+    if (!huespedesResolved.ok) return huespedesResolved.response;
+    const numHuespedesPorServicio = huespedesResolved.map;
+
     const { data: perfilCliente, error: perfilError } = await supabaseAdmin
       .from("profiles")
       .select("reservas_sin_comision_cliente, credito_disponible, nombre")
@@ -1326,7 +1374,10 @@ export async function POST(request) {
 
       const calc = calculateServiceBasePrice(
         svc,
-        dateContext,
+        {
+          ...dateContext,
+          numHuespedes: numHuespedesPorServicio.get(serviceId),
+        },
         unitOverride,
         tarifasPorServicio[serviceId] ?? {},
       );
@@ -1505,6 +1556,7 @@ export async function POST(request) {
         grupoReserva: grupo_reserva,
         paymentIntentId: payment_intent_id,
         familiaId: familia_id,
+        numHuespedes: numHuespedesPorServicio.get(serviceId) ?? null,
       });
     });
 

@@ -1,8 +1,119 @@
 /**
- * Precio por huésped (alojamiento): configuración del anuncio.
- * No afecta al cálculo de reserva hasta el Paso 2.
- * Campos NULL = comportamiento precio plano actual.
+ * Precio por huésped (alojamiento): configuración del anuncio + cálculo de reserva.
+ * Campos NULL / precio_huesped_extra 0 = precio plano (retrocompatible).
  */
+
+/**
+ * True solo si el servicio tiene el modelo base + suplemento por huésped extra.
+ * Sin modelo → precio exactamente como antes (plano × noches × 1.14).
+ */
+export function serviceHasHuespedesModelo(svc) {
+  if (!svc || svc.vertical !== "alojamiento") return false;
+
+  const max = Number(svc.capacidad_maxima);
+  const incluidos = Number(svc.huespedes_incluidos);
+  const extra = Number(svc.precio_huesped_extra);
+
+  return (
+    Number.isFinite(max) &&
+    max > 0 &&
+    Number.isFinite(incluidos) &&
+    incluidos > 0 &&
+    Number.isFinite(extra) &&
+    extra > 0
+  );
+}
+
+/**
+ * Suplemento €/noche por huéspedes por encima de los incluidos.
+ * Sin modelo → 0 (no altera el precio).
+ */
+export function getHuespedesSuplementoPorNoche(svc, numHuespedes) {
+  if (!serviceHasHuespedesModelo(svc)) return 0;
+
+  const incluidos = Math.floor(Number(svc.huespedes_incluidos));
+  const extra = Number(svc.precio_huesped_extra);
+  const n = resolveNumHuespedesValue(svc, numHuespedes);
+  if (n == null) return 0;
+
+  return Math.max(0, n - incluidos) * extra;
+}
+
+/**
+ * Valor entero de huéspedes a usar en precio (default = incluidos).
+ * No valida capacidad; usar validateNumHuespedesParaReserva en servidor.
+ */
+export function resolveNumHuespedesValue(svc, numHuespedes) {
+  if (!serviceHasHuespedesModelo(svc)) return null;
+
+  const incluidos = Math.floor(Number(svc.huespedes_incluidos));
+  if (numHuespedes == null || numHuespedes === "") return incluidos;
+
+  const n = Number(numHuespedes);
+  if (!Number.isFinite(n)) return incluidos;
+  return Math.floor(n);
+}
+
+/**
+ * Valida num_huespedes para un servicio con modelo.
+ * @returns {{ ok: true, num: number|null } | { ok: false, error: string }}
+ */
+export function validateNumHuespedesParaReserva(svc, numHuespedes) {
+  if (!serviceHasHuespedesModelo(svc)) {
+    return { ok: true, num: null };
+  }
+
+  const max = Math.floor(Number(svc.capacidad_maxima));
+  const incluidos = Math.floor(Number(svc.huespedes_incluidos));
+
+  let n;
+  if (numHuespedes == null || numHuespedes === "") {
+    n = incluidos;
+  } else {
+    n = Number(numHuespedes);
+    if (!Number.isFinite(n) || Math.floor(n) !== n) {
+      return { ok: false, error: "El número de huéspedes no es válido." };
+    }
+    n = Math.floor(n);
+  }
+
+  if (n < 1) {
+    return { ok: false, error: "Debe haber al menos 1 huésped." };
+  }
+  if (n > max) {
+    return {
+      ok: false,
+      error: `Este alojamiento admite un máximo de ${max} huésped${max === 1 ? "" : "es"}.`,
+    };
+  }
+
+  return { ok: true, num: n };
+}
+
+/**
+ * Desglose legible para el cliente, ej.
+ * "2 huéspedes incluidos · +2 huéspedes × 5€ = +10€/noche"
+ */
+export function formatHuespedesPrecioDesglose(svc, numHuespedes) {
+  if (!serviceHasHuespedesModelo(svc)) return null;
+
+  const incluidos = Math.floor(Number(svc.huespedes_incluidos));
+  const extra = Number(svc.precio_huesped_extra);
+  const n = resolveNumHuespedesValue(svc, numHuespedes) ?? incluidos;
+  const extras = Math.max(0, n - incluidos);
+  const inclLabel = `${incluidos} huésped${incluidos === 1 ? "" : "es"} incluidos`;
+
+  if (extras === 0) return inclLabel;
+
+  const euro =
+    Number.isInteger(extra) ? String(extra) : extra.toFixed(2).replace(/\.?0+$/, "");
+  const suplemento = Math.round(extras * extra * 100) / 100;
+  const suplStr = Number.isInteger(suplemento)
+    ? String(suplemento)
+    : suplemento.toFixed(2).replace(/\.?0+$/, "");
+
+  return `${inclLabel} · +${extras} huésped${extras === 1 ? "" : "es"} × ${euro}€ = +${suplStr}€/noche`;
+}
 
 /**
  * @param {object|null|undefined} row — fila services
