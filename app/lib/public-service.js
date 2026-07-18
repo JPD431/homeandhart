@@ -1,3 +1,4 @@
+import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { supabase } from "@/app/lib/supabase";
 import { isAdminUserId } from "@/lib/auth/admin";
 import { attachModalidadesToService } from "@/app/lib/service-modalidades-server";
@@ -10,6 +11,20 @@ import {
   loadServiceContactAdmin,
   mergeResolvedContactIntoService,
 } from "@/app/lib/service-contact";
+
+function getSupabaseAdmin() {
+  if (
+    !process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    !process.env.SUPABASE_SERVICE_ROLE_KEY
+  ) {
+    return null;
+  }
+  return createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+    { auth: { persistSession: false, autoRefreshToken: false } },
+  );
+}
 
 /**
  * Servicio visible en búsqueda / anuncio público.
@@ -38,7 +53,7 @@ const OWNER_PROFILE_SELECT =
 /**
  * Servicio del proveedor autenticado para vista previa (sin filtros públicos).
  * Solo devuelve datos si proveedor_id === userId (comprobado en la query).
- * Incluye dirección/teléfono (dueño).
+ * Incluye dirección/teléfono (dueño). Usa el cliente del usuario (RLS dueño).
  */
 export async function loadOwnerServiceForPreview(serviceId, userId, supabaseClient) {
   if (!serviceId || !userId || !supabaseClient) return null;
@@ -68,13 +83,24 @@ export async function loadOwnerServiceForPreview(serviceId, userId, supabaseClie
 }
 
 /**
- * Vista previa admin de cualquier servicio (moderación).
- * Incluye campos privados (moderación).
+ * Vista previa admin de cualquier servicio (moderación), vía SERVICE ROLE.
+ * NO usa el cliente del navegador (RLS no aplica): así funciona tras Paso B
+ * aunque el servicio esté en borrador/en_revision.
+ *
+ * SOLO llamar tras verificar isAdminUserId(userId) / getAdminUser().
  */
-export async function loadAdminServiceForPreview(serviceId, supabaseClient) {
-  if (!serviceId || !supabaseClient) return null;
+export async function loadAdminServiceForPreview(serviceId) {
+  if (!serviceId) return null;
 
-  const { data: service, error } = await supabaseClient
+  const admin = getSupabaseAdmin();
+  if (!admin) {
+    console.error(
+      "[public-service] loadAdminServiceForPreview: falta SERVICE_ROLE",
+    );
+    return null;
+  }
+
+  const { data: service, error } = await admin
     .from("services")
     .select("*")
     .eq("id", serviceId)
@@ -82,13 +108,12 @@ export async function loadAdminServiceForPreview(serviceId, supabaseClient) {
 
   if (error || !service) return null;
 
-  const { data: profile } = await supabaseClient
+  const { data: profile } = await admin
     .from("profiles")
     .select(OWNER_PROFILE_SELECT)
     .eq("id", service.proveedor_id)
     .maybeSingle();
 
-  // Admin: service role bypass for contact (preview moderación).
   const contact = await loadServiceContactAdmin(service.id);
   const withContact = mergeResolvedContactIntoService(service, contact);
 
@@ -111,26 +136,24 @@ export async function loadAnuncioService(
     supabase: supabaseClient = null,
   } = {},
 ) {
-  // Dueño/admin con preview: cargar completo (con dirección) aunque el anuncio
-  // también sea público, para que el proveedor vea sus datos privados.
-  if (previewRequested && userId && supabaseClient) {
+  // Preview: admin (service role) o dueño (RLS propio).
+  if (previewRequested && userId) {
     if (isAdminUserId(userId)) {
-      const adminService = await loadAdminServiceForPreview(
-        serviceId,
-        supabaseClient,
-      );
+      const adminService = await loadAdminServiceForPreview(serviceId);
       if (adminService) {
         return { service: adminService, mode: "admin-preview" };
       }
     }
 
-    const ownerService = await loadOwnerServiceForPreview(
-      serviceId,
-      userId,
-      supabaseClient,
-    );
-    if (ownerService) {
-      return { service: ownerService, mode: "owner-preview" };
+    if (supabaseClient) {
+      const ownerService = await loadOwnerServiceForPreview(
+        serviceId,
+        userId,
+        supabaseClient,
+      );
+      if (ownerService) {
+        return { service: ownerService, mode: "owner-preview" };
+      }
     }
   }
 
