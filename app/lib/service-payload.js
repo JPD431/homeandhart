@@ -195,6 +195,7 @@ async function geocodificarDireccion(direccion) {
 }
 
 export async function getServiceLocationFields(details, vertical) {
+  // Si no aplica dirección: nulls → syncServiceContact BORRA la fila (regla única).
   if (!needsDireccionFields(vertical, details.modalidad)) {
     return {
       direccion_exacta: null,

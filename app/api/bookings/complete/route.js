@@ -14,6 +14,7 @@ import {
 } from "@/app/lib/pricing-reserva";
 import { cargarTarifasPorServicios } from "@/app/lib/tarifas";
 import { loadServiceModalidadesRows } from "@/app/lib/service-modalidades-server";
+import { attachContactsToServicesAdmin } from "@/app/lib/service-contact";
 import {
   COBROS_INACTIVE_MSG,
   getProveedorFromService,
@@ -959,7 +960,8 @@ async function completePerServicePayments(userId, body) {
     );
   }
 
-  const services = await attachModalidadesToServices(servicesRaw);
+  const servicesWithMods = await attachModalidadesToServices(servicesRaw);
+  const services = await attachContactsToServicesAdmin(servicesWithMods);
   const serviceMap = new Map(services.map((s) => [s.id, s]));
   const mainService = serviceMap.get(main_service_id);
   if (!mainService) {
@@ -1347,7 +1349,8 @@ export async function POST(request) {
       );
     }
 
-    const services = await attachModalidadesToServices(servicesRaw);
+    const servicesWithMods = await attachModalidadesToServices(servicesRaw);
+    const services = await attachContactsToServicesAdmin(servicesWithMods);
     const serviceMap = new Map(services.map((s) => [s.id, s]));
     const mainService = serviceMap.get(main_service_id);
     if (!mainService) {

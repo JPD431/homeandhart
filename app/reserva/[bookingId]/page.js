@@ -20,6 +20,10 @@ import {
 import { puedeReportarIncidencia } from "@/app/lib/booking-incidencia";
 import { buildLoginUrl } from "@/app/lib/auth-redirect";
 import { canLeaveReview } from "@/app/lib/reviews";
+import {
+  loadServiceContact,
+  mergeResolvedContactIntoService,
+} from "@/app/lib/service-contact";
 import { supabase } from "@/app/lib/supabase";
 
 const PRIMARY = "#1d4f91";
@@ -116,7 +120,25 @@ export default function ReservaDetallePage() {
         return;
       }
 
-      setBooking(row);
+      // Dual-read: preferir service_contact; fallback a columns legacy en services.
+      const rawService = Array.isArray(row.services)
+        ? row.services[0]
+        : row.services;
+      let mergedService = rawService ?? null;
+      if (row.service_id) {
+        const contact = await loadServiceContact(row.service_id);
+        if (mergedService || contact) {
+          mergedService = mergeResolvedContactIntoService(
+            mergedService || { id: row.service_id },
+            contact,
+          );
+        }
+      }
+
+      setBooking({
+        ...row,
+        services: mergedService,
+      });
 
       const { data: review } = await supabase
         .from("reviews")

@@ -5,6 +5,11 @@ import {
   SERVICE_PUBLIC_SELECT,
   stripPrivateServiceFields,
 } from "@/app/lib/location-privacy";
+import {
+  loadServiceContact,
+  loadServiceContactAdmin,
+  mergeResolvedContactIntoService,
+} from "@/app/lib/service-contact";
 
 /**
  * Servicio visible en búsqueda / anuncio público.
@@ -53,8 +58,11 @@ export async function loadOwnerServiceForPreview(serviceId, userId, supabaseClie
     .eq("id", userId)
     .maybeSingle();
 
+  const contact = await loadServiceContact(service.id, supabaseClient);
+  const withContact = mergeResolvedContactIntoService(service, contact);
+
   return attachModalidadesToService({
-    ...service,
+    ...withContact,
     profiles_public: profile ?? {},
   });
 }
@@ -80,8 +88,12 @@ export async function loadAdminServiceForPreview(serviceId, supabaseClient) {
     .eq("id", service.proveedor_id)
     .maybeSingle();
 
+  // Admin: service role bypass for contact (preview moderación).
+  const contact = await loadServiceContactAdmin(service.id);
+  const withContact = mergeResolvedContactIntoService(service, contact);
+
   return attachModalidadesToService({
-    ...service,
+    ...withContact,
     profiles_public: profile ?? {},
   });
 }

@@ -24,6 +24,11 @@ import {
   syncServicePhotos,
 } from "@/app/lib/service-photos";
 import { getServiceCompleteness } from "@/app/lib/service-revision";
+import {
+  applyContactToDetails,
+  loadServiceContactsByIds,
+  syncServiceContact,
+} from "@/app/lib/service-contact";
 import { supabase } from "@/app/lib/supabase";
 
 export const REVISION_BORRADOR = "borrador";
@@ -219,6 +224,13 @@ export async function upsertDraftService(
       .single();
     if (error) throw error;
 
+    const contactResult = await syncServiceContact(data.id, locationFields);
+    if (!contactResult.ok) {
+      throw new Error(
+        contactResult.error || "No se pudo guardar el contacto del servicio",
+      );
+    }
+
     if (supportsModalidadCobro(vertical)) {
       const { saveServiceModalidades } = await import(
         "@/app/lib/modalidad-cobro-persist"
@@ -245,6 +257,13 @@ export async function upsertDraftService(
     .select("id, fotos, foto_url, revision_estado")
     .single();
   if (error) throw error;
+
+  const contactResult = await syncServiceContact(data.id, locationFields);
+  if (!contactResult.ok) {
+    throw new Error(
+      contactResult.error || "No se pudo guardar el contacto del servicio",
+    );
+  }
 
   if (supportsModalidadCobro(vertical)) {
     const { saveServiceModalidades } = await import(
@@ -347,7 +366,33 @@ export async function loadOnboardingState(userId) {
 
   if (draftsError) throw draftsError;
 
-  return { profile, drafts: drafts ?? [] };
+  const draftRows = drafts ?? [];
+  const contactById = await loadServiceContactsByIds(
+    draftRows.map((r) => r.id),
+  );
+
+  const draftsWithContact = draftRows.map((row) => {
+    const contact = contactById.get(row.id) ?? null;
+    const resolved = applyContactToDetails(
+      {
+        direccion_exacta: row.direccion_exacta || "",
+        telefono_contacto: row.telefono_contacto || "",
+        location_lat: row.location_lat ?? null,
+        location_lng: row.location_lng ?? null,
+      },
+      contact,
+      row,
+    );
+    return {
+      ...row,
+      direccion_exacta: resolved.direccion_exacta,
+      telefono_contacto: resolved.telefono_contacto,
+      location_lat: resolved.location_lat,
+      location_lng: resolved.location_lng,
+    };
+  });
+
+  return { profile, drafts: draftsWithContact };
 }
 
 export async function finalizeOnboarding(userId, verticales, draftIdsByVertical) {

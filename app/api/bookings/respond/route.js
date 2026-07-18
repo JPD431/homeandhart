@@ -3,6 +3,7 @@ import Stripe from "stripe";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { notifyBookingEvent } from "@/app/lib/notifications";
+import { attachContactToServiceAdmin } from "@/app/lib/service-contact";
 
 const supabaseAdmin = createServiceClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -66,8 +67,9 @@ function mergeServiceEmbed(embed, fallback) {
   if (!raw) return fallback;
   return {
     titulo: raw.titulo || fallback.titulo,
-    direccion_exacta: raw.direccion_exacta || fallback.direccion_exacta,
-    telefono_contacto: raw.telefono_contacto || fallback.telefono_contacto,
+    // Preferir contacto ya resuelto (service_contact) del fallback
+    direccion_exacta: fallback.direccion_exacta || raw.direccion_exacta,
+    telefono_contacto: fallback.telefono_contacto || raw.telefono_contacto,
     modalidad: raw.modalidad || fallback.modalidad,
     proveedor_id: raw.proveedor_id || fallback.proveedor_id,
   };
@@ -136,7 +138,7 @@ export async function POST(request) {
     return NextResponse.json({ error: "Reserva no encontrada" }, { status: 404 });
   }
 
-  const { data: service, error: serviceError } = await supabaseAdmin
+  const { data: serviceRaw, error: serviceError } = await supabaseAdmin
     .from("services")
     .select(
       "id, proveedor_id, titulo, direccion_exacta, telefono_contacto, modalidad",
@@ -147,6 +149,10 @@ export async function POST(request) {
   if (serviceError) {
     return NextResponse.json({ error: serviceError.message }, { status: 500 });
   }
+
+  const service = serviceRaw
+    ? await attachContactToServiceAdmin(serviceRaw)
+    : null;
 
   if (!service || service.proveedor_id !== user.id) {
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });

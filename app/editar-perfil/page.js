@@ -76,6 +76,11 @@ import {
   parseNormasFromDb,
 } from "@/app/lib/service-payload";
 import {
+  applyContactToDetails,
+  loadServiceContactsByIds,
+  syncServiceContact,
+} from "@/app/lib/service-contact";
+import {
   formatMissingPublishDocumentLabels,
   getMissingPublishDocumentsForVertical,
 } from "@/app/lib/provider-documents";
@@ -1159,10 +1164,20 @@ function EditarPerfilContent() {
         setErrorMessage(servicesError.message);
       } else {
         const rows = serviceRows ?? [];
+        const contactById = await loadServiceContactsByIds(rows.map((r) => r.id));
         const modalidadesById = await loadModalidadesForServices(rows);
         setServices(
           rows.map((row) => {
-            const mapped = mapServiceFromDb(row);
+            const contact = contactById.get(row.id) ?? null;
+            const resolved = applyContactToDetails({}, contact, row);
+            const rowWithContact = {
+              ...row,
+              direccion_exacta: resolved.direccion_exacta,
+              telefono_contacto: resolved.telefono_contacto,
+              location_lat: resolved.location_lat,
+              location_lng: resolved.location_lng,
+            };
+            const mapped = mapServiceFromDb(rowWithContact);
             const cobro = modalidadesById.get(row.id);
             if (cobro) {
               mapped.details = { ...mapped.details, ...cobro };
@@ -1598,6 +1613,16 @@ function EditarPerfilContent() {
             .single();
           if (error) throw error;
           revisionMeta.savedRow = inserted;
+          const contactResult = await syncServiceContact(
+            inserted.id,
+            locationFields,
+          );
+          if (!contactResult.ok) {
+            throw new Error(
+              contactResult.error ||
+                "No se pudo guardar el contacto del servicio",
+            );
+          }
           const modResult = await saveServiceModalidades(
             inserted.id,
             service.details,
@@ -1618,6 +1643,17 @@ function EditarPerfilContent() {
             .single();
 
           if (error) throw error;
+
+          const contactResult = await syncServiceContact(
+            service.id,
+            locationFields,
+          );
+          if (!contactResult.ok) {
+            throw new Error(
+              contactResult.error ||
+                "No se pudo guardar el contacto del servicio",
+            );
+          }
 
           let savedFotos = parseFotosFromDbStrict(updated);
           console.log("[editar-perfil] guardar — BD devolvió", {
@@ -1742,13 +1778,25 @@ function EditarPerfilContent() {
           .select("*")
           .single();
         if (error) throw error;
+        const contactResult = await syncServiceContact(data.id, locationFields);
+        if (!contactResult.ok) {
+          throw new Error(
+            contactResult.error ||
+              "No se pudo guardar el contacto del servicio",
+          );
+        }
         const modResult = await saveServiceModalidades(
           data.id,
           newServiceDetails,
           newVertical,
         );
         if (!modResult.ok) throw new Error(modResult.error);
-        const mappedNew = mapServiceFromDb(data);
+        const mappedNew = mapServiceFromDb({
+          ...data,
+          ...locationFields,
+          direccion_exacta: locationFields.direccion_exacta || "",
+          telefono_contacto: locationFields.telefono_contacto || "",
+        });
         servicesAfterSave = [
           ...servicesAfterSave,
           {
