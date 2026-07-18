@@ -8,7 +8,6 @@ import { supabase } from "@/app/lib/supabase";
 import {
   buildAnuncioHref,
   buildReservarHref,
-  formatServiceCardPrice,
   formatServiceCardShortName,
   getServiceCardInitials,
   getServiceCardTags,
@@ -16,6 +15,7 @@ import {
   getServiceCardZone,
   getServicePhotos,
   normalizeServiceProfile,
+  resolveServiceCardPricing,
 } from "@/app/lib/service-card-display";
 
 /** Máximo 2 chips visibles, priorizando verificado y tipo de reserva. */
@@ -71,16 +71,9 @@ export default function ServiceCard({
     () => pickCardTags(allTags, profile, isPreview),
     [allTags, profile, isPreview],
   );
-  const priceLabel = formatServiceCardPrice(service?.precio, theme.priceSuffix);
-  const reservarLabel =
-    typeof extra?.reservar === "function"
-      ? extra.reservar(
-          service.precio != null && service.precio !== ""
-            ? `${Number(service.precio)}€`
-            : "—",
-          theme.priceSuffix,
-        )
-      : `Reservar · ${priceLabel}`;
+  const pricing = resolveServiceCardPricing(service, lang);
+  const priceLabel = pricing.priceLabel;
+  const reservarLabel = pricing.reservarLabel;
 
   const rating = service
     ? ratingsByProveedor?.[service.proveedor_id]

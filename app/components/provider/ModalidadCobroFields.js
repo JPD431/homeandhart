@@ -18,7 +18,7 @@ const inputClass = PROVIDER_INPUT_CLASS;
 
 /**
  * Activa 1–3 modalidades de cobro, cada una con precio / horas / suplemento.
- * Solo niñera / mascotas. No afecta el cálculo de reserva (paso 1).
+ * Solo niñera / mascotas (mismas 3 opciones en ambas verticales).
  */
 export default function ModalidadCobroFields({
   vertical,
@@ -69,10 +69,10 @@ export default function ModalidadCobroFields({
         ¿Cómo puedes cobrar este servicio?
       </p>
       <p className="mt-1 text-[11px] leading-relaxed text-[#666]">
-        Activa una o varias modalidades. El cliente elegirá al reservar. Mientras
-        tanto, la reserva sigue cobrando como ahora (
-        {legacy === "hora" ? "por hora" : "por día"}): usa el precio de «
-        {legacy === "hora" ? "Por hora" : "Por día completo"}» si está activa.
+        Activa una o varias modalidades. El cliente elegirá al reservar. Si no
+        configuras ninguna, se cobra como hasta ahora (
+        {legacy === "hora" ? "por hora" : "por día"}) con el precio base del
+        servicio.
       </p>
 
       <div className="mt-4 flex flex-col gap-3">

@@ -1,3 +1,11 @@
+import { parseFotosFromDb } from "@/app/lib/service-photos";
+import {
+  MODALIDAD_COBRO_VALUES,
+  getModalidadCobroPriceSuffix,
+  legacyModalidadForVertical,
+  supportsModalidadCobro,
+} from "@/app/lib/modalidad-cobro";
+
 /** Tema visual por vertical — misma definición que /buscar. */
 export const SERVICE_CARD_VERTICAL_THEME = {
   alojamiento: {
@@ -50,6 +58,114 @@ export function formatServiceCardPrice(precio, suffix) {
   return `${Number(precio)}€${suffix}`;
 }
 
+function formatCardEuroAmount(precio) {
+  const n = Number(precio);
+  if (!Number.isFinite(n)) return null;
+  return n % 1 === 0 ? String(n) : n.toFixed(2).replace(/\.?0+$/, "");
+}
+
+/** Compacta "/ hora" → "/hora"; deja "/medio día" legible. */
+export function compactPriceSuffix(suffix) {
+  return String(suffix || "")
+    .trim()
+    .replace(/^\/\s*/, "/");
+}
+
+/**
+ * Precio mostrado en tarjeta de búsqueda.
+ * - Niñera/mascotas con service_modalidades → mínimo entre modalidades activas.
+ * - Sin filas → services.precio + sufijo legacy (hora / día).
+ * - Alojamiento → services.precio /noche; si hay tarifas variables, mínimo + "desde".
+ * No afecta el cálculo de reserva.
+ *
+ * @returns {{
+ *   precio: number|null,
+ *   suffix: string,
+ *   useDesde: boolean,
+ *   priceLabel: string,
+ *   reservarLabel: string,
+ * }}
+ */
+export function resolveServiceCardPricing(service, lang = "es") {
+  const theme = getServiceCardTheme(service?.vertical);
+  const verb = lang === "en" ? "Book" : "Reservar";
+  const fromWord = lang === "en" ? "from" : "desde";
+
+  const empty = {
+    precio: null,
+    suffix: "",
+    useDesde: false,
+    priceLabel: "Consultar",
+    reservarLabel: verb,
+  };
+
+  if (!service) return empty;
+
+  const vertical = service.vertical;
+  let precio = null;
+  let suffix = theme.priceSuffix || "";
+  let useDesde = false;
+
+  if (supportsModalidadCobro(vertical)) {
+    const rows = Array.isArray(service.modalidades) ? service.modalidades : [];
+    const priced = [];
+    for (const row of rows) {
+      const p = Number(row?.precio);
+      if (!Number.isFinite(p) || p <= 0) continue;
+      if (!MODALIDAD_COBRO_VALUES.includes(row.modalidad)) continue;
+      priced.push({ modalidad: row.modalidad, precio: p });
+    }
+
+    if (priced.length > 0) {
+      priced.sort((a, b) => a.precio - b.precio);
+      const best = priced[0];
+      precio = best.precio;
+      suffix = getModalidadCobroPriceSuffix(best.modalidad);
+      useDesde = priced.length > 1;
+    } else {
+      const p = Number(service.precio);
+      if (Number.isFinite(p) && p > 0) precio = p;
+      const legacy = legacyModalidadForVertical(vertical);
+      suffix = legacy
+        ? getModalidadCobroPriceSuffix(legacy)
+        : theme.priceSuffix;
+      useDesde = false;
+    }
+  } else if (vertical === "alojamiento") {
+    const base = Number(service.precio);
+    const tarifasMin = Number(service.tarifas_min_precio);
+    const hasTarifasMin = Number.isFinite(tarifasMin) && tarifasMin > 0;
+    const hasBase = Number.isFinite(base) && base > 0;
+
+    if (hasTarifasMin && hasBase) {
+      precio = Math.min(base, tarifasMin);
+      useDesde = tarifasMin !== base || service.tarifas_variables === true;
+    } else if (hasTarifasMin) {
+      precio = tarifasMin;
+      useDesde = service.tarifas_variables === true;
+    } else if (hasBase) {
+      precio = base;
+      useDesde = false;
+    }
+    suffix = theme.priceSuffix || "/ noche";
+  } else {
+    const p = Number(service.precio);
+    if (Number.isFinite(p) && p > 0) precio = p;
+    suffix = theme.priceSuffix || "";
+  }
+
+  if (precio == null) return empty;
+
+  const compact = compactPriceSuffix(suffix);
+  const amount = `${formatCardEuroAmount(precio)}€${compact}`;
+  const priceLabel = useDesde ? `${fromWord} ${amount}` : amount;
+  const reservarLabel = useDesde
+    ? `${verb} ${fromWord} ${amount}`
+    : `${verb} · ${amount}`;
+
+  return { precio, suffix, useDesde, priceLabel, reservarLabel };
+}
+
 export function getServiceCardZone(service, profile) {
   return (
     service.location_zone ||
@@ -80,8 +196,6 @@ export function getServiceDescription(service) {
       : "";
   return fallback;
 }
-
-import { parseFotosFromDb } from "@/app/lib/service-photos";
 
 /**
  * URLs de fotos del servicio (ordenadas; portada = [0]).

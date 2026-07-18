@@ -719,12 +719,69 @@ function BuscarContent() {
           }
         }
 
+        const modalidadesByService = {};
+        const careIds = services
+          .filter((s) => s.vertical === "ninos" || s.vertical === "mascotas")
+          .map((s) => s.id)
+          .filter(Boolean);
+        if (careIds.length > 0) {
+          const { data: modRows } = await supabase
+            .from("service_modalidades")
+            .select("service_id, modalidad, precio, horas_unidad, suplemento_extra")
+            .in("service_id", careIds);
+          for (const row of modRows ?? []) {
+            if (!modalidadesByService[row.service_id]) {
+              modalidadesByService[row.service_id] = [];
+            }
+            modalidadesByService[row.service_id].push(row);
+          }
+        }
+
+        const tarifasMinByService = {};
+        const tarifasVariablesByService = {};
+        const alojamientoIds = services
+          .filter((s) => s.vertical === "alojamiento")
+          .map((s) => s.id)
+          .filter(Boolean);
+        if (alojamientoIds.length > 0) {
+          const { data: tarifaRows } = await supabase
+            .from("service_tarifas")
+            .select("service_id, precio")
+            .in("service_id", alojamientoIds);
+          const tarifasAgg = {};
+          for (const row of tarifaRows ?? []) {
+            const p = Number(row.precio);
+            if (!Number.isFinite(p) || p <= 0) continue;
+            const sid = row.service_id;
+            if (!tarifasAgg[sid]) {
+              tarifasAgg[sid] = { min: p, max: p };
+            } else {
+              tarifasAgg[sid].min = Math.min(tarifasAgg[sid].min, p);
+              tarifasAgg[sid].max = Math.max(tarifasAgg[sid].max, p);
+            }
+          }
+          for (const s of services) {
+            if (s.vertical !== "alojamiento") continue;
+            const agg = tarifasAgg[s.id];
+            if (!agg) continue;
+            tarifasMinByService[s.id] = agg.min;
+            const base = Number(s.precio);
+            const hasBase = Number.isFinite(base) && base > 0;
+            tarifasVariablesByService[s.id] =
+              agg.min !== agg.max ||
+              (hasBase && (base !== agg.min || base !== agg.max));
+          }
+        }
+
         setRatingsByProveedor(ratingsMap);
         setBookingsByService(bookingsMap);
         setRawResults(
           services.map((service) => ({
             ...service,
             avales_count: avalesByProveedor[service.proveedor_id] ?? 0,
+            modalidades: modalidadesByService[service.id] ?? [],
+            tarifas_min_precio: tarifasMinByService[service.id] ?? null,
+            tarifas_variables: tarifasVariablesByService[service.id] === true,
           })),
         );
       }

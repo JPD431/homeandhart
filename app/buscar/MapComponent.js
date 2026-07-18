@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
+import { resolveServiceCardPricing } from "@/app/lib/service-card-display";
 
 export default function RealMap({
   results,
@@ -66,7 +67,13 @@ export default function RealMap({
         box-shadow: 0 2px 8px rgba(0,0,0,.2);
         white-space: nowrap;
       `;
-      el.textContent = `${servicio.precio}€`;
+      const pricing = resolveServiceCardPricing(servicio, "es");
+      el.textContent =
+        pricing.precio != null
+          ? pricing.useDesde
+            ? `desde ${pricing.precio}€`
+            : `${pricing.precio}€`
+          : "·";
 
       el.addEventListener("mouseenter", () => onPinHover(i));
       el.addEventListener("mouseleave", () => onPinLeave());
