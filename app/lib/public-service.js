@@ -1,27 +1,15 @@
 import { supabase } from "@/app/lib/supabase";
 import { isAdminUserId } from "@/lib/auth/admin";
 import { attachModalidadesToService } from "@/app/lib/service-modalidades-server";
-
-const SERVICE_PUBLIC_SELECT = `
-  *,
-  profiles_public!inner (
-    id,
-    nombre,
-    apellido,
-    foto_perfil,
-    foto_url,
-    descripcion,
-    ciudad,
-    location_zone,
-    verificado,
-    idiomas,
-    badge_respuesta
-  )
-`;
+import {
+  SERVICE_PUBLIC_SELECT,
+  stripPrivateServiceFields,
+} from "@/app/lib/location-privacy";
 
 /**
  * Servicio visible en búsqueda / anuncio público.
  * Mismos filtros que /buscar: solo aprobado (o legacy null).
+ * Sin dirección exacta, teléfono ni coordenadas precisas.
  */
 export async function loadPublicServiceById(serviceId) {
   if (!serviceId) return null;
@@ -36,7 +24,7 @@ export async function loadPublicServiceById(serviceId) {
     .maybeSingle();
 
   if (error || !data) return null;
-  return attachModalidadesToService(data);
+  return attachModalidadesToService(stripPrivateServiceFields(data));
 }
 
 const OWNER_PROFILE_SELECT =
@@ -45,6 +33,7 @@ const OWNER_PROFILE_SELECT =
 /**
  * Servicio del proveedor autenticado para vista previa (sin filtros públicos).
  * Solo devuelve datos si proveedor_id === userId (comprobado en la query).
+ * Incluye dirección/teléfono (dueño).
  */
 export async function loadOwnerServiceForPreview(serviceId, userId, supabaseClient) {
   if (!serviceId || !userId || !supabaseClient) return null;
@@ -72,6 +61,7 @@ export async function loadOwnerServiceForPreview(serviceId, userId, supabaseClie
 
 /**
  * Vista previa admin de cualquier servicio (moderación).
+ * Incluye campos privados (moderación).
  */
 export async function loadAdminServiceForPreview(serviceId, supabaseClient) {
   if (!serviceId || !supabaseClient) return null;
@@ -109,11 +99,8 @@ export async function loadAnuncioService(
     supabase: supabaseClient = null,
   } = {},
 ) {
-  const publicService = await loadPublicServiceById(serviceId);
-  if (publicService) {
-    return { service: publicService, mode: "public" };
-  }
-
+  // Dueño/admin con preview: cargar completo (con dirección) aunque el anuncio
+  // también sea público, para que el proveedor vea sus datos privados.
   if (previewRequested && userId && supabaseClient) {
     if (isAdminUserId(userId)) {
       const adminService = await loadAdminServiceForPreview(
@@ -133,6 +120,11 @@ export async function loadAnuncioService(
     if (ownerService) {
       return { service: ownerService, mode: "owner-preview" };
     }
+  }
+
+  const publicService = await loadPublicServiceById(serviceId);
+  if (publicService) {
+    return { service: publicService, mode: "public" };
   }
 
   return { service: null, mode: null };

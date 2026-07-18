@@ -19,6 +19,7 @@ import {
   normalizeServiceProfile,
   serviceDescriptionIsPetFriendly,
 } from "@/app/lib/service-card-display";
+import { stripPrivateServiceFields } from "@/app/lib/location-privacy";
 import { supabase } from "@/app/lib/supabase";
 
 const RealMap = dynamic(() => import("./MapComponent"), {
@@ -574,6 +575,7 @@ function BuscarContent() {
 
       const f = appliedFilters;
 
+      // Público: sin direccion_exacta, telefono_contacto ni coords exactas.
       let query = supabase
         .from("services")
         .select(
@@ -590,8 +592,6 @@ function BuscarContent() {
           tipo_alojamiento,
           modalidad,
           location_zone,
-          location_lat,
-          location_lng,
           ciudad,
           proveedor_id,
           oferta_descuento,
@@ -777,7 +777,7 @@ function BuscarContent() {
         setBookingsByService(bookingsMap);
         setRawResults(
           services.map((service) => ({
-            ...service,
+            ...stripPrivateServiceFields(service),
             avales_count: avalesByProveedor[service.proveedor_id] ?? 0,
             modalidades: modalidadesByService[service.id] ?? [],
             tarifas_min_precio: tarifasMinByService[service.id] ?? null,

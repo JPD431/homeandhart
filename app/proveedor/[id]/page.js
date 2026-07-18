@@ -253,13 +253,59 @@ export default async function ProveedorPage({ params }) {
     notFound();
   }
 
-  const { data: services } = await supabase
+  // Perfil público: sin dirección exacta, teléfono ni coordenadas precisas.
+  const { data: servicesRaw } = await supabase
     .from("services")
-    .select("*")
+    .select(
+      `
+      id,
+      titulo,
+      vertical,
+      precio,
+      disponible,
+      cancellation_policy,
+      reserva_inmediata,
+      descripcion,
+      descripcion_anuncio,
+      foto_url,
+      fotos,
+      tipo_alojamiento,
+      modalidad,
+      location_zone,
+      ciudad,
+      proveedor_id,
+      oferta_descuento,
+      oferta_valida_hasta,
+      oferta_titulo,
+      oferta_descripcion,
+      disponible_para_viajar,
+      capacidad,
+      capacidad_maxima,
+      huespedes_incluidos,
+      precio_huesped_extra,
+      amenities,
+      jardin,
+      paseos_incluidos,
+      fotos_actualizaciones,
+      mascotas_detalle,
+      ninos_detalle,
+      normas,
+      check_in,
+      check_out,
+      estancia_minima,
+      estancia_maxima,
+      antelacion_minima,
+      dias_disponibles,
+      proveedor_emergencia,
+      anos_experiencia,
+      revision_estado
+    `,
+    )
     .eq("proveedor_id", id)
     .eq("disponible", true);
 
-  const serviceIds = (services ?? []).map((s) => s.id);
+  const services = servicesRaw ?? [];
+  const serviceIds = services.map((s) => s.id);
 
   let bloqueosCalendario = [];
   if (serviceIds.length > 0) {
