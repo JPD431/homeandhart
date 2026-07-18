@@ -10,6 +10,11 @@ import {
   getServiceCardTheme,
 } from "@/app/lib/service-card-display";
 import {
+  getModalidadCobroPriceSuffix,
+  resolveModalidadCobro,
+  supportsModalidadCobro,
+} from "@/app/lib/modalidad-cobro";
+import {
   getPrecioConDescuento,
   isOfertaActiva,
 } from "@/app/lib/ofertas";
@@ -36,14 +41,18 @@ export default function AnuncioBookingPanel({
   isOwnerPreview = false,
 }) {
   const theme = getServiceCardTheme(service?.vertical);
+  const priceSuffix =
+    supportsModalidadCobro(service?.vertical)
+      ? getModalidadCobroPriceSuffix(resolveModalidadCobro(service))
+      : theme.priceSuffix;
   const ofertaActiva = isOfertaActiva(service);
   const precioConDescuento = ofertaActiva
     ? getPrecioConDescuento(service.precio, service.oferta_descuento)
     : null;
 
   const displayPrice = ofertaActiva
-    ? formatServiceCardPrice(precioConDescuento, theme.priceSuffix)
-    : formatServiceCardPrice(service?.precio, theme.priceSuffix);
+    ? formatServiceCardPrice(precioConDescuento, priceSuffix)
+    : formatServiceCardPrice(service?.precio, priceSuffix);
 
   const [fechaDesde, setFechaDesde] = useState(initialDesde);
   const [fechaHasta, setFechaHasta] = useState(initialHasta);
@@ -82,7 +91,7 @@ export default function AnuncioBookingPanel({
               {displayPrice}
             </p>
             <p className="text-[13px] text-[#aaa] line-through">
-              {formatServiceCardPrice(service.precio, theme.priceSuffix)}
+              {formatServiceCardPrice(service.precio, priceSuffix)}
             </p>
             {service.oferta_descuento ? (
               <span

@@ -8,12 +8,14 @@ import AmenitiesPicker from "@/app/components/AmenitiesPicker";
 import BanoTipoSelector from "@/app/components/BanoTipoSelector";
 import AlojamientoServiceFields from "@/app/components/provider/AlojamientoServiceFields";
 import HuespedesPrecioFields from "@/app/components/provider/HuespedesPrecioFields";
+import ModalidadCobroFields from "@/app/components/provider/ModalidadCobroFields";
 import NinosServiceFields from "@/app/components/provider/NinosServiceFields";
 import MascotasServiceFields from "@/app/components/provider/MascotasServiceFields";
 import ToggleRow from "@/app/components/provider/ToggleRow";
 import ServiceOperationalFields from "@/app/components/ServiceOperationalFields";
 import { BRAND, SERIF } from "@/app/components/brand";
 import { validateHuespedesPrecio } from "@/app/lib/huespedes-precio";
+import { validateModalidadCobro } from "@/app/lib/modalidad-cobro";
 import {
   loadProviderDocuments,
   persistProviderDocument,
@@ -183,6 +185,8 @@ const EMPTY_SERVICE_DETAILS = {
     location_lng: null,
     precio: "",
     modalidad: "domicilio_cliente",
+    modalidad_cobro: "hora",
+    horas_por_unidad: "",
     direccion_exacta: "",
     telefono_contacto: "",
     edadesTags: [],
@@ -215,6 +219,8 @@ const EMPTY_SERVICE_DETAILS = {
     location_lng: null,
     precio: "0",
     modalidad: "domicilio_cliente",
+    modalidad_cobro: "dia",
+    horas_por_unidad: "8",
     direccion_exacta: "",
     telefono_contacto: "",
     animalesTags: [],
@@ -823,6 +829,11 @@ export default function SerProveedorPage() {
         setErrorMessage("Completa título y precio del servicio de niñera.");
         return false;
       }
+      const cobroError = validateModalidadCobro(d, "ninos");
+      if (cobroError) {
+        setErrorMessage(cobroError);
+        return false;
+      }
       const unidadesError = validateHuespedesPrecio(d, "ninos");
       if (unidadesError) {
         setErrorMessage(unidadesError);
@@ -833,6 +844,11 @@ export default function SerProveedorPage() {
       const d = serviceDetails.mascotas;
       if (!d.titulo.trim() || !d.precio) {
         setErrorMessage("Completa título y precio del servicio de mascotas.");
+        return false;
+      }
+      const cobroError = validateModalidadCobro(d, "mascotas");
+      if (cobroError) {
+        setErrorMessage(cobroError);
         return false;
       }
       const unidadesError = validateHuespedesPrecio(d, "mascotas");
@@ -1311,12 +1327,16 @@ export default function SerProveedorPage() {
               <label className="mb-1.5 block text-xs font-medium text-[#444]">Años de experiencia</label>
               <input type="number" min="0" value={d.anos_experiencia} onChange={(e) => upd("anos_experiencia", e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
             </div>
-            <div>
-              <label className="mb-1.5 block text-xs font-medium text-[#444]">{servicePrecioLabel("ninos")}</label>
-              <input type="number" min="0" value={d.precio} onChange={(e) => upd("precio", e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
+            <div className="sm:col-span-2">
+              <ModalidadCobroFields
+                vertical="ninos"
+                details={d}
+                onChange={(next) => updateServiceDetails("ninos", next)}
+                accentColor={GREEN}
+              />
             </div>
             <div className="sm:col-span-2">
-              <p className="mb-2 text-xs font-medium text-[#444]">Modalidad</p>
+              <p className="mb-2 text-xs font-medium text-[#444]">{SERVICE_LABELS.modalidad}</p>
               <div className="flex flex-wrap gap-2">
                 {MODALIDAD_OPTIONS.ninos.map((opt) => (
                   <TagPill key={opt.value} label={opt.label} selected={d.modalidad === opt.value} onClick={() => upd("modalidad", opt.value)} color={GREEN} />
@@ -1413,12 +1433,16 @@ export default function SerProveedorPage() {
               <label className="mb-1.5 block text-xs font-medium text-[#444]">Años de experiencia</label>
               <input type="number" min="0" value={d.anos_experiencia} onChange={(e) => upd("anos_experiencia", e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
             </div>
-            <div>
-              <label className="mb-1.5 block text-xs font-medium text-[#444]">{servicePrecioLabel("mascotas")}</label>
-              <input type="number" min="0" value={d.precio} onChange={(e) => upd("precio", e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
+            <div className="sm:col-span-2">
+              <ModalidadCobroFields
+                vertical="mascotas"
+                details={d}
+                onChange={(next) => updateServiceDetails("mascotas", next)}
+                accentColor={ORANGE}
+              />
             </div>
             <div className="sm:col-span-2">
-              <label className="mb-1.5 block text-xs font-medium text-[#444]">Modalidad</label>
+              <label className="mb-1.5 block text-xs font-medium text-[#444]">{SERVICE_LABELS.modalidad}</label>
               <select
                 value={d.modalidad}
                 onChange={(e) => upd("modalidad", e.target.value)}

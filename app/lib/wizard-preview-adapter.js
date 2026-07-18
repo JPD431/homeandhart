@@ -8,6 +8,12 @@ import {
   getServiceDescription,
   getServicePhotos,
 } from "@/app/lib/service-card-display";
+import {
+  formatModalidadCobroAnuncio,
+  getModalidadCobroPriceSuffix,
+  resolveModalidadCobro,
+  supportsModalidadCobro,
+} from "@/app/lib/modalidad-cobro";
 
 const CANCEL_LABELS = {
   flexible: "Flexible",
@@ -59,6 +65,11 @@ export function buildWizardPreviewService(
     }),
     descripcion_anuncio: details.descripcion_anuncio?.trim() || "",
     precio: details.precio ?? "",
+    modalidad_cobro: details.modalidad_cobro || null,
+    horas_por_unidad:
+      details.horas_por_unidad != null && details.horas_por_unidad !== ""
+        ? Number(details.horas_por_unidad)
+        : null,
     foto_url,
     fotos: photos,
     amenities: Array.isArray(details.amenities) ? details.amenities : [],
@@ -110,11 +121,24 @@ export function buildWizardPreviewServices(verticales, wizardState) {
 export function getWizardPreviewSummary(vertical, details = {}) {
   const theme = getServiceCardTheme(vertical);
   const items = [];
+  const priceSuffix = supportsModalidadCobro(vertical)
+    ? getModalidadCobroPriceSuffix(resolveModalidadCobro(vertical, details.modalidad_cobro))
+    : theme.priceSuffix;
 
   items.push({
     label: "Precio",
-    value: formatServiceCardPrice(details.precio, theme.priceSuffix),
+    value: formatServiceCardPrice(details.precio, priceSuffix),
   });
+
+  const cobroLine = formatModalidadCobroAnuncio({
+    vertical,
+    precio: details.precio,
+    modalidad_cobro: details.modalidad_cobro,
+    horas_por_unidad: details.horas_por_unidad,
+  });
+  if (cobroLine) {
+    items.push({ label: "Cobro", value: cobroLine });
+  }
 
   if (vertical === "alojamiento") {
     const capRows = getCapacidadDisplayRows({ capacidad: details.capacidad });

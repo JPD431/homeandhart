@@ -42,6 +42,11 @@ import {
 } from "@/app/lib/capacidad";
 import { parseHuespedesPrecioFromDb, validateHuespedesPrecio } from "@/app/lib/huespedes-precio";
 import HuespedesPrecioFields from "@/app/components/provider/HuespedesPrecioFields";
+import ModalidadCobroFields from "@/app/components/provider/ModalidadCobroFields";
+import {
+  parseModalidadCobroFromDb,
+  validateModalidadCobro,
+} from "@/app/lib/modalidad-cobro";
 import {
   normalizeDescuentosDuracion,
   serializeDescuentosDuracionForDb,
@@ -185,6 +190,8 @@ function emptyServiceDetails() {
     precio: "",
     tipo_alojamiento: "",
     modalidad: "domicilio_cliente",
+    modalidad_cobro: "",
+    horas_por_unidad: "",
     direccion_exacta: "",
     telefono_contacto: "",
     estancia_minima: "1",
@@ -256,6 +263,13 @@ function mergeServiceDetails(rawDetails, vertical) {
     Object.assign(merged, parseCheckTimesFromDb(rawDetails || {}));
   } else if (vertical === "ninos" || vertical === "mascotas") {
     merged.anos_experiencia = parseAnosExperienciaFromDb(rawDetails || {});
+    const cobro = parseModalidadCobroFromDb({
+      vertical,
+      modalidad_cobro: merged.modalidad_cobro,
+      horas_por_unidad: merged.horas_por_unidad,
+    });
+    merged.modalidad_cobro = cobro.modalidad_cobro;
+    merged.horas_por_unidad = cobro.horas_por_unidad;
   }
 
   return merged;
@@ -299,6 +313,7 @@ function mapServiceFromDb(row) {
     foto_url: parseFotosFromDb(row)[0] || "",
     capacidad: parseCapacidadFromDb(row),
     ...parseHuespedesPrecioFromDb(row),
+    ...parseModalidadCobroFromDb(row),
     direccion_exacta: row.direccion_exacta || "",
     telefono_contacto: row.telefono_contacto || "",
     nru: row.nru || "",
@@ -696,19 +711,31 @@ function ServiceEditForm({ vertical, details: rawDetails, onChange, userId, serv
           />
         </div>
       )}
-      <div>
-        <label className="mb-1.5 block text-xs font-medium text-[#444]">
-          {servicePrecioLabel(vertical)}
-        </label>
-        <input
-          type="number"
-          min="0"
-          value={details.precio}
-          onChange={(e) => update("precio", e.target.value)}
-          className={inputClass}
-          style={{ borderColor: BRAND.border }}
-        />
-      </div>
+      {vertical === "alojamiento" && (
+        <div>
+          <label className="mb-1.5 block text-xs font-medium text-[#444]">
+            {servicePrecioLabel(vertical)}
+          </label>
+          <input
+            type="number"
+            min="0"
+            value={details.precio}
+            onChange={(e) => update("precio", e.target.value)}
+            className={inputClass}
+            style={{ borderColor: BRAND.border }}
+          />
+        </div>
+      )}
+      {(vertical === "ninos" || vertical === "mascotas") && (
+        <div className="sm:col-span-2">
+          <ModalidadCobroFields
+            vertical={vertical}
+            details={details}
+            onChange={onChange}
+            accentColor={vertical === "ninos" ? GREEN : ORANGE}
+          />
+        </div>
+      )}
       {vertical === "alojamiento" && (
         <div>
           <label className="mb-1.5 block text-xs font-medium text-[#444]">NRU</label>
@@ -1435,6 +1462,15 @@ function EditarPerfilContent() {
 
     try {
       for (const service of services) {
+        const cobroError = validateModalidadCobro(
+          service.details,
+          service.vertical,
+        );
+        if (cobroError) {
+          setErrorMessage(cobroError);
+          setSubmitting(false);
+          return;
+        }
         const unidadesError = validateHuespedesPrecio(
           service.details,
           service.vertical,
@@ -1446,6 +1482,15 @@ function EditarPerfilContent() {
         }
       }
       if (addingService) {
+        const cobroError = validateModalidadCobro(
+          newServiceDetails,
+          newVertical,
+        );
+        if (cobroError) {
+          setErrorMessage(cobroError);
+          setSubmitting(false);
+          return;
+        }
         const unidadesError = validateHuespedesPrecio(
           newServiceDetails,
           newVertical,

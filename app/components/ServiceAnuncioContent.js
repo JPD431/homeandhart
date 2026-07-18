@@ -1,6 +1,7 @@
 import { resolveAmenitiesGrouped } from "@/app/lib/amenities";
 import { getCapacidadDisplayRows, formatCapacidadDisplayRow } from "@/app/lib/capacidad";
 import { formatHuespedesPrecioInfo } from "@/app/lib/huespedes-precio";
+import { formatModalidadCobroAnuncio } from "@/app/lib/modalidad-cobro";
 import { getMascotasDisplayRows } from "@/app/lib/service-payload";
 import {
   getServiceCardTheme,
@@ -94,6 +95,7 @@ export default function ServiceAnuncioContent({
       vertical === "mascotas")
       ? formatHuespedesPrecioInfo(service)
       : null;
+  const modalidadCobroInfo = formatModalidadCobroAnuncio(service);
   const amenityGroups =
     showAmenities && vertical === "alojamiento"
       ? resolveAmenitiesGrouped(
@@ -112,6 +114,15 @@ export default function ServiceAnuncioContent({
       {descriptionText ? (
         <p className="text-[12px] leading-relaxed text-[#666] whitespace-pre-line">
           {descriptionText}
+        </p>
+      ) : null}
+
+      {modalidadCobroInfo ? (
+        <p
+          className="rounded-lg px-3 py-2 text-[11px] font-medium leading-relaxed text-[#444]"
+          style={{ backgroundColor: "#eef6f2" }}
+        >
+          {modalidadCobroInfo}
         </p>
       ) : null}
 

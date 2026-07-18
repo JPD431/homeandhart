@@ -6,6 +6,7 @@ import {
   getUnidadesPrecioCopy,
   supportsUnidadesPrecio,
 } from "@/app/lib/huespedes-precio";
+import { resolveModalidadCobro } from "@/app/lib/modalidad-cobro";
 
 const inputClass = PROVIDER_INPUT_CLASS;
 
@@ -23,7 +24,11 @@ export default function HuespedesPrecioFields({
 }) {
   if (!supportsUnidadesPrecio(vertical)) return null;
 
-  const copy = getUnidadesPrecioCopy(vertical);
+  const modalidadCobro =
+    vertical === "ninos" || vertical === "mascotas"
+      ? resolveModalidadCobro(vertical, details?.modalidad_cobro)
+      : null;
+  const copy = getUnidadesPrecioCopy(vertical, modalidadCobro);
 
   function update(field, val) {
     const next = { ...details, [field]: val };

@@ -9,6 +9,8 @@
  * cuando el servicio tiene el modelo configurado.
  */
 
+import { resolveModalidadCobro } from "@/app/lib/modalidad-cobro";
+
 export const VERTICALES_UNIDADES_PRECIO = ["alojamiento", "ninos", "mascotas"];
 
 /** Copy / etiquetas por vertical (UI + anuncio + desglose). */
@@ -81,8 +83,27 @@ export function supportsUnidadesPrecio(vertical) {
   return VERTICALES_UNIDADES_PRECIO.includes(vertical);
 }
 
-export function getUnidadesPrecioCopy(vertical) {
-  return UNIDADES_PRECIO_COPY[vertical] ?? UNIDADES_PRECIO_COPY.alojamiento;
+/**
+ * @param {string} vertical
+ * @param {string|null} [modalidadCobro] — si ninos/mascotas, adapta €/hora|día|medio día
+ */
+export function getUnidadesPrecioCopy(vertical, modalidadCobro = null) {
+  const base =
+    UNIDADES_PRECIO_COPY[vertical] ?? UNIDADES_PRECIO_COPY.alojamiento;
+  if (vertical !== "ninos" && vertical !== "mascotas") return base;
+
+  let unit = base.priceUnit;
+  if (modalidadCobro === "hora") unit = "hora";
+  else if (modalidadCobro === "medio_dia") unit = "medio día";
+  else if (modalidadCobro === "dia") unit = "día";
+  else if (vertical === "ninos") unit = "hora";
+  else unit = "día";
+
+  return {
+    ...base,
+    priceUnit: unit,
+    extraLabel: `Precio por ${base.unitSingular} adicional (€/${unit})`,
+  };
 }
 
 /**
@@ -330,7 +351,11 @@ export function formatHuespedesPrecioInfo(service) {
   const vertical = service?.vertical || "alojamiento";
   if (!supportsUnidadesPrecio(vertical)) return null;
 
-  const copy = getUnidadesPrecioCopy(vertical);
+  const modalidad =
+    vertical === "ninos" || vertical === "mascotas"
+      ? resolveModalidadCobro(service)
+      : null;
+  const copy = getUnidadesPrecioCopy(vertical, modalidad);
   const max =
     service?.capacidad_maxima != null
       ? Number(service.capacidad_maxima)

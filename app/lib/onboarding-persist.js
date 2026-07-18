@@ -1,5 +1,6 @@
 import { parseCapacidadFromDb } from "@/app/lib/capacidad";
 import { parseHuespedesPrecioFromDb } from "@/app/lib/huespedes-precio";
+import { parseModalidadCobroFromDb } from "@/app/lib/modalidad-cobro";
 import { normalizeDescuentosDuracion } from "@/app/lib/descuentosDuracion";
 import { uploadProfilePhoto, uploadServicePhoto } from "@/app/lib/provider-uploads";
 import {
@@ -264,6 +265,7 @@ export function mapDraftRowToServiceDetails(row) {
     foto_url: fotos[0] || "",
     capacidad: parseCapacidadFromDb(row),
     ...parseHuespedesPrecioFromDb(row),
+    ...parseModalidadCobroFromDb(row),
     descuentos_duracion_activa: tiers.length > 0,
     descuentos_duracion:
       tiers.length > 0
