@@ -15,7 +15,11 @@ import ToggleRow from "@/app/components/provider/ToggleRow";
 import ServiceOperationalFields from "@/app/components/ServiceOperationalFields";
 import { BRAND, SERIF } from "@/app/components/brand";
 import { validateHuespedesPrecio } from "@/app/lib/huespedes-precio";
-import { validateModalidadCobro } from "@/app/lib/modalidad-cobro";
+import {
+  seedModalidadesCobroFromLegacy,
+  validateModalidadCobro,
+} from "@/app/lib/modalidad-cobro";
+import { loadServiceModalidadesForm } from "@/app/lib/modalidad-cobro-persist";
 import {
   loadProviderDocuments,
   persistProviderDocument,
@@ -185,8 +189,7 @@ const EMPTY_SERVICE_DETAILS = {
     location_lng: null,
     precio: "",
     modalidad: "domicilio_cliente",
-    modalidad_cobro: "hora",
-    horas_por_unidad: "",
+    modalidades_cobro: seedModalidadesCobroFromLegacy("ninos", {}),
     direccion_exacta: "",
     telefono_contacto: "",
     edadesTags: [],
@@ -219,8 +222,7 @@ const EMPTY_SERVICE_DETAILS = {
     location_lng: null,
     precio: "0",
     modalidad: "domicilio_cliente",
-    modalidad_cobro: "dia",
-    horas_por_unidad: "8",
+    modalidades_cobro: seedModalidadesCobroFromLegacy("mascotas", { precio: "0" }),
     direccion_exacta: "",
     telefono_contacto: "",
     animalesTags: [],
@@ -531,9 +533,16 @@ export default function SerProveedorPage() {
           for (const row of drafts) {
             const vertical = row.vertical;
             if (!vertical || !nextDetails[vertical]) continue;
+            const mapped = mapDraftRowToServiceDetails(row);
+            const cobro = await loadServiceModalidadesForm(
+              row.id,
+              vertical,
+              row,
+            );
             nextDetails[vertical] = {
               ...nextDetails[vertical],
-              ...mapDraftRowToServiceDetails(row),
+              ...mapped,
+              ...cobro,
             };
             nextDraftIds[vertical] = row.id;
           }
@@ -1350,6 +1359,7 @@ export default function SerProveedorPage() {
             vertical="ninos"
             details={d}
             onChange={(next) => updateServiceDetails("ninos", next)}
+            hideExtra
           />
           <NinosServiceFields
             details={d}
@@ -1462,6 +1472,7 @@ export default function SerProveedorPage() {
             vertical="mascotas"
             details={d}
             onChange={(next) => updateServiceDetails("mascotas", next)}
+            hideExtra
           />
           <MascotasServiceFields
             details={d}

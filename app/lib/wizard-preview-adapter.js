@@ -9,9 +9,9 @@ import {
   getServicePhotos,
 } from "@/app/lib/service-card-display";
 import {
-  formatModalidadCobroAnuncio,
-  getModalidadCobroPriceSuffix,
-  resolveModalidadCobro,
+  formatModalidadesCobroAnuncio,
+  resolveDisplayPriceSuffix,
+  serializeModalidadesCobroRows,
   supportsModalidadCobro,
 } from "@/app/lib/modalidad-cobro";
 
@@ -54,6 +54,12 @@ export function buildWizardPreviewService(
   });
   const foto_url = photos[0] || null;
 
+  let modalidades = [];
+  if (supportsModalidadCobro(vertical)) {
+    const serialized = serializeModalidadesCobroRows(details, vertical);
+    if (serialized.ok) modalidades = serialized.rows;
+  }
+
   return {
     id: `preview-${vertical}`,
     proveedor_id: userId || "preview",
@@ -65,11 +71,7 @@ export function buildWizardPreviewService(
     }),
     descripcion_anuncio: details.descripcion_anuncio?.trim() || "",
     precio: details.precio ?? "",
-    modalidad_cobro: details.modalidad_cobro || null,
-    horas_por_unidad:
-      details.horas_por_unidad != null && details.horas_por_unidad !== ""
-        ? Number(details.horas_por_unidad)
-        : null,
+    modalidades,
     foto_url,
     fotos: photos,
     amenities: Array.isArray(details.amenities) ? details.amenities : [],
@@ -122,7 +124,7 @@ export function getWizardPreviewSummary(vertical, details = {}) {
   const theme = getServiceCardTheme(vertical);
   const items = [];
   const priceSuffix = supportsModalidadCobro(vertical)
-    ? getModalidadCobroPriceSuffix(resolveModalidadCobro(vertical, details.modalidad_cobro))
+    ? resolveDisplayPriceSuffix({ vertical })
     : theme.priceSuffix;
 
   items.push({
@@ -130,46 +132,44 @@ export function getWizardPreviewSummary(vertical, details = {}) {
     value: formatServiceCardPrice(details.precio, priceSuffix),
   });
 
-  const cobroLine = formatModalidadCobroAnuncio({
-    vertical,
-    precio: details.precio,
-    modalidad_cobro: details.modalidad_cobro,
-    horas_por_unidad: details.horas_por_unidad,
-  });
+  let modalidades = [];
+  if (supportsModalidadCobro(vertical)) {
+    const serialized = serializeModalidadesCobroRows(details, vertical);
+    if (serialized.ok) modalidades = serialized.rows;
+  }
+  const cobroLine = formatModalidadesCobroAnuncio(
+    { vertical, precio: details.precio, modalidades },
+    modalidades,
+  );
   if (cobroLine) {
     items.push({ label: "Cobro", value: cobroLine });
   }
 
   if (vertical === "alojamiento") {
-    const capRows = getCapacidadDisplayRows({ capacidad: details.capacidad });
-    if (capRows.length > 0) {
+    const rows = getCapacidadDisplayRows({ capacidad: details.capacidad });
+    if (rows.length > 0) {
       items.push({
         label: "Capacidad",
-        value: capRows
-          .map((row) => formatCapacidadDisplayRow(row))
-          .join(" · "),
+        value: rows.map(formatCapacidadDisplayRow).join(" · "),
       });
     }
-
-    const amenityLabels = resolveAmenities(details.amenities).map((a) => a.label);
-    if (amenityLabels.length > 0) {
-      items.push({
-        label: "Comodidades",
-        value: amenityLabels.slice(0, 4).join(", ") + (amenityLabels.length > 4 ? "…" : ""),
-      });
+    if (details.tipo_alojamiento) {
+      items.push({ label: "Tipo", value: details.tipo_alojamiento });
     }
   }
 
-  const cancelKey = normalizeCancelPolicy(details.cancelacion || "moderada");
-  items.push({
-    label: "Cancelación",
-    value: CANCEL_LABELS[cancelKey] || cancelKey,
-  });
+  const cancelKey = normalizeCancelPolicy(details.cancelacion);
+  if (CANCEL_LABELS[cancelKey]) {
+    items.push({ label: "Cancelación", value: CANCEL_LABELS[cancelKey] });
+  }
 
-  items.push({
-    label: "Tipo de reserva",
-    value: details.reserva_inmediata ? "Reserva inmediata" : "Con confirmación",
-  });
+  if (Array.isArray(details.amenities) && details.amenities.length > 0) {
+    const resolved = resolveAmenities(details.amenities);
+    items.push({
+      label: "Comodidades",
+      value: resolved.slice(0, 4).map((a) => a.label).join(", "),
+    });
+  }
 
   return items;
 }

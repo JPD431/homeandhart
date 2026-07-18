@@ -44,9 +44,14 @@ import { parseHuespedesPrecioFromDb, validateHuespedesPrecio } from "@/app/lib/h
 import HuespedesPrecioFields from "@/app/components/provider/HuespedesPrecioFields";
 import ModalidadCobroFields from "@/app/components/provider/ModalidadCobroFields";
 import {
-  parseModalidadCobroFromDb,
+  emptyModalidadesCobroForm,
+  seedModalidadesCobroFromLegacy,
   validateModalidadCobro,
 } from "@/app/lib/modalidad-cobro";
+import {
+  loadModalidadesForServices,
+  saveServiceModalidades,
+} from "@/app/lib/modalidad-cobro-persist";
 import {
   normalizeDescuentosDuracion,
   serializeDescuentosDuracionForDb,
@@ -190,8 +195,7 @@ function emptyServiceDetails() {
     precio: "",
     tipo_alojamiento: "",
     modalidad: "domicilio_cliente",
-    modalidad_cobro: "",
-    horas_por_unidad: "",
+    modalidades_cobro: emptyModalidadesCobroForm(),
     direccion_exacta: "",
     telefono_contacto: "",
     estancia_minima: "1",
@@ -263,13 +267,9 @@ function mergeServiceDetails(rawDetails, vertical) {
     Object.assign(merged, parseCheckTimesFromDb(rawDetails || {}));
   } else if (vertical === "ninos" || vertical === "mascotas") {
     merged.anos_experiencia = parseAnosExperienciaFromDb(rawDetails || {});
-    const cobro = parseModalidadCobroFromDb({
-      vertical,
-      modalidad_cobro: merged.modalidad_cobro,
-      horas_por_unidad: merged.horas_por_unidad,
-    });
-    merged.modalidad_cobro = cobro.modalidad_cobro;
-    merged.horas_por_unidad = cobro.horas_por_unidad;
+    if (!merged.modalidades_cobro) {
+      merged.modalidades_cobro = seedModalidadesCobroFromLegacy(vertical, merged);
+    }
   }
 
   return merged;
@@ -313,7 +313,7 @@ function mapServiceFromDb(row) {
     foto_url: parseFotosFromDb(row)[0] || "",
     capacidad: parseCapacidadFromDb(row),
     ...parseHuespedesPrecioFromDb(row),
-    ...parseModalidadCobroFromDb(row),
+    modalidades_cobro: seedModalidadesCobroFromLegacy(row.vertical, row),
     direccion_exacta: row.direccion_exacta || "",
     telefono_contacto: row.telefono_contacto || "",
     nru: row.nru || "",
@@ -894,6 +894,7 @@ function ServiceEditForm({ vertical, details: rawDetails, onChange, userId, serv
               vertical="ninos"
               details={details}
               onChange={onChange}
+              hideExtra
             />
           </div>
           <NinosServiceFields
@@ -912,6 +913,7 @@ function ServiceEditForm({ vertical, details: rawDetails, onChange, userId, serv
               vertical="mascotas"
               details={details}
               onChange={onChange}
+              hideExtra
             />
           </div>
           <MascotasServiceFields
@@ -1156,7 +1158,18 @@ function EditarPerfilContent() {
       if (servicesError) {
         setErrorMessage(servicesError.message);
       } else {
-        setServices((serviceRows ?? []).map(mapServiceFromDb));
+        const rows = serviceRows ?? [];
+        const modalidadesById = await loadModalidadesForServices(rows);
+        setServices(
+          rows.map((row) => {
+            const mapped = mapServiceFromDb(row);
+            const cobro = modalidadesById.get(row.id);
+            if (cobro) {
+              mapped.details = { ...mapped.details, ...cobro };
+            }
+            return mapped;
+          }),
+        );
       }
 
       if (perfilData?.role === "proveedor") {
@@ -1585,6 +1598,12 @@ function EditarPerfilContent() {
             .single();
           if (error) throw error;
           revisionMeta.savedRow = inserted;
+          const modResult = await saveServiceModalidades(
+            inserted.id,
+            service.details,
+            service.vertical,
+          );
+          if (!modResult.ok) throw new Error(modResult.error);
         } else {
           const expectedFotos = parseFotosFromDb({
             fotos: payload.fotos,
@@ -1639,13 +1658,29 @@ function EditarPerfilContent() {
               fotos: savedFotos,
             });
           }
+
+          const modResult = await saveServiceModalidades(
+            service.id,
+            service.details,
+            service.vertical,
+          );
+          if (!modResult.ok) throw new Error(modResult.error);
         }
       }
 
       let servicesAfterSave = services.map((s, index) => {
         const meta = revisionOutcomes[index];
         if (meta?.savedRow) {
-          return mapServiceFromDb(meta.savedRow);
+          const mapped = mapServiceFromDb(meta.savedRow);
+          return {
+            ...mapped,
+            details: {
+              ...mapped.details,
+              modalidades_cobro:
+                s.details?.modalidades_cobro ||
+                seedModalidadesCobroFromLegacy(s.vertical, s.details),
+            },
+          };
         }
         return {
           ...s,
@@ -1655,6 +1690,10 @@ function EditarPerfilContent() {
               ? meta.revision_estado
               : s.revision_estado,
           disponible: resolveDisponibleForSave(s, perfil, documentContext),
+          details: {
+            ...s.details,
+            modalidades_cobro: s.details?.modalidades_cobro,
+          },
         };
       });
 
@@ -1703,7 +1742,25 @@ function EditarPerfilContent() {
           .select("*")
           .single();
         if (error) throw error;
-        servicesAfterSave = [...servicesAfterSave, mapServiceFromDb(data)];
+        const modResult = await saveServiceModalidades(
+          data.id,
+          newServiceDetails,
+          newVertical,
+        );
+        if (!modResult.ok) throw new Error(modResult.error);
+        const mappedNew = mapServiceFromDb(data);
+        servicesAfterSave = [
+          ...servicesAfterSave,
+          {
+            ...mappedNew,
+            details: {
+              ...mappedNew.details,
+              modalidades_cobro:
+                newServiceDetails.modalidades_cobro ||
+                seedModalidadesCobroFromLegacy(newVertical, newServiceDetails),
+            },
+          },
+        ];
         setAddingService(false);
         setNewServiceDetails(emptyServiceDetails());
       }
@@ -2090,7 +2147,21 @@ function EditarPerfilContent() {
                 <p className="text-sm font-semibold">Nuevo servicio</p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {VERTICALS.map((v) => (
-                    <button key={v.id} type="button" onClick={() => { markDirty(); setNewVertical(v.id); setNewServiceDetails(emptyServiceDetails()); }} className="rounded-full border px-4 py-2 text-sm font-medium" style={{ borderColor: newVertical === v.id ? PRIMARY : BRAND.border, backgroundColor: newVertical === v.id ? "#e8f0fb" : "#fff", color: newVertical === v.id ? PRIMARY : "#444" }}>
+                    <button key={v.id} type="button" onClick={() => {
+                      markDirty();
+                      setNewVertical(v.id);
+                      setNewServiceDetails({
+                        ...emptyServiceDetails(),
+                        ...(v.id === "ninos" || v.id === "mascotas"
+                          ? {
+                              modalidades_cobro: seedModalidadesCobroFromLegacy(
+                                v.id,
+                                {},
+                              ),
+                            }
+                          : {}),
+                      });
+                    }} className="rounded-full border px-4 py-2 text-sm font-medium" style={{ borderColor: newVertical === v.id ? PRIMARY : BRAND.border, backgroundColor: newVertical === v.id ? "#e8f0fb" : "#fff", color: newVertical === v.id ? PRIMARY : "#444" }}>
                       {v.label}
                     </button>
                   ))}

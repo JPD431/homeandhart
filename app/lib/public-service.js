@@ -1,5 +1,6 @@
 import { supabase } from "@/app/lib/supabase";
 import { isAdminUserId } from "@/lib/auth/admin";
+import { attachModalidadesToService } from "@/app/lib/service-modalidades-server";
 
 const SERVICE_PUBLIC_SELECT = `
   *,
@@ -35,7 +36,7 @@ export async function loadPublicServiceById(serviceId) {
     .maybeSingle();
 
   if (error || !data) return null;
-  return data;
+  return attachModalidadesToService(data);
 }
 
 const OWNER_PROFILE_SELECT =
@@ -63,10 +64,10 @@ export async function loadOwnerServiceForPreview(serviceId, userId, supabaseClie
     .eq("id", userId)
     .maybeSingle();
 
-  return {
+  return attachModalidadesToService({
     ...service,
     profiles_public: profile ?? {},
-  };
+  });
 }
 
 /**
@@ -89,10 +90,10 @@ export async function loadAdminServiceForPreview(serviceId, supabaseClient) {
     .eq("id", service.proveedor_id)
     .maybeSingle();
 
-  return {
+  return attachModalidadesToService({
     ...service,
     profiles_public: profile ?? {},
-  };
+  });
 }
 
 /**

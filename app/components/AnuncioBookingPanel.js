@@ -10,8 +10,7 @@ import {
   getServiceCardTheme,
 } from "@/app/lib/service-card-display";
 import {
-  getModalidadCobroPriceSuffix,
-  resolveModalidadCobro,
+  resolveDisplayPriceSuffix,
   supportsModalidadCobro,
 } from "@/app/lib/modalidad-cobro";
 import {
@@ -41,10 +40,9 @@ export default function AnuncioBookingPanel({
   isOwnerPreview = false,
 }) {
   const theme = getServiceCardTheme(service?.vertical);
-  const priceSuffix =
-    supportsModalidadCobro(service?.vertical)
-      ? getModalidadCobroPriceSuffix(resolveModalidadCobro(service))
-      : theme.priceSuffix;
+  const priceSuffix = supportsModalidadCobro(service?.vertical)
+    ? resolveDisplayPriceSuffix(service)
+    : theme.priceSuffix;
   const ofertaActiva = isOfertaActiva(service);
   const precioConDescuento = ofertaActiva
     ? getPrecioConDescuento(service.precio, service.oferta_descuento)

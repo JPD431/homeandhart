@@ -9,7 +9,7 @@
  * cuando el servicio tiene el modelo configurado.
  */
 
-import { resolveModalidadCobro } from "@/app/lib/modalidad-cobro";
+import { legacyModalidadForVertical } from "@/app/lib/modalidad-cobro";
 
 export const VERTICALES_UNIDADES_PRECIO = ["alojamiento", "ninos", "mascotas"];
 
@@ -92,11 +92,11 @@ export function getUnidadesPrecioCopy(vertical, modalidadCobro = null) {
     UNIDADES_PRECIO_COPY[vertical] ?? UNIDADES_PRECIO_COPY.alojamiento;
   if (vertical !== "ninos" && vertical !== "mascotas") return base;
 
+  const resolved =
+    modalidadCobro || legacyModalidadForVertical(vertical) || "dia";
   let unit = base.priceUnit;
-  if (modalidadCobro === "hora") unit = "hora";
-  else if (modalidadCobro === "medio_dia") unit = "medio día";
-  else if (modalidadCobro === "dia") unit = "día";
-  else if (vertical === "ninos") unit = "hora";
+  if (resolved === "hora") unit = "hora";
+  else if (resolved === "medio_dia") unit = "medio día";
   else unit = "día";
 
   return {
@@ -353,7 +353,7 @@ export function formatHuespedesPrecioInfo(service) {
 
   const modalidad =
     vertical === "ninos" || vertical === "mascotas"
-      ? resolveModalidadCobro(service)
+      ? legacyModalidadForVertical(vertical)
       : null;
   const copy = getUnidadesPrecioCopy(vertical, modalidad);
   const max =

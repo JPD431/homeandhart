@@ -1,9 +1,12 @@
 /**
- * Modalidad de cobro (niñera / mascotas).
+ * Modalidades de cobro MÚLTIPLES (niñera / mascotas).
  * Distinto de services.modalidad (domicilio).
  *
- * NULL en BD = comportamiento legacy por vertical (ninos→hora, mascotas→dia).
- * El cálculo de reserva aún no usa estos campos (paso 2).
+ * Sin filas en service_modalidades = legacy:
+ *   ninos → hora con services.precio
+ *   mascotas → dia con services.precio
+ *
+ * El cálculo de reserva aún NO usa estas filas (paso 2).
  */
 
 export const MODALIDAD_COBRO_VALUES = ["hora", "dia", "medio_dia"];
@@ -17,44 +20,24 @@ export const MODALIDAD_COBRO_OPTIONS = [
   {
     value: "dia",
     label: "Por día completo",
-    hint: "El cliente reserva uno o varios días seguidos. Cobras €/día × días. Indica cuántas horas dura tu día (informativo).",
+    hint: "El cliente reserva uno o varios días. Cobras €/día × días.",
   },
   {
     value: "medio_dia",
     label: "Por medio día",
-    hint: "El cliente reserva día(s) y hora de inicio. Cobras €/medio día × días. Indica cuántas horas es tu medio día (informativo).",
+    hint: "El cliente reserva día(s) y hora de inicio. Cobras €/medio día × días.",
   },
 ];
-
-/** Default implícito cuando modalidad_cobro es NULL (servicios existentes). */
-export function defaultModalidadCobroForVertical(vertical) {
-  if (vertical === "ninos") return "hora";
-  if (vertical === "mascotas") return "dia";
-  return null;
-}
 
 export function supportsModalidadCobro(vertical) {
   return vertical === "ninos" || vertical === "mascotas";
 }
 
-/**
- * Resuelve la modalidad efectiva para UI/info.
- * NULL en BD → default por vertical (retrocompat).
- */
-export function resolveModalidadCobro(svcOrVertical, modalidadCobro) {
-  const vertical =
-    typeof svcOrVertical === "string"
-      ? svcOrVertical
-      : svcOrVertical?.vertical;
-  const raw =
-    modalidadCobro !== undefined
-      ? modalidadCobro
-      : typeof svcOrVertical === "object" && svcOrVertical
-        ? svcOrVertical.modalidad_cobro
-        : null;
-
-  if (raw && MODALIDAD_COBRO_VALUES.includes(raw)) return raw;
-  return defaultModalidadCobroForVertical(vertical);
+/** Modalidad que hoy usa la reserva (hasta el paso 2). */
+export function legacyModalidadForVertical(vertical) {
+  if (vertical === "ninos") return "hora";
+  if (vertical === "mascotas") return "dia";
+  return null;
 }
 
 export function modalidadCobroNeedsHoras(modalidad) {
@@ -75,141 +58,261 @@ export function getModalidadCobroPriceSuffix(modalidad) {
   return "";
 }
 
-/** Label del campo precio según modalidad (o vertical si no hay modalidad). */
-export function getPrecioCobroLabel(vertical, modalidadCobro) {
-  if (vertical === "alojamiento") return "¿Cuánto cobras por noche? (€)";
-  const m = resolveModalidadCobro(vertical, modalidadCobro);
-  if (m === "hora") return "¿Cuánto cobras por hora? (€)";
-  if (m === "medio_dia") return "¿Cuánto cobras por medio día? (€)";
-  if (m === "dia") return "¿Cuánto cobras por día? (€)";
+export function getPrecioCobroLabel(modalidad) {
+  if (modalidad === "hora") return "Precio por hora (€)";
+  if (modalidad === "medio_dia") return "Precio por medio día (€)";
+  if (modalidad === "dia") return "Precio por día (€)";
   return "Precio (€)";
 }
 
 export function getHorasPorUnidadLabel(modalidad) {
-  if (modalidad === "medio_dia") {
-    return "¿Cuántas horas es un medio día?";
-  }
+  if (modalidad === "medio_dia") return "¿Cuántas horas es un medio día?";
   return "¿Cuántas horas es un día completo?";
 }
 
-export function getHorasPorUnidadHint(modalidad) {
-  if (modalidad === "medio_dia") {
-    return "Solo informativo para el cliente (ej. 4 o 5 horas). No cambia el precio: cobras por medio día.";
-  }
-  return "Solo informativo para el cliente (ej. 8 horas). No cambia el precio: cobras por día completo.";
+export function getSuplementoLabel(vertical, modalidad) {
+  const who = vertical === "mascotas" ? "mascota" : "niño";
+  const unit = getModalidadCobroPriceUnit(modalidad);
+  return `Suplemento por ${who} adicional (€/${unit})`;
+}
+
+function emptySlot(modalidad) {
+  return {
+    activa: false,
+    precio: "",
+    horas_unidad:
+      modalidad === "medio_dia" ? "5" : modalidad === "dia" ? "8" : "",
+    suplemento_extra: "",
+  };
+}
+
+/** Formulario vacío (3 slots). */
+export function emptyModalidadesCobroForm() {
+  return {
+    hora: emptySlot("hora"),
+    dia: emptySlot("dia"),
+    medio_dia: emptySlot("medio_dia"),
+  };
 }
 
 /**
- * Parsea campos de modalidad desde fila BD → formulario.
- * Si NULL, rellena el default por vertical para que el selector no mienta.
+ * Semilla legacy cuando no hay filas: activa la modalidad actual del vertical
+ * con services.precio (+ suplemento global si existe).
  */
-export function parseModalidadCobroFromDb(row) {
-  const vertical = row?.vertical;
-  if (!supportsModalidadCobro(vertical)) {
-    return { modalidad_cobro: "", horas_por_unidad: "" };
-  }
-  const modalidad = resolveModalidadCobro(row);
-  let horas =
-    row?.horas_por_unidad != null && row.horas_por_unidad !== ""
-      ? String(row.horas_por_unidad)
+export function seedModalidadesCobroFromLegacy(vertical, rowOrDetails = {}) {
+  const form = emptyModalidadesCobroForm();
+  if (!supportsModalidadCobro(vertical)) return form;
+
+  const legacy = legacyModalidadForVertical(vertical);
+  const precio =
+    rowOrDetails.precio != null && rowOrDetails.precio !== ""
+      ? String(rowOrDetails.precio)
       : "";
-  // Default informativo en formulario si eligen día/medio día sin valor aún
-  if (!horas && modalidadCobroNeedsHoras(modalidad)) {
-    horas = modalidad === "medio_dia" ? "5" : "8";
-  }
-  return {
-    modalidad_cobro: modalidad,
-    horas_por_unidad: horas,
+  const supl =
+    rowOrDetails.precio_huesped_extra != null &&
+    rowOrDetails.precio_huesped_extra !== ""
+      ? String(rowOrDetails.precio_huesped_extra)
+      : "";
+
+  form[legacy] = {
+    ...form[legacy],
+    activa: true,
+    precio,
+    suplemento_extra: supl,
   };
+  return form;
 }
 
 /**
- * Serializa para payload de services.
- * alojamiento → ambos null.
- * hora → horas_por_unidad null.
+ * Filas BD → formulario. Si no hay filas, semilla legacy.
  */
-export function serializeModalidadCobroForDb(details, vertical) {
+export function parseModalidadesCobroFromRows(vertical, rows, legacyRow = {}) {
   if (!supportsModalidadCobro(vertical)) {
-    return { modalidad_cobro: null, horas_por_unidad: null };
+    return { modalidades_cobro: emptyModalidadesCobroForm() };
   }
 
-  const modalidad = resolveModalidadCobro(vertical, details?.modalidad_cobro);
-  if (!modalidadCobroNeedsHoras(modalidad)) {
-    return { modalidad_cobro: modalidad, horas_por_unidad: null };
+  const list = Array.isArray(rows) ? rows : [];
+  if (list.length === 0) {
+    return {
+      modalidades_cobro: seedModalidadesCobroFromLegacy(vertical, legacyRow),
+    };
   }
 
-  const h = Number(details?.horas_por_unidad);
-  return {
-    modalidad_cobro: modalidad,
-    horas_por_unidad: Number.isFinite(h) && h > 0 ? h : null,
-  };
+  const form = emptyModalidadesCobroForm();
+  for (const row of list) {
+    const m = row?.modalidad;
+    if (!MODALIDAD_COBRO_VALUES.includes(m)) continue;
+    form[m] = {
+      activa: true,
+      precio: row.precio != null ? String(row.precio) : "",
+      horas_unidad:
+        row.horas_unidad != null && row.horas_unidad !== ""
+          ? String(row.horas_unidad)
+          : m === "medio_dia"
+            ? "5"
+            : m === "dia"
+              ? "8"
+              : "",
+      suplemento_extra:
+        row.suplemento_extra != null && row.suplemento_extra !== ""
+          ? String(row.suplemento_extra)
+          : "",
+    };
+  }
+  return { modalidades_cobro: form };
 }
 
 /**
- * Validación de formulario (wizard / editar-perfil).
- * @returns {string|null} mensaje de error o null si ok
+ * Formulario → filas para persistir (solo activas).
+ * @returns {{ ok: true, rows: object[] } | { ok: false, error: string }}
+ */
+export function serializeModalidadesCobroRows(details, vertical) {
+  if (!supportsModalidadCobro(vertical)) {
+    return { ok: true, rows: [] };
+  }
+
+  const form = details?.modalidades_cobro || emptyModalidadesCobroForm();
+  const rows = [];
+
+  for (const modalidad of MODALIDAD_COBRO_VALUES) {
+    const slot = form[modalidad];
+    if (!slot?.activa) continue;
+
+    const precio = Number(slot.precio);
+    if (!Number.isFinite(precio) || precio <= 0) {
+      return {
+        ok: false,
+        error: `Indica un precio mayor que 0 para «${labelModalidad(modalidad)}».`,
+      };
+    }
+
+    let horas_unidad = null;
+    if (modalidadCobroNeedsHoras(modalidad)) {
+      const h = Number(slot.horas_unidad);
+      if (!Number.isFinite(h) || h <= 0) {
+        return {
+          ok: false,
+          error:
+            modalidad === "medio_dia"
+              ? "Indica cuántas horas es un medio día (mayor que 0)."
+              : "Indica cuántas horas es un día completo (mayor que 0).",
+        };
+      }
+      if (h > 24) {
+        return { ok: false, error: "Las horas no pueden superar 24." };
+      }
+      horas_unidad = h;
+    }
+
+    let suplemento_extra = null;
+    if (slot.suplemento_extra != null && slot.suplemento_extra !== "") {
+      const s = Number(slot.suplemento_extra);
+      if (!Number.isFinite(s) || s < 0) {
+        return {
+          ok: false,
+          error: `El suplemento de «${labelModalidad(modalidad)}» no puede ser negativo.`,
+        };
+      }
+      if (s > 0) suplemento_extra = s;
+    }
+
+    rows.push({ modalidad, precio, horas_unidad, suplemento_extra });
+  }
+
+  if (rows.length === 0) {
+    return {
+      ok: false,
+      error: "Activa al menos una modalidad de cobro (hora, día o medio día).",
+    };
+  }
+
+  return { ok: true, rows };
+}
+
+function labelModalidad(modalidad) {
+  return (
+    MODALIDAD_COBRO_OPTIONS.find((o) => o.value === modalidad)?.label ||
+    modalidad
+  );
+}
+
+/**
+ * Validación de formulario.
+ * @returns {string|null}
  */
 export function validateModalidadCobro(details, vertical) {
   if (!supportsModalidadCobro(vertical)) return null;
-
-  const precio = Number(details?.precio);
-  if (!Number.isFinite(precio) || precio <= 0) {
-    return "El precio debe ser mayor que 0.";
-  }
-
-  const modalidad = resolveModalidadCobro(vertical, details?.modalidad_cobro);
-  if (!MODALIDAD_COBRO_VALUES.includes(modalidad)) {
-    return "Elige cómo cobras este servicio: por hora, por día o por medio día.";
-  }
-
-  if (modalidadCobroNeedsHoras(modalidad)) {
-    const h = Number(details?.horas_por_unidad);
-    if (!Number.isFinite(h) || h <= 0) {
-      return modalidad === "medio_dia"
-        ? "Indica cuántas horas es un medio día (mayor que 0)."
-        : "Indica cuántas horas es un día completo (mayor que 0).";
-    }
-    if (h > 24) {
-      return "Las horas por unidad no pueden superar 24.";
-    }
-  }
-
-  return null;
+  const result = serializeModalidadesCobroRows(details, vertical);
+  return result.ok ? null : result.error;
 }
 
 /**
- * Texto informativo para el anuncio (no afecta reserva).
- * Ej.: "Por hora · 15€/h" | "Cobra por día completo · 90€/día · aprox. 8h"
+ * Precio a guardar en services.precio (reserva actual):
+ * preferir modalidad legacy si está activa; si no, no tocar (caller usa details.precio).
  */
-export function formatModalidadCobroAnuncio(service) {
+export function getSyncedServicesPrecio(details, vertical) {
+  if (!supportsModalidadCobro(vertical)) {
+    const p = Number(details?.precio);
+    return Number.isFinite(p) && p > 0 ? p : null;
+  }
+  const form = details?.modalidades_cobro;
+  const legacy = legacyModalidadForVertical(vertical);
+  const slot = form?.[legacy];
+  if (slot?.activa) {
+    const p = Number(slot.precio);
+    if (Number.isFinite(p) && p > 0) return p;
+  }
+  const p = Number(details?.precio);
+  return Number.isFinite(p) && p > 0 ? p : null;
+}
+
+/** Filas o legacy → texto anuncio. */
+export function formatModalidadesCobroAnuncio(service, rows) {
   if (!service || !supportsModalidadCobro(service.vertical)) return null;
 
-  const modalidad = resolveModalidadCobro(service);
-  const precio = Number(service.precio);
-  const precioStr = Number.isFinite(precio)
-    ? `${precio % 1 === 0 ? precio : precio.toFixed(2)}€`
-    : null;
+  const list = Array.isArray(rows)
+    ? rows
+    : Array.isArray(service.modalidades)
+      ? service.modalidades
+      : [];
 
-  if (modalidad === "hora") {
-    return precioStr ? `Por hora · ${precioStr}/h` : "Por hora";
-  }
-
-  if (modalidad === "medio_dia") {
-    const parts = ["Cobra por medio día"];
-    if (precioStr) parts.push(`${precioStr}/medio día`);
-    const h = Number(service.horas_por_unidad);
-    if (Number.isFinite(h) && h > 0) {
-      parts.push(`aprox. ${h % 1 === 0 ? h : h}h`);
+  if (list.length > 0) {
+    const parts = [];
+    for (const modalidad of MODALIDAD_COBRO_VALUES) {
+      const row = list.find((r) => r.modalidad === modalidad);
+      if (!row) continue;
+      const precio = Number(row.precio);
+      if (!Number.isFinite(precio) || precio <= 0) continue;
+      const precioStr =
+        precio % 1 === 0 ? String(precio) : precio.toFixed(2).replace(/\.?0+$/, "");
+      if (modalidad === "hora") parts.push(`Por hora ${precioStr}€`);
+      else if (modalidad === "dia") parts.push(`Por día ${precioStr}€`);
+      else parts.push(`Medio día ${precioStr}€`);
     }
-    return parts.join(" · ");
+    return parts.length > 0 ? parts.join(" · ") : null;
   }
 
-  // dia
-  const parts = ["Cobra por día completo"];
-  if (precioStr) parts.push(`${precioStr}/día`);
-  const h = Number(service.horas_por_unidad);
-  if (Number.isFinite(h) && h > 0) {
-    parts.push(`aprox. ${h % 1 === 0 ? h : h}h`);
+  // Legacy sin filas
+  const legacy = legacyModalidadForVertical(service.vertical);
+  const precio = Number(service.precio);
+  if (!Number.isFinite(precio)) {
+    return legacy === "hora" ? "Por hora" : "Por día";
   }
-  return parts.join(" · ");
+  const precioStr =
+    precio % 1 === 0 ? String(precio) : precio.toFixed(2).replace(/\.?0+$/, "");
+  return legacy === "hora"
+    ? `Por hora ${precioStr}€`
+    : `Por día ${precioStr}€`;
+}
+
+/** @deprecated alias */
+export const formatModalidadCobroAnuncio = formatModalidadesCobroAnuncio;
+
+/**
+ * Sufijo de precio en panel: modalidad legacy (comportamiento actual de reserva).
+ */
+export function resolveDisplayPriceSuffix(service) {
+  const legacy = legacyModalidadForVertical(service?.vertical);
+  if (!legacy) return "";
+  return getModalidadCobroPriceSuffix(legacy);
 }

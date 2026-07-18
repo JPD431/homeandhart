@@ -1,6 +1,10 @@
 import { serializeCapacidad } from "@/app/lib/capacidad";
 import { serializeHuespedesPrecioForDb } from "@/app/lib/huespedes-precio";
-import { serializeModalidadCobroForDb } from "@/app/lib/modalidad-cobro";
+import {
+  getSyncedServicesPrecio,
+  legacyModalidadForVertical,
+  supportsModalidadCobro,
+} from "@/app/lib/modalidad-cobro";
 import { serializeDescuentosDuracionForDb } from "@/app/lib/descuentosDuracion";
 import { parseFotosFromDb, syncServicePhotos } from "@/app/lib/service-photos";
 
@@ -214,12 +218,39 @@ export async function getServiceLocationFields(details, vertical) {
 }
 
 export function buildServicePayload(details, vertical, ciudad, proveedorId, disponible) {
+  // Paso 1: el suplemento de la modalidad legacy (hora/día) alimenta
+  // services.precio_huesped_extra para que la reserva actual no cambie de lógica.
+  let detailsForSave = details;
+  if (supportsModalidadCobro(vertical)) {
+    const legacy = legacyModalidadForVertical(vertical);
+    const slot = details?.modalidades_cobro?.[legacy];
+    if (slot?.activa) {
+      detailsForSave = {
+        ...details,
+        precio_huesped_extra:
+          slot.suplemento_extra != null && slot.suplemento_extra !== ""
+            ? slot.suplemento_extra
+            : "",
+      };
+    }
+  }
+
+  const syncedPrecio = supportsModalidadCobro(vertical)
+    ? getSyncedServicesPrecio(detailsForSave, vertical)
+    : null;
+  const precio =
+    syncedPrecio != null
+      ? syncedPrecio
+      : detailsForSave.precio
+        ? Number(detailsForSave.precio)
+        : null;
+
   const payload = {
     proveedor_id: proveedorId,
     vertical,
-    titulo: details.titulo.trim(),
-    descripcion: details.descripcion?.trim() || null,
-    precio: details.precio ? Number(details.precio) : null,
+    titulo: detailsForSave.titulo.trim(),
+    descripcion: detailsForSave.descripcion?.trim() || null,
+    precio,
     estancia_minima: details.estancia_minima
       ? Number(details.estancia_minima)
       : null,
@@ -264,29 +295,31 @@ export function buildServicePayload(details, vertical, ciudad, proveedorId, disp
     descuentos_duracion: serializeDescuentosDuracionForDb(details),
     proveedor_emergencia: details.proveedor_emergencia === true,
     amenities: details.amenities || [],
-    capacidad: serializeCapacidad(details, vertical),
-    ...serializeHuespedesPrecioForDb(details, vertical),
-    ...serializeModalidadCobroForDb(details, vertical),
+    capacidad: serializeCapacidad(detailsForSave, vertical),
+    ...serializeHuespedesPrecioForDb(detailsForSave, vertical),
   };
 
   syncServicePhotos(
     payload,
-    parseFotosFromDb({ fotos: details.fotos, foto_url: details.foto_url }),
+    parseFotosFromDb({
+      fotos: detailsForSave.fotos,
+      foto_url: detailsForSave.foto_url,
+    }),
   );
 
   if (vertical === "alojamiento") {
-    payload.normas = serializeNormas(details);
-    payload.check_in = details.check_in?.trim() || null;
-    payload.check_out = details.check_out?.trim() || null;
+    payload.normas = serializeNormas(detailsForSave);
+    payload.check_in = detailsForSave.check_in?.trim() || null;
+    payload.check_out = detailsForSave.check_out?.trim() || null;
   } else if (vertical === "ninos") {
-    payload.ninos_detalle = serializeNinosDetalle(details);
-    payload.anos_experiencia = serializeAnosExperiencia(details);
+    payload.ninos_detalle = serializeNinosDetalle(detailsForSave);
+    payload.anos_experiencia = serializeAnosExperiencia(detailsForSave);
   } else if (vertical === "mascotas") {
-    payload.mascotas_detalle = serializeMascotasDetalle(details);
-    payload.jardin = details.jardin === true;
-    payload.paseos_incluidos = details.paseosIncluidos === true;
-    payload.fotos_actualizaciones = details.fotosActualizaciones === true;
-    payload.anos_experiencia = serializeAnosExperiencia(details);
+    payload.mascotas_detalle = serializeMascotasDetalle(detailsForSave);
+    payload.jardin = detailsForSave.jardin === true;
+    payload.paseos_incluidos = detailsForSave.paseosIncluidos === true;
+    payload.fotos_actualizaciones = detailsForSave.fotosActualizaciones === true;
+    payload.anos_experiencia = serializeAnosExperiencia(detailsForSave);
   }
 
   return payload;
