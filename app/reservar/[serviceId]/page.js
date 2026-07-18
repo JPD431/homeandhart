@@ -22,16 +22,27 @@ import { getUserFamiliaActiva } from "@/app/lib/familia";
 import { getHoyDateStr, getPrecioEfectivo, isOfertaActiva } from "@/app/lib/ofertas";
 import {
   applyClientPrice,
+  billingNeedsDuracionHoras,
+  billingNeedsFechaFin,
+  billingNeedsHora,
   calculateServiceBasePrice,
   COMMISSION_RATE,
   getEstanciaUnit,
   getServiceDuration,
+  getServiceModalidadesRows,
+  resolveBillingForService,
 } from "@/app/lib/pricing-reserva";
 import {
   formatHuespedesPrecioDesglose,
   getUnidadesPrecioCopy,
   serviceHasHuespedesModelo,
+  serviceNeedsUnidadesSelector,
 } from "@/app/lib/huespedes-precio";
+import {
+  MODALIDAD_COBRO_OPTIONS,
+  getModalidadCobroPriceSuffix,
+  supportsModalidadCobro,
+} from "@/app/lib/modalidad-cobro";
 import {
   getRefundPercent,
   getServiceStartDateTime,
@@ -1580,6 +1591,7 @@ export default function ReservarPage() {
   const [fechaFin, setFechaFin] = useState("");
   const [hora, setHora] = useState("");
   const [duracionHoras, setDuracionHoras] = useState("");
+  const [modalidadCobro, setModalidadCobro] = useState(null);
   const [numHuespedes, setNumHuespedes] = useState(null);
   const [mensaje, setMensaje] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
@@ -1733,8 +1745,29 @@ export default function ReservarPage() {
 
       setService(data);
 
-      if (serviceHasHuespedesModelo(data)) {
-        setNumHuespedes(Math.floor(Number(data.huespedes_incluidos)));
+      // Modalidades de cobro (niñera/mascotas)
+      let serviceWithMods = data;
+      if (supportsModalidadCobro(data.vertical)) {
+        const { data: modRows } = await supabase
+          .from("service_modalidades")
+          .select("modalidad, precio, horas_unidad, suplemento_extra")
+          .eq("service_id", data.id);
+        serviceWithMods = { ...data, modalidades: modRows ?? [] };
+        setService(serviceWithMods);
+        const rows = modRows ?? [];
+        if (rows.length === 1) {
+          setModalidadCobro(rows[0].modalidad);
+        } else if (rows.length > 1) {
+          setModalidadCobro(null);
+        } else {
+          setModalidadCobro(null);
+        }
+      } else {
+        setModalidadCobro(null);
+      }
+
+      if (serviceNeedsUnidadesSelector(serviceWithMods)) {
+        setNumHuespedes(Math.floor(Number(serviceWithMods.huespedes_incluidos)));
       } else {
         setNumHuespedes(null);
       }
@@ -2045,14 +2078,25 @@ export default function ReservarPage() {
       duracionHoras,
       mainVertical: vertical,
       numHuespedes,
+      modalidadCobro,
+      requireModalidad:
+        supportsModalidadCobro(vertical) &&
+        getServiceModalidadesRows(service).length > 1,
     };
     const clienteSinComision = getReservasSinComisionCliente(perfilCliente) > 0;
     const lines = selectedServices.map((svc) => {
       const unitOverride =
         svc.id === service.id ? precioEspecialChat : null;
+      const isMain = svc.id === service.id;
       const calc = calculateServiceBasePrice(
         svc,
-        dateContext,
+        {
+          ...dateContext,
+          requireModalidad:
+            isMain &&
+            supportsModalidadCobro(svc.vertical) &&
+            getServiceModalidadesRows(svc).length > 1,
+        },
         unitOverride,
         tarifasPorServicio[svc.id] ?? {},
       );
@@ -2137,10 +2181,23 @@ export default function ReservarPage() {
     fechaFin,
     duracionHoras,
     numHuespedes,
+    modalidadCobro,
     precioEspecialChat,
     perfilCliente,
     tarifasPorServicio,
   ]);
+
+  const mainBilling = useMemo(() => {
+    if (!service) return { kind: "legacy" };
+    return resolveBillingForService(service, modalidadCobro);
+  }, [service, modalidadCobro]);
+
+  const modalidadesActivas = useMemo(
+    () => (service ? getServiceModalidadesRows(service) : []),
+    [service],
+  );
+
+  const showModalidadSelector = modalidadesActivas.length > 1;
 
   const clienteSinComision = getReservasSinComisionCliente(perfilCliente) > 0;
 
@@ -2171,6 +2228,16 @@ export default function ReservarPage() {
 
   const datesReady = useMemo(() => {
     if (!fechaInicio) return false;
+    if (showModalidadSelector && !modalidadCobro) return false;
+
+    const billing = mainBilling;
+    if (billing.kind === "modalidad") {
+      if (billingNeedsFechaFin(billing, vertical) && !fechaFin) return false;
+      if (billingNeedsHora(billing) && !hora) return false;
+      if (billingNeedsDuracionHoras(billing) && !duracionHoras) return false;
+      return true;
+    }
+
     if (vertical === "ninos") {
       return Boolean(hora && duracionHoras);
     }
@@ -2178,7 +2245,16 @@ export default function ReservarPage() {
       return Boolean(fechaFin);
     }
     return true;
-  }, [fechaInicio, fechaFin, hora, duracionHoras, vertical]);
+  }, [
+    fechaInicio,
+    fechaFin,
+    hora,
+    duracionHoras,
+    vertical,
+    modalidadCobro,
+    showModalidadSelector,
+    mainBilling,
+  ]);
 
   const loadServicesForVertical = useCallback(
     async (tabVertical, inicio, fin) => {
@@ -2439,9 +2515,10 @@ export default function ReservarPage() {
             reservarComoFamilia && familiaInfo?.id ? familiaInfo.id : null,
           precio_especial: precioEspecialChat,
           valida_hasta: validaHastaParam || null,
-          num_huespedes: serviceHasHuespedesModelo(service)
+          num_huespedes: serviceNeedsUnidadesSelector(service)
             ? numHuespedes
             : null,
+          modalidad_cobro: modalidadCobro || null,
         }),
       });
 
@@ -2464,6 +2541,7 @@ export default function ReservarPage() {
       hora,
       duracionHoras,
       numHuespedes,
+      modalidadCobro,
       mensaje,
       router,
       reservarComoFamilia,
@@ -2501,9 +2579,10 @@ export default function ReservarPage() {
             reservarComoFamilia && familiaInfo?.id ? familiaInfo.id : null,
           precio_especial: precioEspecialChat,
           valida_hasta: validaHastaParam || null,
-          num_huespedes: serviceHasHuespedesModelo(service)
+          num_huespedes: serviceNeedsUnidadesSelector(service)
             ? numHuespedes
             : null,
+          modalidad_cobro: modalidadCobro || null,
         }),
       });
 
@@ -2526,6 +2605,7 @@ export default function ReservarPage() {
       hora,
       duracionHoras,
       numHuespedes,
+      modalidadCobro,
       mensaje,
       router,
       reservarComoFamilia,
@@ -2778,6 +2858,64 @@ export default function ReservarPage() {
                 </div>
               </div>
 
+              {showModalidadSelector && (
+                <div className="mt-4">
+                  <p className="mb-2 text-[8px] font-medium uppercase tracking-wide text-[#bbb]">
+                    ¿Cómo quieres contratar?
+                  </p>
+                  <div className="flex flex-col gap-2">
+                    {modalidadesActivas.map((row) => {
+                      const opt = MODALIDAD_COBRO_OPTIONS.find(
+                        (o) => o.value === row.modalidad,
+                      );
+                      const selected = modalidadCobro === row.modalidad;
+                      const precio = Number(row.precio);
+                      const precioLabel = Number.isFinite(precio)
+                        ? `${precio % 1 === 0 ? precio : precio.toFixed(2)}€${getModalidadCobroPriceSuffix(row.modalidad)}`
+                        : "";
+                      return (
+                        <button
+                          key={row.modalidad}
+                          type="button"
+                          onClick={() => {
+                            setModalidadCobro(row.modalidad);
+                            if (row.modalidad === "hora") setFechaFin("");
+                            if (row.modalidad === "dia") {
+                              setHora("");
+                              setDuracionHoras("");
+                            }
+                            if (row.modalidad === "medio_dia") {
+                              setDuracionHoras("");
+                            }
+                          }}
+                          className="min-h-[44px] w-full border px-3 py-2.5 text-left transition-opacity hover:opacity-90"
+                          style={{
+                            borderColor: selected ? "#1d4f91" : "#e8e4de",
+                            backgroundColor: selected ? "#e8f0fb" : "#fff",
+                            borderRadius: 6,
+                          }}
+                        >
+                          <span className="block text-[13px] font-semibold text-[#1a1a1a]">
+                            {opt?.label || row.modalidad}
+                            {precioLabel ? (
+                              <span className="ml-2 font-medium text-[#1d4f91]">
+                                {precioLabel}
+                              </span>
+                            ) : null}
+                          </span>
+                          {opt?.hint ? (
+                            <span className="mt-0.5 block text-[11px] text-[#666]">
+                              {opt.hint}
+                            </span>
+                          ) : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {(!showModalidadSelector || modalidadCobro) && (
               <div className="relative mt-4">
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <button
@@ -2792,7 +2930,9 @@ export default function ReservarPage() {
                     }}
                   >
                     <p className="text-[8px] font-medium uppercase tracking-wide text-[#bbb]">
-                      Llegada
+                      {billingNeedsFechaFin(mainBilling, vertical)
+                        ? "Inicio"
+                        : "Fecha"}
                     </p>
                     <p className="mt-0.5 text-[13px] text-[#2a3a4a]">
                       {fechaInicio ? formatFechaDisplay(fechaInicio) : "Seleccionar"}
@@ -2810,14 +2950,14 @@ export default function ReservarPage() {
                     }}
                   >
                     <p className="text-[8px] font-medium uppercase tracking-wide text-[#bbb]">
-                      Salida
+                      {billingNeedsFechaFin(mainBilling, vertical) ? "Fin" : "—"}
                     </p>
                     <p className="mt-0.5 text-[13px] text-[#2a3a4a]">
                       {fechaFin
                         ? formatFechaDisplay(fechaFin)
-                        : vertical === "ninos"
-                          ? "—"
-                          : "Seleccionar"}
+                        : billingNeedsFechaFin(mainBilling, vertical)
+                          ? "Seleccionar"
+                          : "—"}
                     </p>
                   </button>
                 </div>
@@ -2846,44 +2986,54 @@ export default function ReservarPage() {
                   Cambiar fechas →
                 </button>
               </div>
+              )}
 
-              {vertical === "ninos" && (
+              {(!showModalidadSelector || modalidadCobro) &&
+                (billingNeedsHora(mainBilling) ||
+                  billingNeedsDuracionHoras(mainBilling) ||
+                  (mainBilling.kind === "legacy" && vertical === "ninos")) && (
                 <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <div>
-                    <label htmlFor="hora" className="mb-1 block text-[8px] font-medium uppercase tracking-wide text-[#bbb]">
-                      Hora
-                    </label>
-                    <input
-                      id="hora"
-                      type="time"
-                      required
-                      min={getMinHora()}
-                      value={hora}
-                      onChange={(e) => setHora(e.target.value)}
-                      className={inputClass}
-                      style={{ borderColor: "#e8e4de", borderRadius: 6 }}
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="duracion" className="mb-1 block text-[8px] font-medium uppercase tracking-wide text-[#bbb]">
-                      Duración (horas)
-                    </label>
-                    <input
-                      id="duracion"
-                      type="number"
-                      min="1"
-                      step="1"
-                      required
-                      value={duracionHoras}
-                      onChange={(e) => setDuracionHoras(e.target.value)}
-                      className={inputClass}
-                      style={{ borderColor: "#e8e4de", borderRadius: 6 }}
-                    />
-                  </div>
+                  {(billingNeedsHora(mainBilling) ||
+                    (mainBilling.kind === "legacy" && vertical === "ninos")) && (
+                    <div>
+                      <label htmlFor="hora" className="mb-1 block text-[8px] font-medium uppercase tracking-wide text-[#bbb]">
+                        Hora de inicio
+                      </label>
+                      <input
+                        id="hora"
+                        type="time"
+                        required
+                        min={getMinHora()}
+                        value={hora}
+                        onChange={(e) => setHora(e.target.value)}
+                        className={inputClass}
+                        style={{ borderColor: "#e8e4de", borderRadius: 6 }}
+                      />
+                    </div>
+                  )}
+                  {(billingNeedsDuracionHoras(mainBilling) ||
+                    (mainBilling.kind === "legacy" && vertical === "ninos")) && (
+                    <div>
+                      <label htmlFor="duracion" className="mb-1 block text-[8px] font-medium uppercase tracking-wide text-[#bbb]">
+                        Duración (horas)
+                      </label>
+                      <input
+                        id="duracion"
+                        type="number"
+                        min="1"
+                        step="1"
+                        required
+                        value={duracionHoras}
+                        onChange={(e) => setDuracionHoras(e.target.value)}
+                        className={inputClass}
+                        style={{ borderColor: "#e8e4de", borderRadius: 6 }}
+                      />
+                    </div>
+                  )}
                 </div>
               )}
 
-              {serviceHasHuespedesModelo(service) && (
+              {serviceNeedsUnidadesSelector(service) && (
                 <div className="mt-3">
                   <label
                     htmlFor="num-huespedes"
@@ -3442,7 +3592,7 @@ export default function ReservarPage() {
                     </span>
                   </div>
 
-                  {serviceHasHuespedesModelo(service) &&
+                  {serviceNeedsUnidadesSelector(service) &&
                     formatHuespedesPrecioDesglose(service, numHuespedes) && (
                       <p className="mt-1.5 text-[10px] leading-snug text-[#888]">
                         {formatHuespedesPrecioDesglose(service, numHuespedes)}

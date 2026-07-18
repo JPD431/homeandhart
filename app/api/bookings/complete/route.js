@@ -5,10 +5,15 @@ import { createClient } from "@/lib/supabase/server";
 import { getHoyDateStr } from "@/app/lib/ofertas";
 import {
   applyClientPrice,
+  billingNeedsDuracionHoras,
+  billingNeedsFechaFin,
+  billingNeedsHora,
   calculateServiceBasePrice,
   COMMISSION_RATE,
+  resolveBillingForService,
 } from "@/app/lib/pricing-reserva";
 import { cargarTarifasPorServicios } from "@/app/lib/tarifas";
+import { loadServiceModalidadesRows } from "@/app/lib/service-modalidades-server";
 import {
   COBROS_INACTIVE_MSG,
   getProveedorFromService,
@@ -17,6 +22,7 @@ import { rewardReferidorPrimeraReserva } from "@/app/lib/referidos";
 import { assertUserIsDniVerified } from "@/app/lib/dni";
 import { notifyBookingEvent } from "@/app/lib/notifications";
 import { validateNumHuespedesParaReserva } from "@/app/lib/huespedes-precio";
+import { supportsModalidadCobro } from "@/app/lib/modalidad-cobro";
 
 const MAX_CREDITO_PORCENTAJE = 0.6;
 
@@ -502,6 +508,20 @@ async function sendPostCompleteBookingEmails({
   await sendBookingEmail(solicitudPayload);
 }
 
+async function attachModalidadesToServices(services) {
+  const list = Array.isArray(services) ? services : [];
+  await Promise.all(
+    list.map(async (svc) => {
+      if (!supportsModalidadCobro(svc?.vertical)) {
+        svc.modalidades = [];
+        return;
+      }
+      svc.modalidades = await loadServiceModalidadesRows(svc.id);
+    }),
+  );
+  return list;
+}
+
 function buildBookingRow({
   svc,
   userId,
@@ -518,20 +538,32 @@ function buildBookingRow({
   paymentIntentId,
   familiaId,
   numHuespedes = null,
+  modalidadCobro = null,
 }) {
   const v = svc.vertical;
   const isImmediate = svc.reserva_inmediata === true;
+  const billing = resolveBillingForService(svc, modalidadCobro);
+  const modalidadUsed =
+    billing.kind === "modalidad" ? billing.modalidad : null;
+
+  const needsFin = billingNeedsFechaFin(billing, v);
+  const needsHora = billingNeedsHora(billing);
+  // Legacy ninos: always hora+duracion; modality hora: same; medio_dia: hora only
+  const storeHora =
+    needsHora === true ||
+    (billing.kind === "legacy" && v === "ninos");
+  const storeDuracion =
+    billingNeedsDuracionHoras(billing) ||
+    (billing.kind === "legacy" && v === "ninos");
 
   return {
     cliente_id: userId,
     service_id: svc.id,
     fecha_inicio: fechaInicio || null,
-    fecha_fin:
-      v === "alojamiento" || v === "mascotas"
-        ? fechaFin || fechaInicio || null
-        : null,
-    hora: v === "ninos" ? hora || null : null,
-    duracion_horas: v === "ninos" ? Number(duracionHoras) || null : null,
+    fecha_fin: needsFin ? fechaFin || fechaInicio || null : null,
+    hora: storeHora ? hora || null : null,
+    duracion_horas: storeDuracion ? Number(duracionHoras) || null : null,
+    modalidad_cobro: modalidadUsed,
     mensaje: mensaje?.trim() || null,
     precio_base: precioBase,
     precio_total: precioTotal,
@@ -886,6 +918,7 @@ async function completePerServicePayments(userId, body) {
     precio_especial = null,
     valida_hasta = null,
     num_huespedes = null,
+    modalidad_cobro = null,
   } = body ?? {};
 
   if (!grupo_reserva || typeof grupo_reserva !== "string") {
@@ -908,7 +941,7 @@ async function completePerServicePayments(userId, body) {
   }
   const paymentsByService = parsedPayments.map;
 
-  const { data: services, error: servicesError } = await supabaseAdmin
+  const { data: servicesRaw, error: servicesError } = await supabaseAdmin
     .from("services")
     .select(SERVICE_SELECT)
     .in("id", uniqueServiceIds);
@@ -917,8 +950,8 @@ async function completePerServicePayments(userId, body) {
     return NextResponse.json({ error: servicesError.message }, { status: 500 });
   }
 
-  if (!services || services.length !== uniqueServiceIds.length) {
-    const foundIds = new Set(services?.map((s) => s.id) ?? []);
+  if (!servicesRaw || servicesRaw.length !== uniqueServiceIds.length) {
+    const foundIds = new Set(servicesRaw?.map((s) => s.id) ?? []);
     const missing = uniqueServiceIds.filter((id) => !foundIds.has(id));
     return NextResponse.json(
       { error: "Algunos servicios no existen", missing_service_ids: missing },
@@ -926,6 +959,7 @@ async function completePerServicePayments(userId, body) {
     );
   }
 
+  const services = await attachModalidadesToServices(servicesRaw);
   const serviceMap = new Map(services.map((s) => [s.id, s]));
   const mainService = serviceMap.get(main_service_id);
   if (!mainService) {
@@ -963,6 +997,7 @@ async function completePerServicePayments(userId, body) {
     fechaFin: fecha_fin,
     duracionHoras: duracion_horas,
     mainVertical,
+    modalidadCobro: modalidad_cobro,
   };
 
   const precioEspecialOverride = getPrecioEspecialOverride(
@@ -994,12 +1029,14 @@ async function completePerServicePayments(userId, body) {
     const svc = serviceMap.get(serviceId);
     const unitOverride =
       serviceId === main_service_id ? precioEspecialOverride : null;
+    const isMain = serviceId === main_service_id;
 
     const calc = calculateServiceBasePrice(
       svc,
       {
         ...dateContext,
         numHuespedes: numHuespedesPorServicio.get(serviceId),
+        requireModalidad: isMain && supportsModalidadCobro(svc.vertical),
       },
       unitOverride,
       tarifasPorServicio[serviceId] ?? {},
@@ -1027,6 +1064,7 @@ async function completePerServicePayments(userId, body) {
       service_id: serviceId,
       precio_base,
       precio_total,
+      modalidad_cobro: calc.modalidadCobro ?? null,
     });
   }
 
@@ -1045,6 +1083,9 @@ async function completePerServicePayments(userId, body) {
   );
   const precioBasePorServicioMap = new Map(
     preciosPorServicio.map((p) => [p.service_id, p.precio_base]),
+  );
+  const modalidadPorServicioMap = new Map(
+    preciosPorServicio.map((p) => [p.service_id, p.modalidad_cobro ?? null]),
   );
 
   const creditoPorServicioMap = splitCreditoPorServicio(
@@ -1158,6 +1199,7 @@ async function completePerServicePayments(userId, body) {
       paymentIntentId: paymentsByService.get(serviceId),
       familiaId: familia_id,
       numHuespedes: numHuespedesPorServicio.get(serviceId) ?? null,
+      modalidadCobro: modalidadPorServicioMap.get(serviceId),
     });
   });
 
@@ -1254,6 +1296,7 @@ export async function POST(request) {
       precio_especial = null,
       valida_hasta = null,
       num_huespedes = null,
+      modalidad_cobro = null,
     } = body ?? {};
 
     if (!payment_intent_id || typeof payment_intent_id !== "string") {
@@ -1283,7 +1326,7 @@ export async function POST(request) {
 
     const uniqueServiceIds = [...new Set(service_ids)];
 
-    const { data: services, error: servicesError } = await supabaseAdmin
+    const { data: servicesRaw, error: servicesError } = await supabaseAdmin
       .from("services")
       .select(SERVICE_SELECT)
       .in("id", uniqueServiceIds);
@@ -1295,8 +1338,8 @@ export async function POST(request) {
       );
     }
 
-    if (!services || services.length !== uniqueServiceIds.length) {
-      const foundIds = new Set(services?.map((s) => s.id) ?? []);
+    if (!servicesRaw || servicesRaw.length !== uniqueServiceIds.length) {
+      const foundIds = new Set(servicesRaw?.map((s) => s.id) ?? []);
       const missing = uniqueServiceIds.filter((id) => !foundIds.has(id));
       return NextResponse.json(
         { error: "Algunos servicios no existen", missing_service_ids: missing },
@@ -1304,6 +1347,7 @@ export async function POST(request) {
       );
     }
 
+    const services = await attachModalidadesToServices(servicesRaw);
     const serviceMap = new Map(services.map((s) => [s.id, s]));
     const mainService = serviceMap.get(main_service_id);
     if (!mainService) {
@@ -1341,6 +1385,7 @@ export async function POST(request) {
       fechaFin: fecha_fin,
       duracionHoras: duracion_horas,
       mainVertical,
+      modalidadCobro: modalidad_cobro,
     };
 
     const precioEspecialOverride = getPrecioEspecialOverride(
@@ -1372,12 +1417,14 @@ export async function POST(request) {
       const svc = serviceMap.get(serviceId);
       const unitOverride =
         serviceId === main_service_id ? precioEspecialOverride : null;
+      const isMain = serviceId === main_service_id;
 
       const calc = calculateServiceBasePrice(
         svc,
         {
           ...dateContext,
           numHuespedes: numHuespedesPorServicio.get(serviceId),
+          requireModalidad: isMain && supportsModalidadCobro(svc.vertical),
         },
         unitOverride,
         tarifasPorServicio[serviceId] ?? {},
@@ -1405,6 +1452,7 @@ export async function POST(request) {
         service_id: serviceId,
         precio_base,
         precio_total,
+        modalidad_cobro: calc.modalidadCobro ?? null,
       });
     }
 
@@ -1504,6 +1552,9 @@ export async function POST(request) {
     const precioBasePorServicioMap = new Map(
       preciosPorServicio.map((p) => [p.service_id, p.precio_base]),
     );
+    const modalidadPorServicioMap = new Map(
+      preciosPorServicio.map((p) => [p.service_id, p.modalidad_cobro ?? null]),
+    );
 
     const creditoPorServicioMap = splitCreditoPorServicio(
       preciosPorServicio,
@@ -1558,6 +1609,7 @@ export async function POST(request) {
         paymentIntentId: payment_intent_id,
         familiaId: familia_id,
         numHuespedes: numHuespedesPorServicio.get(serviceId) ?? null,
+        modalidadCobro: modalidadPorServicioMap.get(serviceId),
       });
     });
 

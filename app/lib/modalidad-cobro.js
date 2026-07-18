@@ -6,7 +6,7 @@
  *   ninos → hora con services.precio
  *   mascotas → dia con services.precio
  *
- * El cálculo de reserva aún NO usa estas filas (paso 2).
+ * Paso 2: calculateServiceBasePrice usa las filas cuando existen.
  */
 
 export const MODALIDAD_COBRO_VALUES = ["hora", "dia", "medio_dia"];

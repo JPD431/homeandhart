@@ -127,6 +127,30 @@ export function serviceHasHuespedesModelo(svc) {
   );
 }
 
+/** Capacidad configurada (máx + incluidos), con o sin suplemento legacy. */
+export function serviceHasCapacidadUnidades(svc) {
+  if (!svc || !supportsUnidadesPrecio(svc.vertical)) return false;
+  const max = Number(svc.capacidad_maxima);
+  const incluidos = Number(svc.huespedes_incluidos);
+  return (
+    Number.isFinite(max) &&
+    max > 0 &&
+    Number.isFinite(incluidos) &&
+    incluidos > 0
+  );
+}
+
+/**
+ * Mostrar selector de niños/mascotas en reserva:
+ * modelo legacy completo, o capacidad + suplemento en alguna modalidad.
+ */
+export function serviceNeedsUnidadesSelector(svc) {
+  if (serviceHasHuespedesModelo(svc)) return true;
+  if (!serviceHasCapacidadUnidades(svc)) return false;
+  const rows = Array.isArray(svc?.modalidades) ? svc.modalidades : [];
+  return rows.some((r) => Number(r?.suplemento_extra) > 0);
+}
+
 /**
  * Suplemento € por periodo (noche/hora/día) por unidades por encima de las incluidas.
  * Sin modelo → 0 (no altera el precio).
@@ -150,7 +174,9 @@ export const getUnidadesSuplementoPorPeriodo = getHuespedesSuplementoPorNoche;
  * No valida capacidad; usar validateNumHuespedesParaReserva en servidor.
  */
 export function resolveNumHuespedesValue(svc, numHuespedes) {
-  if (!serviceHasHuespedesModelo(svc)) return null;
+  if (!serviceHasHuespedesModelo(svc) && !serviceHasCapacidadUnidades(svc)) {
+    return null;
+  }
 
   const incluidos = Math.floor(Number(svc.huespedes_incluidos));
   if (numHuespedes == null || numHuespedes === "") return incluidos;
@@ -166,7 +192,7 @@ export function resolveNumHuespedesValue(svc, numHuespedes) {
  * @returns {{ ok: true, num: number|null } | { ok: false, error: string }}
  */
 export function validateNumHuespedesParaReserva(svc, numHuespedes) {
-  if (!serviceHasHuespedesModelo(svc)) {
+  if (!serviceHasHuespedesModelo(svc) && !serviceHasCapacidadUnidades(svc)) {
     return { ok: true, num: null };
   }
 
