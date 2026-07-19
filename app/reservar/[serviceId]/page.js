@@ -1624,6 +1624,15 @@ export default function ReservarPage() {
   const [tabReviewsMap, setTabReviewsMap] = useState({});
   const [filteredComplementary, setFilteredComplementary] = useState([]);
   const bundleDatesAppliedRef = useRef(false);
+  const bundleAddedMsgTimerRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (bundleAddedMsgTimerRef.current) {
+        clearTimeout(bundleAddedMsgTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const savedState = sessionStorage.getItem("bundle_state");
@@ -1868,8 +1877,16 @@ export default function ReservarPage() {
       const nombreServicio =
         data.titulo ||
         `${VERTICALS[data.vertical]?.label ?? "Servicio"} · ${formatShortName(data.profiles_public?.nombre, data.profiles_public?.apellido)}`;
-      setSuccessMessage(`✓ ${nombreServicio} añadido a tu reserva`);
+      // Aviso temporal: no bloquea el botón de pagar (disabled no depende de successMessage).
       setSuccessVariant("green");
+      setSuccessMessage(`✓ ${nombreServicio} añadido a tu reserva`);
+      if (bundleAddedMsgTimerRef.current) {
+        clearTimeout(bundleAddedMsgTimerRef.current);
+      }
+      bundleAddedMsgTimerRef.current = setTimeout(() => {
+        setSuccessMessage("");
+        bundleAddedMsgTimerRef.current = null;
+      }, 4000);
     }
 
     addBundleFromUrl();
@@ -3778,7 +3795,7 @@ export default function ReservarPage() {
                       getBookingDateError={() =>
                         validateBookingDates(vertical, fechaInicio, hora)
                       }
-                      disabled={!!successMessage || !aceptaPolitica}
+                      disabled={!aceptaPolitica}
                     />
                   ) : grupoReserva ? (
                     <>
@@ -3800,7 +3817,7 @@ export default function ReservarPage() {
                         hora={hora}
                         setErrorMessage={setErrorMessage}
                         service={service}
-                        disabled={!!successMessage || !aceptaPolitica}
+                        disabled={!aceptaPolitica}
                       />
                       {savedPaymentMethods.length > 0 && (
                         <button
@@ -3843,7 +3860,7 @@ export default function ReservarPage() {
                     getBookingDateError={() =>
                       validateBookingDates(vertical, fechaInicio, hora)
                     }
-                    disabled={!!successMessage || !aceptaPolitica}
+                    disabled={!aceptaPolitica}
                   />
                 ) : clientSecret && paymentMetadata ? (
                   <>
@@ -3868,7 +3885,7 @@ export default function ReservarPage() {
                         hora={hora}
                         setErrorMessage={setErrorMessage}
                         service={service}
-                        disabled={!!successMessage || !aceptaPolitica}
+                        disabled={!aceptaPolitica}
                       />
                     </Elements>
                     {savedPaymentMethods.length > 0 && (
