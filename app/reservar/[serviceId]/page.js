@@ -449,6 +449,68 @@ function FechaInicioConDias({
 const MAX_CREDITO_PORCENTAJE = 0.6;
 const MIN_STRIPE_EUR = 0.5;
 
+const SERVICE_MODALIDADES_SELECT =
+  "modalidad, precio, horas_unidad, suplemento_extra";
+
+/** Paso 2a: campos de reserva por servicio en el carrito. */
+function emptyCartBookingFields() {
+  return {
+    fechaInicio: "",
+    fechaFin: "",
+    hora: "",
+    duracionHoras: "",
+    modalidadCobro: null,
+    numHuespedes: null,
+  };
+}
+
+function buildCartEntry(service, fields = {}) {
+  const base = emptyCartBookingFields();
+  return {
+    service,
+    fechaInicio: fields.fechaInicio ?? base.fechaInicio,
+    fechaFin: fields.fechaFin ?? base.fechaFin,
+    hora: fields.hora ?? base.hora,
+    duracionHoras: fields.duracionHoras ?? base.duracionHoras,
+    modalidadCobro:
+      fields.modalidadCobro !== undefined
+        ? fields.modalidadCobro
+        : base.modalidadCobro,
+    numHuespedes:
+      fields.numHuespedes !== undefined
+        ? fields.numHuespedes
+        : base.numHuespedes,
+  };
+}
+
+/** Carga service_modalidades y las adjunta en service.modalidades. */
+async function loadServiceWithModalidades(serviceRow) {
+  if (!serviceRow?.id) return serviceRow;
+  if (!supportsModalidadCobro(serviceRow.vertical)) {
+    return { ...serviceRow, modalidades: serviceRow.modalidades ?? [] };
+  }
+  if (Array.isArray(serviceRow.modalidades)) {
+    return serviceRow;
+  }
+  const { data: modRows } = await supabase
+    .from("service_modalidades")
+    .select(SERVICE_MODALIDADES_SELECT)
+    .eq("service_id", serviceRow.id);
+  return { ...serviceRow, modalidades: modRows ?? [] };
+}
+
+function defaultModalidadCobroFromService(serviceWithMods) {
+  const rows = getServiceModalidadesRows(serviceWithMods);
+  if (rows.length === 1) return rows[0].modalidad;
+  return null;
+}
+
+function defaultNumHuespedesFromService(serviceWithMods) {
+  if (!serviceNeedsUnidadesSelector(serviceWithMods)) return null;
+  const n = Math.floor(Number(serviceWithMods.huespedes_incluidos));
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
 function roundMoney(amount) {
   return Math.round(amount * 100) / 100;
 }
@@ -1584,6 +1646,9 @@ export default function ReservarPage() {
   const [service, setService] = useState(null);
   const [complementaryServices, setComplementaryServices] = useState([]);
   const [bundleServices, setBundleServices] = useState([]);
+  /** Paso 2a: contexto por servicio (modalidades + campos). No alimenta aún el precio/pago. */
+  const [cartByServiceId, setCartByServiceId] = useState({});
+  const [mainServiceId, setMainServiceId] = useState(null);
   const [userId, setUserId] = useState(null);
   const [userEmail, setUserEmail] = useState(null);
   const [perfilCliente, setPerfilCliente] = useState(null);
@@ -1648,6 +1713,10 @@ export default function ReservarPage() {
       if (state.hora) setHora(state.hora);
       if (state.duracionHoras) setDuracionHoras(state.duracionHoras);
       if (state.bundleServices) setBundleServices(state.bundleServices);
+      if (state.cartByServiceId && typeof state.cartByServiceId === "object") {
+        setCartByServiceId(state.cartByServiceId);
+      }
+      if (state.mainServiceId) setMainServiceId(state.mainServiceId);
     } catch {
       // ignore invalid saved state
     }
@@ -1759,7 +1828,7 @@ export default function ReservarPage() {
       if (supportsModalidadCobro(data.vertical)) {
         const { data: modRows } = await supabase
           .from("service_modalidades")
-          .select("modalidad, precio, horas_unidad, suplemento_extra")
+          .select(SERVICE_MODALIDADES_SELECT)
           .eq("service_id", data.id);
         serviceWithMods = { ...data, modalidades: modRows ?? [] };
         setService(serviceWithMods);
@@ -1775,11 +1844,23 @@ export default function ReservarPage() {
         setModalidadCobro(null);
       }
 
-      if (serviceNeedsUnidadesSelector(serviceWithMods)) {
-        setNumHuespedes(Math.floor(Number(serviceWithMods.huespedes_incluidos)));
+      const mainNumHuespedes = defaultNumHuespedesFromService(serviceWithMods);
+      if (mainNumHuespedes != null) {
+        setNumHuespedes(mainNumHuespedes);
       } else {
         setNumHuespedes(null);
       }
+
+      setMainServiceId(serviceWithMods.id);
+      // Entrada de carrito del main (fechas se sincronizan en useEffect aparte).
+      setCartByServiceId((prev) => ({
+        ...prev,
+        [serviceWithMods.id]: buildCartEntry(serviceWithMods, {
+          ...(prev[serviceWithMods.id] || emptyCartBookingFields()),
+          modalidadCobro: defaultModalidadCobroFromService(serviceWithMods),
+          numHuespedes: mainNumHuespedes,
+        }),
+      }));
 
       const { data: ratings } = await supabase
         .from("reviews")
@@ -1871,9 +1952,23 @@ export default function ReservarPage() {
 
       if (!isServiceBookable(data)) return;
 
+      // bundleServices sin modalidades → precio/UI igual que hoy (retrocompat 2a).
+      // cartByServiceId sí guarda modalidades para el paso 2b.
+      const withMods = await loadServiceWithModalidades(data);
       setBundleServices((prev) =>
         prev.some((s) => s.id === data.id) ? prev : [...prev, data],
       );
+      setCartByServiceId((prev) => ({
+        ...prev,
+        [withMods.id]: buildCartEntry(withMods, {
+          fechaInicio,
+          fechaFin,
+          hora,
+          duracionHoras,
+          modalidadCobro: defaultModalidadCobroFromService(withMods),
+          numHuespedes: defaultNumHuespedesFromService(withMods),
+        }),
+      }));
       const nombreServicio =
         data.titulo ||
         `${VERTICALS[data.vertical]?.label ?? "Servicio"} · ${formatShortName(data.profiles_public?.nombre, data.profiles_public?.apellido)}`;
@@ -1890,7 +1985,18 @@ export default function ReservarPage() {
     }
 
     addBundleFromUrl();
-  }, [searchParams, loading, service, userId, serviceId, router]);
+  }, [
+    searchParams,
+    loading,
+    service,
+    userId,
+    serviceId,
+    router,
+    fechaInicio,
+    fechaFin,
+    hora,
+    duracionHoras,
+  ]);
 
   useEffect(() => {
     if (!cancelarBookingId || !userId || loading) return;
@@ -1967,6 +2073,153 @@ export default function ReservarPage() {
     () => (service ? [service, ...bundleServices] : []),
     [service, bundleServices],
   );
+
+  // Paso 2a: sincronizar fechas/hora del estado flat (main) a TODAS las entradas del carrito.
+  // En 2b cada línea tendrá las suyas; ahora se copian del main para no romper nada.
+  useEffect(() => {
+    if (!service?.id) return;
+    setCartByServiceId((prev) => {
+      const ids = new Set([
+        service.id,
+        ...bundleServices.map((s) => s.id),
+        ...Object.keys(prev),
+      ]);
+      let changed = false;
+      const next = { ...prev };
+      for (const id of ids) {
+        const existing = next[id];
+        if (!existing?.service) continue;
+        const patch = {
+          fechaInicio,
+          fechaFin,
+          hora,
+          duracionHoras,
+        };
+        if (
+          existing.fechaInicio === patch.fechaInicio &&
+          existing.fechaFin === patch.fechaFin &&
+          existing.hora === patch.hora &&
+          existing.duracionHoras === patch.duracionHoras
+        ) {
+          continue;
+        }
+        next[id] = { ...existing, ...patch };
+        changed = true;
+      }
+      // Main: también sincronizar modalidadCobro / numHuespedes del UI flat.
+      const mainEntry = next[service.id];
+      if (mainEntry) {
+        if (
+          mainEntry.modalidadCobro !== modalidadCobro ||
+          mainEntry.numHuespedes !== numHuespedes ||
+          mainEntry.service !== service
+        ) {
+          next[service.id] = {
+            ...mainEntry,
+            service: {
+              ...service,
+              modalidades:
+                service.modalidades ?? mainEntry.service?.modalidades ?? [],
+            },
+            modalidadCobro,
+            numHuespedes,
+            fechaInicio,
+            fechaFin,
+            hora,
+            duracionHoras,
+          };
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [
+    service,
+    bundleServices,
+    fechaInicio,
+    fechaFin,
+    hora,
+    duracionHoras,
+    modalidadCobro,
+    numHuespedes,
+  ]);
+
+  // Paso 2a: si hay servicios en el carrito sin modalidades cargadas, hidratarlas.
+  useEffect(() => {
+    let cancelled = false;
+    async function hydrateMissingModalidades() {
+      const entries = Object.values(cartByServiceId);
+      const needing = entries.filter((e) => {
+        const svc = e?.service;
+        if (!svc?.id) return false;
+        if (!supportsModalidadCobro(svc.vertical)) return false;
+        return !Array.isArray(svc.modalidades);
+      });
+      if (needing.length === 0) return;
+
+      const updates = await Promise.all(
+        needing.map(async (e) => {
+          const withMods = await loadServiceWithModalidades(e.service);
+          return [withMods.id, withMods];
+        }),
+      );
+      if (cancelled) return;
+      setCartByServiceId((prev) => {
+        const next = { ...prev };
+        let changed = false;
+        for (const [id, withMods] of updates) {
+          if (!next[id]) continue;
+          if (Array.isArray(next[id].service?.modalidades)) continue;
+          next[id] = {
+            ...next[id],
+            service: withMods,
+            modalidadCobro:
+              next[id].modalidadCobro ??
+              defaultModalidadCobroFromService(withMods),
+            numHuespedes:
+              next[id].numHuespedes ??
+              defaultNumHuespedesFromService(withMods),
+          };
+          changed = true;
+        }
+        return changed ? next : prev;
+      });
+    }
+    hydrateMissingModalidades();
+    return () => {
+      cancelled = true;
+    };
+  }, [cartByServiceId]);
+
+  // Asegurar entrada de carrito al restaurar bundleServices desde sessionStorage.
+  useEffect(() => {
+    if (!service?.id || bundleServices.length === 0) return;
+    let cancelled = false;
+    async function ensureBundleCartEntries() {
+      const missing = bundleServices.filter((s) => !cartByServiceId[s.id]);
+      if (missing.length === 0) return;
+      const built = {};
+      for (const svc of missing) {
+        const withMods = await loadServiceWithModalidades(svc);
+        if (cancelled) return;
+        built[withMods.id] = buildCartEntry(withMods, {
+          fechaInicio,
+          fechaFin,
+          hora,
+          duracionHoras,
+          modalidadCobro: defaultModalidadCobroFromService(withMods),
+          numHuespedes: defaultNumHuespedesFromService(withMods),
+        });
+      }
+      if (cancelled || Object.keys(built).length === 0) return;
+      setCartByServiceId((prev) => ({ ...prev, ...built }));
+    }
+    ensureBundleCartEntries();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- solo al cambiar ids del bundle
+  }, [service?.id, bundleServices.map((s) => s.id).join(",")]);
 
   const isBundle = selectedServices.length > 1;
 
@@ -2634,19 +2887,46 @@ export default function ReservarPage() {
   );
 
   function toggleBundleService(id) {
-    setBundleServices((prev) => {
-      if (prev.some((s) => s.id === id)) {
-        return prev.filter((s) => s.id !== id);
-      }
-      const svc = allBundleCandidates.find((s) => s.id === id);
-      if (!svc) return prev;
-      const issue = getServiceBookabilityIssue(svc);
-      if (issue) {
-        setErrorMessage(issue);
-        return prev;
-      }
-      return [...prev, svc];
-    });
+    const existing = bundleServices.find((s) => s.id === id);
+    if (existing) {
+      setBundleServices((prev) => prev.filter((s) => s.id !== id));
+      setCartByServiceId((prev) => {
+        if (!prev[id]) return prev;
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      return;
+    }
+
+    const svc = allBundleCandidates.find((s) => s.id === id);
+    if (!svc) return;
+    const issue = getServiceBookabilityIssue(svc);
+    if (issue) {
+      setErrorMessage(issue);
+      return;
+    }
+
+    // UI/precio: mismo objeto sin modalidades (retrocompat).
+    setBundleServices((prev) =>
+      prev.some((s) => s.id === id) ? prev : [...prev, svc],
+    );
+
+    // Carrito interno: con modalidades cargadas.
+    (async () => {
+      const withMods = await loadServiceWithModalidades(svc);
+      setCartByServiceId((prev) => ({
+        ...prev,
+        [withMods.id]: buildCartEntry(withMods, {
+          fechaInicio,
+          fechaFin,
+          hora,
+          duracionHoras,
+          modalidadCobro: defaultModalidadCobroFromService(withMods),
+          numHuespedes: defaultNumHuespedesFromService(withMods),
+        }),
+      }));
+    })();
   }
 
   function handleRangeChange({ desde, hasta }) {
@@ -2743,6 +3023,8 @@ export default function ReservarPage() {
         hora,
         duracionHoras,
         bundleServices,
+        cartByServiceId,
+        mainServiceId: mainServiceId || serviceId,
       }),
     );
     const params = new URLSearchParams();
@@ -3339,11 +3621,17 @@ export default function ReservarPage() {
                           </span>
                           <button
                             type="button"
-                            onClick={() =>
+                            onClick={() => {
                               setBundleServices((prev) =>
                                 prev.filter((b) => b.id !== s.id),
-                              )
-                            }
+                              );
+                              setCartByServiceId((prev) => {
+                                if (!prev[s.id]) return prev;
+                                const next = { ...prev };
+                                delete next[s.id];
+                                return next;
+                              });
+                            }}
                             style={{
                               fontSize: 14,
                               color: "#e53e3e",
