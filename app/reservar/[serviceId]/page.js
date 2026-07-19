@@ -3242,6 +3242,28 @@ export default function ReservarPage() {
         throw new Error("Completa las fechas o la duración para calcular el precio.");
       }
 
+      const service_contexts = selectedServices.map((s) => {
+        const entry = cartByServiceId[s.id];
+        const svcForUnits = entry?.service ?? s;
+        return {
+          service_id: s.id,
+          fecha_inicio: entry?.fechaInicio || fechaInicio,
+          fecha_fin:
+            entry?.fechaFin ||
+            entry?.fechaInicio ||
+            fechaFin ||
+            fechaInicio,
+          hora: entry?.hora ?? hora ?? "",
+          duracion_horas: entry?.duracionHoras ?? duracionHoras ?? "",
+          modalidad_cobro: entry?.modalidadCobro ?? modalidadCobro ?? null,
+          num_huespedes: serviceNeedsUnidadesSelector(svcForUnits)
+            ? entry?.numHuespedes ?? numHuespedes ?? null
+            : null,
+          payment_intent_id:
+            s.id === service.id ? confirmedPaymentIntentId : null,
+        };
+      });
+
       const res = await fetch("/api/bookings/complete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -3250,6 +3272,8 @@ export default function ReservarPage() {
           grupo_reserva: grupoReserva,
           main_service_id: service.id,
           service_ids: selectedServices.map((s) => s.id),
+          service_contexts,
+          // Legacy flat (retrocompat / emails): contexto del main
           fecha_inicio: fechaInicio,
           fecha_fin: fechaFin || fechaInicio,
           hora,
@@ -3280,6 +3304,7 @@ export default function ReservarPage() {
       grupoReserva,
       priceSummary.total,
       selectedServices,
+      cartByServiceId,
       fechaInicio,
       fechaFin,
       hora,
@@ -3306,6 +3331,29 @@ export default function ReservarPage() {
         throw new Error("Completa las fechas o la duración para calcular el precio.");
       }
 
+      const paymentsList = Array.isArray(payments) ? payments : [];
+      const service_contexts = selectedServices.map((s) => {
+        const entry = cartByServiceId[s.id];
+        const svcForUnits = entry?.service ?? s;
+        const pay = paymentsList.find((p) => p.service_id === s.id);
+        return {
+          service_id: s.id,
+          fecha_inicio: entry?.fechaInicio || fechaInicio,
+          fecha_fin:
+            entry?.fechaFin ||
+            entry?.fechaInicio ||
+            fechaFin ||
+            fechaInicio,
+          hora: entry?.hora ?? "",
+          duracion_horas: entry?.duracionHoras ?? "",
+          modalidad_cobro: entry?.modalidadCobro ?? null,
+          num_huespedes: serviceNeedsUnidadesSelector(svcForUnits)
+            ? entry?.numHuespedes ?? null
+            : null,
+          payment_intent_id: pay?.payment_intent_id ?? null,
+        };
+      });
+
       const res = await fetch("/api/bookings/complete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -3314,6 +3362,8 @@ export default function ReservarPage() {
           grupo_reserva: grupoReserva,
           main_service_id: service.id,
           service_ids: selectedServices.map((s) => s.id),
+          service_contexts,
+          // Legacy flat: main (no se usa para precio si hay service_contexts)
           fecha_inicio: fechaInicio,
           fecha_fin: fechaFin || fechaInicio,
           hora,
@@ -3344,6 +3394,7 @@ export default function ReservarPage() {
       grupoReserva,
       priceSummary.total,
       selectedServices,
+      cartByServiceId,
       fechaInicio,
       fechaFin,
       hora,

@@ -10,9 +10,10 @@ import {
   billingNeedsHora,
   calculateServiceBasePrice,
   COMMISSION_RATE,
+  getServiceModalidadesRows,
   resolveBillingForService,
 } from "@/app/lib/pricing-reserva";
-import { cargarTarifasPorServicios } from "@/app/lib/tarifas";
+import { cargarTarifasPorFecha } from "@/app/lib/tarifas";
 import { loadServiceModalidadesRows } from "@/app/lib/service-modalidades-server";
 import { attachContactsToServicesAdmin } from "@/app/lib/service-contact";
 import {
@@ -125,16 +126,28 @@ function roundMoney(amount) {
 /**
  * Valida capacidad y resuelve num_huespedes por servicio.
  * Sin modelo por huésped → null (precio plano, retrocompatible).
+ * @param {object[]} services
+ * @param {unknown} numHuespedesRaw — valor único (legacy) o Map serviceId→num
  */
 function resolveNumHuespedesPorServicio(services, numHuespedesRaw) {
   const map = new Map();
+  const perService =
+    numHuespedesRaw instanceof Map ? numHuespedesRaw : null;
+
   for (const svc of services) {
-    const validated = validateNumHuespedesParaReserva(svc, numHuespedesRaw);
+    const raw = perService
+      ? perService.get(svc.id)
+      : numHuespedesRaw;
+    const validated = validateNumHuespedesParaReserva(svc, raw);
     if (!validated.ok) {
       return {
         ok: false,
         response: NextResponse.json(
-          { error: validated.error, service_id: svc.id },
+          {
+            error: validated.error,
+            service_id: svc.id,
+            service: svc.titulo || svc.id,
+          },
           { status: 400 },
         ),
       };
@@ -142,6 +155,239 @@ function resolveNumHuespedesPorServicio(services, numHuespedesRaw) {
     map.set(svc.id, validated.num);
   }
   return { ok: true, map };
+}
+
+/**
+ * Paso 2c: contexto de reserva por servicio.
+ * Si body.service_contexts viene, cada línea usa SUS fechas/modalidad/huéspedes.
+ * Si no, legacy: el mismo flat para todos (retrocompat 1 servicio / antiguos clientes).
+ *
+ * @returns {{ ok: true, map: Map<string, object> } | { ok: false, response: NextResponse }}
+ */
+function resolveServiceContextsById(body, serviceIds, {
+  fecha_inicio = null,
+  fecha_fin = null,
+  hora = null,
+  duracion_horas = null,
+  modalidad_cobro = null,
+  num_huespedes = null,
+} = {}) {
+  const raw = body?.service_contexts;
+  const map = new Map();
+
+  if (Array.isArray(raw) && raw.length > 0) {
+    for (const entry of raw) {
+      if (!entry || typeof entry.service_id !== "string") {
+        return {
+          ok: false,
+          response: NextResponse.json(
+            { error: "Cada service_context debe incluir service_id" },
+            { status: 400 },
+          ),
+        };
+      }
+      if (map.has(entry.service_id)) {
+        return {
+          ok: false,
+          response: NextResponse.json(
+            {
+              error: `service_context duplicado para ${entry.service_id}`,
+            },
+            { status: 400 },
+          ),
+        };
+      }
+      map.set(entry.service_id, {
+        service_id: entry.service_id,
+        fecha_inicio: entry.fecha_inicio ?? null,
+        fecha_fin: entry.fecha_fin ?? entry.fecha_inicio ?? null,
+        hora: entry.hora ?? null,
+        duracion_horas: entry.duracion_horas ?? null,
+        modalidad_cobro: entry.modalidad_cobro ?? null,
+        num_huespedes:
+          entry.num_huespedes !== undefined ? entry.num_huespedes : null,
+        payment_intent_id:
+          typeof entry.payment_intent_id === "string"
+            ? entry.payment_intent_id
+            : null,
+      });
+    }
+
+    for (const id of serviceIds) {
+      if (!map.has(id)) {
+        return {
+          ok: false,
+          response: NextResponse.json(
+            {
+              error: `Falta service_context para el servicio ${id}`,
+              service_id: id,
+            },
+            { status: 400 },
+          ),
+        };
+      }
+    }
+
+    for (const id of map.keys()) {
+      if (!serviceIds.includes(id)) {
+        return {
+          ok: false,
+          response: NextResponse.json(
+            {
+              error: `service_context con service_id fuera de service_ids: ${id}`,
+            },
+            { status: 400 },
+          ),
+        };
+      }
+    }
+
+    return { ok: true, map };
+  }
+
+  // Legacy: un solo contexto compartido para todos.
+  for (const id of serviceIds) {
+    map.set(id, {
+      service_id: id,
+      fecha_inicio: fecha_inicio ?? null,
+      fecha_fin: fecha_fin ?? fecha_inicio ?? null,
+      hora: hora ?? null,
+      duracion_horas: duracion_horas ?? null,
+      modalidad_cobro: modalidad_cobro ?? null,
+      num_huespedes: num_huespedes ?? null,
+      payment_intent_id: null,
+    });
+  }
+  return { ok: true, map };
+}
+
+function serviceNeedsRequireModalidad(svc) {
+  return (
+    supportsModalidadCobro(svc.vertical) &&
+    getServiceModalidadesRows(svc).length > 1
+  );
+}
+
+/**
+ * Recalcula precio de CADA servicio con SU contexto (fechas/modalidad/huéspedes)
+ * + modalidades + tarifas por fecha propias.
+ */
+async function computePreciosPorServicioConContextos({
+  serviceIds,
+  serviceMap,
+  contextByServiceId,
+  numHuespedesPorServicio,
+  mainServiceId,
+  precioEspecialOverride,
+  clienteSinComision,
+}) {
+  const preciosPorServicio = [];
+  let subtotalGrupo = 0;
+
+  for (const serviceId of serviceIds) {
+    const svc = serviceMap.get(serviceId);
+    const ctx = contextByServiceId.get(serviceId);
+    if (!svc || !ctx) {
+      return {
+        ok: false,
+        response: NextResponse.json(
+          { error: `Contexto incompleto para ${serviceId}`, service_id: serviceId },
+          { status: 400 },
+        ),
+      };
+    }
+
+    if (!ctx.fecha_inicio) {
+      return {
+        ok: false,
+        response: NextResponse.json(
+          {
+            error: `Faltan fechas para ${svc.titulo || serviceId}`,
+            service_id: serviceId,
+          },
+          { status: 400 },
+        ),
+      };
+    }
+
+    let tarifasPorFecha = {};
+    try {
+      tarifasPorFecha = await cargarTarifasPorFecha(
+        supabaseAdmin,
+        serviceId,
+        ctx.fecha_inicio,
+        ctx.fecha_fin || ctx.fecha_inicio,
+      );
+    } catch (tarifasError) {
+      return {
+        ok: false,
+        response: NextResponse.json(
+          {
+            error:
+              tarifasError.message ||
+              `Error al cargar tarifas de ${svc.titulo || serviceId}`,
+            service_id: serviceId,
+          },
+          { status: 500 },
+        ),
+      };
+    }
+
+    const unitOverride =
+      serviceId === mainServiceId ? precioEspecialOverride : null;
+
+    const calc = calculateServiceBasePrice(
+      svc,
+      {
+        fechaInicio: ctx.fecha_inicio,
+        fechaFin: ctx.fecha_fin || ctx.fecha_inicio,
+        duracionHoras: ctx.duracion_horas,
+        mainVertical: svc.vertical,
+        modalidadCobro: ctx.modalidad_cobro,
+        numHuespedes: numHuespedesPorServicio.get(serviceId),
+        requireModalidad: serviceNeedsRequireModalidad(svc),
+      },
+      unitOverride,
+      tarifasPorFecha,
+    );
+
+    if (!calc.ready) {
+      return {
+        ok: false,
+        response: NextResponse.json(
+          {
+            error: `No se pudo calcular el precio de ${svc.titulo || serviceId}`,
+            service_id: serviceId,
+            detail: calc.detail,
+          },
+          { status: 400 },
+        ),
+      };
+    }
+
+    subtotalGrupo += calc.base;
+    const { precio_base, precio_total } = buildServicePricing(
+      calc.base,
+      clienteSinComision,
+    );
+
+    preciosPorServicio.push({
+      service_id: serviceId,
+      precio_base,
+      precio_total,
+      modalidad_cobro: calc.modalidadCobro ?? null,
+      fecha_inicio: ctx.fecha_inicio,
+      fecha_fin: ctx.fecha_fin || ctx.fecha_inicio,
+      hora: ctx.hora,
+      duracion_horas: ctx.duracion_horas,
+    });
+  }
+
+  return {
+    ok: true,
+    preciosPorServicio,
+    subtotalGrupo: roundMoney(subtotalGrupo),
+  };
 }
 
 function buildServicePricing(calcBase, clienteSinComision) {
@@ -796,15 +1042,17 @@ async function finalizeInsertedBookings({
   mensaje,
   grupoReserva,
 }) {
-  const finDisponibilidad = fechaFin || fechaInicio;
-
   const { error: disponibilidadError } = await supabaseAdmin
     .from("disponibilidad")
     .insert(
       insertedBookings.map((booking) => ({
         service_id: booking.service_id,
-        fecha_inicio: fechaInicio,
-        fecha_fin: finDisponibilidad,
+        fecha_inicio: booking.fecha_inicio || fechaInicio,
+        fecha_fin:
+          booking.fecha_fin ||
+          booking.fecha_inicio ||
+          fechaFin ||
+          fechaInicio,
         booking_id: booking.id,
         tipo: "reserva",
       })),
@@ -974,9 +1222,26 @@ async function completePerServicePayments(userId, body) {
     return NextResponse.json({ error: bookability.error }, { status: 409 });
   }
 
+  const contextsResolved = resolveServiceContextsById(body, uniqueServiceIds, {
+    fecha_inicio,
+    fecha_fin,
+    hora,
+    duracion_horas,
+    modalidad_cobro,
+    num_huespedes,
+  });
+  if (!contextsResolved.ok) return contextsResolved.response;
+  const contextByServiceId = contextsResolved.map;
+
+  const numHuespedesRawMap = new Map(
+    [...contextByServiceId.entries()].map(([id, ctx]) => [
+      id,
+      ctx.num_huespedes,
+    ]),
+  );
   const huespedesResolved = resolveNumHuespedesPorServicio(
     services,
-    num_huespedes,
+    numHuespedesRawMap,
   );
   if (!huespedesResolved.ok) return huespedesResolved.response;
   const numHuespedesPorServicio = huespedesResolved.map;
@@ -991,15 +1256,6 @@ async function completePerServicePayments(userId, body) {
     return NextResponse.json({ error: perfilError.message }, { status: 500 });
   }
 
-  const mainVertical = mainService.vertical;
-  const dateContext = {
-    fechaInicio: fecha_inicio,
-    fechaFin: fecha_fin,
-    duracionHoras: duracion_horas,
-    mainVertical,
-    modalidadCobro: modalidad_cobro,
-  };
-
   const precioEspecialOverride = getPrecioEspecialOverride(
     precio_especial,
     valida_hasta,
@@ -1007,68 +1263,19 @@ async function completePerServicePayments(userId, body) {
 
   const clienteSinComision = getReservasSinComisionCliente(perfilCliente) > 0;
 
-  let tarifasPorServicio;
-  try {
-    tarifasPorServicio = await cargarTarifasPorServicios(
-      supabaseAdmin,
-      service_ids,
-      fecha_inicio,
-      fecha_fin,
-    );
-  } catch (tarifasError) {
-    return NextResponse.json(
-      { error: tarifasError.message || "Error al cargar tarifas" },
-      { status: 500 },
-    );
-  }
+  const priced = await computePreciosPorServicioConContextos({
+    serviceIds: service_ids,
+    serviceMap,
+    contextByServiceId,
+    numHuespedesPorServicio,
+    mainServiceId: main_service_id,
+    precioEspecialOverride,
+    clienteSinComision,
+  });
+  if (!priced.ok) return priced.response;
 
-  const preciosPorServicio = [];
-  let subtotalGrupo = 0;
-
-  for (const serviceId of service_ids) {
-    const svc = serviceMap.get(serviceId);
-    const unitOverride =
-      serviceId === main_service_id ? precioEspecialOverride : null;
-    const isMain = serviceId === main_service_id;
-
-    const calc = calculateServiceBasePrice(
-      svc,
-      {
-        ...dateContext,
-        numHuespedes: numHuespedesPorServicio.get(serviceId),
-        requireModalidad: isMain && supportsModalidadCobro(svc.vertical),
-      },
-      unitOverride,
-      tarifasPorServicio[serviceId] ?? {},
-    );
-
-    if (!calc.ready) {
-      return NextResponse.json(
-        {
-          error: "No se pudo calcular el precio",
-          service_id: serviceId,
-          detail: calc.detail,
-        },
-        { status: 400 },
-      );
-    }
-
-    subtotalGrupo += calc.base;
-
-    const { precio_base, precio_total } = buildServicePricing(
-      calc.base,
-      clienteSinComision,
-    );
-
-    preciosPorServicio.push({
-      service_id: serviceId,
-      precio_base,
-      precio_total,
-      modalidad_cobro: calc.modalidadCobro ?? null,
-    });
-  }
-
-  subtotalGrupo = roundMoney(subtotalGrupo);
+  const { preciosPorServicio } = priced;
+  let subtotalGrupo = priced.subtotalGrupo;
   const comision = clienteSinComision
     ? 0
     : roundMoney(subtotalGrupo * COMMISSION_RATE);
@@ -1098,13 +1305,16 @@ async function completePerServicePayments(userId, body) {
     const precioTotal = precioPorServicioMap.get(serviceId);
     const creditoServicio = creditoPorServicioMap.get(serviceId) ?? 0;
     const tarjetaEsperada = roundMoney(precioTotal - creditoServicio);
-    const paymentIntentId = paymentsByService.get(serviceId);
+    const ctx = contextByServiceId.get(serviceId);
+    const paymentIntentId =
+      paymentsByService.get(serviceId) ?? ctx?.payment_intent_id ?? null;
 
     if (tarjetaEsperada <= 0) {
       if (paymentIntentId != null) {
         return NextResponse.json(
           {
             error: `El servicio ${serviceId} no requiere pago con tarjeta (cubierto con crédito)`,
+            service_id: serviceId,
           },
           { status: 400 },
         );
@@ -1116,6 +1326,7 @@ async function completePerServicePayments(userId, body) {
       return NextResponse.json(
         {
           error: `Falta payment_intent_id para el servicio ${serviceId}`,
+          service_id: serviceId,
         },
         { status: 400 },
       );
@@ -1131,8 +1342,14 @@ async function completePerServicePayments(userId, body) {
     });
 
     if (validation.error) {
+      const svc = serviceMap.get(serviceId);
       return NextResponse.json(
-        { error: validation.error },
+        {
+          error:
+            validation.error ||
+            `El importe no cuadra para ${svc?.titulo || serviceId}`,
+          service_id: serviceId,
+        },
         { status: validation.status ?? 400 },
       );
     }
@@ -1152,29 +1369,30 @@ async function completePerServicePayments(userId, body) {
   if (idempotency.error) return idempotency.error;
   if (idempotency.earlyResponse) return idempotency.earlyResponse;
 
-  const finDisponibilidad = fecha_fin || fecha_inicio;
-  const uniqueServicesForDates = [...new Set(service_ids)];
-
-  for (const serviceId of uniqueServicesForDates) {
+  for (const serviceId of uniqueServiceIds) {
+    const ctx = contextByServiceId.get(serviceId);
+    const inicio = ctx.fecha_inicio;
+    const fin = ctx.fecha_fin || ctx.fecha_inicio;
     let solapamiento;
     try {
       solapamiento = await hasDisponibilidadSolapamiento(
         serviceId,
-        fecha_inicio,
-        finDisponibilidad,
+        inicio,
+        fin,
       );
     } catch (overlapError) {
       return NextResponse.json(
-        { error: overlapError.message },
+        { error: overlapError.message, service_id: serviceId },
         { status: 500 },
       );
     }
 
     if (solapamiento) {
+      const svc = serviceMap.get(serviceId);
       return NextResponse.json(
         {
-          error:
-            "Estas fechas ya no están disponibles para uno de los servicios. Por favor elige otras.",
+          error: `Estas fechas ya no están disponibles para ${svc?.titulo || serviceId}. Elige otras.`,
+          service_id: serviceId,
         },
         { status: 409 },
       );
@@ -1183,20 +1401,22 @@ async function completePerServicePayments(userId, body) {
 
   const bookingRows = service_ids.map((serviceId) => {
     const svc = serviceMap.get(serviceId);
+    const ctx = contextByServiceId.get(serviceId);
     return buildBookingRow({
       svc,
       userId,
-      fechaInicio: fecha_inicio,
-      fechaFin: fecha_fin,
-      hora,
-      duracionHoras: duracion_horas,
+      fechaInicio: ctx.fecha_inicio,
+      fechaFin: ctx.fecha_fin,
+      hora: ctx.hora,
+      duracionHoras: ctx.duracion_horas,
       mensaje,
       precioBase: precioBasePorServicioMap.get(serviceId),
       precioTotal: precioPorServicioMap.get(serviceId),
       clienteSinComision,
       creditoAplicado: creditoPorServicioMap.get(serviceId) ?? 0,
       grupoReserva: grupo_reserva,
-      paymentIntentId: paymentsByService.get(serviceId),
+      paymentIntentId:
+        paymentsByService.get(serviceId) ?? ctx.payment_intent_id ?? null,
       familiaId: familia_id,
       numHuespedes: numHuespedesPorServicio.get(serviceId) ?? null,
       modalidadCobro: modalidadPorServicioMap.get(serviceId),
@@ -1206,7 +1426,7 @@ async function completePerServicePayments(userId, body) {
   const { data: insertedBookings, error: insertError } = await supabaseAdmin
     .from("bookings")
     .insert(bookingRows)
-    .select("id, service_id");
+    .select("id, service_id, fecha_inicio, fecha_fin");
 
   if (insertError) {
     return NextResponse.json({ error: insertError.message }, { status: 500 });
@@ -1215,6 +1435,9 @@ async function completePerServicePayments(userId, body) {
   const insertedBookingIds = insertedBookings.map((b) => b.id);
   const rollbackPaymentIntentId =
     [...paymentsByService.values()].find((pi) => typeof pi === "string") ?? null;
+
+  // Fechas del main solo para emails de grupo; disponibilidad usa fechas de cada booking.
+  const mainCtx = contextByServiceId.get(main_service_id);
 
   return finalizeInsertedBookings({
     userId,
@@ -1226,8 +1449,8 @@ async function completePerServicePayments(userId, body) {
     insertedBookings,
     insertedBookingIds,
     rollbackPaymentIntentId,
-    fechaInicio: fecha_inicio,
-    fechaFin: fecha_fin,
+    fechaInicio: mainCtx?.fecha_inicio ?? fecha_inicio,
+    fechaFin: mainCtx?.fecha_fin ?? fecha_fin,
     familiaId: familia_id,
     mainService,
     mainServiceId: main_service_id,
@@ -1363,9 +1586,26 @@ export async function POST(request) {
       return NextResponse.json({ error: bookability.error }, { status: 409 });
     }
 
+    const contextsResolved = resolveServiceContextsById(body, uniqueServiceIds, {
+      fecha_inicio,
+      fecha_fin,
+      hora,
+      duracion_horas,
+      modalidad_cobro,
+      num_huespedes,
+    });
+    if (!contextsResolved.ok) return contextsResolved.response;
+    const contextByServiceId = contextsResolved.map;
+
+    const numHuespedesRawMap = new Map(
+      [...contextByServiceId.entries()].map(([id, ctx]) => [
+        id,
+        ctx.num_huespedes,
+      ]),
+    );
     const huespedesResolved = resolveNumHuespedesPorServicio(
       services,
-      num_huespedes,
+      numHuespedesRawMap,
     );
     if (!huespedesResolved.ok) return huespedesResolved.response;
     const numHuespedesPorServicio = huespedesResolved.map;
@@ -1380,15 +1620,6 @@ export async function POST(request) {
       return NextResponse.json({ error: perfilError.message }, { status: 500 });
     }
 
-    const mainVertical = mainService.vertical;
-    const dateContext = {
-      fechaInicio: fecha_inicio,
-      fechaFin: fecha_fin,
-      duracionHoras: duracion_horas,
-      mainVertical,
-      modalidadCobro: modalidad_cobro,
-    };
-
     const precioEspecialOverride = getPrecioEspecialOverride(
       precio_especial,
       valida_hasta,
@@ -1396,68 +1627,19 @@ export async function POST(request) {
 
     const clienteSinComision = getReservasSinComisionCliente(perfilCliente) > 0;
 
-    let tarifasPorServicio;
-    try {
-      tarifasPorServicio = await cargarTarifasPorServicios(
-        supabaseAdmin,
-        service_ids,
-        fecha_inicio,
-        fecha_fin,
-      );
-    } catch (tarifasError) {
-      return NextResponse.json(
-        { error: tarifasError.message || "Error al cargar tarifas" },
-        { status: 500 },
-      );
-    }
+    const priced = await computePreciosPorServicioConContextos({
+      serviceIds: service_ids,
+      serviceMap,
+      contextByServiceId,
+      numHuespedesPorServicio,
+      mainServiceId: main_service_id,
+      precioEspecialOverride,
+      clienteSinComision,
+    });
+    if (!priced.ok) return priced.response;
 
-    const preciosPorServicio = [];
-    let subtotalGrupo = 0;
-
-    for (const serviceId of service_ids) {
-      const svc = serviceMap.get(serviceId);
-      const unitOverride =
-        serviceId === main_service_id ? precioEspecialOverride : null;
-      const isMain = serviceId === main_service_id;
-
-      const calc = calculateServiceBasePrice(
-        svc,
-        {
-          ...dateContext,
-          numHuespedes: numHuespedesPorServicio.get(serviceId),
-          requireModalidad: isMain && supportsModalidadCobro(svc.vertical),
-        },
-        unitOverride,
-        tarifasPorServicio[serviceId] ?? {},
-      );
-
-      if (!calc.ready) {
-        return NextResponse.json(
-          {
-            error: "No se pudo calcular el precio",
-            service_id: serviceId,
-            detail: calc.detail,
-          },
-          { status: 400 },
-        );
-      }
-
-      subtotalGrupo += calc.base;
-
-      const { precio_base, precio_total } = buildServicePricing(
-        calc.base,
-        clienteSinComision,
-      );
-
-      preciosPorServicio.push({
-        service_id: serviceId,
-        precio_base,
-        precio_total,
-        modalidad_cobro: calc.modalidadCobro ?? null,
-      });
-    }
-
-    subtotalGrupo = roundMoney(subtotalGrupo);
+    const { preciosPorServicio } = priced;
+    const subtotalGrupo = priced.subtotalGrupo;
     const comision = clienteSinComision
       ? 0
       : roundMoney(subtotalGrupo * COMMISSION_RATE);
@@ -1527,26 +1709,6 @@ export async function POST(request) {
       }
     }
 
-    const { data: existingBookings, error: existingError } = await supabaseAdmin
-      .from("bookings")
-      .select("id, service_id")
-      .eq("payment_intent_id", payment_intent_id);
-
-    if (existingError) {
-      return NextResponse.json(
-        { error: existingError.message },
-        { status: 500 },
-      );
-    }
-
-    if (existingBookings?.length > 0) {
-      return NextResponse.json({
-        ok: true,
-        already_created: true,
-        booking_ids: existingBookings.map((b) => b.id),
-      });
-    }
-
     const precioPorServicioMap = new Map(
       preciosPorServicio.map((p) => [p.service_id, p.precio_total]),
     );
@@ -1563,29 +1725,28 @@ export async function POST(request) {
       totalGrupo,
     );
 
-    const finDisponibilidad = fecha_fin || fecha_inicio;
-    const uniqueServicesForDates = [...new Set(service_ids)];
-
-    for (const serviceId of uniqueServicesForDates) {
+    for (const serviceId of uniqueServiceIds) {
+      const ctx = contextByServiceId.get(serviceId);
       let solapamiento;
       try {
         solapamiento = await hasDisponibilidadSolapamiento(
           serviceId,
-          fecha_inicio,
-          finDisponibilidad,
+          ctx.fecha_inicio,
+          ctx.fecha_fin || ctx.fecha_inicio,
         );
       } catch (overlapError) {
         return NextResponse.json(
-          { error: overlapError.message },
+          { error: overlapError.message, service_id: serviceId },
           { status: 500 },
         );
       }
 
       if (solapamiento) {
+        const svc = serviceMap.get(serviceId);
         return NextResponse.json(
           {
-            error:
-              "Estas fechas ya no están disponibles para uno de los servicios. Por favor elige otras.",
+            error: `Estas fechas ya no están disponibles para ${svc?.titulo || serviceId}. Elige otras.`,
+            service_id: serviceId,
           },
           { status: 409 },
         );
@@ -1594,13 +1755,14 @@ export async function POST(request) {
 
     const bookingRows = service_ids.map((serviceId) => {
       const svc = serviceMap.get(serviceId);
+      const ctx = contextByServiceId.get(serviceId);
       return buildBookingRow({
         svc,
         userId,
-        fechaInicio: fecha_inicio,
-        fechaFin: fecha_fin,
-        hora,
-        duracionHoras: duracion_horas,
+        fechaInicio: ctx.fecha_inicio,
+        fechaFin: ctx.fecha_fin,
+        hora: ctx.hora,
+        duracionHoras: ctx.duracion_horas,
         mensaje,
         precioBase: precioBasePorServicioMap.get(serviceId),
         precioTotal: precioPorServicioMap.get(serviceId),
@@ -1617,7 +1779,7 @@ export async function POST(request) {
     const { data: insertedBookings, error: insertError } = await supabaseAdmin
       .from("bookings")
       .insert(bookingRows)
-      .select("id, service_id");
+      .select("id, service_id, fecha_inicio, fecha_fin");
 
     if (insertError) {
       return NextResponse.json({ error: insertError.message }, { status: 500 });
@@ -1630,8 +1792,8 @@ export async function POST(request) {
       .insert(
         insertedBookings.map((booking) => ({
           service_id: booking.service_id,
-          fecha_inicio: fecha_inicio,
-          fecha_fin: finDisponibilidad,
+          fecha_inicio: booking.fecha_inicio,
+          fecha_fin: booking.fecha_fin || booking.fecha_inicio,
           booking_id: booking.id,
           tipo: "reserva",
         })),
@@ -1713,8 +1875,10 @@ export async function POST(request) {
       precioBasePorServicioMap,
       clienteSinComision,
       mainService,
-      fechaInicio: fecha_inicio,
-      fechaFin: fecha_fin,
+      fechaInicio:
+        contextByServiceId.get(main_service_id)?.fecha_inicio ?? fecha_inicio,
+      fechaFin:
+        contextByServiceId.get(main_service_id)?.fecha_fin ?? fecha_fin,
       totalGrupo,
       subtotalGrupo,
       comision,
