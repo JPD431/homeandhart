@@ -98,8 +98,6 @@ export default function ReservaDetallePage() {
             precio,
             ciudad,
             proveedor_id,
-            telefono_contacto,
-            direccion_exacta,
             modalidad,
             profiles_public:proveedor_id (nombre, apellido)
           )
@@ -120,7 +118,7 @@ export default function ReservaDetallePage() {
         return;
       }
 
-      // Dual-read: preferir service_contact; fallback a columns legacy en services.
+      // Contacto solo desde service_contact (RLS: dueño o cliente con reserva activa).
       const rawService = Array.isArray(row.services)
         ? row.services[0]
         : row.services;

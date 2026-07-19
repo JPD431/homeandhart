@@ -87,8 +87,6 @@ const SERVICE_SELECT = `
   reserva_inmediata,
   proveedor_id,
   titulo,
-  direccion_exacta,
-  telefono_contacto,
   modalidad,
   capacidad_maxima,
   huespedes_incluidos,

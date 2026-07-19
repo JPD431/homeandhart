@@ -1,14 +1,15 @@
 /**
  * Privacidad de ubicación y contacto del proveedor.
  *
+ * Estos datos viven en service_contact (no en services).
  * Público (búsqueda, anuncio, perfil proveedor, comparar…):
  *   NUNCA exponer direccion_exacta, telefono_contacto ni location_lat/lng exactos.
  *
  * Legítimo (dueño, admin preview, reserva confirmada, emails server-side):
- *   sí pueden leer esos campos.
+ *   leerlos de service_contact con el helper correspondiente.
  */
 
-/** Columnas que no deben viajar en respuestas públicas. */
+/** Campos de contacto: solo viven en service_contact (no en services). */
 export const SERVICE_PRIVATE_COLUMNS = [
   "direccion_exacta",
   "telefono_contacto",
@@ -88,8 +89,8 @@ export const SERVICE_PUBLIC_SELECT = `
 `;
 
 /**
- * Elimina campos privados si alguien hizo select('*') por error.
- * Defensa en profundidad; la query no debería haberlos pedido.
+ * Elimina campos de contacto si llegaron por merge en memoria.
+ * Defensa en profundidad; no deben pedirse en selects de services.
  */
 export function stripPrivateServiceFields(service) {
   if (!service || typeof service !== "object") return service;

@@ -1,9 +1,8 @@
 /**
  * Contacto/ubicación exacta del servicio (tabla service_contact).
  *
- * Dual-write / dual-read mientras existan columnas legacy en services:
- *   - Escritura: service_contact + columnas en services
- *   - Lectura: preferir service_contact; fallback a services.*
+ * Los campos direccion_exacta, telefono_contacto, location_lat, location_lng
+ * viven SOLO aquí — ya no existen en services.
  *
  * Regla si no aplica dirección (needsDireccionFields=false o todo vacío):
  *   BORRAR la fila de service_contact (no dejar nulls huérfanos).
@@ -71,25 +70,26 @@ export function hasAnyContactData(fields) {
 }
 
 /**
- * Preferir service_contact; fallback por campo a legacy (services.*).
- * @param {object|null|undefined} contact
- * @param {object|null|undefined} legacy — fila services o details
+ * Campos desde service_contact (o, opcionalmente, estado en memoria del formulario).
+ * NO leer de services — esas columnas ya no existen.
+ * @param {object|null|undefined} contact — fila service_contact
+ * @param {object|null|undefined} formFallback — details del formulario (opcional)
  */
-export function resolveContactFields(contact, legacy = {}) {
+export function resolveContactFields(contact, formFallback = null) {
   const c = contact || null;
-  const l = legacy || {};
+  const f = formFallback || {};
   return {
-    direccion_exacta: c?.direccion_exacta ?? l.direccion_exacta ?? null,
-    telefono_contacto: c?.telefono_contacto ?? l.telefono_contacto ?? null,
-    location_lat: c?.location_lat ?? l.location_lat ?? null,
-    location_lng: c?.location_lng ?? l.location_lng ?? null,
+    direccion_exacta: c?.direccion_exacta ?? f.direccion_exacta ?? null,
+    telefono_contacto: c?.telefono_contacto ?? f.telefono_contacto ?? null,
+    location_lat: c?.location_lat ?? f.location_lat ?? null,
+    location_lng: c?.location_lng ?? f.location_lng ?? null,
   };
 }
 
-/** Fusiona contacto resuelto en un objeto servicio (mutación superficial). */
+/** Fusiona contacto de service_contact en un objeto servicio (mutación superficial). */
 export function mergeResolvedContactIntoService(service, contact) {
   if (!service) return service;
-  const resolved = resolveContactFields(contact, service);
+  const resolved = resolveContactFields(contact);
   return { ...service, ...resolved };
 }
 
@@ -177,14 +177,9 @@ export async function loadServiceContactsByIds(serviceIds, client = null) {
   return map;
 }
 
-/** Aplica contacto (con fallback legacy) a details de formulario. */
-export function applyContactToDetails(details, contact, legacyRow = {}) {
-  const resolved = resolveContactFields(contact, {
-    direccion_exacta: legacyRow.direccion_exacta ?? details?.direccion_exacta,
-    telefono_contacto: legacyRow.telefono_contacto ?? details?.telefono_contacto,
-    location_lat: legacyRow.location_lat ?? details?.location_lat,
-    location_lng: legacyRow.location_lng ?? details?.location_lng,
-  });
+/** Aplica contacto de service_contact a details de formulario. */
+export function applyContactToDetails(details, contact) {
+  const resolved = resolveContactFields(contact);
   return {
     ...details,
     direccion_exacta: resolved.direccion_exacta || "",

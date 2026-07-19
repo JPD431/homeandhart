@@ -210,7 +210,6 @@ export async function upsertDraftService(
 
   const payload = {
     ...buildServicePayload(servicioData, vertical, ciudad, userId, false),
-    ...locationFields,
     revision_estado,
   };
   syncServicePhotos(payload, allFotos);
@@ -293,8 +292,8 @@ export function mapDraftRowToServiceDetails(row) {
     descripcion: row.descripcion || row.descripcion_anuncio || "",
     precio: row.precio ?? "",
     location_zone: row.location_zone || "",
-    location_lat: row.location_lat ?? null,
-    location_lng: row.location_lng ?? null,
+    location_lat: null,
+    location_lng: null,
     tipo_alojamiento: row.tipo_alojamiento || "",
     modalidad: row.modalidad || "domicilio_cliente",
     estancia_minima: row.estancia_minima != null ? String(row.estancia_minima) : "1",
@@ -304,8 +303,8 @@ export function mapDraftRowToServiceDetails(row) {
       row.dias_disponibles?.length > 0 ? row.dias_disponibles : [...DIAS_DISPONIBLES_DEFAULT],
     cancelacion: row.cancellation_policy || "moderada",
     reserva_inmediata: row.reserva_inmediata === true,
-    direccion_exacta: row.direccion_exacta || "",
-    telefono_contacto: row.telefono_contacto || "",
+    direccion_exacta: "",
+    telefono_contacto: "",
     disponible_para_viajar: row.disponible_para_viajar === true,
     proveedor_emergencia: row.proveedor_emergencia === true,
     amenities: row.amenities || [],
@@ -373,16 +372,7 @@ export async function loadOnboardingState(userId) {
 
   const draftsWithContact = draftRows.map((row) => {
     const contact = contactById.get(row.id) ?? null;
-    const resolved = applyContactToDetails(
-      {
-        direccion_exacta: row.direccion_exacta || "",
-        telefono_contacto: row.telefono_contacto || "",
-        location_lat: row.location_lat ?? null,
-        location_lng: row.location_lng ?? null,
-      },
-      contact,
-      row,
-    );
+    const resolved = applyContactToDetails({}, contact);
     return {
       ...row,
       direccion_exacta: resolved.direccion_exacta,

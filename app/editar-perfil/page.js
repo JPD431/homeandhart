@@ -1169,7 +1169,7 @@ function EditarPerfilContent() {
         setServices(
           rows.map((row) => {
             const contact = contactById.get(row.id) ?? null;
-            const resolved = applyContactToDetails({}, contact, row);
+            const resolved = applyContactToDetails({}, contact);
             const rowWithContact = {
               ...row,
               direccion_exacta: resolved.direccion_exacta,
@@ -1592,7 +1592,6 @@ function EditarPerfilContent() {
             userId,
             resolveDisponibleForSave(service, perfil, documentContext),
           ),
-          ...locationFields,
           revision_estado: revisionMeta.revision_estado,
         };
 
@@ -1769,7 +1768,6 @@ function EditarPerfilContent() {
             userId,
             puedeActivarServicio(nuevoServicio, perfil, nuevoContext),
           ),
-          ...locationFields,
           revision_estado: revisionMeta.revision_estado,
         };
         const { data, error } = await supabase

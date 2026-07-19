@@ -67,9 +67,9 @@ function mergeServiceEmbed(embed, fallback) {
   if (!raw) return fallback;
   return {
     titulo: raw.titulo || fallback.titulo,
-    // Preferir contacto ya resuelto (service_contact) del fallback
-    direccion_exacta: fallback.direccion_exacta || raw.direccion_exacta,
-    telefono_contacto: fallback.telefono_contacto || raw.telefono_contacto,
+    // Contacto solo desde service_contact (ya resuelto en fallback)
+    direccion_exacta: fallback.direccion_exacta ?? null,
+    telefono_contacto: fallback.telefono_contacto ?? null,
     modalidad: raw.modalidad || fallback.modalidad,
     proveedor_id: raw.proveedor_id || fallback.proveedor_id,
   };
@@ -140,9 +140,7 @@ export async function POST(request) {
 
   const { data: serviceRaw, error: serviceError } = await supabaseAdmin
     .from("services")
-    .select(
-      "id, proveedor_id, titulo, direccion_exacta, telefono_contacto, modalidad",
-    )
+    .select("id, proveedor_id, titulo, modalidad")
     .eq("id", booking.service_id)
     .maybeSingle();
 
@@ -335,8 +333,6 @@ export async function POST(request) {
           mensaje,
           services:service_id (
             titulo,
-            direccion_exacta,
-            telefono_contacto,
             modalidad,
             proveedor_id
           )
