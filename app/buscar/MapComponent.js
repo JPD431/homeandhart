@@ -128,11 +128,7 @@ export default function RealMap({
           white-space: nowrap;
         `;
         el.textContent =
-          pricing.precio != null
-            ? pricing.useDesde
-              ? `desde ${pricing.precio}€`
-              : `${pricing.precio}€`
-            : "·";
+          pricing.precio != null ? pricing.priceLabel : "·";
         el.title = "Zona aproximada (la dirección exacta se comparte tras reservar)";
 
         el.addEventListener("mouseenter", () => onPinHover?.(i));

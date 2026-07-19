@@ -72,11 +72,13 @@ export function compactPriceSuffix(suffix) {
 }
 
 /**
- * Precio mostrado en tarjeta de búsqueda.
- * - Niñera/mascotas con service_modalidades → mínimo entre modalidades activas.
- * - Sin filas → services.precio + sufijo legacy (hora / día).
- * - Alojamiento → services.precio /noche; si hay tarifas variables, mínimo + "desde".
- * No afecta el cálculo de reserva.
+ * Precio mostrado en tarjeta de búsqueda (solo display; no afecta reserva).
+ *
+ * Niñera / mascotas (service_modalidades):
+ *   - 2+ modalidades activas → "desde X€/[unidad del mínimo]" (hay rango)
+ *   - exactamente 1 → "X€/[unidad]" SIN "desde" (precio fijo)
+ *   - 0 filas (legacy) → services.precio + unidad legacy, sin "desde"
+ * Alojamiento: sin cambios (precio/noche; "desde" solo con tarifas variables).
  *
  * @returns {{
  *   precio: number|null,
@@ -108,21 +110,29 @@ export function resolveServiceCardPricing(service, lang = "es") {
 
   if (supportsModalidadCobro(vertical)) {
     const rows = Array.isArray(service.modalidades) ? service.modalidades : [];
-    const priced = [];
+    // Una fila por modalidad (las filas en BD = activas).
+    const byModalidad = new Map();
     for (const row of rows) {
+      if (!MODALIDAD_COBRO_VALUES.includes(row?.modalidad)) continue;
       const p = Number(row?.precio);
       if (!Number.isFinite(p) || p <= 0) continue;
-      if (!MODALIDAD_COBRO_VALUES.includes(row.modalidad)) continue;
-      priced.push({ modalidad: row.modalidad, precio: p });
+      const prev = byModalidad.get(row.modalidad);
+      if (!prev || p < prev.precio) {
+        byModalidad.set(row.modalidad, { modalidad: row.modalidad, precio: p });
+      }
     }
+    const priced = [...byModalidad.values()];
+    const activeCount = priced.length;
 
-    if (priced.length > 0) {
+    if (activeCount > 0) {
       priced.sort((a, b) => a.precio - b.precio);
       const best = priced[0];
       precio = best.precio;
       suffix = getModalidadCobroPriceSuffix(best.modalidad);
-      useDesde = priced.length > 1;
+      // "desde" solo si hay rango real (2 o 3 modalidades).
+      useDesde = activeCount >= 2;
     } else {
+      // Legacy: sin filas en service_modalidades.
       const p = Number(service.precio);
       if (Number.isFinite(p) && p > 0) precio = p;
       const legacy = legacyModalidadForVertical(vertical);
