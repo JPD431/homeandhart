@@ -9,7 +9,10 @@
  * cuando el servicio tiene el modelo configurado.
  */
 
-import { legacyModalidadForVertical } from "@/app/lib/modalidad-cobro";
+import {
+  legacyModalidadForVertical,
+  MODALIDAD_COBRO_VALUES,
+} from "@/app/lib/modalidad-cobro";
 
 export const VERTICALES_UNIDADES_PRECIO = ["alojamiento", "ninos", "mascotas"];
 
@@ -225,20 +228,66 @@ export function validateNumHuespedesParaReserva(svc, numHuespedes) {
  * Desglose legible para el cliente, ej.
  * "1 niño incluido · +2 niños × 8€ = +16€/hora"
  * "1 mascota incluida · +1 mascota × 5€ = +5€/día"
+ * "1 niño incluido · +1 niño × 2.95€ = +2.95€/medio día"
+ *
+ * Con service_modalidades: usa suplemento_extra y unidad de la modalidad elegida
+ * (no services.precio_huesped_extra ni la unidad legacy "hora").
+ *
+ * @param {object} svc
+ * @param {number|null|undefined} numHuespedes
+ * @param {string|null|undefined} [modalidadCobro] — hora | dia | medio_dia
  */
-export function formatHuespedesPrecioDesglose(svc, numHuespedes) {
-  if (!serviceHasHuespedesModelo(svc)) return null;
+export function formatHuespedesPrecioDesglose(
+  svc,
+  numHuespedes,
+  modalidadCobro = null,
+) {
+  if (!svc || !supportsUnidadesPrecio(svc.vertical)) return null;
+  if (!serviceHasHuespedesModelo(svc) && !serviceHasCapacidadUnidades(svc)) {
+    return null;
+  }
 
-  const copy = getUnidadesPrecioCopy(svc.vertical);
+  const rows = Array.isArray(svc.modalidades) ? svc.modalidades : [];
+  let resolvedModalidad = null;
+  let modalidadRow = null;
+
+  if (rows.length > 0 && (svc.vertical === "ninos" || svc.vertical === "mascotas")) {
+    const requested =
+      typeof modalidadCobro === "string" &&
+      MODALIDAD_COBRO_VALUES.includes(modalidadCobro)
+        ? modalidadCobro
+        : null;
+    if (requested) {
+      modalidadRow = rows.find((r) => r.modalidad === requested) ?? null;
+      if (modalidadRow) resolvedModalidad = requested;
+    } else if (rows.length === 1) {
+      modalidadRow = rows[0];
+      resolvedModalidad = rows[0].modalidad;
+    }
+  }
+
+  const copy = getUnidadesPrecioCopy(svc.vertical, resolvedModalidad);
   const incluidos = Math.floor(Number(svc.huespedes_incluidos));
-  const extra = Number(svc.precio_huesped_extra);
+  if (!Number.isFinite(incluidos) || incluidos <= 0) return null;
+
+  // Preferir suplemento de la modalidad elegida; legacy solo si no hay fila de modalidad.
+  let extra = 0;
+  if (modalidadRow) {
+    extra = Number(modalidadRow.suplemento_extra) || 0;
+  } else if (serviceHasHuespedesModelo(svc)) {
+    extra = Number(svc.precio_huesped_extra) || 0;
+  } else {
+    // Capacidad sin modalidad resuelta (p. ej. 2+ modalidades sin elegir): solo "incluidos".
+    extra = 0;
+  }
+
   const n = resolveNumHuespedesValue(svc, numHuespedes) ?? incluidos;
   const extras = Math.max(0, n - incluidos);
   const inclWord = incluidos === 1 ? copy.unitSingular : copy.unitPlural;
   const inclAdj = incluidos === 1 ? copy.incluidoSingular : copy.incluidoPlural;
   const inclLabel = `${incluidos} ${inclWord} ${inclAdj}`;
 
-  if (extras === 0) return inclLabel;
+  if (extras === 0 || extra <= 0) return inclLabel;
 
   const euro =
     Number.isInteger(extra) ? String(extra) : extra.toFixed(2).replace(/\.?0+$/, "");

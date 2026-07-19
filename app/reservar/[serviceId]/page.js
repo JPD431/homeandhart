@@ -743,7 +743,7 @@ function CartLineBookingFields({
       {serviceNeedsUnidadesSelector(svc) && (
         <div className="mt-2">
           <label className="mb-1 block text-[8px] font-medium uppercase tracking-wide text-[#bbb]">
-            {getUnidadesPrecioCopy(svc.vertical).selectorLabel}
+            {getUnidadesPrecioCopy(svc.vertical, entry.modalidadCobro).selectorLabel}
           </label>
           <select
             value={entry.numHuespedes ?? ""}
@@ -755,7 +755,7 @@ function CartLineBookingFields({
               { length: Math.floor(Number(svc.capacidad_maxima)) || 1 },
               (_, i) => i + 1,
             ).map((n) => {
-              const copy = getUnidadesPrecioCopy(svc.vertical);
+              const copy = getUnidadesPrecioCopy(svc.vertical, entry.modalidadCobro);
               const word = n === 1 ? copy.unitSingular : copy.unitPlural;
               return (
                 <option key={n} value={n}>
@@ -764,6 +764,18 @@ function CartLineBookingFields({
               );
             })}
           </select>
+          {(() => {
+            const desglose = formatHuespedesPrecioDesglose(
+              svc,
+              entry.numHuespedes,
+              entry.modalidadCobro,
+            );
+            return desglose ? (
+              <p className="mt-1.5 text-[11px] leading-snug text-[#666]">
+                {desglose}
+              </p>
+            ) : null;
+          })()}
         </div>
       )}
     </div>
@@ -3680,7 +3692,7 @@ export default function ReservarPage() {
                     htmlFor="num-huespedes"
                     className="mb-1 block text-[8px] font-medium uppercase tracking-wide text-[#bbb]"
                   >
-                    {getUnidadesPrecioCopy(service.vertical).selectorLabel}
+                    {getUnidadesPrecioCopy(service.vertical, modalidadCobro).selectorLabel}
                   </label>
                   <select
                     id="num-huespedes"
@@ -3693,7 +3705,10 @@ export default function ReservarPage() {
                       { length: Math.floor(Number(service.capacidad_maxima)) },
                       (_, i) => i + 1,
                     ).map((n) => {
-                      const copy = getUnidadesPrecioCopy(service.vertical);
+                      const copy = getUnidadesPrecioCopy(
+                        service.vertical,
+                        modalidadCobro,
+                      );
                       const word = n === 1 ? copy.unitSingular : copy.unitPlural;
                       return (
                         <option key={n} value={n}>
@@ -3702,11 +3717,18 @@ export default function ReservarPage() {
                       );
                     })}
                   </select>
-                  {formatHuespedesPrecioDesglose(service, numHuespedes) && (
-                    <p className="mt-1.5 text-[11px] leading-snug text-[#666]">
-                      {formatHuespedesPrecioDesglose(service, numHuespedes)}
-                    </p>
-                  )}
+                  {(() => {
+                    const desglose = formatHuespedesPrecioDesglose(
+                      cartByServiceId[service.id]?.service ?? service,
+                      numHuespedes,
+                      modalidadCobro,
+                    );
+                    return desglose ? (
+                      <p className="mt-1.5 text-[11px] leading-snug text-[#666]">
+                        {desglose}
+                      </p>
+                    ) : null;
+                  })()}
                 </div>
               )}
 
@@ -4304,11 +4326,18 @@ export default function ReservarPage() {
 
                   {precioListo &&
                     serviceNeedsUnidadesSelector(service) &&
-                    formatHuespedesPrecioDesglose(service, numHuespedes) && (
-                      <p className="mt-1.5 text-[10px] leading-snug text-[#888]">
-                        {formatHuespedesPrecioDesglose(service, numHuespedes)}
-                      </p>
-                    )}
+                    (() => {
+                      const desglose = formatHuespedesPrecioDesglose(
+                        cartByServiceId[service.id]?.service ?? service,
+                        numHuespedes,
+                        modalidadCobro,
+                      );
+                      return desglose ? (
+                        <p className="mt-1.5 text-[10px] leading-snug text-[#888]">
+                          {desglose}
+                        </p>
+                      ) : null;
+                    })()}
 
                   {bundleLines.map((line) => {
                     const lineConfig = VERTICALS[line.vertical] ?? verticalConfig;
