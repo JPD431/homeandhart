@@ -5,10 +5,16 @@ export const COBROS_INACTIVE_MSG =
   "Este proveedor todavía no puede recibir pagos. Inténtalo más tarde.";
 
 /** Datos del proveedor desde profiles_public (y opcionalmente profiles en servidor). */
+function unwrapProfileEmbed(value) {
+  if (!value) return null;
+  if (Array.isArray(value)) return value[0] ?? null;
+  return value;
+}
+
 export function getProveedorFromService(service) {
   if (!service) return null;
-  const pub = service.profiles_public;
-  const prov = service.profiles;
+  const pub = unwrapProfileEmbed(service.profiles_public);
+  const prov = unwrapProfileEmbed(service.profiles);
   if (!pub && !prov) return null;
   return {
     ...pub,

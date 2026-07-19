@@ -186,6 +186,16 @@ const COMPLEMENTARY_VERTICALS = {
   mascotas: ["alojamiento", "ninos"],
 };
 
+const ALL_BUNDLE_VERTICAL_IDS = ["alojamiento", "ninos", "mascotas"];
+
+/** Verticales que aún se pueden añadir (una por tipo en el carrito). */
+function getAvailableComplementaryVerticals(servicesInCart) {
+  const taken = new Set(
+    (servicesInCart ?? []).map((s) => s.vertical).filter(Boolean),
+  );
+  return ALL_BUNDLE_VERTICAL_IDS.filter((v) => !taken.has(v));
+}
+
 const RESERVAR_SERVICE_COLUMNS = `
   id,
   titulo,
@@ -212,7 +222,7 @@ const RESERVAR_SERVICE_COLUMNS = `
 
 const RESERVAR_SERVICE_SELECT = `
   ${RESERVAR_SERVICE_COLUMNS},
-  profiles_public (
+  profiles_public!inner (
     nombre,
     apellido,
     verificado,
@@ -222,7 +232,7 @@ const RESERVAR_SERVICE_SELECT = `
 
 const RESERVAR_MAIN_SERVICE_SELECT = `
   ${RESERVAR_SERVICE_COLUMNS},
-  profiles_public (
+  profiles_public!inner (
     nombre,
     apellido,
     ciudad,
@@ -2185,7 +2195,6 @@ export default function ReservarPage() {
             .eq("profiles_public.cobros_activos", true)
             .eq("vertical", compVertical)
             .ilike("ciudad", `%${city}%`)
-            .neq("proveedor_id", data.proveedor_id)
             .neq("id", data.id)
             .limit(3);
 
@@ -2242,6 +2251,18 @@ export default function ReservarPage() {
       }
 
       if (!isServiceBookable(data)) return;
+
+      // Una sola vertical por carrito (no dos niñeras / dos alojamientos).
+      if (
+        data.vertical &&
+        (data.vertical === service.vertical ||
+          bundleServices.some((s) => s.vertical === data.vertical))
+      ) {
+        setErrorMessage(
+          "Ya tienes un servicio de este tipo en el carrito. Elige otra vertical.",
+        );
+        return;
+      }
 
       // bundleServices sin modalidades → precio/UI igual que hoy (retrocompat 2a).
       // cartByServiceId sí guarda modalidades para el paso 2b.
@@ -2907,12 +2928,12 @@ export default function ReservarPage() {
   ]);
 
   const loadServicesForVertical = useCallback(
-    async (tabVertical, inicio, fin) => {
+    async (tabVertical, inicio, fin, excludeIds = []) => {
       if (!service || !inicio) return [];
       const city = service.ciudad?.trim();
       if (!city) return [];
 
-      const { data: compData } = await supabase
+      let query = supabase
         .from("services")
         .select(RESERVAR_SERVICE_SELECT)
         .eq("disponible", true)
@@ -2920,15 +2941,24 @@ export default function ReservarPage() {
         .eq("profiles_public.cobros_activos", true)
         .eq("vertical", tabVertical)
         .ilike("ciudad", `%${city}%`)
-        .neq("proveedor_id", service.proveedor_id)
         .neq("id", service.id)
         .limit(12);
+
+      const ids = [...new Set(excludeIds.filter((id) => id && id !== service.id))];
+      if (ids.length === 1) {
+        query = query.neq("id", ids[0]);
+      } else if (ids.length > 1) {
+        query = query.not("id", "in", `(${ids.join(",")})`);
+      }
+
+      const { data: compData } = await query;
 
       if (!compData?.length) return [];
 
       const end = fin || inicio;
       const available = await Promise.all(
         compData.map(async (svc) => {
+          if (ids.includes(svc.id)) return null;
           const avail = await verificarDisponibilidad(svc.id, inicio, end);
           const diaError = validateDiaDisponible(svc, inicio);
           return avail && !diaError ? svc : null;
@@ -2939,6 +2969,34 @@ export default function ReservarPage() {
     [service],
   );
 
+  const cartServiceIdsKey = useMemo(
+    () => selectedServices.map((s) => s.id).join(","),
+    [selectedServices],
+  );
+
+  const cartVerticalsKey = useMemo(
+    () =>
+      [...new Set(selectedServices.map((s) => s.vertical).filter(Boolean))]
+        .sort()
+        .join(","),
+    [selectedServices],
+  );
+
+  const availableBundleTabs = useMemo(() => {
+    const available = new Set(
+      getAvailableComplementaryVerticals(selectedServices),
+    );
+    return BUNDLE_TABS.filter((tab) => available.has(tab.id));
+  }, [selectedServices]);
+
+  // Si la pestaña activa ya está cubierta por el carrito, saltar a una disponible.
+  useEffect(() => {
+    if (availableBundleTabs.length === 0) return;
+    if (!availableBundleTabs.some((t) => t.id === bundleTab)) {
+      setBundleTab(availableBundleTabs[0].id);
+    }
+  }, [availableBundleTabs, bundleTab]);
+
   useEffect(() => {
     if (!datesReady || !fechaInicio || !service) {
       setFilteredComplementary([]);
@@ -2948,8 +3006,19 @@ export default function ReservarPage() {
     let cancelled = false;
     async function filterComplementary() {
       const fin = fechaFin || fechaInicio;
+      const cartIds = new Set(selectedServices.map((s) => s.id));
+      const cartVerticals = new Set(
+        selectedServices.map((s) => s.vertical).filter(Boolean),
+      );
+      const candidates = complementaryServices.filter(
+        (svc) =>
+          svc?.id &&
+          !cartIds.has(svc.id) &&
+          svc.vertical &&
+          !cartVerticals.has(svc.vertical),
+      );
       const results = await Promise.all(
-        complementaryServices.map(async (svc) => {
+        candidates.map(async (svc) => {
           const avail = await verificarDisponibilidad(svc.id, fechaInicio, fin);
           const diaError = validateDiaDisponible(svc, fechaInicio);
           return avail && !diaError ? svc : null;
@@ -2964,11 +3033,28 @@ export default function ReservarPage() {
     return () => {
       cancelled = true;
     };
-  }, [complementaryServices, fechaInicio, fechaFin, datesReady, service]);
+  }, [
+    complementaryServices,
+    fechaInicio,
+    fechaFin,
+    datesReady,
+    service,
+    cartServiceIdsKey,
+    cartVerticalsKey,
+  ]);
 
   useEffect(() => {
     if (!datesReady || !fechaInicio || !service) {
       setTabServices([]);
+      return;
+    }
+
+    const cartVerticals = new Set(
+      selectedServices.map((s) => s.vertical).filter(Boolean),
+    );
+    if (cartVerticals.has(bundleTab)) {
+      setTabServices([]);
+      setTabServicesLoading(false);
       return;
     }
 
@@ -2977,7 +3063,13 @@ export default function ReservarPage() {
 
     async function loadTab() {
       const fin = fechaFin || fechaInicio;
-      const services = await loadServicesForVertical(bundleTab, fechaInicio, fin);
+      const excludeIds = selectedServices.map((s) => s.id);
+      const services = await loadServicesForVertical(
+        bundleTab,
+        fechaInicio,
+        fin,
+        excludeIds,
+      );
       if (cancelled) return;
 
       setTabServices(services);
@@ -3021,6 +3113,8 @@ export default function ReservarPage() {
     fechaFin,
     service,
     loadServicesForVertical,
+    cartServiceIdsKey,
+    cartVerticalsKey,
   ]);
 
   const paymentMetadata = useMemo(() => {
@@ -3301,6 +3395,19 @@ export default function ReservarPage() {
     const issue = getServiceBookabilityIssue(svc);
     if (issue) {
       setErrorMessage(issue);
+      return;
+    }
+
+    // Una sola vertical por carrito.
+    if (
+      svc.vertical &&
+      selectedServices.some((s) => s.vertical === svc.vertical)
+    ) {
+      const label =
+        VERTICALS[svc.vertical]?.label || "este tipo";
+      setErrorMessage(
+        `Ya tienes un servicio de ${label.toLowerCase()} en el carrito.`,
+      );
       return;
     }
 
@@ -4153,28 +4260,34 @@ export default function ReservarPage() {
                   </div>
 
                   <div className="flex flex-wrap gap-2">
-                    {BUNDLE_TABS.map((tab) => (
-                      <button
-                        key={tab.id}
-                        type="button"
-                        onClick={() => setBundleTab(tab.id)}
-                        className="min-h-[44px] rounded-full px-3 py-2 text-[10px] font-semibold transition-colors"
-                        style={
-                          bundleTab === tab.id
-                            ? { backgroundColor: "#1d4f91", color: "#fff" }
-                            : {
-                                backgroundColor: "#f7f5f2",
-                                border: "1px solid #e8e4de",
-                                color: "#666",
-                              }
-                        }
-                      >
-                        {tab.label}
-                      </button>
-                    ))}
+                    {availableBundleTabs.length > 0 ? (
+                      availableBundleTabs.map((tab) => (
+                        <button
+                          key={tab.id}
+                          type="button"
+                          onClick={() => setBundleTab(tab.id)}
+                          className="min-h-[44px] rounded-full px-3 py-2 text-[10px] font-semibold transition-colors"
+                          style={
+                            bundleTab === tab.id
+                              ? { backgroundColor: "#1d4f91", color: "#fff" }
+                              : {
+                                  backgroundColor: "#f7f5f2",
+                                  border: "1px solid #e8e4de",
+                                  color: "#666",
+                                }
+                          }
+                        >
+                          {tab.label}
+                        </button>
+                      ))
+                    ) : (
+                      <p className="text-[10px] text-[#888]">
+                        Ya tienes alojamiento, niñera y mascotas en el carrito.
+                      </p>
+                    )}
                   </div>
 
-                  {tabServicesLoading ? (
+                  {availableBundleTabs.length === 0 ? null : tabServicesLoading ? (
                     <p className="mt-4 text-center text-[11px] text-[#888]">
                       Buscando proveedores…
                     </p>
