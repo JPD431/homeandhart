@@ -49,7 +49,7 @@ import {
   normalizeCancelPolicy,
 } from "@/app/lib/cancelacion-politica";
 import { supabase } from "@/app/lib/supabase";
-import { cargarTarifasPorServicios } from "@/app/lib/tarifas";
+import { cargarTarifasPorFecha } from "@/app/lib/tarifas";
 import {
   getServiceBookabilityIssue,
   isServiceBookable,
@@ -509,6 +509,265 @@ function defaultNumHuespedesFromService(serviceWithMods) {
   if (!serviceNeedsUnidadesSelector(serviceWithMods)) return null;
   const n = Math.floor(Number(serviceWithMods.huespedes_incluidos));
   return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/** Paso 2b: ¿hace falta elegir modalidad (2+ filas)? */
+function cartEntryNeedsModalidad(entry) {
+  const svc = entry?.service;
+  if (!svc || !supportsModalidadCobro(svc.vertical)) return false;
+  return getServiceModalidadesRows(svc).length > 1;
+}
+
+function getCartEntryBilling(entry) {
+  const svc = entry?.service;
+  if (!svc) return { kind: "legacy" };
+  return resolveBillingForService(svc, entry.modalidadCobro);
+}
+
+/** Contexto de fechas/modalidad para calculateServiceBasePrice desde una línea del carrito. */
+function buildDateContextFromCartEntry(entry) {
+  const svc = entry.service;
+  return {
+    fechaInicio: entry.fechaInicio,
+    fechaFin: entry.fechaFin,
+    duracionHoras: entry.duracionHoras,
+    mainVertical: svc.vertical,
+    numHuespedes: entry.numHuespedes,
+    modalidadCobro: entry.modalidadCobro,
+    requireModalidad: cartEntryNeedsModalidad(entry),
+  };
+}
+
+function getMinHoraForFecha(fecha) {
+  if (!fecha) return undefined;
+  const hoy = new Date().toISOString().split("T")[0];
+  if (fecha === hoy) {
+    const ahora = new Date();
+    ahora.setHours(ahora.getHours() + 1);
+    return `${String(ahora.getHours()).padStart(2, "0")}:${String(ahora.getMinutes()).padStart(2, "0")}`;
+  }
+  return undefined;
+}
+
+/**
+ * Paso 2b: bloque de inputs de una línea del carrito (complementarios).
+ * Lee/escribe cartByServiceId vía onPatch.
+ */
+function CartLineBookingFields({
+  entry,
+  fechasOcupadas,
+  calendarOpen,
+  onToggleCalendar,
+  onPatch,
+  onValidationError,
+}) {
+  const svc = entry?.service;
+  if (!svc) return null;
+
+  const vertical = svc.vertical;
+  const modalidades = getServiceModalidadesRows(svc);
+  const showModalidadSelector = modalidades.length > 1;
+  const billing = getCartEntryBilling(entry);
+  const showDateInputs = !showModalidadSelector || Boolean(entry.modalidadCobro);
+
+  return (
+    <div className="mt-3 border-t pt-3" style={{ borderColor: "#c5e0d8" }}>
+      {showModalidadSelector && (
+        <div className="mb-3">
+          <p className="mb-2 text-[8px] font-medium uppercase tracking-wide text-[#bbb]">
+            ¿Cómo quieres contratar?
+          </p>
+          <div className="flex flex-col gap-2">
+            {modalidades.map((row) => {
+              const opt = MODALIDAD_COBRO_OPTIONS.find(
+                (o) => o.value === row.modalidad,
+              );
+              const selected = entry.modalidadCobro === row.modalidad;
+              const precio = Number(row.precio);
+              const precioLabel = Number.isFinite(precio)
+                ? `${precio % 1 === 0 ? precio : precio.toFixed(2)}€${getModalidadCobroPriceSuffix(row.modalidad)}`
+                : "";
+              return (
+                <button
+                  key={row.modalidad}
+                  type="button"
+                  onClick={() => {
+                    const patch = { modalidadCobro: row.modalidad };
+                    if (row.modalidad === "hora") patch.fechaFin = "";
+                    if (row.modalidad === "dia") {
+                      patch.hora = "";
+                      patch.duracionHoras = "";
+                    }
+                    if (row.modalidad === "medio_dia") {
+                      patch.duracionHoras = "";
+                    }
+                    onPatch(patch);
+                  }}
+                  className="min-h-[40px] w-full border px-3 py-2 text-left transition-opacity hover:opacity-90"
+                  style={{
+                    borderColor: selected ? "#1d4f91" : "#e8e4de",
+                    backgroundColor: selected ? "#e8f0fb" : "#fff",
+                    borderRadius: 6,
+                  }}
+                >
+                  <span className="block text-[12px] font-semibold text-[#1a1a1a]">
+                    {opt?.label || row.modalidad}
+                    {precioLabel ? (
+                      <span className="ml-2 font-medium text-[#1d4f91]">
+                        {precioLabel}
+                      </span>
+                    ) : null}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {showDateInputs && (
+        <div className="relative">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={onToggleCalendar}
+              className="min-h-[40px] w-full border text-left transition-opacity hover:opacity-80"
+              style={{
+                backgroundColor: "#fff",
+                borderColor: "#e8e4de",
+                borderRadius: 6,
+                padding: "8px 10px",
+              }}
+            >
+              <p className="text-[8px] font-medium uppercase tracking-wide text-[#bbb]">
+                {billingNeedsFechaFin(billing, vertical) ? "Inicio" : "Fecha"}
+              </p>
+              <p className="mt-0.5 text-[12px] text-[#2a3a4a]">
+                {entry.fechaInicio
+                  ? formatFechaDisplay(entry.fechaInicio)
+                  : "Seleccionar"}
+              </p>
+            </button>
+            <button
+              type="button"
+              onClick={onToggleCalendar}
+              className="min-h-[40px] w-full border text-left transition-opacity hover:opacity-80"
+              style={{
+                backgroundColor: "#fff",
+                borderColor: "#e8e4de",
+                borderRadius: 6,
+                padding: "8px 10px",
+              }}
+            >
+              <p className="text-[8px] font-medium uppercase tracking-wide text-[#bbb]">
+                {billingNeedsFechaFin(billing, vertical) ? "Fin" : "—"}
+              </p>
+              <p className="mt-0.5 text-[12px] text-[#2a3a4a]">
+                {entry.fechaFin
+                  ? formatFechaDisplay(entry.fechaFin)
+                  : billingNeedsFechaFin(billing, vertical)
+                    ? "Seleccionar"
+                    : "—"}
+              </p>
+            </button>
+          </div>
+
+          {calendarOpen && (
+            <div
+              className="absolute left-0 right-0 z-20 mt-2 rounded-lg border bg-white p-3 shadow-lg"
+              style={{ borderColor: "#e8e4de" }}
+            >
+              <CalendarioRangoFechas
+                fechaInicio={entry.fechaInicio}
+                fechaFin={entry.fechaFin}
+                onChange={({ desde, hasta }) => {
+                  if (desde) {
+                    const diaError = validateDiaDisponible(svc, desde);
+                    if (diaError) {
+                      onValidationError?.(diaError);
+                      return;
+                    }
+                    onValidationError?.("");
+                  }
+                  onPatch({ fechaInicio: desde, fechaFin: hasta });
+                }}
+                onRangeComplete={onToggleCalendar}
+                fechasOcupadas={fechasOcupadas}
+              />
+            </div>
+          )}
+        </div>
+      )}
+
+      {showDateInputs &&
+        (billingNeedsHora(billing) ||
+          billingNeedsDuracionHoras(billing) ||
+          (billing.kind === "legacy" && vertical === "ninos")) && (
+          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {(billingNeedsHora(billing) ||
+              (billing.kind === "legacy" && vertical === "ninos")) && (
+              <div>
+                <label className="mb-1 block text-[8px] font-medium uppercase tracking-wide text-[#bbb]">
+                  Hora de inicio
+                </label>
+                <input
+                  type="time"
+                  min={getMinHoraForFecha(entry.fechaInicio)}
+                  value={entry.hora || ""}
+                  onChange={(e) => onPatch({ hora: e.target.value })}
+                  className={inputClass}
+                  style={{ borderColor: "#e8e4de", borderRadius: 6 }}
+                />
+              </div>
+            )}
+            {(billingNeedsDuracionHoras(billing) ||
+              (billing.kind === "legacy" && vertical === "ninos")) && (
+              <div>
+                <label className="mb-1 block text-[8px] font-medium uppercase tracking-wide text-[#bbb]">
+                  Duración (horas)
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={entry.duracionHoras || ""}
+                  onChange={(e) => onPatch({ duracionHoras: e.target.value })}
+                  className={inputClass}
+                  style={{ borderColor: "#e8e4de", borderRadius: 6 }}
+                />
+              </div>
+            )}
+          </div>
+        )}
+
+      {serviceNeedsUnidadesSelector(svc) && (
+        <div className="mt-2">
+          <label className="mb-1 block text-[8px] font-medium uppercase tracking-wide text-[#bbb]">
+            {getUnidadesPrecioCopy(svc.vertical).selectorLabel}
+          </label>
+          <select
+            value={entry.numHuespedes ?? ""}
+            onChange={(e) => onPatch({ numHuespedes: Number(e.target.value) })}
+            className={inputClass}
+            style={{ borderColor: "#e8e4de", borderRadius: 6 }}
+          >
+            {Array.from(
+              { length: Math.floor(Number(svc.capacidad_maxima)) || 1 },
+              (_, i) => i + 1,
+            ).map((n) => {
+              const copy = getUnidadesPrecioCopy(svc.vertical);
+              const word = n === 1 ? copy.unitSingular : copy.unitPlural;
+              return (
+                <option key={n} value={n}>
+                  {n} {word}
+                </option>
+              );
+            })}
+          </select>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function roundMoney(amount) {
@@ -1646,7 +1905,7 @@ export default function ReservarPage() {
   const [service, setService] = useState(null);
   const [complementaryServices, setComplementaryServices] = useState([]);
   const [bundleServices, setBundleServices] = useState([]);
-  /** Paso 2a: contexto por servicio (modalidades + campos). No alimenta aún el precio/pago. */
+  /** Paso 2b: datos + precio por servicio (modalidades + campos de reserva). */
   const [cartByServiceId, setCartByServiceId] = useState({});
   const [mainServiceId, setMainServiceId] = useState(null);
   const [userId, setUserId] = useState(null);
@@ -1679,8 +1938,13 @@ export default function ReservarPage() {
   const [tarifasPorServicio, setTarifasPorServicio] = useState({});
   const [tarifasLoading, setTarifasLoading] = useState(false);
   const [calendarioError, setCalendarioError] = useState("");
-  const [fechasOcupadas, setFechasOcupadas] = useState([]);
+  /** Fechas bloqueadas por service_id (calendario de cada línea). */
+  const [fechasOcupadasByServiceId, setFechasOcupadasByServiceId] = useState(
+    {},
+  );
   const [calendarOpen, setCalendarOpen] = useState(false);
+  /** Calendario abierto en un bloque complementario (serviceId). */
+  const [cartCalendarOpenId, setCartCalendarOpenId] = useState(null);
   const [bundleTab, setBundleTab] = useState("alojamiento");
   const [tabServices, setTabServices] = useState([]);
   const [tabServicesLoading, setTabServicesLoading] = useState(false);
@@ -1961,10 +2225,8 @@ export default function ReservarPage() {
       setCartByServiceId((prev) => ({
         ...prev,
         [withMods.id]: buildCartEntry(withMods, {
-          fechaInicio,
-          fechaFin,
-          hora,
-          duracionHoras,
+          // Paso 2b: datos propios (vacío); el cliente los completa en su bloque.
+          ...emptyCartBookingFields(),
           modalidadCobro: defaultModalidadCobroFromService(withMods),
           numHuespedes: defaultNumHuespedesFromService(withMods),
         }),
@@ -1985,18 +2247,7 @@ export default function ReservarPage() {
     }
 
     addBundleFromUrl();
-  }, [
-    searchParams,
-    loading,
-    service,
-    userId,
-    serviceId,
-    router,
-    fechaInicio,
-    fechaFin,
-    hora,
-    duracionHoras,
-  ]);
+  }, [searchParams, loading, service, userId, serviceId, router]);
 
   useEffect(() => {
     if (!cancelarBookingId || !userId || loading) return;
@@ -2074,68 +2325,41 @@ export default function ReservarPage() {
     [service, bundleServices],
   );
 
-  // Paso 2a: sincronizar fechas/hora del estado flat (main) a TODAS las entradas del carrito.
-  // En 2b cada línea tendrá las suyas; ahora se copian del main para no romper nada.
+  // Paso 2b: sincronizar SOLO el main (UI flat → cart). Las líneas complementarias
+  // tienen sus propios campos y ya no se sobrescriben con las fechas del main.
   useEffect(() => {
     if (!service?.id) return;
     setCartByServiceId((prev) => {
-      const ids = new Set([
-        service.id,
-        ...bundleServices.map((s) => s.id),
-        ...Object.keys(prev),
-      ]);
-      let changed = false;
-      const next = { ...prev };
-      for (const id of ids) {
-        const existing = next[id];
-        if (!existing?.service) continue;
-        const patch = {
-          fechaInicio,
-          fechaFin,
-          hora,
-          duracionHoras,
-        };
-        if (
-          existing.fechaInicio === patch.fechaInicio &&
-          existing.fechaFin === patch.fechaFin &&
-          existing.hora === patch.hora &&
-          existing.duracionHoras === patch.duracionHoras
-        ) {
-          continue;
-        }
-        next[id] = { ...existing, ...patch };
-        changed = true;
+      const mainEntry = prev[service.id];
+      const nextService = {
+        ...service,
+        modalidades:
+          service.modalidades ?? mainEntry?.service?.modalidades ?? [],
+      };
+      const nextMain = buildCartEntry(nextService, {
+        fechaInicio,
+        fechaFin,
+        hora,
+        duracionHoras,
+        modalidadCobro,
+        numHuespedes,
+      });
+      if (
+        mainEntry &&
+        mainEntry.fechaInicio === nextMain.fechaInicio &&
+        mainEntry.fechaFin === nextMain.fechaFin &&
+        mainEntry.hora === nextMain.hora &&
+        mainEntry.duracionHoras === nextMain.duracionHoras &&
+        mainEntry.modalidadCobro === nextMain.modalidadCobro &&
+        mainEntry.numHuespedes === nextMain.numHuespedes &&
+        mainEntry.service === nextService
+      ) {
+        return prev;
       }
-      // Main: también sincronizar modalidadCobro / numHuespedes del UI flat.
-      const mainEntry = next[service.id];
-      if (mainEntry) {
-        if (
-          mainEntry.modalidadCobro !== modalidadCobro ||
-          mainEntry.numHuespedes !== numHuespedes ||
-          mainEntry.service !== service
-        ) {
-          next[service.id] = {
-            ...mainEntry,
-            service: {
-              ...service,
-              modalidades:
-                service.modalidades ?? mainEntry.service?.modalidades ?? [],
-            },
-            modalidadCobro,
-            numHuespedes,
-            fechaInicio,
-            fechaFin,
-            hora,
-            duracionHoras,
-          };
-          changed = true;
-        }
-      }
-      return changed ? next : prev;
+      return { ...prev, [service.id]: nextMain };
     });
   }, [
     service,
-    bundleServices,
     fechaInicio,
     fechaFin,
     hora,
@@ -2203,12 +2427,13 @@ export default function ReservarPage() {
         const withMods = await loadServiceWithModalidades(svc);
         if (cancelled) return;
         built[withMods.id] = buildCartEntry(withMods, {
-          fechaInicio,
-          fechaFin,
-          hora,
-          duracionHoras,
-          modalidadCobro: defaultModalidadCobroFromService(withMods),
-          numHuespedes: defaultNumHuespedesFromService(withMods),
+          ...(cartByServiceId[withMods.id] || emptyCartBookingFields()),
+          modalidadCobro:
+            cartByServiceId[withMods.id]?.modalidadCobro ??
+            defaultModalidadCobroFromService(withMods),
+          numHuespedes:
+            cartByServiceId[withMods.id]?.numHuespedes ??
+            defaultNumHuespedesFromService(withMods),
         });
       }
       if (cancelled || Object.keys(built).length === 0) return;
@@ -2227,6 +2452,31 @@ export default function ReservarPage() {
     () => selectedServices.map((s) => s.id).join(","),
     [selectedServices],
   );
+
+  /** Clave de fechas por línea (tarifas / disponibilidad por servicio). */
+  const cartDatesKey = useMemo(
+    () =>
+      selectedServices
+        .map((s) => {
+          const e = cartByServiceId[s.id];
+          return `${s.id}:${e?.fechaInicio || ""}:${e?.fechaFin || ""}`;
+        })
+        .join("|"),
+    [selectedServices, cartByServiceId],
+  );
+
+  const fechasOcupadas = fechasOcupadasByServiceId[service?.id] ?? [];
+
+  const patchCartEntry = useCallback((serviceId, patch) => {
+    setCartByServiceId((prev) => {
+      const cur = prev[serviceId];
+      if (!cur) return prev;
+      return {
+        ...prev,
+        [serviceId]: { ...cur, ...patch },
+      };
+    });
+  }, []);
 
   useEffect(() => {
     setAceptaPolitica(false);
@@ -2251,32 +2501,52 @@ export default function ReservarPage() {
   const showDniUploadLink =
     dniRevisionEstado === "sin_dni" || dniRevisionEstado === "rechazado";
 
+  // Paso 2b: disponibilidad con las fechas DE CADA línea (no las del main).
   useEffect(() => {
-    if (!fechaInicio || !service || selectedServices.length === 0) {
+    const checks = selectedServices
+      .map((svc) => {
+        const entry = cartByServiceId[svc.id];
+        if (!entry?.fechaInicio) return null;
+        return {
+          svc,
+          inicio: entry.fechaInicio,
+          fin: entry.fechaFin || entry.fechaInicio,
+        };
+      })
+      .filter(Boolean);
+
+    if (checks.length === 0) {
       setCalendarioError("");
       setDisponibilidadChecking(false);
       return;
     }
 
-    const fin = fechaFin || fechaInicio;
     let cancelled = false;
     setDisponibilidadChecking(true);
 
     async function checkDisponibilidad() {
       const results = await Promise.all(
-        selectedServices.map((svc) =>
-          verificarDisponibilidad(svc.id, fechaInicio, fin),
-        ),
+        checks.map((c) => verificarDisponibilidad(c.svc.id, c.inicio, c.fin)),
       );
-
       if (cancelled) return;
 
-      const todasDisponibles = results.every(Boolean);
-      setCalendarioError(
-        todasDisponibles
-          ? ""
-          : "Este proveedor ya tiene una reserva en esas fechas. Por favor elige otras fechas.",
-      );
+      const conflicts = checks.filter((_, i) => !results[i]);
+      if (conflicts.length === 0) {
+        setCalendarioError("");
+      } else {
+        const names = conflicts
+          .map((c) => {
+            const cfg = VERTICALS[c.svc.vertical] ?? VERTICALS.alojamiento;
+            return (
+              c.svc.titulo ||
+              `${cfg.label} · ${formatShortName(c.svc.profiles_public?.nombre, c.svc.profiles_public?.apellido)}`
+            );
+          })
+          .join(", ");
+        setCalendarioError(
+          `Ya hay una reserva en esas fechas: ${names}. Elige otras fechas.`,
+        );
+      }
       setDisponibilidadChecking(false);
     }
 
@@ -2284,28 +2554,46 @@ export default function ReservarPage() {
     return () => {
       cancelled = true;
     };
-  }, [fechaInicio, fechaFin, service, selectedServices]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- cartDatesKey cubre fechas por línea
+  }, [cartDatesKey, selectedServiceIdsKey]);
 
+  // Paso 2b: tarifas por fecha DE CADA servicio con SUS fechas.
   useEffect(() => {
-    if (!fechaInicio || selectedServices.length === 0) {
+    const jobs = selectedServices
+      .map((svc) => {
+        const entry = cartByServiceId[svc.id];
+        if (!entry?.fechaInicio) return null;
+        return {
+          id: svc.id,
+          fechaInicio: entry.fechaInicio,
+          fechaFin: entry.fechaFin || entry.fechaInicio,
+        };
+      })
+      .filter(Boolean);
+
+    if (jobs.length === 0) {
       setTarifasPorServicio({});
       setTarifasLoading(false);
       return;
     }
 
-    const fin = fechaFin || fechaInicio;
     let cancelled = false;
     setTarifasLoading(true);
 
     (async () => {
       try {
-        const map = await cargarTarifasPorServicios(
-          supabase,
-          selectedServices.map((s) => s.id),
-          fechaInicio,
-          fin,
+        const pairs = await Promise.all(
+          jobs.map(async (job) => {
+            const map = await cargarTarifasPorFecha(
+              supabase,
+              job.id,
+              job.fechaInicio,
+              job.fechaFin,
+            );
+            return [job.id, map];
+          }),
         );
-        if (!cancelled) setTarifasPorServicio(map);
+        if (!cancelled) setTarifasPorServicio(Object.fromEntries(pairs));
       } catch {
         if (!cancelled) setTarifasPorServicio({});
       } finally {
@@ -2316,20 +2604,39 @@ export default function ReservarPage() {
     return () => {
       cancelled = true;
     };
-  }, [fechaInicio, fechaFin, selectedServices]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- cartDatesKey cubre fechas por línea
+  }, [cartDatesKey, selectedServiceIdsKey]);
 
+  // Paso 2b: fechas ocupadas de TODOS los servicios del carrito (calendarios propios).
   useEffect(() => {
-    async function cargarOcupadas() {
-      const { data } = await supabase
-        .from("disponibilidad")
-        .select("fecha_inicio, fecha_fin")
-        .eq("service_id", service.id);
-
-      setFechasOcupadas(data || []);
+    const ids = selectedServices.map((s) => s.id).filter(Boolean);
+    if (ids.length === 0) {
+      setFechasOcupadasByServiceId({});
+      return;
     }
-    if (service?.id) cargarOcupadas();
-  }, [service?.id]);
 
+    let cancelled = false;
+    async function cargarOcupadas() {
+      const pairs = await Promise.all(
+        ids.map(async (id) => {
+          const { data } = await supabase
+            .from("disponibilidad")
+            .select("fecha_inicio, fecha_fin")
+            .eq("service_id", id);
+          return [id, data || []];
+        }),
+      );
+      if (!cancelled) {
+        setFechasOcupadasByServiceId(Object.fromEntries(pairs));
+      }
+    }
+    cargarOcupadas();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedServiceIdsKey]);
+
+  // Paso 2b: precio por línea desde cartByServiceId (datos + modalidades + tarifas propias).
   const priceSummary = useMemo(() => {
     if (!service) {
       return {
@@ -2342,57 +2649,59 @@ export default function ReservarPage() {
       };
     }
 
-    const dateContext = {
-      fechaInicio,
-      fechaFin,
-      duracionHoras,
-      mainVertical: vertical,
-      numHuespedes,
-      modalidadCobro,
-      requireModalidad:
-        supportsModalidadCobro(vertical) &&
-        getServiceModalidadesRows(service).length > 1,
-    };
     const clienteSinComision = getReservasSinComisionCliente(perfilCliente) > 0;
     const lines = selectedServices.map((svc) => {
+      const entry = cartByServiceId[svc.id];
+      const svcForPrice = entry?.service ?? svc;
+      const svcConfig = VERTICALS[svcForPrice.vertical] ?? VERTICALS.alojamiento;
+      const name =
+        svcForPrice.titulo ||
+        `${svcConfig.label} · ${formatShortName(svcForPrice.profiles_public?.nombre, svcForPrice.profiles_public?.apellido)}`;
+
+      if (!entry?.fechaInicio) {
+        return {
+          id: svc.id,
+          name,
+          base: 0,
+          total: 0,
+          detail: "Faltan datos",
+          ready: false,
+          vertical: svcForPrice.vertical,
+          discountPct: 0,
+          discountSource: null,
+        };
+      }
+
+      const dateContext = buildDateContextFromCartEntry(entry);
       const unitOverride =
         svc.id === service.id ? precioEspecialChat : null;
-      const isMain = svc.id === service.id;
       const calc = calculateServiceBasePrice(
-        svc,
-        {
-          ...dateContext,
-          requireModalidad:
-            isMain &&
-            supportsModalidadCobro(svc.vertical) &&
-            getServiceModalidadesRows(svc).length > 1,
-        },
+        svcForPrice,
+        dateContext,
         unitOverride,
         tarifasPorServicio[svc.id] ?? {},
       );
       let ready = calc.ready;
       let detail = calc.detail;
 
-      if (fechaInicio) {
-        const diaError = validateDiaDisponible(svc, fechaInicio);
-        if (diaError) {
-          ready = false;
-          detail = diaError;
-        }
+      const diaError = validateDiaDisponible(svcForPrice, entry.fechaInicio);
+      if (diaError) {
+        ready = false;
+        detail = diaError;
       }
 
       if (calc.ready && ready) {
-        const duration = getServiceDuration(svc, dateContext);
-        const estanciaError = validateEstancia(svc, duration);
+        const duration = getServiceDuration(svcForPrice, dateContext);
+        const estanciaError = validateEstancia(svcForPrice, duration);
         if (estanciaError) {
           ready = false;
           detail = estanciaError;
         } else {
           const antelacionError = validateAntelacion(
-            svc,
-            fechaInicio,
-            hora,
-            vertical,
+            svcForPrice,
+            entry.fechaInicio,
+            entry.hora,
+            svcForPrice.vertical,
           );
           if (antelacionError) {
             ready = false;
@@ -2400,10 +2709,7 @@ export default function ReservarPage() {
           }
         }
       }
-      const svcConfig = VERTICALS[svc.vertical] ?? VERTICALS.alojamiento;
-      const name =
-        svc.titulo ||
-        `${svcConfig.label} · ${formatShortName(svc.profiles_public?.nombre, svc.profiles_public?.apellido)}`;
+
       return {
         id: svc.id,
         name,
@@ -2411,7 +2717,7 @@ export default function ReservarPage() {
         total: clienteSinComision ? calc.base : applyClientPrice(calc.base),
         detail,
         ready,
-        vertical: svc.vertical,
+        vertical: svcForPrice.vertical,
         discountPct: calc.discountPct ?? 0,
         discountSource: calc.discountSource ?? null,
       };
@@ -2446,12 +2752,7 @@ export default function ReservarPage() {
   }, [
     service,
     selectedServices,
-    vertical,
-    fechaInicio,
-    fechaFin,
-    duracionHoras,
-    numHuespedes,
-    modalidadCobro,
+    cartByServiceId,
     precioEspecialChat,
     perfilCliente,
     tarifasPorServicio,
@@ -2470,6 +2771,8 @@ export default function ReservarPage() {
   const showModalidadSelector = modalidadesActivas.length > 1;
 
   const clienteSinComision = getReservasSinComisionCliente(perfilCliente) > 0;
+
+  const incompletePriceLine = priceSummary.lines.find((l) => !l.ready);
 
   const precioListo =
     priceSummary.ready &&
@@ -2494,7 +2797,11 @@ export default function ReservarPage() {
     calendarioError ||
     (disponibilidadChecking
       ? "Comprobando disponibilidad…"
-      : priceSummary.detail);
+      : incompletePriceLine
+        ? incompletePriceLine.detail === "Faltan datos"
+          ? `Completa los datos de: ${incompletePriceLine.name}`
+          : incompletePriceLine.detail
+        : priceSummary.detail);
 
   const datesReady = useMemo(() => {
     if (!fechaInicio) return false;
@@ -2524,6 +2831,26 @@ export default function ReservarPage() {
     modalidadCobro,
     showModalidadSelector,
     mainBilling,
+  ]);
+
+  const payBlockedReason = useMemo(() => {
+    if (clienteNoVerificado) return dniBlockMessage || "Verifica tu identidad";
+    if (bookabilityBlock) return bookabilityBlock;
+    if (calendarioError) return calendarioError;
+    if (incompletePriceLine) {
+      return incompletePriceLine.detail === "Faltan datos"
+        ? `Completa datos: ${incompletePriceLine.name}`
+        : incompletePriceLine.detail;
+    }
+    if (!aceptaPolitica) return "Acepta la política de cancelación";
+    return null;
+  }, [
+    clienteNoVerificado,
+    dniBlockMessage,
+    bookabilityBlock,
+    calendarioError,
+    incompletePriceLine,
+    aceptaPolitica,
   ]);
 
   const loadServicesForVertical = useCallback(
@@ -2918,10 +3245,7 @@ export default function ReservarPage() {
       setCartByServiceId((prev) => ({
         ...prev,
         [withMods.id]: buildCartEntry(withMods, {
-          fechaInicio,
-          fechaFin,
-          hora,
-          duracionHoras,
+          ...emptyCartBookingFields(),
           modalidadCobro: defaultModalidadCobroFromService(withMods),
           numHuespedes: defaultNumHuespedesFromService(withMods),
         }),
@@ -3124,6 +3448,23 @@ export default function ReservarPage() {
               style={{ borderColor: "#e8e4de" }}
             >
               <SectionHeader number={1} title="Tu reserva" />
+              {(() => {
+                const mainLine = priceSummary.lines.find((l) => l.id === service.id);
+                const mainOk = mainLine?.ready;
+                return (
+                  <div className="mb-3 flex items-center gap-2">
+                    <span
+                      className="rounded px-2 py-0.5 text-[10px] font-semibold"
+                      style={{
+                        backgroundColor: mainOk ? "#e6f4f0" : "#fdf3e3",
+                        color: mainOk ? "#0e7a5c" : "#92400e",
+                      }}
+                    >
+                      {mainOk ? "OK" : "Faltan datos"}
+                    </span>
+                  </div>
+                );
+              })()}
 
               <div className="flex gap-3">
                 <div
@@ -3549,102 +3890,144 @@ export default function ReservarPage() {
                       >
                         ✓ Añadidos a tu reserva
                       </div>
-                      {bundleServices.map((s) => (
-                        <div
-                          key={s.id}
-                          style={{
-                            background: "#e6f4f0",
-                            border: "0.5px solid #0e7a5c",
-                            borderRadius: 7,
-                            padding: "10px 12px",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 10,
-                            marginBottom: 6,
-                          }}
-                        >
+                      {bundleServices.map((s) => {
+                        const entry = cartByServiceId[s.id];
+                        const line = priceSummary.lines.find((l) => l.id === s.id);
+                        const lineReady = Boolean(line?.ready);
+                        const linePrice = lineReady ? line.total : null;
+                        return (
                           <div
+                            key={s.id}
                             style={{
-                              width: 28,
-                              height: 28,
-                              borderRadius: "50%",
-                              background:
-                                s.vertical === "alojamiento"
-                                  ? "#1d4f91"
-                                  : s.vertical === "ninos"
-                                    ? "#0e7a5c"
-                                    : "#c47d1a",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              fontSize: 9,
-                              color: "#fff",
-                              fontWeight: 500,
-                              flexShrink: 0,
+                              background: lineReady ? "#e6f4f0" : "#f7f5f2",
+                              border: `0.5px solid ${lineReady ? "#0e7a5c" : "#e8e4de"}`,
+                              borderRadius: 7,
+                              padding: "10px 12px",
+                              marginBottom: 8,
                             }}
                           >
-                            {(s.titulo || "S")[0]}
-                          </div>
-                          <div style={{ flex: 1 }}>
                             <div
                               style={{
-                                fontSize: 12,
-                                fontWeight: 500,
-                                color: "#2a3a4a",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 10,
                               }}
                             >
-                              {s.titulo}
+                              <div
+                                style={{
+                                  width: 28,
+                                  height: 28,
+                                  borderRadius: "50%",
+                                  background:
+                                    s.vertical === "alojamiento"
+                                      ? "#1d4f91"
+                                      : s.vertical === "ninos"
+                                        ? "#0e7a5c"
+                                        : "#c47d1a",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  fontSize: 9,
+                                  color: "#fff",
+                                  fontWeight: 500,
+                                  flexShrink: 0,
+                                }}
+                              >
+                                {(s.titulo || "S")[0]}
+                              </div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div
+                                  style={{
+                                    fontSize: 12,
+                                    fontWeight: 500,
+                                    color: "#2a3a4a",
+                                  }}
+                                >
+                                  {s.titulo}
+                                </div>
+                                <div
+                                  style={{
+                                    fontSize: 10,
+                                    color: "#888",
+                                    marginTop: 1,
+                                  }}
+                                >
+                                  {s.profiles_public?.nombre}{" "}
+                                  {s.profiles_public?.apellido}
+                                </div>
+                              </div>
+                              <span
+                                className="shrink-0 rounded px-2 py-0.5 text-[10px] font-semibold"
+                                style={{
+                                  backgroundColor: lineReady
+                                    ? "#d8f0e8"
+                                    : "#fdf3e3",
+                                  color: lineReady ? "#0e7a5c" : "#92400e",
+                                }}
+                              >
+                                {lineReady ? "OK" : "Faltan datos"}
+                              </span>
+                              <span
+                                style={{
+                                  fontSize: 12,
+                                  fontWeight: 500,
+                                  color: lineReady ? "#0e7a5c" : "#888",
+                                  flexShrink: 0,
+                                }}
+                              >
+                                {linePrice != null
+                                  ? formatEuro(linePrice)
+                                  : "—"}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setBundleServices((prev) =>
+                                    prev.filter((b) => b.id !== s.id),
+                                  );
+                                  setCartByServiceId((prev) => {
+                                    if (!prev[s.id]) return prev;
+                                    const next = { ...prev };
+                                    delete next[s.id];
+                                    return next;
+                                  });
+                                  if (cartCalendarOpenId === s.id) {
+                                    setCartCalendarOpenId(null);
+                                  }
+                                }}
+                                style={{
+                                  fontSize: 14,
+                                  color: "#e53e3e",
+                                  background: "none",
+                                  border: "none",
+                                  cursor: "pointer",
+                                  padding: "0 4px",
+                                }}
+                              >
+                                ×
+                              </button>
                             </div>
-                            <div
-                              style={{
-                                fontSize: 10,
-                                color: "#888",
-                                marginTop: 1,
-                              }}
-                            >
-                              {s.profiles_public?.nombre} {s.profiles_public?.apellido} · {s.precio}€/
-                              {s.vertical === "alojamiento"
-                                ? "noche"
-                                : s.vertical === "ninos"
-                                  ? "hora"
-                                  : "día"}
-                            </div>
+                            {entry && (
+                              <CartLineBookingFields
+                                entry={entry}
+                                fechasOcupadas={
+                                  fechasOcupadasByServiceId[s.id] ?? []
+                                }
+                                calendarOpen={cartCalendarOpenId === s.id}
+                                onToggleCalendar={() =>
+                                  setCartCalendarOpenId((cur) =>
+                                    cur === s.id ? null : s.id,
+                                  )
+                                }
+                                onPatch={(patch) => patchCartEntry(s.id, patch)}
+                                onValidationError={(msg) =>
+                                  setErrorMessage(msg || "")
+                                }
+                              />
+                            )}
                           </div>
-                          <span
-                            style={{
-                              fontSize: 12,
-                              fontWeight: 500,
-                              color: "#0e7a5c",
-                            }}
-                          >
-                            {s.precio}€
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setBundleServices((prev) =>
-                                prev.filter((b) => b.id !== s.id),
-                              );
-                              setCartByServiceId((prev) => {
-                                if (!prev[s.id]) return prev;
-                                const next = { ...prev };
-                                delete next[s.id];
-                                return next;
-                              });
-                            }}
-                            style={{
-                              fontSize: 14,
-                              color: "#e53e3e",
-                              background: "none",
-                              border: "none",
-                              cursor: "pointer",
-                              padding: "0 4px",
-                            }}
-                          >
-                            ×
-                          </button>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
 
@@ -3886,18 +4269,37 @@ export default function ReservarPage() {
                 </div>
               </div>
 
-              {precioListo ? (
+              {precioListo || (isBundle && priceSummary.lines.length > 0) ? (
                 <>
-                  <div className="mt-4 flex items-center justify-between gap-2 text-[11px]">
-                    <span className="text-[#444]">
-                      {mainPriceLine?.detail} × {formatEuro(unitClientPrice)}
-                    </span>
-                    <span className="shrink-0 text-[#1a1a1a]">
-                      {mainPriceLine ? formatEuro(mainPriceLine.total) : "—"}
-                    </span>
-                  </div>
+                  {precioListo ? (
+                    <div className="mt-4 flex items-center justify-between gap-2 text-[11px]">
+                      <span className="text-[#444]">
+                        {mainPriceLine?.detail} × {formatEuro(unitClientPrice)}
+                      </span>
+                      <span className="shrink-0 text-[#1a1a1a]">
+                        {mainPriceLine ? formatEuro(mainPriceLine.total) : "—"}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="mt-4 flex items-center justify-between gap-2 text-[11px]">
+                      <span className="truncate text-[#444]">
+                        {mainPriceLine?.name || "Servicio principal"}
+                      </span>
+                      <span
+                        className="shrink-0 font-medium"
+                        style={{
+                          color: mainPriceLine?.ready ? "#1a1a1a" : "#92400e",
+                        }}
+                      >
+                        {mainPriceLine?.ready
+                          ? formatEuro(mainPriceLine.total)
+                          : "Faltan datos"}
+                      </span>
+                    </div>
+                  )}
 
-                  {serviceNeedsUnidadesSelector(service) &&
+                  {precioListo &&
+                    serviceNeedsUnidadesSelector(service) &&
                     formatHuespedesPrecioDesglose(service, numHuespedes) && (
                       <p className="mt-1.5 text-[10px] leading-snug text-[#888]">
                         {formatHuespedesPrecioDesglose(service, numHuespedes)}
@@ -3919,7 +4321,13 @@ export default function ReservarPage() {
                           <span className="truncate text-[#666]">{line.name}</span>
                         </div>
                         <div className="flex shrink-0 items-center gap-2">
-                          <span className="text-[#1a1a1a]">{formatEuro(line.total)}</span>
+                          <span
+                            style={{
+                              color: line.ready ? "#1a1a1a" : "#92400e",
+                            }}
+                          >
+                            {line.ready ? formatEuro(line.total) : "Faltan datos"}
+                          </span>
                           <button
                             type="button"
                             onClick={() => toggleBundleService(line.id)}
@@ -3933,14 +4341,15 @@ export default function ReservarPage() {
                     );
                   })}
 
-                  {precioEspecialChat && (
+                  {precioListo && precioEspecialChat && (
                     <div className="mt-2 flex items-center justify-between text-[11px] font-medium text-green-700">
                       <span>Precio especial 🏷️</span>
                       <span>Aplicado</span>
                     </div>
                   )}
 
-                  {priceSummary.lines
+                  {precioListo &&
+                    priceSummary.lines
                     .filter((l) => l.discountSource === "duration" && l.discountPct > 0)
                     .map((line) => (
                       <div
@@ -3952,7 +4361,7 @@ export default function ReservarPage() {
                       </div>
                     ))}
 
-                  {creditoAplicado > 0 && (
+                  {precioListo && creditoAplicado > 0 && (
                     <>
                       <div
                         className="mt-2 flex items-center justify-between text-[11px]"
@@ -3970,34 +4379,38 @@ export default function ReservarPage() {
                     </>
                   )}
 
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      fontWeight: 600,
-                      fontSize: 14,
-                      marginTop: 8,
-                      paddingTop: 8,
-                      borderTop: "1px solid #e8e4de",
-                    }}
-                  >
-                    <span className="text-[#1a1a1a]">
-                      {creditoAplicado > 0 ? (
-                        "Total a pagar"
-                      ) : (
-                        <>
-                          Total{" "}
-                          {clienteSinComision
-                            ? ""
-                            : "(gastos de gestión incluidos)"}
-                        </>
-                      )}
-                    </span>
-                    <span className="text-[#1a1a1a]">
-                      {(creditoAplicado > 0 ? totalAPagar : priceSummary.total).toFixed(2)}€
-                    </span>
-                  </div>
-                  {clienteSinComision && (
+                  {precioListo ? (
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        fontWeight: 600,
+                        fontSize: 14,
+                        marginTop: 8,
+                        paddingTop: 8,
+                        borderTop: "1px solid #e8e4de",
+                      }}
+                    >
+                      <span className="text-[#1a1a1a]">
+                        {creditoAplicado > 0 ? (
+                          "Total a pagar"
+                        ) : (
+                          <>
+                            Total{" "}
+                            {clienteSinComision
+                              ? ""
+                              : "(gastos de gestión incluidos)"}
+                          </>
+                        )}
+                      </span>
+                      <span className="text-[#1a1a1a]">
+                        {(creditoAplicado > 0 ? totalAPagar : priceSummary.total).toFixed(2)}€
+                      </span>
+                    </div>
+                  ) : (
+                    <p className="mt-3 text-[11px] text-[#888]">{precioDetail}</p>
+                  )}
+                  {precioListo && clienteSinComision && (
                     <div style={{ fontSize: 10, color: "#0e7a5c", marginTop: 4 }}>
                       🎁 Sin gastos de gestión - te quedan{" "}
                       {getReservasSinComisionCliente(perfilCliente)} reservas gratis
@@ -4204,7 +4617,11 @@ export default function ReservarPage() {
                   className="mt-4 min-h-[44px] w-full py-3 text-[13px] font-semibold text-white opacity-60"
                   style={{ backgroundColor: "#1d4f91", borderRadius: 6 }}
                 >
-                  Pagar →
+                  {payBlockedReason && incompletePriceLine
+                    ? payBlockedReason.length > 48
+                      ? `Completa: ${incompletePriceLine.name}`
+                      : payBlockedReason
+                    : payBlockedReason || "Pagar →"}
                 </button>
               )}
 
