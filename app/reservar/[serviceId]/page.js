@@ -2669,6 +2669,10 @@ export default function ReservarPage() {
           vertical: svcForPrice.vertical,
           discountPct: 0,
           discountSource: null,
+          modalidadCobro: entry?.modalidadCobro ?? null,
+          duration: 0,
+          unitBase: null,
+          unitClient: null,
         };
       }
 
@@ -2683,6 +2687,7 @@ export default function ReservarPage() {
       );
       let ready = calc.ready;
       let detail = calc.detail;
+      let durationForUnit = 0;
 
       const diaError = validateDiaDisponible(svcForPrice, entry.fechaInicio);
       if (diaError) {
@@ -2691,11 +2696,12 @@ export default function ReservarPage() {
       }
 
       if (calc.ready && ready) {
-        const duration = getServiceDuration(svcForPrice, dateContext);
-        const estanciaError = validateEstancia(svcForPrice, duration);
+        durationForUnit = getServiceDuration(svcForPrice, dateContext);
+        const estanciaError = validateEstancia(svcForPrice, durationForUnit);
         if (estanciaError) {
           ready = false;
           detail = estanciaError;
+          durationForUnit = 0;
         } else {
           const antelacionError = validateAntelacion(
             svcForPrice,
@@ -2706,20 +2712,38 @@ export default function ReservarPage() {
           if (antelacionError) {
             ready = false;
             detail = antelacionError;
+            durationForUnit = 0;
           }
         }
       }
 
+      const lineBase = calc.base;
+      const lineTotal = clienteSinComision
+        ? calc.base
+        : applyClientPrice(calc.base);
+      const unitBase =
+        ready && durationForUnit > 0
+          ? Math.round((lineBase / durationForUnit) * 100) / 100
+          : null;
+      const unitClient =
+        ready && durationForUnit > 0
+          ? Math.round((lineTotal / durationForUnit) * 100) / 100
+          : null;
+
       return {
         id: svc.id,
         name,
-        base: calc.base,
-        total: clienteSinComision ? calc.base : applyClientPrice(calc.base),
+        base: lineBase,
+        total: lineTotal,
         detail,
         ready,
         vertical: svcForPrice.vertical,
         discountPct: calc.discountPct ?? 0,
         discountSource: calc.discountSource ?? null,
+        modalidadCobro: calc.modalidadCobro ?? entry.modalidadCobro ?? null,
+        duration: durationForUnit || 0,
+        unitBase,
+        unitClient,
       };
     });
 
@@ -3361,33 +3385,10 @@ export default function ReservarPage() {
   const mainPriceLine =
     priceSummary.lines.find((l) => l.id === service.id) ?? priceSummary.lines[0];
   const bundleLines = priceSummary.lines.filter((l) => l.id !== service.id);
-  const durationCount = getServiceDuration(service, {
-    fechaInicio,
-    fechaFin,
-    duracionHoras,
-    mainVertical: vertical,
-  });
-  const unitBase =
-    mainPriceLine?.base && durationCount
-      ? mainPriceLine.base / durationCount
-      : (() => {
-          if (!fechaInicio || !service) return Number(service?.precio) || 0;
-          const calc = calculateServiceBasePrice(
-            service,
-            {
-              fechaInicio,
-              fechaFin,
-              duracionHoras,
-              mainVertical: vertical,
-              numHuespedes,
-            },
-            precioEspecialChat,
-            tarifasPorServicio[service.id] ?? {},
-          );
-          if (calc.ready && durationCount) return calc.base / durationCount;
-          return Number(service.precio) || 0;
-        })();
-  const unitClientPrice = applyClientPrice(unitBase);
+  // Unidad del resumen = precio por línea / duración (misma modalidad + suplemento).
+  // NO recalcular con services.precio legacy (eso producía 15€→17,10€ ignorando medio_dia).
+  const unitClientPrice =
+    mainPriceLine?.unitClient != null ? mainPriceLine.unitClient : null;
 
   function getCompAddPrice(comp) {
     const calc = calculateServiceBasePrice(
@@ -4274,7 +4275,10 @@ export default function ReservarPage() {
                   {precioListo ? (
                     <div className="mt-4 flex items-center justify-between gap-2 text-[11px]">
                       <span className="text-[#444]">
-                        {mainPriceLine?.detail} × {formatEuro(unitClientPrice)}
+                        {mainPriceLine?.detail}
+                        {unitClientPrice != null
+                          ? ` × ${formatEuro(unitClientPrice)}`
+                          : ""}
                       </span>
                       <span className="shrink-0 text-[#1a1a1a]">
                         {mainPriceLine ? formatEuro(mainPriceLine.total) : "—"}
