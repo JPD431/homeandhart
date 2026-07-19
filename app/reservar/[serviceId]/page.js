@@ -54,6 +54,7 @@ import {
   getServiceBookabilityIssue,
   isServiceBookable,
 } from "@/app/lib/service-bookable";
+import { resolveServiceCardPricing } from "@/app/lib/service-card-display";
 import { verticalEmojiLabel } from "@/app/lib/vertical-emojis";
 import {
   LodgingIcon,
@@ -509,6 +510,20 @@ function defaultNumHuespedesFromService(serviceWithMods) {
   if (!serviceNeedsUnidadesSelector(serviceWithMods)) return null;
   const n = Math.floor(Number(serviceWithMods.huespedes_incluidos));
   return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/**
+ * Prefill editable al añadir un complementario: fechas del main como sugerencia.
+ * Hora/duración/modalidad son propias de cada vertical → no se copian del main.
+ */
+function suggestedBookingFieldsFromMain(mainFields, serviceWithMods) {
+  return {
+    ...emptyCartBookingFields(),
+    fechaInicio: mainFields?.fechaInicio || "",
+    fechaFin: mainFields?.fechaFin || "",
+    modalidadCobro: defaultModalidadCobroFromService(serviceWithMods),
+    numHuespedes: defaultNumHuespedesFromService(serviceWithMods),
+  };
 }
 
 /** Paso 2b: ¿hace falta elegir modalidad (2+ filas)? */
@@ -2237,10 +2252,11 @@ export default function ReservarPage() {
       setCartByServiceId((prev) => ({
         ...prev,
         [withMods.id]: buildCartEntry(withMods, {
-          // Paso 2b: datos propios (vacío); el cliente los completa en su bloque.
-          ...emptyCartBookingFields(),
-          modalidadCobro: defaultModalidadCobroFromService(withMods),
-          numHuespedes: defaultNumHuespedesFromService(withMods),
+          // Prefill editable: fechas del main como sugerencia (el cliente puede cambiarlas).
+          ...suggestedBookingFieldsFromMain(
+            { fechaInicio, fechaFin },
+            withMods,
+          ),
         }),
       }));
       const nombreServicio =
@@ -2259,6 +2275,7 @@ export default function ReservarPage() {
     }
 
     addBundleFromUrl();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fechas del main solo como prefill al añadir
   }, [searchParams, loading, service, userId, serviceId, router]);
 
   useEffect(() => {
@@ -3249,7 +3266,13 @@ export default function ReservarPage() {
     ],
   );
 
-  function toggleBundleService(id) {
+  function toggleBundleService(idOrSvc) {
+    const id =
+      typeof idOrSvc === "object" && idOrSvc != null
+        ? idOrSvc.id
+        : idOrSvc;
+    if (!id) return;
+
     const existing = bundleServices.find((s) => s.id === id);
     if (existing) {
       setBundleServices((prev) => prev.filter((s) => s.id !== id));
@@ -3259,32 +3282,46 @@ export default function ReservarPage() {
         delete next[id];
         return next;
       });
+      if (cartCalendarOpenId === id) setCartCalendarOpenId(null);
       return;
     }
 
-    const svc = allBundleCandidates.find((s) => s.id === id);
-    if (!svc) return;
+    // Misma resolución para lista superior y buscador por vertical:
+    // preferir el objeto pasado (tarjeta clicada), si no buscar en todas las fuentes.
+    const svc =
+      (typeof idOrSvc === "object" && idOrSvc?.id ? idOrSvc : null) ||
+      tabServices.find((s) => s.id === id) ||
+      filteredComplementary.find((s) => s.id === id) ||
+      complementaryServices.find((s) => s.id === id) ||
+      allBundleCandidates.find((s) => s.id === id);
+    if (!svc) {
+      setErrorMessage("No se pudo añadir este servicio. Prueba de nuevo.");
+      return;
+    }
     const issue = getServiceBookabilityIssue(svc);
     if (issue) {
       setErrorMessage(issue);
       return;
     }
 
-    // UI/precio: mismo objeto sin modalidades (retrocompat).
+    setErrorMessage("");
+    // UI: objeto del listado (sin modalidades obligatorias).
     setBundleServices((prev) =>
       prev.some((s) => s.id === id) ? prev : [...prev, svc],
     );
 
-    // Carrito interno: con modalidades cargadas.
+    // Carrito: modalidades + fechas sugeridas del main (editables por línea).
     (async () => {
       const withMods = await loadServiceWithModalidades(svc);
       setCartByServiceId((prev) => ({
         ...prev,
-        [withMods.id]: buildCartEntry(withMods, {
-          ...emptyCartBookingFields(),
-          modalidadCobro: defaultModalidadCobroFromService(withMods),
-          numHuespedes: defaultNumHuespedesFromService(withMods),
-        }),
+        [withMods.id]: buildCartEntry(
+          withMods,
+          suggestedBookingFieldsFromMain(
+            { fechaInicio, fechaFin },
+            withMods,
+          ),
+        ),
       }));
     })();
   }
@@ -3401,24 +3438,6 @@ export default function ReservarPage() {
   // NO recalcular con services.precio legacy (eso producía 15€→17,10€ ignorando medio_dia).
   const unitClientPrice =
     mainPriceLine?.unitClient != null ? mainPriceLine.unitClient : null;
-
-  function getCompAddPrice(comp) {
-    const calc = calculateServiceBasePrice(
-      comp,
-      {
-        fechaInicio,
-        fechaFin,
-        duracionHoras,
-        mainVertical: vertical,
-        numHuespedes,
-      },
-      null,
-      tarifasPorServicio[comp.id] ?? {},
-    );
-    if (calc.ready) return applyClientPrice(calc.base);
-    if (comp.precio) return applyClientPrice(Number(comp.precio));
-    return 0;
-  }
 
   return (
     <div
@@ -4069,7 +4088,7 @@ export default function ReservarPage() {
                         {filteredComplementary.map((comp) => {
                           const compConfig = VERTICALS[comp.vertical] ?? VERTICALS.alojamiento;
                           const isAdded = bundleServices.some((s) => s.id === comp.id);
-                          const addPrice = getCompAddPrice(comp);
+                          const cardPricing = resolveServiceCardPricing(comp);
                           const providerName = formatShortName(
                             comp.profiles_public?.nombre,
                             comp.profiles_public?.apellido,
@@ -4090,12 +4109,19 @@ export default function ReservarPage() {
                                   </p>
                                   <p className="truncate text-[10px] text-[#888]">
                                     {comp.titulo || compConfig.label}
+                                    {cardPricing.priceLabel !== "Consultar"
+                                      ? ` · ${cardPricing.priceLabel}`
+                                      : ""}
                                   </p>
                                 </div>
                               </div>
                               <button
                                 type="button"
-                                onClick={() => toggleBundleService(comp.id)}
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  toggleBundleService(comp);
+                                }}
                                 className="min-h-[44px] shrink-0 rounded px-3 py-2 text-[10px] font-semibold transition-colors"
                                 style={
                                   isAdded
@@ -4107,7 +4133,7 @@ export default function ReservarPage() {
                                       }
                                 }
                               >
-                                {isAdded ? "✓" : `+ ${addPrice ? formatEuro(addPrice) : "Añadir"}`}
+                                {isAdded ? "✓" : "+ Añadir"}
                               </button>
                             </li>
                           );
@@ -4157,6 +4183,7 @@ export default function ReservarPage() {
                       {tabServices.map((comp) => {
                         const compConfig = VERTICALS[comp.vertical] ?? VERTICALS.alojamiento;
                         const isAdded = bundleServices.some((s) => s.id === comp.id);
+                        const cardPricing = resolveServiceCardPricing(comp);
                         const providerName = formatShortName(
                           comp.profiles_public?.nombre,
                           comp.profiles_public?.apellido,
@@ -4193,12 +4220,16 @@ export default function ReservarPage() {
                                     )}
                                   </div>
                                   <p className="shrink-0 text-[12px] font-semibold text-[#1a1a1a]">
-                                    {comp.precio ? `${comp.precio}€` : "—"}
+                                    {cardPricing.priceLabel}
                                   </p>
                                 </div>
                                 <button
                                   type="button"
-                                  onClick={() => toggleBundleService(comp.id)}
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    toggleBundleService(comp);
+                                  }}
                                   className="mt-2 min-h-[44px] rounded px-3 py-2 text-[10px] font-semibold transition-colors"
                                   style={
                                     isAdded
