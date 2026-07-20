@@ -19,6 +19,13 @@ import {
   isClienteVerificado,
 } from "@/app/lib/dni";
 import { getUserFamiliaActiva } from "@/app/lib/familia";
+import {
+  buildBundleStateSnapshot,
+  clearBundleStateFromSession,
+  createBundleStatePersister,
+  restoreBundleStateFromSession,
+  writeBundleStateToSession,
+} from "@/app/lib/bundle-persist";
 import { getHoyDateStr, getPrecioEfectivo, isOfertaActiva } from "@/app/lib/ofertas";
 import {
   applyClientPrice,
@@ -1991,38 +1998,115 @@ export default function ReservarPage() {
   const [filteredComplementary, setFilteredComplementary] = useState([]);
   const bundleDatesAppliedRef = useRef(false);
   const bundleAddedMsgTimerRef = useRef(null);
+  /** Paso 2d: evita que load() pise carrito restaurado de sessionStorage. */
+  const cartHydratedRef = useRef(false);
+  const bundleRestoredRef = useRef(false);
+  const bundlePersistRef = useRef(null);
 
   useEffect(() => {
     return () => {
       if (bundleAddedMsgTimerRef.current) {
         clearTimeout(bundleAddedMsgTimerRef.current);
       }
+      bundlePersistRef.current?.dispose();
     };
   }, []);
 
-  useEffect(() => {
-    const savedState = sessionStorage.getItem("bundle_state");
-    if (!savedState) return;
+  const bundleStateSetters = useMemo(
+    () => ({
+      setFechaInicio,
+      setFechaFin,
+      setHora,
+      setDuracionHoras,
+      setModalidadCobro,
+      setNumHuespedes,
+      setMensaje,
+      setAceptaPolitica,
+      setBundleServices,
+      setCartByServiceId,
+      setMainServiceId,
+      bundleDatesAppliedRef,
+    }),
+    [],
+  );
 
-    try {
-      const state = JSON.parse(savedState);
-      if (state.fechaInicio) {
-        setFechaInicio(state.fechaInicio);
-        bundleDatesAppliedRef.current = true;
-      }
-      if (state.fechaFin) setFechaFin(state.fechaFin);
-      if (state.hora) setHora(state.hora);
-      if (state.duracionHoras) setDuracionHoras(state.duracionHoras);
-      if (state.bundleServices) setBundleServices(state.bundleServices);
-      if (state.cartByServiceId && typeof state.cartByServiceId === "object") {
-        setCartByServiceId(state.cartByServiceId);
-      }
-      if (state.mainServiceId) setMainServiceId(state.mainServiceId);
-    } catch {
-      // ignore invalid saved state
+  function tryRestoreBundleFromSession() {
+    const restored = restoreBundleStateFromSession(serviceId, bundleStateSetters);
+    if (restored) {
+      cartHydratedRef.current = true;
+      bundleRestoredRef.current = true;
     }
-    sessionStorage.removeItem("bundle_state");
-  }, []);
+    return restored;
+  }
+
+  // Restaurar carrito al montar (F5 o volver de /buscar).
+  useEffect(() => {
+    tryRestoreBundleFromSession();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- solo al montar / serviceId
+  }, [serviceId]);
+
+  // bfcache: botón atrás del navegador puede restaurar snapshot React viejo.
+  useEffect(() => {
+    function onPageShow(event) {
+      if (!event.persisted) return;
+      tryRestoreBundleFromSession();
+    }
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serviceId]);
+
+  // Persistir carrito en sessionStorage (F5 + navegación a buscar).
+  useEffect(() => {
+    if (!serviceId || loading || !service?.id) return;
+
+    if (!bundlePersistRef.current) {
+      bundlePersistRef.current = createBundleStatePersister(() =>
+        buildBundleStateSnapshot({
+          origenServiceId: serviceId,
+          mainServiceId: mainServiceId || serviceId,
+          bundleServices,
+          cartByServiceId,
+          fechaInicio,
+          fechaFin,
+          hora,
+          duracionHoras,
+          modalidadCobro,
+          numHuespedes,
+          mensaje,
+          aceptaPolitica,
+        }),
+      );
+    }
+
+    bundlePersistRef.current.schedulePersist();
+
+    function onVisibilityChange() {
+      if (document.visibilityState === "hidden") {
+        bundlePersistRef.current?.flushPersist();
+      }
+    }
+    window.addEventListener("visibilitychange", onVisibilityChange);
+
+    return () => {
+      window.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [
+    serviceId,
+    loading,
+    service?.id,
+    mainServiceId,
+    bundleServices,
+    cartByServiceId,
+    fechaInicio,
+    fechaFin,
+    hora,
+    duracionHoras,
+    modalidadCobro,
+    numHuespedes,
+    mensaje,
+    aceptaPolitica,
+  ]);
 
   useEffect(() => {
     if (bundleDatesAppliedRef.current) return;
@@ -2126,6 +2210,8 @@ export default function ReservarPage() {
 
       // Modalidades de cobro (niñera/mascotas)
       let serviceWithMods = data;
+      const hadPersistedCart = cartHydratedRef.current;
+
       if (supportsModalidadCobro(data.vertical)) {
         const { data: modRows } = await supabase
           .from("service_modalidades")
@@ -2133,35 +2219,61 @@ export default function ReservarPage() {
           .eq("service_id", data.id);
         serviceWithMods = { ...data, modalidades: modRows ?? [] };
         setService(serviceWithMods);
-        const rows = modRows ?? [];
-        if (rows.length === 1) {
-          setModalidadCobro(rows[0].modalidad);
-        } else if (rows.length > 1) {
-          setModalidadCobro(null);
-        } else {
-          setModalidadCobro(null);
+        if (!hadPersistedCart) {
+          const rows = modRows ?? [];
+          if (rows.length === 1) {
+            setModalidadCobro(rows[0].modalidad);
+          } else if (rows.length > 1) {
+            setModalidadCobro(null);
+          } else {
+            setModalidadCobro(null);
+          }
         }
       } else {
-        setModalidadCobro(null);
+        setService(serviceWithMods);
+        if (!hadPersistedCart) {
+          setModalidadCobro(null);
+        }
       }
 
       const mainNumHuespedes = defaultNumHuespedesFromService(serviceWithMods);
-      if (mainNumHuespedes != null) {
-        setNumHuespedes(mainNumHuespedes);
-      } else {
-        setNumHuespedes(null);
+      if (!hadPersistedCart) {
+        if (mainNumHuespedes != null) {
+          setNumHuespedes(mainNumHuespedes);
+        } else {
+          setNumHuespedes(null);
+        }
       }
 
       setMainServiceId(serviceWithMods.id);
-      // Entrada de carrito del main (fechas se sincronizan en useEffect aparte).
-      setCartByServiceId((prev) => ({
-        ...prev,
-        [serviceWithMods.id]: buildCartEntry(serviceWithMods, {
-          ...(prev[serviceWithMods.id] || emptyCartBookingFields()),
-          modalidadCobro: defaultModalidadCobroFromService(serviceWithMods),
-          numHuespedes: mainNumHuespedes,
-        }),
-      }));
+
+      // Entrada de carrito del main: no pisar líneas restauradas (Paso 2d).
+      setCartByServiceId((prev) => {
+        const existing = prev[serviceWithMods.id];
+        if (hadPersistedCart && existing) {
+          return {
+            ...prev,
+            [serviceWithMods.id]: buildCartEntry(serviceWithMods, {
+              ...existing,
+              service: {
+                ...serviceWithMods,
+                modalidades:
+                  serviceWithMods.modalidades ??
+                  existing.service?.modalidades ??
+                  [],
+              },
+            }),
+          };
+        }
+        return {
+          ...prev,
+          [serviceWithMods.id]: buildCartEntry(serviceWithMods, {
+            ...(existing || emptyCartBookingFields()),
+            modalidadCobro: defaultModalidadCobroFromService(serviceWithMods),
+            numHuespedes: mainNumHuespedes,
+          }),
+        };
+      });
 
       const { data: ratings } = await supabase
         .from("reviews")
@@ -3296,6 +3408,9 @@ export default function ReservarPage() {
         throw new Error(data.error || "No se pudo completar la reserva.");
       }
 
+      clearBundleStateFromSession();
+      cartHydratedRef.current = false;
+      bundleRestoredRef.current = false;
       router.push("/dashboard");
     },
     [
@@ -3386,6 +3501,9 @@ export default function ReservarPage() {
         throw new Error(data.error || "No se pudo completar la reserva.");
       }
 
+      clearBundleStateFromSession();
+      cartHydratedRef.current = false;
+      bundleRestoredRef.current = false;
       router.push("/dashboard");
     },
     [
@@ -3570,16 +3688,20 @@ export default function ReservarPage() {
   );
   const freeCancelDateStr = formatCancelDeadline(freeCancelDeadline);
   function goToBuscarBundle() {
-    sessionStorage.setItem(
-      "bundle_state",
-      JSON.stringify({
+    writeBundleStateToSession(
+      buildBundleStateSnapshot({
+        origenServiceId: serviceId,
+        mainServiceId: mainServiceId || serviceId,
+        bundleServices,
+        cartByServiceId,
         fechaInicio,
         fechaFin,
         hora,
         duracionHoras,
-        bundleServices,
-        cartByServiceId,
-        mainServiceId: mainServiceId || serviceId,
+        modalidadCobro,
+        numHuespedes,
+        mensaje,
+        aceptaPolitica,
       }),
     );
     const params = new URLSearchParams();
