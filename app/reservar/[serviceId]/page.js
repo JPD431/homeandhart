@@ -1955,6 +1955,12 @@ export default function ReservarPage() {
   const [userId, setUserId] = useState(null);
   const [userEmail, setUserEmail] = useState(null);
   const [perfilCliente, setPerfilCliente] = useState(null);
+  /**
+   * Campos flat del MAIN = espejo UI de cartByServiceId[main].
+   * Fuente de verdad para precio/pago/disponibilidad por línea: cartByServiceId.
+   * Estos states alimentan el formulario del servicio de la URL y se sincronizan
+   * hacia cart[main] (no al revés salvo restore desde sessionStorage).
+   */
   const [fechaInicio, setFechaInicio] = useState("");
   const [fechaFin, setFechaFin] = useState("");
   const [hora, setHora] = useState("");
@@ -2002,6 +2008,8 @@ export default function ReservarPage() {
   const cartHydratedRef = useRef(false);
   const bundleRestoredRef = useRef(false);
   const bundlePersistRef = useRef(null);
+  /** Snapshot siempre fresco para el persister (evita closure stale). */
+  const latestBundleSnapshotRef = useRef(null);
 
   useEffect(() => {
     return () => {
@@ -2060,22 +2068,24 @@ export default function ReservarPage() {
   useEffect(() => {
     if (!serviceId || loading || !service?.id) return;
 
+    latestBundleSnapshotRef.current = buildBundleStateSnapshot({
+      origenServiceId: serviceId,
+      mainServiceId: mainServiceId || serviceId,
+      bundleServices,
+      cartByServiceId,
+      fechaInicio,
+      fechaFin,
+      hora,
+      duracionHoras,
+      modalidadCobro,
+      numHuespedes,
+      mensaje,
+      aceptaPolitica,
+    });
+
     if (!bundlePersistRef.current) {
-      bundlePersistRef.current = createBundleStatePersister(() =>
-        buildBundleStateSnapshot({
-          origenServiceId: serviceId,
-          mainServiceId: mainServiceId || serviceId,
-          bundleServices,
-          cartByServiceId,
-          fechaInicio,
-          fechaFin,
-          hora,
-          duracionHoras,
-          modalidadCobro,
-          numHuespedes,
-          mensaje,
-          aceptaPolitica,
-        }),
+      bundlePersistRef.current = createBundleStatePersister(
+        () => latestBundleSnapshotRef.current,
       );
     }
 
@@ -2614,6 +2624,39 @@ export default function ReservarPage() {
     () => selectedServices.map((s) => s.id).join(","),
     [selectedServices],
   );
+
+  // Seguridad: cartByServiceId solo con main + complementarios actuales (sin huérfanos).
+  useEffect(() => {
+    if (!service?.id) return;
+    const keep = new Set(selectedServices.map((s) => s.id).filter(Boolean));
+    setCartByServiceId((prev) => {
+      const keys = Object.keys(prev);
+      if (keys.every((k) => keep.has(k))) return prev;
+      const next = {};
+      for (const k of keys) {
+        if (keep.has(k)) next[k] = prev[k];
+      }
+      return next;
+    });
+    setTarifasPorServicio((prev) => {
+      const keys = Object.keys(prev);
+      if (keys.every((k) => keep.has(k))) return prev;
+      const next = {};
+      for (const k of keys) {
+        if (keep.has(k)) next[k] = prev[k];
+      }
+      return next;
+    });
+    setFechasOcupadasByServiceId((prev) => {
+      const keys = Object.keys(prev);
+      if (keys.every((k) => keep.has(k))) return prev;
+      const next = {};
+      for (const k of keys) {
+        if (keep.has(k)) next[k] = prev[k];
+      }
+      return next;
+    });
+  }, [service?.id, selectedServiceIdsKey]);
 
   /** Clave de fechas por línea (tarifas / disponibilidad por servicio). */
   const cartDatesKey = useMemo(
@@ -3536,16 +3579,14 @@ export default function ReservarPage() {
         : idOrSvc;
     if (!id) return;
 
+    // El main (URL /reservar/[serviceId]) no se puede quitar del carrito.
+    if (id === service?.id || id === mainServiceId || id === serviceId) {
+      return;
+    }
+
     const existing = bundleServices.find((s) => s.id === id);
     if (existing) {
-      setBundleServices((prev) => prev.filter((s) => s.id !== id));
-      setCartByServiceId((prev) => {
-        if (!prev[id]) return prev;
-        const next = { ...prev };
-        delete next[id];
-        return next;
-      });
-      if (cartCalendarOpenId === id) setCartCalendarOpenId(null);
+      removeComplementaryFromCart(id);
       return;
     }
 
@@ -3600,6 +3641,69 @@ export default function ReservarPage() {
         ),
       }));
     })();
+  }
+
+  /**
+   * Quitar un complementario: limpia bundleServices + cartByServiceId +
+   * tarifas/ocupadas, y persiste ya sin ese servicio.
+   * El main (service de la URL) NUNCA se quita — la página es su flujo.
+   */
+  function removeComplementaryFromCart(complementaryId) {
+    const id = complementaryId;
+    if (!id) return;
+    if (id === service?.id || id === mainServiceId || id === serviceId) {
+      return;
+    }
+
+    const nextBundle = bundleServices.filter((s) => s.id !== id);
+    const nextCart = { ...cartByServiceId };
+    delete nextCart[id];
+
+    // Conservar solo main + complementarios restantes (sin huérfanos).
+    const keepIds = new Set([
+      service?.id,
+      serviceId,
+      mainServiceId,
+      ...nextBundle.map((s) => s.id),
+    ].filter(Boolean));
+    for (const key of Object.keys(nextCart)) {
+      if (!keepIds.has(key)) delete nextCart[key];
+    }
+
+    setBundleServices(nextBundle);
+    setCartByServiceId(nextCart);
+
+    setTarifasPorServicio((prev) => {
+      if (!prev[id]) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    setFechasOcupadasByServiceId((prev) => {
+      if (!prev[id]) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    if (cartCalendarOpenId === id) setCartCalendarOpenId(null);
+
+    // Persistencia inmediata (sin esperar debounce) con el estado ya limpio.
+    const snapshot = buildBundleStateSnapshot({
+      origenServiceId: serviceId,
+      mainServiceId: mainServiceId || serviceId,
+      bundleServices: nextBundle,
+      cartByServiceId: nextCart,
+      fechaInicio,
+      fechaFin,
+      hora,
+      duracionHoras,
+      modalidadCobro,
+      numHuespedes,
+      mensaje,
+      aceptaPolitica,
+    });
+    latestBundleSnapshotRef.current = snapshot;
+    writeBundleStateToSession(snapshot);
   }
 
   function handleRangeChange({ desde, hasta }) {
@@ -4303,20 +4407,8 @@ export default function ReservarPage() {
                               </span>
                               <button
                                 type="button"
-                                onClick={() => {
-                                  setBundleServices((prev) =>
-                                    prev.filter((b) => b.id !== s.id),
-                                  );
-                                  setCartByServiceId((prev) => {
-                                    if (!prev[s.id]) return prev;
-                                    const next = { ...prev };
-                                    delete next[s.id];
-                                    return next;
-                                  });
-                                  if (cartCalendarOpenId === s.id) {
-                                    setCartCalendarOpenId(null);
-                                  }
-                                }}
+                                onClick={() => removeComplementaryFromCart(s.id)}
+                                aria-label="Quitar servicio del carrito"
                                 style={{
                                   fontSize: 14,
                                   color: "#e53e3e",
@@ -4680,7 +4772,7 @@ export default function ReservarPage() {
                           </span>
                           <button
                             type="button"
-                            onClick={() => toggleBundleService(line.id)}
+                            onClick={() => removeComplementaryFromCart(line.id)}
                             className="flex min-h-[44px] min-w-[44px] items-center justify-center border-0 bg-transparent p-2 text-[14px] leading-none text-red-500 hover:text-red-700"
                             aria-label="Eliminar servicio"
                           >
