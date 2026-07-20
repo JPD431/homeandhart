@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { sequences } from "@/app/lib/email-sequences";
+import { isExcludedFromUserEmailSequences } from "@/app/lib/email-sequence-recipients";
 import { resolverEmailUsuario } from "@/app/lib/email-usuario";
 import { canLeaveReview } from "@/app/lib/reviews";
 
@@ -72,6 +73,21 @@ async function sendSequenceEmail(payload) {
   }
 
   return response.json();
+}
+
+/** Destinatario de secuencia de usuario: excluye admin/internos. */
+async function resolveSequenceRecipient(userId) {
+  if (isExcludedFromUserEmailSequences(userId)) {
+    return { skip: true, email: null, reason: "internal_account" };
+  }
+  const email = await resolverEmailUsuario(userId);
+  if (!email) {
+    return { skip: true, email: null, reason: "no_email" };
+  }
+  if (isExcludedFromUserEmailSequences(userId, email)) {
+    return { skip: true, email, reason: "internal_account" };
+  }
+  return { skip: false, email };
 }
 
 async function userHasBookings(userId, asClient = true) {
@@ -172,11 +188,13 @@ export async function runEmailSequences() {
     if (await alreadySent(user.id, "cliente_activacion")) continue;
     if (await userHasBookings(user.id, true)) continue;
 
-    const email = await resolverEmailUsuario(user.id);
-    if (!email) {
-      console.warn(
-        `[email-sequences] Sin email para ${user.id}, skip cliente_activacion`,
-      );
+    const recipient = await resolveSequenceRecipient(user.id);
+    if (recipient.skip) {
+      if (recipient.reason === "no_email") {
+        console.warn(
+          `[email-sequences] Sin email para ${user.id}, skip cliente_activacion`,
+        );
+      }
       continue;
     }
 
@@ -205,11 +223,13 @@ export async function runEmailSequences() {
     if (await alreadySent(user.id, "cliente_primera_reserva")) continue;
     if (await userHasBookings(user.id, true)) continue;
 
-    const email = await resolverEmailUsuario(user.id);
-    if (!email) {
-      console.warn(
-        `[email-sequences] Sin email para ${user.id}, skip cliente_primera_reserva`,
-      );
+    const recipient = await resolveSequenceRecipient(user.id);
+    if (recipient.skip) {
+      if (recipient.reason === "no_email") {
+        console.warn(
+          `[email-sequences] Sin email para ${user.id}, skip cliente_primera_reserva`,
+        );
+      }
       continue;
     }
 
@@ -236,11 +256,13 @@ export async function runEmailSequences() {
   for (const user of clientes || []) {
     if (await alreadySent(user.id, "cliente_reactivacion")) continue;
 
-    const email = await resolverEmailUsuario(user.id);
-    if (!email) {
-      console.warn(
-        `[email-sequences] Sin email para ${user.id}, skip cliente_reactivacion`,
-      );
+    const recipient = await resolveSequenceRecipient(user.id);
+    if (recipient.skip) {
+      if (recipient.reason === "no_email") {
+        console.warn(
+          `[email-sequences] Sin email para ${user.id}, skip cliente_reactivacion`,
+        );
+      }
       continue;
     }
 
@@ -293,11 +315,13 @@ export async function runEmailSequences() {
     if (await alreadySent(proveedor.id, "proveedor_sin_actividad")) continue;
     if (await userHasBookings(proveedor.id, false)) continue;
 
-    const email = await resolverEmailUsuario(proveedor.id);
-    if (!email) {
-      console.warn(
-        `[email-sequences] Sin email para ${proveedor.id}, skip proveedor_sin_actividad`,
-      );
+    const recipient = await resolveSequenceRecipient(proveedor.id);
+    if (recipient.skip) {
+      if (recipient.reason === "no_email") {
+        console.warn(
+          `[email-sequences] Sin email para ${proveedor.id}, skip proveedor_sin_actividad`,
+        );
+      }
       continue;
     }
 
@@ -328,11 +352,13 @@ export async function runEmailSequences() {
     if (await alreadySent(user.id, "proveedor_onboarding_pendiente_1")) continue;
     if (!(await isProveedorOnboardingPendiente(user.id))) continue;
 
-    const email = await resolverEmailUsuario(user.id);
-    if (!email) {
-      console.warn(
-        `[email-sequences] Sin email para ${user.id}, skip proveedor_onboarding_pendiente_1`,
-      );
+    const recipient = await resolveSequenceRecipient(user.id);
+    if (recipient.skip) {
+      if (recipient.reason === "no_email") {
+        console.warn(
+          `[email-sequences] Sin email para ${user.id}, skip proveedor_onboarding_pendiente_1`,
+        );
+      }
       continue;
     }
 
@@ -372,11 +398,13 @@ export async function runEmailSequences() {
 
     if (!proveedor) continue;
 
-    const email = await resolverEmailUsuario(proveedor.id);
-    if (!email) {
-      console.warn(
-        `[email-sequences] Sin email para ${proveedor.id}, skip proveedor_onboarding_pendiente_2`,
-      );
+    const recipient = await resolveSequenceRecipient(proveedor.id);
+    if (recipient.skip) {
+      if (recipient.reason === "no_email") {
+        console.warn(
+          `[email-sequences] Sin email para ${proveedor.id}, skip proveedor_onboarding_pendiente_2`,
+        );
+      }
       continue;
     }
 
@@ -435,11 +463,13 @@ export async function runEmailSequences() {
         continue;
       }
 
-      const email = await resolverEmailUsuario(booking.cliente_id);
-      if (!email) {
-        console.warn(
-          `[email-sequences] Sin email para ${booking.cliente_id}, skip resena_recordatorio_1`,
-        );
+      const recipient = await resolveSequenceRecipient(booking.cliente_id);
+      if (recipient.skip) {
+        if (recipient.reason === "no_email") {
+          console.warn(
+            `[email-sequences] Sin email para ${booking.cliente_id}, skip resena_recordatorio_1`,
+          );
+        }
         continue;
       }
 

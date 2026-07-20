@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { getAdminUser } from "@/lib/auth/requireAdmin";
+import { isExcludedFromUserEmailSequences } from "@/app/lib/email-sequence-recipients";
 import {
   REVISION_APROBADO,
   REVISION_EN_REVISION,
@@ -14,6 +15,10 @@ const supabaseAdmin = createClient(
 );
 
 async function sendProveedorVerificadoEmail(userId, nombre) {
+  if (isExcludedFromUserEmailSequences(userId)) {
+    return;
+  }
+
   const baseUrl = process.env.NEXT_PUBLIC_URL || "https://homeandheart.es";
 
   try {

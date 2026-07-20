@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse } from "next/server";
 import { linkPendingInvitesToProfile } from "@/app/lib/familia-invites";
+import { isExcludedFromUserEmailSequences } from "@/app/lib/email-sequence-recipients";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -28,6 +29,10 @@ function createAuthRouteClient(request, response) {
 }
 
 async function sendWelcomeEmail(user) {
+  if (isExcludedFromUserEmailSequences(user.id, user.email)) {
+    return;
+  }
+
   const { data: profile } = await supabaseAdmin
     .from("profiles")
     .select("nombre, role")

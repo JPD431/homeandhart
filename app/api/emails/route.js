@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { Resend } from "resend";
 import { canShowProviderContact } from "@/app/lib/booking-display";
 import { sequences } from "@/app/lib/email-sequences";
+import { isExcludedFromUserEmailSequences } from "@/app/lib/email-sequence-recipients";
 import {
   resolverEmailUsuario,
   resolverNombreUsuario,
@@ -366,6 +367,15 @@ async function sendMarketingSequenceEmail(data) {
 
   if (!email) {
     return { error: "No se encontró el email del destinatario" };
+  }
+
+  // Defensa: no enviar ni loguear secuencias de marketing a admin/internos.
+  if (isExcludedFromUserEmailSequences(userId, email)) {
+    console.info(
+      `[emails] Skip secuencia marketing «${data.tipo}» para cuenta interna`,
+      { userId, email },
+    );
+    return { success: true, skipped: "internal_account" };
   }
 
   const { tipo } = data;
