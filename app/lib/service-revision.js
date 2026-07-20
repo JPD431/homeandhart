@@ -178,8 +178,8 @@ export function getServiceRevisionDisplay(revisionEstado) {
 
 /**
  * Etiqueta de publicación para cabecera (revision_estado + disponible).
- * - aprobado/null + disponible → Publicado
- * - aprobado/null + !disponible → En pausa
+ * - aprobado/null + disponible → Activo
+ * - aprobado/null + !disponible → Pausado
  * - en_revision / rechazado / borrador → solo estado de revisión
  */
 export function getServiceAvailabilityDisplay(revisionEstado, disponible) {
@@ -194,9 +194,9 @@ export function getServiceAvailabilityDisplay(revisionEstado, disponible) {
   }
   // aprobado o null
   if (disponible) {
-    return { label: "Publicado", color: "#0e7a5c" };
+    return { label: "Activo", color: "#0e7a5c" };
   }
-  return { label: "En pausa", color: "#666" };
+  return { label: "Pausado", color: "#666" };
 }
 
 /**

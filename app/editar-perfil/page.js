@@ -121,7 +121,8 @@ import {
 } from "@/app/lib/service-revision";
 import { REVISION_EN_REVISION } from "@/app/lib/onboarding-persist";
 
-const SERVICE_VERTICAL_TABS = ["alojamiento", "ninos", "mascotas"];
+/** Params antiguos de pestañas por vertical → redirigen a ?tab=servicios */
+const LEGACY_VERTICAL_TAB_PARAMS = ["alojamiento", "ninos", "mascotas"];
 
 function buildPublishReminderMessage(vertical, missingDocs) {
   const verticalLabel =
@@ -168,8 +169,6 @@ const IDIOMAS_DEFAULT = [
   "中文",
 ];
 
-const SERVICE_VERTICAL_TAB_ORDER = ["alojamiento", "ninos", "mascotas"];
-
 function resolveTabFromParam(tabParam, services) {
   const tieneServicios = services.length > 0;
 
@@ -183,8 +182,8 @@ function resolveTabFromParam(tabParam, services) {
   if (tabParam === "documentos") {
     return tieneServicios ? "documentos" : "perfil";
   }
-  // Legacy: pestañas por vertical → lista (Paso 1; se retiran en Paso 2)
-  if (SERVICE_VERTICAL_TAB_ORDER.includes(tabParam)) {
+  // Legacy: pestañas por vertical → lista
+  if (LEGACY_VERTICAL_TAB_PARAMS.includes(tabParam)) {
     return "servicios";
   }
 
@@ -1062,6 +1061,7 @@ function EditarPerfilContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab");
+  const serviceIdParam = searchParams.get("serviceId");
   const profilePhotoRef = useRef(null);
   const documentInputRef = useRef(null);
 
@@ -1219,24 +1219,68 @@ function EditarPerfilContent() {
     if (loading || !tabParam) return;
 
     const resolved = resolveTabFromParam(tabParam, services);
-    const href = buildEditarPerfilTabHref(resolved);
-    const current =
-      tabParam === "perfil"
-        ? "/editar-perfil"
-        : `/editar-perfil?tab=${encodeURIComponent(tabParam)}`;
+    const keepServiceId =
+      resolved === "servicios" && serviceIdParam ? serviceIdParam : null;
+    const href = buildEditarPerfilTabHref(resolved, {
+      serviceId: keepServiceId,
+    });
+
+    const currentParams = new URLSearchParams();
+    if (tabParam && tabParam !== "perfil") {
+      currentParams.set("tab", tabParam);
+    }
+    if (serviceIdParam) {
+      currentParams.set("serviceId", serviceIdParam);
+    }
+    const current = currentParams.toString()
+      ? `/editar-perfil?${currentParams.toString()}`
+      : "/editar-perfil";
 
     // Canonicaliza legacy ?tab=alojamiento|ninos|mascotas → ?tab=servicios
     if (href !== current) {
       router.replace(href, { scroll: false });
     }
-  }, [loading, services, tabParam, router]);
+  }, [loading, services, tabParam, serviceIdParam, router]);
+
+  // Deep-link: ?tab=servicios&serviceId=<uuid> abre ese servicio en edición
+  useEffect(() => {
+    if (loading) return;
+    if (resolveTabFromParam(tabParam, services) !== "servicios") return;
+    if (!serviceIdParam) return;
+    if (!services.some((s) => s.id === serviceIdParam)) return;
+    setEditingId(serviceIdParam);
+    setAddingService(false);
+  }, [loading, services, tabParam, serviceIdParam]);
 
   function handleTabChange(tabId) {
     if (tabId !== "documentos") {
       setDocumentosReminderVertical(null);
     }
     setActiveTab(tabId);
+    setEditingId(null);
+    setAddingService(false);
     router.replace(buildEditarPerfilTabHref(tabId), { scroll: false });
+  }
+
+  function openServiceEditor(serviceId) {
+    setAddingService(false);
+    setEditingId(serviceId);
+    router.replace(
+      buildEditarPerfilTabHref("servicios", { serviceId }),
+      { scroll: false },
+    );
+  }
+
+  function closeServiceEditor() {
+    setEditingId(null);
+    router.replace(buildEditarPerfilTabHref("servicios"), { scroll: false });
+  }
+
+  function openCreateAnuncio() {
+    markDirty();
+    setEditingId(null);
+    setAddingService(true);
+    router.replace(buildEditarPerfilTabHref("servicios"), { scroll: false });
   }
 
   function markDirty() {
@@ -1381,14 +1425,26 @@ function EditarPerfilContent() {
     { id: "cuenta", label: "Cuenta" },
   ];
 
-  // Legacy UI B (pestañas por vertical) — sin enlazar en Paso 1; se retira en Paso 2
-  function getServiceByVertical(vertical) {
-    return services.find((s) => s.vertical === vertical);
-  }
-
   function renderMisServiciosCard() {
     return (
       <Card title="Mis servicios">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-[#666]">
+            {services.length === 0
+              ? "Aún no tienes anuncios. Crea el primero."
+              : `${services.length} ${services.length === 1 ? "anuncio" : "anuncios"}`}
+          </p>
+          {!addingService ? (
+            <button
+              type="button"
+              onClick={openCreateAnuncio}
+              className="rounded-lg px-4 py-2 text-sm font-semibold text-white"
+              style={{ backgroundColor: PRIMARY }}
+            >
+              + Crear anuncio
+            </button>
+          ) : null}
+        </div>
         {perfil?.role === "proveedor" && !puedePublicarServicios && (
           <div
             className="mb-4 rounded-lg border px-3 py-2.5 text-xs leading-relaxed"
@@ -1448,7 +1504,9 @@ function EditarPerfilContent() {
                       <button
                         type="button"
                         onClick={() =>
-                          setEditingId(isEditing ? null : service.id)
+                          isEditing
+                            ? closeServiceEditor()
+                            : openServiceEditor(service.id)
                         }
                         className="rounded-lg border px-3 py-1.5 text-xs font-semibold"
                         style={{ borderColor: BRAND.border, color: PRIMARY }}
@@ -1484,7 +1542,8 @@ function EditarPerfilContent() {
             className="mt-4 rounded-xl border p-4"
             style={{ borderColor: BRAND.border }}
           >
-            <p className="text-sm font-semibold">Nuevo servicio</p>
+            <p className="text-sm font-semibold">Nuevo anuncio</p>
+            <p className="mt-1 text-xs text-[#888]">Elige la vertical y completa los datos.</p>
             <div className="mt-3 flex flex-wrap gap-2">
               {VERTICALS.map((v) => (
                 <button
@@ -1539,19 +1598,7 @@ function EditarPerfilContent() {
               Cancelar
             </button>
           </div>
-        ) : (
-          <button
-            type="button"
-            onClick={() => {
-              markDirty();
-              setAddingService(true);
-            }}
-            className="mt-4 text-sm font-semibold"
-            style={{ color: PRIMARY }}
-          >
-            + Añadir nuevo servicio
-          </button>
-        )}
+        ) : null}
       </Card>
     );
   }
@@ -2027,9 +2074,11 @@ function EditarPerfilContent() {
         }
       }
 
-      const savedFromVertical = SERVICE_VERTICAL_TABS.includes(activeTab)
-        ? activeTab
-        : null;
+      const reminderVertical =
+        (editingId &&
+          (servicesAfterSave.find((s) => s.id === editingId)?.vertical ||
+            services.find((s) => s.id === editingId)?.vertical)) ||
+        (addingService ? newVertical : null);
 
       setFotoPerfil(fotoUrl);
       setProfilePhotoFile(null);
@@ -2046,7 +2095,7 @@ function EditarPerfilContent() {
 
       const revisionFeedback = buildServicesSaveFeedback(revisionOutcomes);
 
-      if (savedFromVertical) {
+      if (reminderVertical) {
         const postSaveContext = {
           ...documentContext,
           services: servicesAfterSave.map((s) => ({
@@ -2056,23 +2105,26 @@ function EditarPerfilContent() {
           })),
         };
         const missingPublishDocs = getMissingPublishDocumentsForVertical(
-          savedFromVertical,
+          reminderVertical,
           postSaveContext,
           perfil,
         );
 
         if (missingPublishDocs.length > 0) {
-          setDocumentosReminderVertical(savedFromVertical);
+          setDocumentosReminderVertical(reminderVertical);
           setActiveTab("documentos");
           router.replace(buildEditarPerfilTabHref("documentos"), { scroll: false });
           setSuccessMessage(
-            `${revisionFeedback} ${buildPublishReminderMessage(savedFromVertical, missingPublishDocs)}`,
+            `${revisionFeedback} ${buildPublishReminderMessage(reminderVertical, missingPublishDocs)}`,
           );
           return;
         }
       }
 
       setSuccessMessage(revisionFeedback);
+      if (activeTab === "servicios") {
+        router.replace(buildEditarPerfilTabHref("servicios"), { scroll: false });
+      }
     } catch (err) {
       console.error("[editar-perfil] error al guardar", err);
       setErrorMessage(err.message || "Error al guardar los cambios.");
@@ -2360,12 +2412,13 @@ function EditarPerfilContent() {
             </div>
           </Card>
 
-          {/* Acceso rápido: la entrada principal es ?tab=servicios */}
+          {/* Resumen: la lista completa vive en ?tab=servicios */}
           {mostrarTabServicios ? (
             <Card title="Mis servicios">
               <p className="text-sm text-[#666]">
-                Tienes {services.length}{" "}
-                {services.length === 1 ? "servicio" : "servicios"}.
+                {services.length === 0
+                  ? "Aún no tienes anuncios publicados."
+                  : `Tienes ${services.length} ${services.length === 1 ? "anuncio" : "anuncios"}.`}
               </p>
               <button
                 type="button"
@@ -2373,7 +2426,7 @@ function EditarPerfilContent() {
                 className="mt-3 text-sm font-semibold"
                 style={{ color: PRIMARY }}
               >
-                Ver y editar todos →
+                Ir a Mis servicios →
               </button>
             </Card>
           ) : null}
@@ -2436,36 +2489,6 @@ function EditarPerfilContent() {
 
     if (activeTab === "servicios") {
       return renderMisServiciosCard();
-    }
-
-    // Legacy UI B (find por vertical) — sin enlazar; se retira en Paso 2
-    if (["alojamiento", "ninos", "mascotas"].includes(activeTab)) {
-      const service = getServiceByVertical(activeTab);
-      const v = VERTICALS.find((x) => x.id === activeTab);
-      if (!service) {
-        return <p className="text-sm text-[#666]">No tienes un servicio de {v?.label}.</p>;
-      }
-      return (
-        <>
-          <Card>
-            <div className="mb-4 border-b pb-4" style={{ borderColor: BRAND.border }}>
-              <ServiceAvailabilityHeader
-                service={service}
-                onToggle={toggleServiceDisponible}
-                toggling={togglingDisponibleId === service.id}
-              />
-            </div>
-            <ServiceEditForm
-              vertical={service.vertical}
-              details={service.details}
-              userId={userId}
-              serviceId={service.isNew ? null : service.id}
-              onChange={(details) => updateServiceDetails(service.id, details)}
-              onUploadError={setErrorMessage}
-            />
-          </Card>
-        </>
-      );
     }
 
     if (activeTab === "documentos") {
