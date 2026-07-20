@@ -25,6 +25,7 @@ import {
 } from "@/app/lib/service-bookable";
 import { rewardReferidorPrimeraReserva } from "@/app/lib/referidos";
 import { assertUserIsDniVerified } from "@/app/lib/dni";
+import { assertUserHasTelefono } from "@/app/lib/profile-telefono";
 import { notifyBookingEvent } from "@/app/lib/notifications";
 import { validateNumHuespedesParaReserva } from "@/app/lib/huespedes-precio";
 import { supportsModalidadCobro } from "@/app/lib/modalidad-cobro";
@@ -1498,6 +1499,13 @@ export async function POST(request) {
     const dniCheck = await assertUserIsDniVerified(supabaseAdmin, userId);
     if (!dniCheck.ok) {
       return NextResponse.json(dniCheck.body, { status: dniCheck.status });
+    }
+
+    const telefonoCheck = await assertUserHasTelefono(supabaseAdmin, userId);
+    if (!telefonoCheck.ok) {
+      return NextResponse.json(telefonoCheck.body, {
+        status: telefonoCheck.status,
+      });
     }
 
     let body;

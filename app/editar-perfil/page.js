@@ -19,6 +19,12 @@ import ProviderDocumentsSection from "@/app/components/provider/ProviderDocument
 import { BRAND, SERIF } from "@/app/components/brand";
 import { hasDniUploaded, DNI_SUBIR_RUTA } from "@/app/lib/dni";
 import {
+  hasTelefono,
+  TELEFONO_BANNER_CLIENT_MSG,
+  TELEFONO_INVALID_MSG,
+  telefonoForStorage,
+} from "@/app/lib/profile-telefono";
+import {
   DOCUMENT_LABELS,
   PROFILE_LABELS,
   PROVIDER_INPUT_CLASS,
@@ -1553,12 +1559,19 @@ function EditarPerfilContent() {
         descripcionParts.push(`Personalidad: ${personalidad.trim()}`);
       }
 
+      const telefonoTrim = telefono.trim();
+      if (telefonoTrim && !telefonoForStorage(telefonoTrim)) {
+        setErrorMessage(TELEFONO_INVALID_MSG);
+        setSubmitting(false);
+        return;
+      }
+
       const { error: profileError } = await supabase.from("profiles").upsert({
         id: userId,
         nombre: nombre.trim(),
         apellido: apellido.trim(),
         ciudad: ciudad.trim(),
-        telefono: telefono.trim() || null,
+        telefono: telefonoForStorage(telefonoTrim),
         descripcion: descripcionParts.join("\n\n"),
         location_zone: ciudad.trim(),
         foto_perfil: fotoUrl,
@@ -1975,6 +1988,14 @@ function EditarPerfilContent() {
               </div>
               <div className="mt-4">
                 <label className="mb-1.5 block text-xs font-medium text-[#444]">Teléfono móvil</label>
+                {!hasTelefono({ telefono }) && (
+                  <p
+                    className="mb-2 rounded-lg px-3 py-2 text-[11px] leading-relaxed"
+                    style={{ backgroundColor: "#e8f0fb", color: "#1d4f91" }}
+                  >
+                    {TELEFONO_BANNER_CLIENT_MSG}
+                  </p>
+                )}
                 <input
                   type="tel"
                   value={telefono}
@@ -2079,6 +2100,14 @@ function EditarPerfilContent() {
               </div>
               <div>
                 <label className="mb-1.5 block text-xs font-medium text-[#444]">Teléfono móvil</label>
+                {!hasTelefono({ telefono }) && (
+                  <p
+                    className="mb-2 rounded-lg px-3 py-2 text-[11px] leading-relaxed"
+                    style={{ backgroundColor: "#e8f0fb", color: "#1d4f91" }}
+                  >
+                    {TELEFONO_BANNER_CLIENT_MSG}
+                  </p>
+                )}
                 <input
                   type="tel"
                   value={telefono}

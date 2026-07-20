@@ -1,6 +1,7 @@
 import Stripe from "stripe";
 import { authorizeAuthenticatedClient } from "@/app/lib/stripe-api-auth";
 import { assertUserIsDniVerified } from "@/app/lib/dni";
+import { assertUserHasTelefono } from "@/app/lib/profile-telefono";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 
 const supabaseAdmin = createServiceClient(
@@ -38,6 +39,13 @@ export async function POST(request) {
     const dniCheck = await assertUserIsDniVerified(supabaseAdmin, clienteId);
     if (!dniCheck.ok) {
       return Response.json(dniCheck.body, { status: dniCheck.status });
+    }
+
+    const telefonoCheck = await assertUserHasTelefono(supabaseAdmin, clienteId);
+    if (!telefonoCheck.ok) {
+      return Response.json(telefonoCheck.body, {
+        status: telefonoCheck.status,
+      });
     }
 
     const intentParams = {

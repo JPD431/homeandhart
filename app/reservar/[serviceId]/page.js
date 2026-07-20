@@ -18,6 +18,12 @@ import {
   getDniRevisionEstado,
   isClienteVerificado,
 } from "@/app/lib/dni";
+import {
+  hasTelefono,
+  TELEFONO_REQUIRED_CLIENT_MSG,
+  TELEFONO_INVALID_MSG,
+  telefonoForStorage,
+} from "@/app/lib/profile-telefono";
 import { getUserFamiliaActiva } from "@/app/lib/familia";
 import {
   buildBundleStateSnapshot,
@@ -1984,6 +1990,10 @@ export default function ReservarPage() {
   const [familiaInfo, setFamiliaInfo] = useState(null);
   const [reservarComoFamilia, setReservarComoFamilia] = useState(false);
   const [paymentMethodsLoading, setPaymentMethodsLoading] = useState(false);
+  /** Paso 1 datos obligatorios: borrador si falta profiles.telefono */
+  const [telefonoDraft, setTelefonoDraft] = useState("");
+  const [telefonoSaving, setTelefonoSaving] = useState(false);
+  const [telefonoSaveError, setTelefonoSaveError] = useState("");
   const [disponibilidadChecking, setDisponibilidadChecking] = useState(false);
   const [tarifasPorServicio, setTarifasPorServicio] = useState({});
   const [tarifasLoading, setTarifasLoading] = useState(false);
@@ -2149,12 +2159,15 @@ export default function ReservarPage() {
       const { data: perfilClienteData } = await supabase
         .from("profiles")
         .select(
-          "nombre, apellido, stripe_customer_id, reservas_sin_comision_cliente, credito_disponible, doc_dni_url, dni_estado",
+          "nombre, apellido, telefono, stripe_customer_id, reservas_sin_comision_cliente, credito_disponible, doc_dni_url, dni_estado",
         )
         .eq("id", user.id)
         .single();
 
       setPerfilCliente(perfilClienteData);
+      if (perfilClienteData?.telefono) {
+        setTelefonoDraft(String(perfilClienteData.telefono));
+      }
 
       const familiaActiva = await getUserFamiliaActiva(supabase, user.id);
       if (familiaActiva) {
@@ -2696,6 +2709,7 @@ export default function ReservarPage() {
   }, [selectedServices]);
 
   const clienteNoVerificado = !isClienteVerificado(perfilCliente);
+  const clienteSinTelefono = !hasTelefono(perfilCliente);
   const dniRevisionEstado = getDniRevisionEstado(perfilCliente);
   const dniBlockMessage = getClienteReservaDniBlockMessage(perfilCliente);
   const dniSubirHref = useMemo(() => {
@@ -3064,6 +3078,7 @@ export default function ReservarPage() {
 
   const payBlockedReason = useMemo(() => {
     if (clienteNoVerificado) return dniBlockMessage || "Verifica tu identidad";
+    if (clienteSinTelefono) return TELEFONO_REQUIRED_CLIENT_MSG;
     if (bookabilityBlock) return bookabilityBlock;
     if (calendarioError) return calendarioError;
     if (incompletePriceLine) {
@@ -3076,6 +3091,7 @@ export default function ReservarPage() {
   }, [
     clienteNoVerificado,
     dniBlockMessage,
+    clienteSinTelefono,
     bookabilityBlock,
     calendarioError,
     incompletePriceLine,
@@ -3297,6 +3313,14 @@ export default function ReservarPage() {
       return;
     }
 
+    if (clienteSinTelefono) {
+      setClientSecret(null);
+      setPaymentIntentId(null);
+      setGrupoReserva(null);
+      setPaymentIntentLoading(false);
+      return;
+    }
+
     const dateError = validateBookingDates(vertical, fechaInicio, hora);
     if (dateError) {
       setErrorMessage(dateError);
@@ -3382,6 +3406,7 @@ export default function ReservarPage() {
     fechaInicio,
     hora,
     clienteNoVerificado,
+    clienteSinTelefono,
     calendarioError,
     disponibilidadChecking,
     selectedServices.length,
@@ -4905,6 +4930,67 @@ export default function ReservarPage() {
                 </div>
               )}
 
+              {!clienteNoVerificado && clienteSinTelefono && (
+                <div
+                  className="mt-4 rounded-lg px-3 py-3 text-[12px] leading-relaxed"
+                  style={{ backgroundColor: "#e8f0fb", color: "#1d4f91" }}
+                >
+                  <p className="font-semibold">{TELEFONO_REQUIRED_CLIENT_MSG}</p>
+                  <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <input
+                      type="tel"
+                      value={telefonoDraft}
+                      onChange={(e) => {
+                        setTelefonoDraft(e.target.value);
+                        setTelefonoSaveError("");
+                      }}
+                      placeholder="+34 600 000 000"
+                      disabled={telefonoSaving}
+                      className="min-h-[44px] flex-1 rounded-lg border bg-white px-3 text-[13px] text-[#1a1a1a]"
+                      style={{ borderColor: "#c5d4eb" }}
+                    />
+                    <button
+                      type="button"
+                      disabled={telefonoSaving}
+                      onClick={async () => {
+                        const stored = telefonoForStorage(telefonoDraft);
+                        if (!stored) {
+                          setTelefonoSaveError(TELEFONO_INVALID_MSG);
+                          return;
+                        }
+                        if (!userId) return;
+                        setTelefonoSaving(true);
+                        setTelefonoSaveError("");
+                        const { error } = await supabase
+                          .from("profiles")
+                          .update({ telefono: stored })
+                          .eq("id", userId);
+                        setTelefonoSaving(false);
+                        if (error) {
+                          setTelefonoSaveError(
+                            error.message || "No se pudo guardar el teléfono.",
+                          );
+                          return;
+                        }
+                        setPerfilCliente((prev) =>
+                          prev ? { ...prev, telefono: stored } : prev,
+                        );
+                        setTelefonoDraft(stored);
+                      }}
+                      className="min-h-[44px] shrink-0 rounded-lg px-4 text-[12px] font-semibold text-white disabled:opacity-60"
+                      style={{ backgroundColor: "#1d4f91" }}
+                    >
+                      {telefonoSaving ? "Guardando…" : "Guardar teléfono"}
+                    </button>
+                  </div>
+                  {telefonoSaveError && (
+                    <p className="mt-2 text-[11px] text-red-700">
+                      {telefonoSaveError}
+                    </p>
+                  )}
+                </div>
+              )}
+
               {bookabilityBlock && (
                 <p
                   className="mt-4 rounded-lg px-3 py-2.5 text-[12px] leading-relaxed text-[#92400e]"
@@ -4914,7 +5000,7 @@ export default function ReservarPage() {
                 </p>
               )}
 
-              {precioListo && priceSummary.total > 0 && !bookabilityBlock && !clienteNoVerificado ? (
+              {precioListo && priceSummary.total > 0 && !bookabilityBlock && !clienteNoVerificado && !clienteSinTelefono ? (
                 isBundle ? (
                   paymentMethodsLoading ? (
                     <p className="mt-4 text-center text-[11px] text-[#666]">
