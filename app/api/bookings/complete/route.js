@@ -19,6 +19,11 @@ import {
   attachContactsToServicesAdmin,
   buildProviderContactEmailFields,
 } from "@/app/lib/service-contact";
+import { syncBookingContactCliente, loadBookingContactClienteAdmin } from "@/app/lib/booking-contact-cliente";
+import {
+  normalizeLugarPayloadForBooking,
+  shouldShowClienteDireccionToProvider,
+} from "@/app/lib/lugar-servicio";
 import {
   COBROS_INACTIVE_MSG,
   getProveedorFromService,
@@ -210,6 +215,12 @@ function resolveServiceContextsById(body, serviceIds, {
         modalidad_cobro: entry.modalidad_cobro ?? null,
         num_huespedes:
           entry.num_huespedes !== undefined ? entry.num_huespedes : null,
+        lugar_servicio: entry.lugar_servicio ?? null,
+        direccion_cliente: entry.direccion_cliente ?? null,
+        direccion_cliente_a_definir:
+          entry.direccion_cliente_a_definir !== undefined
+            ? entry.direccion_cliente_a_definir
+            : null,
         payment_intent_id:
           typeof entry.payment_intent_id === "string"
             ? entry.payment_intent_id
@@ -259,6 +270,9 @@ function resolveServiceContextsById(body, serviceIds, {
       duracion_horas: duracion_horas ?? null,
       modalidad_cobro: modalidad_cobro ?? null,
       num_huespedes: num_huespedes ?? null,
+      lugar_servicio: null,
+      direccion_cliente: null,
+      direccion_cliente_a_definir: null,
       payment_intent_id: null,
     });
   }
@@ -549,9 +563,16 @@ async function sendContactEmailsForConfirmedBooking(
     estado: "confirmada",
     serviceId: svc.id,
     service: svc,
+    lugarServicio: booking.lugar_servicio ?? null,
     telefonoFallback: proveedorProfile?.telefono || null,
     adminClient: supabaseAdmin,
   });
+
+  const clienteContactRow = shouldShowClienteDireccionToProvider(
+    booking.lugar_servicio,
+  )
+    ? await loadBookingContactClienteAdmin(booking.id, supabaseAdmin)
+    : null;
 
   await sendBookingEmail({
     tipo: "reserva_confirmada",
@@ -578,6 +599,10 @@ async function sendContactEmailsForConfirmedBooking(
     cliente_id: booking.cliente_id,
     cliente_nombre: clienteNombre,
     cliente_telefono: clienteProfile?.telefono || undefined,
+    cliente_direccion: clienteContactRow?.direccion_cliente || undefined,
+    cliente_direccion_a_definir:
+      booking.direccion_cliente_a_definir === true ? true : undefined,
+    lugar_servicio: booking.lugar_servicio || undefined,
     servicio_titulo: svc.titulo || "Servicio",
     fecha_inicio: booking.fecha_inicio,
     fecha_fin: finEmail,
@@ -664,6 +689,9 @@ async function sendPostCompleteBookingEmails({
       proveedor_sin_comision: false,
       credito_aplicado: creditoPorServicioMap.get(serviceId) ?? 0,
       mensaje: mensaje?.trim() || "",
+      lugar_servicio: inserted.lugar_servicio ?? null,
+      direccion_cliente_a_definir:
+        inserted.direccion_cliente_a_definir ?? null,
     };
 
     if (svc.reserva_inmediata === true) {
@@ -797,6 +825,9 @@ function buildBookingRow({
   familiaId,
   numHuespedes = null,
   modalidadCobro = null,
+  lugarServicio = null,
+  direccionCliente = null,
+  direccionClienteADefinir = null,
 }) {
   const v = svc.vertical;
   const isImmediate = svc.reserva_inmediata === true;
@@ -814,6 +845,15 @@ function buildBookingRow({
     billingNeedsDuracionHoras(billing) ||
     (billing.kind === "legacy" && v === "ninos");
 
+  const lugarNorm = normalizeLugarPayloadForBooking(
+    {
+      lugar_servicio: lugarServicio,
+      direccion_cliente: direccionCliente,
+      direccion_cliente_a_definir: direccionClienteADefinir,
+    },
+    svc.modalidad,
+  );
+
   return {
     cliente_id: userId,
     service_id: svc.id,
@@ -822,6 +862,8 @@ function buildBookingRow({
     hora: storeHora ? hora || null : null,
     duracion_horas: storeDuracion ? Number(duracionHoras) || null : null,
     modalidad_cobro: modalidadUsed,
+    lugar_servicio: lugarNorm.lugar_servicio,
+    direccion_cliente_a_definir: lugarNorm.direccion_cliente_a_definir,
     mensaje: mensaje?.trim() || null,
     precio_base: precioBase,
     precio_total: precioTotal,
@@ -834,6 +876,42 @@ function buildBookingRow({
     familia_id: familiaId || null,
     num_huespedes: numHuespedes,
   };
+}
+
+/**
+ * Tras insertar bookings: sincroniza booking_contact_cliente por línea.
+ * @param {Array<{ id: string, service_id: string }>} insertedBookings
+ * @param {Map<string, object>} contextByServiceId
+ * @param {Map<string, object>} serviceMap
+ */
+async function syncClienteContactsForInsertedBookings(
+  insertedBookings,
+  contextByServiceId,
+  serviceMap,
+) {
+  for (const row of insertedBookings ?? []) {
+    const svc = serviceMap.get(row.service_id);
+    const ctx = contextByServiceId.get(row.service_id) || {};
+    const norm = normalizeLugarPayloadForBooking(
+      {
+        lugar_servicio: ctx.lugar_servicio,
+        direccion_cliente: ctx.direccion_cliente,
+        direccion_cliente_a_definir: ctx.direccion_cliente_a_definir,
+      },
+      svc?.modalidad,
+    );
+    await syncBookingContactCliente(
+      row.id,
+      {
+        direccion_cliente: norm.direccion_cliente,
+        a_definir:
+          norm.lugar_servicio !== "casa_cliente" ||
+          norm.direccion_cliente_a_definir === true ||
+          !norm.direccion_cliente,
+      },
+      supabaseAdmin,
+    );
+  }
 }
 
 const VALID_PAYMENT_INTENT_STATUSES = new Set(["requires_capture", "succeeded"]);
@@ -1436,17 +1514,26 @@ async function completePerServicePayments(userId, body) {
       familiaId: familia_id,
       numHuespedes: numHuespedesPorServicio.get(serviceId) ?? null,
       modalidadCobro: modalidadPorServicioMap.get(serviceId),
+      lugarServicio: ctx.lugar_servicio ?? null,
+      direccionCliente: ctx.direccion_cliente ?? null,
+      direccionClienteADefinir: ctx.direccion_cliente_a_definir ?? null,
     });
   });
 
   const { data: insertedBookings, error: insertError } = await supabaseAdmin
     .from("bookings")
     .insert(bookingRows)
-    .select("id, service_id, fecha_inicio, fecha_fin");
+    .select("id, service_id, fecha_inicio, fecha_fin, lugar_servicio, direccion_cliente_a_definir");
 
   if (insertError) {
     return NextResponse.json({ error: insertError.message }, { status: 500 });
   }
+
+  await syncClienteContactsForInsertedBookings(
+    insertedBookings,
+    contextByServiceId,
+    serviceMap,
+  );
 
   const insertedBookingIds = insertedBookings.map((b) => b.id);
   const rollbackPaymentIntentId =
@@ -1799,17 +1886,26 @@ export async function POST(request) {
         familiaId: familia_id,
         numHuespedes: numHuespedesPorServicio.get(serviceId) ?? null,
         modalidadCobro: modalidadPorServicioMap.get(serviceId),
+        lugarServicio: ctx.lugar_servicio ?? null,
+        direccionCliente: ctx.direccion_cliente ?? null,
+        direccionClienteADefinir: ctx.direccion_cliente_a_definir ?? null,
       });
     });
 
     const { data: insertedBookings, error: insertError } = await supabaseAdmin
       .from("bookings")
       .insert(bookingRows)
-      .select("id, service_id, fecha_inicio, fecha_fin");
+      .select("id, service_id, fecha_inicio, fecha_fin, lugar_servicio, direccion_cliente_a_definir");
 
     if (insertError) {
       return NextResponse.json({ error: insertError.message }, { status: 500 });
     }
+
+    await syncClienteContactsForInsertedBookings(
+      insertedBookings,
+      contextByServiceId,
+      serviceMap,
+    );
 
     const insertedBookingIds = insertedBookings.map((b) => b.id);
 

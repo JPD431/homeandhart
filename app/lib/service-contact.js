@@ -10,7 +10,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { canShowProviderContact } from "@/app/lib/booking-display";
-import { needsDireccionFields } from "@/app/lib/service-payload";
+import { shouldShowProviderDireccion } from "@/app/lib/lugar-servicio";
 import { supabase as browserSupabase } from "@/app/lib/supabase";
 
 export const SERVICE_CONTACT_SELECT =
@@ -249,13 +249,14 @@ export async function attachContactToServiceAdmin(
  * Lee de service_contact (vía admin); NO de columnas dropeadas en services.
  *
  * - Teléfono: siempre (coordinación), en cualquier vertical/modalidad.
- * - Dirección: solo si needsDireccionFields (alojamiento siempre;
- *   niñera/mascotas solo domicilio_proveedor — no en domicilio_cliente / paseos / etc.).
+ * - Dirección: si lugar_servicio = casa_proveedor, o (legacy) needsDireccionFields.
+ *   No si lugar = casa_cliente.
  *
  * @param {object} opts
  * @param {string} [opts.estado] — estado de la reserva
  * @param {string} [opts.serviceId]
  * @param {object|null} [opts.service] — ya puede traer contacto fusionado + vertical/modalidad
+ * @param {string|null} [opts.lugarServicio] — bookings.lugar_servicio
  * @param {string|null} [opts.telefonoFallback] — p.ej. profiles.telefono
  * @param {import("@supabase/supabase-js").SupabaseClient|null} [opts.adminClient]
  * @returns {Promise<{
@@ -269,6 +270,7 @@ export async function buildProviderContactEmailFields({
   estado,
   serviceId = null,
   service = null,
+  lugarServicio = null,
   telefonoFallback = null,
   adminClient = null,
 } = {}) {
@@ -282,7 +284,11 @@ export async function buildProviderContactEmailFields({
 
   const vertical = service?.vertical || null;
   const modalidad = service?.modalidad || null;
-  const includeDireccion = needsDireccionFields(vertical, modalidad);
+  const includeDireccion = shouldShowProviderDireccion({
+    lugarServicio,
+    vertical,
+    modalidad,
+  });
 
   let direccion = includeDireccion
     ? typeof service?.direccion_exacta === "string"

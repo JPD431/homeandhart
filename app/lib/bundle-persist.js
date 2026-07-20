@@ -62,6 +62,13 @@ export function serializeCartByServiceIdForPersist(cartByServiceId) {
         entry.modalidadCobro !== undefined ? entry.modalidadCobro : null,
       numHuespedes:
         entry.numHuespedes !== undefined ? entry.numHuespedes : null,
+      lugarServicio:
+        entry.lugarServicio !== undefined ? entry.lugarServicio : null,
+      direccionCliente: entry.direccionCliente ?? "",
+      direccionClienteADefinir:
+        entry.direccionClienteADefinir !== undefined
+          ? entry.direccionClienteADefinir
+          : null,
     };
   }
   return out;
@@ -85,6 +92,9 @@ export function buildBundleStateSnapshot({
   duracionHoras,
   modalidadCobro,
   numHuespedes,
+  lugarServicio,
+  direccionCliente,
+  direccionClienteADefinir,
   mensaje,
   aceptaPolitica,
 }) {
@@ -102,6 +112,10 @@ export function buildBundleStateSnapshot({
     duracionHoras: duracionHoras ?? "",
     modalidadCobro: modalidadCobro ?? null,
     numHuespedes: numHuespedes !== undefined ? numHuespedes : null,
+    lugarServicio: lugarServicio !== undefined ? lugarServicio : null,
+    direccionCliente: direccionCliente ?? "",
+    direccionClienteADefinir:
+      direccionClienteADefinir !== undefined ? direccionClienteADefinir : null,
     mensaje: mensaje ?? "",
     aceptaPolitica: aceptaPolitica === true,
   };
@@ -156,6 +170,9 @@ export function applyBundleStateToReservarSetters(state, setters) {
     setDuracionHoras,
     setModalidadCobro,
     setNumHuespedes,
+    setLugarServicio,
+    setDireccionCliente,
+    setDireccionClienteADefinir,
     setMensaje,
     setAceptaPolitica,
     setBundleServices,
@@ -176,6 +193,18 @@ export function applyBundleStateToReservarSetters(state, setters) {
   }
   if (state.numHuespedes !== undefined) {
     setNumHuespedes(state.numHuespedes);
+  }
+  if (state.lugarServicio !== undefined && setLugarServicio) {
+    setLugarServicio(state.lugarServicio);
+  }
+  if (typeof state.direccionCliente === "string" && setDireccionCliente) {
+    setDireccionCliente(state.direccionCliente);
+  }
+  if (
+    state.direccionClienteADefinir !== undefined &&
+    setDireccionClienteADefinir
+  ) {
+    setDireccionClienteADefinir(state.direccionClienteADefinir);
   }
   if (typeof state.mensaje === "string") setMensaje(state.mensaje);
   if (state.aceptaPolitica === true) setAceptaPolitica(true);

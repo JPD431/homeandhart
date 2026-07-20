@@ -24,6 +24,9 @@ import {
   loadServiceContact,
   mergeResolvedContactIntoService,
 } from "@/app/lib/service-contact";
+import {
+  shouldShowProviderDireccion,
+} from "@/app/lib/lugar-servicio";
 import { supabase } from "@/app/lib/supabase";
 
 const PRIMARY = "#1d4f91";
@@ -230,6 +233,16 @@ export default function ReservaDetallePage() {
   const priceFootnote = getClientPriceFootnote(booking);
   const showContact = canShowProviderContact(estado);
   const telefono = service.telefono_contacto || null;
+  const showProviderDireccion =
+    showContact &&
+    shouldShowProviderDireccion({
+      lugarServicio: booking.lugar_servicio,
+      vertical,
+      modalidad: service.modalidad,
+    });
+  const providerDireccion = showProviderDireccion
+    ? service.direccion_exacta || null
+    : null;
 
   return (
     <div className="min-h-screen font-sans" style={{ backgroundColor: BRAND.warm, color: "#1a1a1a" }}>
@@ -397,8 +410,19 @@ export default function ReservaDetallePage() {
                     </a>
                   </p>
                 )}
-                {service.direccion_exacta && (
-                  <p className="mt-1 text-sm text-[#444]">{service.direccion_exacta}</p>
+                {providerDireccion && (
+                  <p className="mt-1 text-sm text-[#444]">
+                    Dirección: {providerDireccion}
+                  </p>
+                )}
+                {booking.lugar_servicio === "casa_cliente" && (
+                  <p className="mt-1 text-[11px] text-[#888]">
+                    El servicio es en tu domicilio
+                    {booking.direccion_cliente_a_definir
+                      ? " (dirección a coordinar)"
+                      : ""}
+                    .
+                  </p>
                 )}
                 {service.proveedor_id && (
                   <ProveedorPreguntarButton

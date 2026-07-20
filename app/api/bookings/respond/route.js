@@ -7,6 +7,8 @@ import {
   attachContactToServiceAdmin,
   buildProviderContactEmailFields,
 } from "@/app/lib/service-contact";
+import { loadBookingContactClienteAdmin } from "@/app/lib/booking-contact-cliente";
+import { shouldShowClienteDireccionToProvider } from "@/app/lib/lugar-servicio";
 
 const supabaseAdmin = createServiceClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -336,6 +338,8 @@ export async function POST(request) {
           cliente_sin_comision,
           proveedor_sin_comision,
           mensaje,
+          lugar_servicio,
+          direccion_cliente_a_definir,
           services:service_id (
             titulo,
             modalidad,
@@ -424,9 +428,16 @@ export async function POST(request) {
             estado: "confirmada",
             serviceId: service.id || booking.service_id,
             service: svc,
+            lugarServicio: bookingFull.lugar_servicio ?? null,
             telefonoFallback: proveedorProfile?.telefono || null,
             adminClient: supabaseAdmin,
           });
+
+          const clienteContactRow = shouldShowClienteDireccionToProvider(
+            bookingFull.lugar_servicio,
+          )
+            ? await loadBookingContactClienteAdmin(bookingId, supabaseAdmin)
+            : null;
 
           await postBookingEmail(baseUrl, {
             tipo: "reserva_confirmada",
@@ -478,6 +489,12 @@ export async function POST(request) {
             cliente_id: bookingFull.cliente_id,
             cliente_nombre: clienteNombre,
             cliente_telefono: clienteProfile?.telefono || undefined,
+            cliente_direccion: clienteContactRow?.direccion_cliente || undefined,
+            cliente_direccion_a_definir:
+              bookingFull.direccion_cliente_a_definir === true
+                ? true
+                : undefined,
+            lugar_servicio: bookingFull.lugar_servicio || undefined,
             servicio_titulo: svc.titulo || "Servicio",
             fecha_inicio: bookingFull.fecha_inicio,
             fecha_fin: finEmail,

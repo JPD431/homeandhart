@@ -24,6 +24,14 @@ import {
   TELEFONO_INVALID_MSG,
   telefonoForStorage,
 } from "@/app/lib/profile-telefono";
+import {
+  initialLugarServicio,
+  LUGAR_CASA_CLIENTE,
+  LUGAR_CASA_PROVEEDOR,
+  lugarServicioInfoLabel,
+  needsClienteDireccionBlock,
+  needsLugarSelector,
+} from "@/app/lib/lugar-servicio";
 import { getUserFamiliaActiva } from "@/app/lib/familia";
 import {
   buildBundleStateSnapshot,
@@ -225,6 +233,7 @@ const RESERVAR_SERVICE_COLUMNS = `
   disponible_para_viajar,
   ciudad,
   proveedor_id,
+  modalidad,
   oferta_descuento,
   oferta_valida_hasta,
   descuentos_duracion,
@@ -477,7 +486,9 @@ const SERVICE_MODALIDADES_SELECT =
   "modalidad, precio, horas_unidad, suplemento_extra";
 
 /** Paso 2a: campos de reserva por servicio en el carrito. */
-function emptyCartBookingFields() {
+function emptyCartBookingFields(service = null) {
+  const modalidad = service?.modalidad ?? null;
+  const lugar = initialLugarServicio(modalidad);
   return {
     fechaInicio: "",
     fechaFin: "",
@@ -485,11 +496,14 @@ function emptyCartBookingFields() {
     duracionHoras: "",
     modalidadCobro: null,
     numHuespedes: null,
+    lugarServicio: lugar,
+    direccionCliente: "",
+    direccionClienteADefinir: lugar === LUGAR_CASA_CLIENTE ? true : null,
   };
 }
 
 function buildCartEntry(service, fields = {}) {
-  const base = emptyCartBookingFields();
+  const base = emptyCartBookingFields(service);
   return {
     service,
     fechaInicio: fields.fechaInicio ?? base.fechaInicio,
@@ -504,7 +518,164 @@ function buildCartEntry(service, fields = {}) {
       fields.numHuespedes !== undefined
         ? fields.numHuespedes
         : base.numHuespedes,
+    lugarServicio:
+      fields.lugarServicio !== undefined
+        ? fields.lugarServicio
+        : base.lugarServicio,
+    direccionCliente:
+      fields.direccionCliente !== undefined
+        ? fields.direccionCliente
+        : base.direccionCliente,
+    direccionClienteADefinir:
+      fields.direccionClienteADefinir !== undefined
+        ? fields.direccionClienteADefinir
+        : base.direccionClienteADefinir,
   };
+}
+
+/**
+ * Selector de lugar (solo modalidad=ambas) + dirección opcional del cliente.
+ */
+function LugarServicioBookingFields({
+  modalidad,
+  lugarServicio,
+  direccionCliente,
+  direccionClienteADefinir,
+  onChange,
+  compact = false,
+}) {
+  if (!modalidad) return null;
+
+  const showSelector = needsLugarSelector(modalidad);
+  const effectiveLugar =
+    lugarServicio ?? initialLugarServicio(modalidad);
+  const infoLabel = !showSelector
+    ? lugarServicioInfoLabel(effectiveLugar, modalidad)
+    : null;
+  const showDireccion = needsClienteDireccionBlock(effectiveLugar);
+  const labelClass =
+    "mb-2 text-[8px] font-medium uppercase tracking-wide text-[#bbb]";
+  const btnMin = compact ? 40 : 44;
+  const aDefinirChecked =
+    direccionClienteADefinir !== false;
+
+  if (!showSelector && !infoLabel && !showDireccion) return null;
+
+  return (
+    <div className={compact ? "mb-3" : "mt-4"}>
+      {showSelector && (
+        <div className="mb-3">
+          <p className={labelClass}>¿Dónde quieres el servicio?</p>
+          <div className="flex flex-col gap-2">
+            {[
+              {
+                value: LUGAR_CASA_PROVEEDOR,
+                label: "En casa del proveedor",
+              },
+              {
+                value: LUGAR_CASA_CLIENTE,
+                label: "En mi domicilio",
+              },
+            ].map((opt) => {
+              const selected = effectiveLugar === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => {
+                    onChange({
+                      lugarServicio: opt.value,
+                      direccionCliente:
+                        opt.value === LUGAR_CASA_CLIENTE
+                          ? direccionCliente || ""
+                          : "",
+                      direccionClienteADefinir:
+                        opt.value === LUGAR_CASA_CLIENTE ? true : null,
+                    });
+                  }}
+                  className="w-full border px-3 text-left transition-opacity hover:opacity-90"
+                  style={{
+                    minHeight: btnMin,
+                    borderColor: selected ? "#1d4f91" : "#e8e4de",
+                    backgroundColor: selected ? "#e8f0fb" : "#fff",
+                    borderRadius: 6,
+                    padding: compact ? "8px 10px" : "10px 12px",
+                  }}
+                >
+                  <span className="block text-[12px] font-semibold text-[#1a1a1a]">
+                    {opt.label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {infoLabel && (
+        <p
+          className="mb-3 text-[11px] leading-relaxed"
+          style={{ color: "#666" }}
+        >
+          {infoLabel}
+        </p>
+      )}
+
+      {showDireccion && (
+        <div
+          className="rounded-lg border p-3"
+          style={{ borderColor: "#e8e4de", backgroundColor: "#faf9f7" }}
+        >
+          <p className={labelClass}>¿Dónde? (opcional)</p>
+          <label className="mb-2 flex cursor-pointer items-start gap-2 text-[12px] text-[#444]">
+            <input
+              type="checkbox"
+              checked={aDefinirChecked}
+              onChange={(e) => {
+                if (e.target.checked) {
+                  onChange({
+                    direccionClienteADefinir: true,
+                    direccionCliente: "",
+                  });
+                } else {
+                  onChange({
+                    direccionClienteADefinir: false,
+                  });
+                }
+              }}
+              className="mt-0.5"
+            />
+            <span>A definir / lo coordino con el proveedor</span>
+          </label>
+          {!aDefinirChecked && (
+            <input
+              type="text"
+              value={direccionCliente || ""}
+              onChange={(e) =>
+                onChange({
+                  direccionCliente: e.target.value,
+                  direccionClienteADefinir: e.target.value.trim()
+                    ? false
+                    : true,
+                })
+              }
+              placeholder="Calle, número, ciudad…"
+              className="w-full border px-3 py-2 text-[13px]"
+              style={{
+                borderColor: "#e8e4de",
+                borderRadius: 6,
+                backgroundColor: "#fff",
+              }}
+            />
+          )}
+          <p className="mt-1.5 text-[10px] text-[#999]">
+            No es obligatorio. Si aún no sabes la dirección, déjala a definir y
+            coordináis por teléfono.
+          </p>
+        </div>
+      )}
+    </div>
+  );
 }
 
 /** Carga service_modalidades y las adjunta en service.modalidades. */
@@ -540,8 +711,9 @@ function defaultNumHuespedesFromService(serviceWithMods) {
  * Hora/duración/modalidad son propias de cada vertical → no se copian del main.
  */
 function suggestedBookingFieldsFromMain(mainFields, serviceWithMods) {
+  const base = emptyCartBookingFields(serviceWithMods);
   return {
-    ...emptyCartBookingFields(),
+    ...base,
     fechaInicio: mainFields?.fechaInicio || "",
     fechaFin: mainFields?.fechaFin || "",
     modalidadCobro: defaultModalidadCobroFromService(serviceWithMods),
@@ -610,6 +782,15 @@ function CartLineBookingFields({
 
   return (
     <div className="mt-3 border-t pt-3" style={{ borderColor: "#c5e0d8" }}>
+      <LugarServicioBookingFields
+        compact
+        modalidad={svc.modalidad}
+        lugarServicio={entry.lugarServicio}
+        direccionCliente={entry.direccionCliente}
+        direccionClienteADefinir={entry.direccionClienteADefinir}
+        onChange={onPatch}
+      />
+
       {showModalidadSelector && (
         <div className="mb-3">
           <p className="mb-2 text-[8px] font-medium uppercase tracking-wide text-[#bbb]">
@@ -1973,6 +2154,10 @@ export default function ReservarPage() {
   const [duracionHoras, setDuracionHoras] = useState("");
   const [modalidadCobro, setModalidadCobro] = useState(null);
   const [numHuespedes, setNumHuespedes] = useState(null);
+  const [lugarServicio, setLugarServicio] = useState(null);
+  const [direccionCliente, setDireccionCliente] = useState("");
+  const [direccionClienteADefinir, setDireccionClienteADefinir] =
+    useState(null);
   const [mensaje, setMensaje] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [successVariant, setSuccessVariant] = useState("green");
@@ -2038,6 +2223,9 @@ export default function ReservarPage() {
       setDuracionHoras,
       setModalidadCobro,
       setNumHuespedes,
+      setLugarServicio,
+      setDireccionCliente,
+      setDireccionClienteADefinir,
       setMensaje,
       setAceptaPolitica,
       setBundleServices,
@@ -2089,6 +2277,9 @@ export default function ReservarPage() {
       duracionHoras,
       modalidadCobro,
       numHuespedes,
+      lugarServicio,
+      direccionCliente,
+      direccionClienteADefinir,
       mensaje,
       aceptaPolitica,
     });
@@ -2124,6 +2315,9 @@ export default function ReservarPage() {
     duracionHoras,
     modalidadCobro,
     numHuespedes,
+    lugarServicio,
+    direccionCliente,
+    direccionClienteADefinir,
     mensaje,
     aceptaPolitica,
   ]);
@@ -2266,6 +2460,12 @@ export default function ReservarPage() {
         } else {
           setNumHuespedes(null);
         }
+        const lugarInit = initialLugarServicio(serviceWithMods.modalidad);
+        setLugarServicio(lugarInit);
+        setDireccionCliente("");
+        setDireccionClienteADefinir(
+          lugarInit === LUGAR_CASA_CLIENTE ? true : null,
+        );
       }
 
       setMainServiceId(serviceWithMods.id);
@@ -2528,6 +2728,9 @@ export default function ReservarPage() {
         duracionHoras,
         modalidadCobro,
         numHuespedes,
+        lugarServicio,
+        direccionCliente,
+        direccionClienteADefinir,
       });
       if (
         mainEntry &&
@@ -2537,6 +2740,10 @@ export default function ReservarPage() {
         mainEntry.duracionHoras === nextMain.duracionHoras &&
         mainEntry.modalidadCobro === nextMain.modalidadCobro &&
         mainEntry.numHuespedes === nextMain.numHuespedes &&
+        mainEntry.lugarServicio === nextMain.lugarServicio &&
+        mainEntry.direccionCliente === nextMain.direccionCliente &&
+        mainEntry.direccionClienteADefinir ===
+          nextMain.direccionClienteADefinir &&
         mainEntry.service === nextService
       ) {
         return prev;
@@ -2551,6 +2758,9 @@ export default function ReservarPage() {
     duracionHoras,
     modalidadCobro,
     numHuespedes,
+    lugarServicio,
+    direccionCliente,
+    direccionClienteADefinir,
   ]);
 
   // Paso 2a: si hay servicios en el carrito sin modalidades cargadas, hidratarlas.
@@ -2895,6 +3105,27 @@ export default function ReservarPage() {
         };
       }
 
+      if (
+        needsLugarSelector(svcForPrice.modalidad) &&
+        !entry.lugarServicio
+      ) {
+        return {
+          id: svc.id,
+          name,
+          base: 0,
+          total: 0,
+          detail: "Elige dónde se presta el servicio",
+          ready: false,
+          vertical: svcForPrice.vertical,
+          discountPct: 0,
+          discountSource: null,
+          modalidadCobro: entry?.modalidadCobro ?? null,
+          duration: 0,
+          unitBase: null,
+          unitClient: null,
+        };
+      }
+
       const dateContext = buildDateContextFromCartEntry(entry);
       const unitOverride =
         svc.id === service.id ? precioEspecialChat : null;
@@ -3049,6 +3280,7 @@ export default function ReservarPage() {
   const datesReady = useMemo(() => {
     if (!fechaInicio) return false;
     if (showModalidadSelector && !modalidadCobro) return false;
+    if (needsLugarSelector(service?.modalidad) && !lugarServicio) return false;
 
     const billing = mainBilling;
     if (billing.kind === "modalidad") {
@@ -3074,6 +3306,8 @@ export default function ReservarPage() {
     modalidadCobro,
     showModalidadSelector,
     mainBilling,
+    service?.modalidad,
+    lugarServicio,
   ]);
 
   const payBlockedReason = useMemo(() => {
@@ -3439,6 +3673,14 @@ export default function ReservarPage() {
           num_huespedes: serviceNeedsUnidadesSelector(svcForUnits)
             ? entry?.numHuespedes ?? numHuespedes ?? null
             : null,
+          lugar_servicio:
+            entry?.lugarServicio ?? lugarServicio ?? null,
+          direccion_cliente:
+            entry?.direccionCliente ?? direccionCliente ?? null,
+          direccion_cliente_a_definir:
+            entry?.direccionClienteADefinir ??
+            direccionClienteADefinir ??
+            null,
           payment_intent_id:
             s.id === service.id ? confirmedPaymentIntentId : null,
         };
@@ -3494,6 +3736,9 @@ export default function ReservarPage() {
       duracionHoras,
       numHuespedes,
       modalidadCobro,
+      lugarServicio,
+      direccionCliente,
+      direccionClienteADefinir,
       mensaje,
       router,
       reservarComoFamilia,
@@ -3533,6 +3778,10 @@ export default function ReservarPage() {
           num_huespedes: serviceNeedsUnidadesSelector(svcForUnits)
             ? entry?.numHuespedes ?? null
             : null,
+          lugar_servicio: entry?.lugarServicio ?? null,
+          direccion_cliente: entry?.direccionCliente ?? null,
+          direccion_cliente_a_definir:
+            entry?.direccionClienteADefinir ?? null,
           payment_intent_id: pay?.payment_intent_id ?? null,
         };
       });
@@ -3724,6 +3973,9 @@ export default function ReservarPage() {
       duracionHoras,
       modalidadCobro,
       numHuespedes,
+      lugarServicio,
+      direccionCliente,
+      direccionClienteADefinir,
       mensaje,
       aceptaPolitica,
     });
@@ -3829,6 +4081,9 @@ export default function ReservarPage() {
         duracionHoras,
         modalidadCobro,
         numHuespedes,
+        lugarServicio,
+        direccionCliente,
+        direccionClienteADefinir,
         mensaje,
         aceptaPolitica,
       }),
@@ -3995,6 +4250,24 @@ export default function ReservarPage() {
                   </div>
                 </div>
               )}
+
+              <LugarServicioBookingFields
+                modalidad={service?.modalidad}
+                lugarServicio={lugarServicio}
+                direccionCliente={direccionCliente}
+                direccionClienteADefinir={direccionClienteADefinir}
+                onChange={(patch) => {
+                  if (patch.lugarServicio !== undefined) {
+                    setLugarServicio(patch.lugarServicio);
+                  }
+                  if (patch.direccionCliente !== undefined) {
+                    setDireccionCliente(patch.direccionCliente);
+                  }
+                  if (patch.direccionClienteADefinir !== undefined) {
+                    setDireccionClienteADefinir(patch.direccionClienteADefinir);
+                  }
+                }}
+              />
 
               {(!showModalidadSelector || modalidadCobro) && (
               <div className="relative mt-4">

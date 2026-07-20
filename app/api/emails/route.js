@@ -453,6 +453,11 @@ function clienteContactBlock(data) {
   if (data.cliente_email) {
     lines.push(`✉️ Email: ${data.cliente_email}`);
   }
+  if (data.cliente_direccion) {
+    lines.push(`📍 Dirección: ${data.cliente_direccion}`);
+  } else if (data.cliente_direccion_a_definir === true) {
+    lines.push(`📍 Dirección: A definir (coordinar por teléfono)`);
+  }
 
   if (lines.length === 0) return "";
 

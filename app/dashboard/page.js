@@ -12,6 +12,7 @@ import { getIngresoProveedorFromBooking } from '@/app/lib/ingresos-proveedor';
 import { puedeReportarIncidencia } from '@/app/lib/booking-incidencia';
 import { PROVIDER_CONTACT_BANNER_MSG } from '@/app/lib/profile-telefono';
 import { providerMissingContactBanner } from '@/app/lib/provider-publicacion';
+import { canShowProviderContact } from '@/app/lib/booking-display';
 import { supabase } from '@/app/lib/supabase';
 
 const BRAND = {
@@ -866,6 +867,7 @@ function ReservaRecibidaCard({
   serviceTitulo,
   clienteNombre,
   clienteVerificado = false,
+  clienteContacto = null,
   sinComisionProveedor,
   onRespond,
   responding,
@@ -879,6 +881,7 @@ function ReservaRecibidaCard({
   const isIncidencia = booking.estado === 'incidencia';
   const canReport = puedeReportarIncidencia(booking.estado);
   const importeReserva = formatImporteReservaRecibida(booking, sinComisionProveedor);
+  const showClienteContact = canShowProviderContact(booking.estado) && clienteContacto;
 
   return (
     <div
@@ -935,6 +938,48 @@ function ReservaRecibidaCard({
             >
               {booking.mensaje}
             </p>
+          )}
+          {showClienteContact && (
+            <div
+              style={{
+                marginTop: 10,
+                padding: '10px 12px',
+                background: '#e8f0fb',
+                borderRadius: 6,
+                fontSize: 12,
+                color: '#1d4f91',
+                lineHeight: 1.5,
+              }}
+            >
+              <div style={{ fontWeight: 600, fontSize: 11, marginBottom: 4 }}>
+                Contacto del cliente
+              </div>
+              {clienteContacto.telefono && (
+                <div>
+                  Teléfono:{' '}
+                  <a
+                    href={`tel:${clienteContacto.telefono}`}
+                    style={{ color: '#1d4f91', fontWeight: 600 }}
+                  >
+                    {clienteContacto.telefono}
+                  </a>
+                </div>
+              )}
+              {booking.lugar_servicio === 'casa_cliente' && (
+                <div style={{ marginTop: 4 }}>
+                  {clienteContacto.direccion_cliente
+                    ? `Dirección: ${clienteContacto.direccion_cliente}`
+                    : clienteContacto.direccion_cliente_a_definir
+                      ? 'Dirección: A definir (coordinar por teléfono)'
+                      : null}
+                </div>
+              )}
+              {booking.lugar_servicio === 'casa_proveedor' && (
+                <div style={{ marginTop: 4, fontSize: 11, color: '#666' }}>
+                  El servicio es en tu domicilio
+                </div>
+              )}
+            </div>
           )}
         </div>
         <EstadoBadge estado={booking.estado} />
@@ -1042,12 +1087,34 @@ function ReservasRecibidas({ perfil, BRAND, highlightBookingId, router }) {
   const [serviceMap, setServiceMap] = useState({});
   const [clientNames, setClientNames] = useState({});
   const [clientVerified, setClientVerified] = useState({});
+  const [clienteContactos, setClienteContactos] = useState({});
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [actionError, setActionError] = useState('');
   const [stripeWarning, setStripeWarning] = useState('');
   const [respondingId, setRespondingId] = useState(null);
   const [cancelingId, setCancelingId] = useState(null);
+
+  async function loadClienteContactos(bookingRows) {
+    const ids = (bookingRows || [])
+      .filter((b) => canShowProviderContact(b.estado))
+      .map((b) => b.id);
+    if (ids.length === 0) {
+      setClienteContactos({});
+      return;
+    }
+    try {
+      const res = await fetch(
+        `/api/bookings/cliente-contacto?ids=${ids.join(',')}`,
+      );
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.contacts) {
+        setClienteContactos(data.contacts);
+      }
+    } catch (err) {
+      console.error('[ReservasRecibidas] contacto cliente', err);
+    }
+  }
 
   useEffect(() => {
     if (!perfil?.id) {
@@ -1079,13 +1146,14 @@ function ReservasRecibidas({ perfil, BRAND, highlightBookingId, router }) {
         setBookings([]);
         setClientNames({});
         setClientVerified({});
+        setClienteContactos({});
         setLoading(false);
         return;
       }
 
       const { data: bookingsData, error: bookingsError } = await supabase
         .from('bookings')
-        .select('id, cliente_id, service_id, fecha_inicio, fecha_fin, hora, precio_total, precio_base, cliente_sin_comision, proveedor_sin_comision, estado, mensaje, created_at, pago_liberado_at, importe_transferido')
+        .select('id, cliente_id, service_id, fecha_inicio, fecha_fin, hora, precio_total, precio_base, cliente_sin_comision, proveedor_sin_comision, estado, mensaje, created_at, pago_liberado_at, importe_transferido, lugar_servicio, direccion_cliente_a_definir')
         .in('service_id', serviceIds)
         .order('created_at', { ascending: false });
 
@@ -1097,6 +1165,7 @@ function ReservasRecibidas({ perfil, BRAND, highlightBookingId, router }) {
 
       const rows = bookingsData ?? [];
       setBookings(rows);
+      await loadClienteContactos(rows);
 
       const clienteIds = [...new Set(rows.map((b) => b.cliente_id).filter(Boolean))];
       if (clienteIds.length > 0) {
@@ -1169,6 +1238,23 @@ function ReservasRecibidas({ perfil, BRAND, highlightBookingId, router }) {
       setBookings((prev) =>
         prev.map((b) => (b.id === bookingId ? { ...b, estado: data.estado } : b)),
       );
+
+      if (action === 'aceptar' && data.estado) {
+        try {
+          const contactRes = await fetch(
+            `/api/bookings/cliente-contacto?ids=${bookingId}`,
+          );
+          const contactData = await contactRes.json().catch(() => ({}));
+          if (contactRes.ok && contactData.contacts?.[bookingId]) {
+            setClienteContactos((prev) => ({
+              ...prev,
+              [bookingId]: contactData.contacts[bookingId],
+            }));
+          }
+        } catch {
+          // ignore
+        }
+      }
     } catch (err) {
       setActionError(err.message || 'Error de conexión.');
     } finally {
@@ -1348,6 +1434,7 @@ function ReservasRecibidas({ perfil, BRAND, highlightBookingId, router }) {
                   serviceTitulo={serviceMap[booking.service_id] || 'Servicio'}
                   clienteNombre={clientNames[booking.cliente_id] || 'Cliente'}
                   clienteVerificado={clientVerified[booking.cliente_id] === true}
+                  clienteContacto={clienteContactos[booking.id] || null}
                   sinComisionProveedor={sinComisionProveedor}
                   onRespond={handleRespond}
                   responding={respondingId === booking.id}
@@ -1383,6 +1470,7 @@ function ReservasRecibidas({ perfil, BRAND, highlightBookingId, router }) {
                   serviceTitulo={serviceMap[booking.service_id] || 'Servicio'}
                   clienteNombre={clientNames[booking.cliente_id] || 'Cliente'}
                   clienteVerificado={clientVerified[booking.cliente_id] === true}
+                  clienteContacto={clienteContactos[booking.id] || null}
                   sinComisionProveedor={sinComisionProveedor}
                   onRespond={handleRespond}
                   responding={respondingId === booking.id}
