@@ -1,6 +1,14 @@
 import { REVISION_APROBADO } from "@/app/lib/onboarding-persist";
 import { alojamientoNruPublishReady } from "@/app/lib/provider-documents";
 import { hasDniUploaded, DNI_REQUIRED_PROVIDER_MSG } from "@/app/lib/dni";
+import { needsDireccionFields } from "@/app/lib/service-payload";
+import {
+  DIRECCION_REQUIRED_PROVIDER_MSG,
+  EMAIL_CONTACTO_REQUIRED_PROVIDER_MSG,
+  hasEmailContacto,
+  hasTelefono,
+  TELEFONO_REQUIRED_PROVIDER_MSG,
+} from "@/app/lib/profile-telefono";
 import {
   buildAnuncioHref,
   buildAnuncioPreviewHref,
@@ -27,44 +35,128 @@ export function proveedorPuedePublicar(perfil) {
 }
 
 /**
- * ¿Puede activarse este servicio ahora? (verificado + cobros; alojamiento además NRU texto + PDF)
- * @param {{ vertical?: string, details?: { nru?: string } }} service
- * @param {object} perfil
- * @param {import("@/app/lib/provider-documents").DocumentContext} [documentContext]
+ * Modalidad de domicilio del servicio (form details o fila services).
+ * @param {{ vertical?: string, modalidad?: string, details?: { modalidad?: string } } | null} service
  */
-export function puedeActivarServicio(service, perfil, documentContext = {}) {
-  if (!hasDniUploaded(perfil)) return false;
-  if (!proveedorPuedePublicar(perfil)) return false;
-  if (service?.vertical === "alojamiento") {
-    return alojamientoNruPublishReady(documentContext);
-  }
-  return true;
+export function getServiceModalidadDomicilio(service) {
+  if (!service) return null;
+  return (
+    service.details?.modalidad ??
+    service.modalidad ??
+    null
+  );
 }
 
 /**
- * Mensaje al bloquear activación; prioriza revisión → cobros → PDF NRU (alojamiento).
- * @param {object} perfil
- * @param {{ vertical?: string }} [service]
- * @param {import("@/app/lib/provider-documents").DocumentContext} [documentContext]
+ * Dirección exacta del servicio (form details, fila fusionada o service_contact).
  */
-export function getActivacionBloqueoMensaje(perfil, service = null, documentContext = null) {
+export function getServiceDireccionExacta(service) {
+  if (!service) return null;
+  const raw =
+    service.details?.direccion_exacta ??
+    service.direccion_exacta ??
+    null;
+  const s = typeof raw === "string" ? raw.trim() : "";
+  return s || null;
+}
+
+/**
+ * ¿Este servicio exige dirección para activar? (needsDireccionFields)
+ */
+export function serviceRequiresDireccionForActivation(service) {
+  if (!service?.vertical) return false;
+  return needsDireccionFields(
+    service.vertical,
+    getServiceModalidadDomicilio(service),
+  );
+}
+
+/**
+ * Bloqueos de activación/publicación (orden de prioridad).
+ * Incluye DNI, verificado, cobros, teléfono, email_contacto, NRU, dirección.
+ *
+ * @param {object} perfil
+ * @param {{ vertical?: string, modalidad?: string, details?: object, direccion_exacta?: string } | null} [service]
+ * @param {import("@/app/lib/provider-documents").DocumentContext} [documentContext]
+ * @returns {string[]} mensajes (vacío = puede activar)
+ */
+export function getServiceActivationBlockers(
+  perfil,
+  service = null,
+  documentContext = null,
+) {
+  const blockers = [];
+
   if (!hasDniUploaded(perfil)) {
-    return DNI_REQUIRED_PROVIDER_MSG;
+    blockers.push(DNI_REQUIRED_PROVIDER_MSG);
   }
   if (perfil?.verificado !== true) {
-    return REVISION_PENDIENTE_MSG;
+    blockers.push(REVISION_PENDIENTE_MSG);
   }
   if (perfil?.cobros_activos !== true) {
-    return COBROS_REQUERIDOS_MSG;
+    blockers.push(COBROS_REQUERIDOS_MSG);
+  }
+  if (!hasTelefono(perfil)) {
+    blockers.push(TELEFONO_REQUIRED_PROVIDER_MSG);
+  }
+  if (!hasEmailContacto(perfil)) {
+    blockers.push(EMAIL_CONTACTO_REQUIRED_PROVIDER_MSG);
   }
   if (
     service?.vertical === "alojamiento" &&
     documentContext &&
     !alojamientoNruPublishReady(documentContext)
   ) {
-    return NRU_PDF_REQUERIDO_MSG;
+    blockers.push(NRU_PDF_REQUERIDO_MSG);
   }
-  return null;
+  if (
+    service &&
+    serviceRequiresDireccionForActivation(service) &&
+    !getServiceDireccionExacta(service)
+  ) {
+    blockers.push(DIRECCION_REQUIRED_PROVIDER_MSG);
+  }
+
+  return blockers;
+}
+
+/**
+ * ¿Puede activarse este servicio ahora?
+ * @param {{ vertical?: string, details?: object }} service
+ * @param {object} perfil
+ * @param {import("@/app/lib/provider-documents").DocumentContext} [documentContext]
+ */
+export function puedeActivarServicio(service, perfil, documentContext = {}) {
+  return getServiceActivationBlockers(perfil, service, documentContext)
+    .length === 0;
+}
+
+/**
+ * Primer mensaje de bloqueo (compat UI / API).
+ * @param {object} perfil
+ * @param {{ vertical?: string }} [service]
+ * @param {import("@/app/lib/provider-documents").DocumentContext} [documentContext]
+ */
+export function getActivacionBloqueoMensaje(
+  perfil,
+  service = null,
+  documentContext = null,
+) {
+  const blockers = getServiceActivationBlockers(
+    perfil,
+    service,
+    documentContext,
+  );
+  return blockers[0] ?? null;
+}
+
+/**
+ * ¿Faltan datos de contacto del proveedor (perfil) para el banner suave?
+ * @param {object|null|undefined} perfil
+ */
+export function providerMissingContactBanner(perfil) {
+  if (!perfil) return false;
+  return !hasTelefono(perfil) || !hasEmailContacto(perfil);
 }
 
 /**
@@ -111,6 +203,7 @@ export function getServiceVisibilidadEstado(perfil, disponible, options = {}) {
     };
   }
 
+  // Ya activo: no degradar a “falta teléfono” (grandfathering visual).
   return {
     label: "Servicio activo",
     subtitle: "Visible en búsqueda",
@@ -124,6 +217,7 @@ export function getServiceVisibilidadEstado(perfil, disponible, options = {}) {
  */
 export function resolveDisponibleForSave(service, perfil, documentContext) {
   if (!service.disponible) return false;
+  // Grandfathering: ya estaba activo → no forzar pausa por datos nuevos.
   if (service.disponibleOnLoad === true) return true;
   return puedeActivarServicio(service, perfil, documentContext);
 }

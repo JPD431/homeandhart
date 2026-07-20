@@ -1,21 +1,36 @@
 /**
- * Teléfono de usuario (profiles.telefono).
- * Obligatorio para clientes al reservar y (Paso 2) para proveedores al activar.
+ * Teléfono de usuario (profiles.telefono) y email de contacto (profiles.email_contacto).
+ * Cliente: teléfono al reservar (Paso 1).
+ * Proveedor: teléfono + email_contacto al activar (Paso 2).
  */
 
 export const TELEFONO_REQUIRED_ERROR_CODE = "telefono_required";
+export const EMAIL_CONTACTO_REQUIRED_ERROR_CODE = "email_contacto_required";
+export const DIRECCION_REQUIRED_ERROR_CODE = "direccion_required";
 
 export const TELEFONO_REQUIRED_CLIENT_MSG =
   "Añade tu teléfono para poder reservar. Lo compartiremos con el proveedor al confirmar.";
 
 export const TELEFONO_REQUIRED_PROVIDER_MSG =
-  "Añade tu teléfono para poder publicar servicios.";
+  "Añade tu teléfono para activar este servicio.";
+
+export const EMAIL_CONTACTO_REQUIRED_PROVIDER_MSG =
+  "Añade un email de contacto para activar este servicio.";
+
+export const DIRECCION_REQUIRED_PROVIDER_MSG =
+  "Añade la dirección del servicio para poder activarlo.";
 
 export const TELEFONO_BANNER_CLIENT_MSG =
   "Completa tu teléfono para poder reservar y que el proveedor pueda contactarte.";
 
+export const PROVIDER_CONTACT_BANNER_MSG =
+  "Completa tus datos de contacto (teléfono y email) para poder activar servicios.";
+
 export const TELEFONO_INVALID_MSG =
   "Introduce un teléfono válido (mínimo 9 dígitos).";
+
+export const EMAIL_CONTACTO_INVALID_MSG =
+  "Introduce un email de contacto válido.";
 
 /**
  * Normaliza a dígitos (+ opcional al inicio).
@@ -26,7 +41,6 @@ export function normalizeTelefono(raw) {
   if (raw == null) return "";
   const s = String(raw).trim();
   if (!s) return "";
-  // Conservar + inicial; resto solo dígitos
   const hasPlus = s.startsWith("+");
   const digits = s.replace(/\D/g, "");
   if (!digits) return "";
@@ -62,6 +76,44 @@ export function telefonoForStorage(raw) {
   const normalized = normalizeTelefono(raw);
   if (!isValidTelefono(normalized)) return null;
   return normalized;
+}
+
+/**
+ * @param {unknown} raw
+ * @returns {string}
+ */
+export function normalizeEmailContacto(raw) {
+  if (raw == null) return "";
+  return String(raw).trim().toLowerCase();
+}
+
+/**
+ * Email simple (no RFC completo): local@dominio.tld
+ * @param {unknown} raw
+ * @returns {boolean}
+ */
+export function isValidEmailContacto(raw) {
+  const email = normalizeEmailContacto(raw);
+  if (!email || email.length > 254) return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+/**
+ * @param {{ email_contacto?: string | null } | null | undefined} profile
+ * @returns {boolean}
+ */
+export function hasEmailContacto(profile) {
+  return isValidEmailContacto(profile?.email_contacto);
+}
+
+/**
+ * @param {unknown} raw
+ * @returns {string | null}
+ */
+export function emailContactoForStorage(raw) {
+  const email = normalizeEmailContacto(raw);
+  if (!isValidEmailContacto(email)) return null;
+  return email;
 }
 
 /**

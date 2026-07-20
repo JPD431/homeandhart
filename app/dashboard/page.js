@@ -10,6 +10,8 @@ import ClienteVerificadoBadge from '@/app/components/ClienteVerificadoBadge';
 import { useModo } from '@/app/lib/ModoContext';
 import { getIngresoProveedorFromBooking } from '@/app/lib/ingresos-proveedor';
 import { puedeReportarIncidencia } from '@/app/lib/booking-incidencia';
+import { PROVIDER_CONTACT_BANNER_MSG } from '@/app/lib/profile-telefono';
+import { providerMissingContactBanner } from '@/app/lib/provider-publicacion';
 import { supabase } from '@/app/lib/supabase';
 
 const BRAND = {
@@ -257,7 +259,38 @@ function DashboardContent() {
           </button>
         </div>
       )}
-      
+
+      {enModoProveedor && providerMissingContactBanner(perfil) && (
+        <div
+          style={{
+            background: '#e8f0fb',
+            borderBottom: `1px solid ${BRAND.border}`,
+            padding: '14px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+            flexWrap: 'wrap',
+          }}
+        >
+          <p style={{ margin: 0, fontSize: 13, color: BRAND.blue, lineHeight: 1.5 }}>
+            {PROVIDER_CONTACT_BANNER_MSG}
+          </p>
+          <Link
+            href="/editar-perfil?tab=perfil"
+            style={{
+              fontSize: 12,
+              fontWeight: 600,
+              color: BRAND.blue,
+              textDecoration: 'underline',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Completar datos →
+          </Link>
+        </div>
+      )}
+
       {/* TABS — solo en modo cliente */}
       {!enModoProveedor && (
       <div

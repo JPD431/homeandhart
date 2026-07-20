@@ -5,6 +5,7 @@ import {
   getActivacionBloqueoMensaje,
   servicioRevisionAprobada,
 } from "@/app/lib/provider-publicacion";
+import { loadServiceContactAdmin } from "@/app/lib/service-contact";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -50,7 +51,9 @@ export async function PATCH(request, { params }) {
 
   const { data: owned, error: ownerError } = await supabase
     .from("services")
-    .select("id, proveedor_id, vertical, revision_estado, nru, disponible")
+    .select(
+      "id, proveedor_id, vertical, revision_estado, nru, modalidad, disponible",
+    )
     .eq("id", serviceId)
     .eq("proveedor_id", user.id)
     .maybeSingle();
@@ -82,7 +85,7 @@ export async function PATCH(request, { params }) {
     const { data: perfil, error: profileError } = await supabaseAdmin
       .from("profiles")
       .select(
-        "id, verificado, cobros_activos, doc_dni_url, doc_antecedentes_url, doc_antecedentes_sexuales_url, dni_estado",
+        "id, verificado, cobros_activos, doc_dni_url, doc_antecedentes_url, doc_antecedentes_sexuales_url, dni_estado, telefono, email_contacto",
       )
       .eq("id", user.id)
       .maybeSingle();
@@ -98,6 +101,8 @@ export async function PATCH(request, { params }) {
       .from("provider_documents")
       .select("id, proveedor_id, tipo, vertical, url, created_at, updated_at")
       .eq("proveedor_id", user.id);
+
+    const contact = await loadServiceContactAdmin(serviceId, supabaseAdmin);
 
     const documentContext = {
       profile: {
@@ -117,7 +122,13 @@ export async function PATCH(request, { params }) {
 
     const serviceForGate = {
       vertical: owned.vertical,
-      details: { nru: owned.nru },
+      modalidad: owned.modalidad,
+      details: {
+        nru: owned.nru,
+        modalidad: owned.modalidad,
+        direccion_exacta: contact?.direccion_exacta ?? null,
+      },
+      direccion_exacta: contact?.direccion_exacta ?? null,
     };
 
     const bloqueo = getActivacionBloqueoMensaje(

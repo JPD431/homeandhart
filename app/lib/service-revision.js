@@ -53,10 +53,12 @@ export function getServiceCompleteness(details, vertical, { ciudad = "" } = {}) 
     if (!String(d.modalidad || "").trim()) {
       missing.push("modalidad");
     }
-    if (needsDireccionFields(vertical, d.modalidad)) {
-      if (!String(d.direccion_exacta || "").trim()) {
-        missing.push("dirección");
-      }
+  }
+
+  // Dirección: alojamiento siempre; niñera/mascotas si domicilio_proveedor.
+  if (needsDireccionFields(vertical, d.modalidad)) {
+    if (!String(d.direccion_exacta || "").trim()) {
+      missing.push("dirección");
     }
   }
 

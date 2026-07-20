@@ -19,7 +19,11 @@ import ProviderDocumentsSection from "@/app/components/provider/ProviderDocument
 import { BRAND, SERIF } from "@/app/components/brand";
 import { hasDniUploaded, DNI_SUBIR_RUTA } from "@/app/lib/dni";
 import {
+  emailContactoForStorage,
+  EMAIL_CONTACTO_INVALID_MSG,
+  hasEmailContacto,
   hasTelefono,
+  PROVIDER_CONTACT_BANNER_MSG,
   TELEFONO_BANNER_CLIENT_MSG,
   TELEFONO_INVALID_MSG,
   telefonoForStorage,
@@ -106,6 +110,7 @@ import {
   getProviderAnuncioHref,
   puedeActivarServicio,
   proveedorPuedePublicar,
+  providerMissingContactBanner,
   resolveDisponibleForSave,
   REVISION_PENDIENTE_MSG,
   servicioRevisionAprobada,
@@ -1083,6 +1088,7 @@ function EditarPerfilContent() {
   const [apellido, setApellido] = useState("");
   const [ciudad, setCiudad] = useState("");
   const [telefono, setTelefono] = useState("");
+  const [emailContacto, setEmailContacto] = useState("");
   const [anosExperiencia, setAnosExperiencia] = useState("");
   const [descripcion, setDescripcion] = useState("");
   const [personalidad, setPersonalidad] = useState("");
@@ -1144,6 +1150,7 @@ function EditarPerfilContent() {
         setApellido(perfilData.apellido || "");
         setCiudad(perfilData.ciudad || "");
         setTelefono(perfilData.telefono || "");
+        setEmailContacto(perfilData.email_contacto || "");
         const desc = perfilData.descripcion || "";
         const personalidadMatch = desc.match(/Personalidad:\s*(.+?)(?:\n\n|$)/s);
         const motivacionParts = desc.split(/\n\nPersonalidad:/);
@@ -1566,12 +1573,23 @@ function EditarPerfilContent() {
         return;
       }
 
+      const emailTrim = emailContacto.trim();
+      if (emailTrim && !emailContactoForStorage(emailTrim)) {
+        setErrorMessage(EMAIL_CONTACTO_INVALID_MSG);
+        setSubmitting(false);
+        return;
+      }
+
+      const telefonoStored = telefonoForStorage(telefonoTrim);
+      const emailStored = emailContactoForStorage(emailTrim);
+
       const { error: profileError } = await supabase.from("profiles").upsert({
         id: userId,
         nombre: nombre.trim(),
         apellido: apellido.trim(),
         ciudad: ciudad.trim(),
-        telefono: telefonoForStorage(telefonoTrim),
+        telefono: telefonoStored,
+        email_contacto: emailStored,
         descripcion: descripcionParts.join("\n\n"),
         location_zone: ciudad.trim(),
         foto_perfil: fotoUrl,
@@ -1580,6 +1598,19 @@ function EditarPerfilContent() {
       });
 
       if (profileError) throw profileError;
+
+      setPerfil((prev) =>
+        prev
+          ? {
+              ...prev,
+              telefono: telefonoStored,
+              email_contacto: emailStored,
+              nombre: nombre.trim(),
+              apellido: apellido.trim(),
+              ciudad: ciudad.trim(),
+            }
+          : prev,
+      );
 
       const revisionOutcomes = [];
 
@@ -2100,12 +2131,15 @@ function EditarPerfilContent() {
               </div>
               <div>
                 <label className="mb-1.5 block text-xs font-medium text-[#444]">Teléfono móvil</label>
-                {!hasTelefono({ telefono }) && (
+                {providerMissingContactBanner({
+                  telefono,
+                  email_contacto: emailContacto,
+                }) && (
                   <p
-                    className="mb-2 rounded-lg px-3 py-2 text-[11px] leading-relaxed"
+                    className="mb-2 rounded-lg px-3 py-2 text-[11px] leading-relaxed sm:col-span-2"
                     style={{ backgroundColor: "#e8f0fb", color: "#1d4f91" }}
                   >
-                    {TELEFONO_BANNER_CLIENT_MSG}
+                    {PROVIDER_CONTACT_BANNER_MSG}
                   </p>
                 )}
                 <input
@@ -2124,6 +2158,25 @@ function EditarPerfilContent() {
                     fontSize: 13,
                   }}
                 />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-xs font-medium text-[#444]">
+                  Email de contacto
+                </label>
+                <input
+                  type="email"
+                  value={emailContacto}
+                  onChange={(e) => {
+                    markDirty();
+                    setEmailContacto(e.target.value);
+                  }}
+                  placeholder="contacto@ejemplo.com"
+                  className={inputClass}
+                  style={{ borderColor: BRAND.border }}
+                />
+                <p className="mt-1 text-[10px] text-[#aaa]">
+                  Para que clientes y Home&amp;Heart puedan contactarte por email
+                </p>
               </div>
               <div>
                 <label className="mb-1.5 block text-xs font-medium text-[#444]">{PROFILE_LABELS.anosExperiencia}</label>
@@ -2417,6 +2470,26 @@ function EditarPerfilContent() {
       {successMessage && (
         <div className="mx-6 mt-4 rounded-lg bg-green-50 px-4 py-3 text-sm text-green-700">{successMessage}</div>
       )}
+      {!esClienteSinServicios &&
+        providerMissingContactBanner({
+          telefono,
+          email_contacto: emailContacto,
+        }) && (
+          <div
+            className="mx-6 mt-4 rounded-lg px-4 py-3 text-sm leading-relaxed"
+            style={{ backgroundColor: "#e8f0fb", color: "#1d4f91" }}
+          >
+            {PROVIDER_CONTACT_BANNER_MSG}{" "}
+            <button
+              type="button"
+              onClick={() => setActiveTab("perfil")}
+              className="font-semibold underline"
+              style={{ color: "#1d4f91" }}
+            >
+              Ir a Perfil →
+            </button>
+          </div>
+        )}
       {errorMessage && (
         <div className="mx-6 mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
           {errorMessage}
