@@ -209,12 +209,42 @@ const COMPLEMENTARY_VERTICALS = {
 
 const ALL_BUNDLE_VERTICAL_IDS = ["alojamiento", "ninos", "mascotas"];
 
+/** Nombres cortos para el mensaje del carrito (minúsculas en frase). */
+const CART_VERTICAL_SHORT_LABELS = {
+  alojamiento: "alojamiento",
+  ninos: "niñera",
+  mascotas: "mascotas",
+};
+
 /** Verticales que aún se pueden añadir (una por tipo en el carrito). */
 function getAvailableComplementaryVerticals(servicesInCart) {
   const taken = new Set(
     (servicesInCart ?? []).map((s) => s.vertical).filter(Boolean),
   );
   return ALL_BUNDLE_VERTICAL_IDS.filter((v) => !taken.has(v));
+}
+
+/**
+ * "Ya tienes X en el carrito" — solo verticales presentes, con comas y "y" final.
+ */
+function formatCartVerticalsInCartMessage(servicesInCart) {
+  const present = new Set(
+    (servicesInCart ?? []).map((s) => s.vertical).filter(Boolean),
+  );
+  const labels = ALL_BUNDLE_VERTICAL_IDS.filter((id) => present.has(id)).map(
+    (id) => CART_VERTICAL_SHORT_LABELS[id] || id,
+  );
+
+  if (labels.length === 0) {
+    return "Ya tienes servicios en el carrito.";
+  }
+  if (labels.length === 1) {
+    return `Ya tienes ${labels[0]} en el carrito.`;
+  }
+  if (labels.length === 2) {
+    return `Ya tienes ${labels[0]} y ${labels[1]} en el carrito.`;
+  }
+  return `Ya tienes ${labels.slice(0, -1).join(", ")} y ${labels[labels.length - 1]} en el carrito.`;
 }
 
 const RESERVAR_SERVICE_COLUMNS = `
@@ -4854,7 +4884,7 @@ export default function ReservarPage() {
                       ))
                     ) : (
                       <p className="text-[10px] text-[#888]">
-                        Ya tienes alojamiento, niñera y mascotas en el carrito.
+                        {formatCartVerticalsInCartMessage(selectedServices)}
                       </p>
                     )}
                   </div>
