@@ -1291,9 +1291,17 @@ function EditarPerfilContent() {
   }
 
   function openCreateAnuncio() {
-    markDirty();
     setEditingId(null);
+    setNewVertical("alojamiento");
+    setNewServiceDetails(emptyServiceDetails());
     setAddingService(true);
+    router.replace(buildEditarPerfilTabHref("servicios"), { scroll: false });
+  }
+
+  function cancelCreateAnuncio() {
+    setAddingService(false);
+    setNewVertical("alojamiento");
+    setNewServiceDetails(emptyServiceDetails());
     router.replace(buildEditarPerfilTabHref("servicios"), { scroll: false });
   }
 
@@ -1545,6 +1553,16 @@ function EditarPerfilContent() {
                       }
                       onUploadError={setErrorMessage}
                     />
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={closeServiceEditor}
+                        className="rounded-lg border px-4 py-2 text-sm font-semibold"
+                        style={{ borderColor: BRAND.border, color: "#666" }}
+                      >
+                        Cancelar
+                      </button>
+                    </div>
                   </div>
                 )}
               </li>
@@ -1556,8 +1574,22 @@ function EditarPerfilContent() {
             className="mt-4 rounded-xl border p-4"
             style={{ borderColor: BRAND.border }}
           >
-            <p className="text-sm font-semibold">Nuevo anuncio</p>
-            <p className="mt-1 text-xs text-[#888]">Elige la vertical y completa los datos.</p>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold">Nuevo anuncio</p>
+                <p className="mt-1 text-xs text-[#888]">
+                  Elige la vertical y completa los datos.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={cancelCreateAnuncio}
+                className="shrink-0 rounded-lg border px-3 py-1.5 text-xs font-semibold"
+                style={{ borderColor: BRAND.border, color: "#666" }}
+              >
+                Cancelar
+              </button>
+            </div>
             <div className="mt-3 flex flex-wrap gap-2">
               {VERTICALS.map((v) => (
                 <button
@@ -1601,16 +1633,19 @@ function EditarPerfilContent() {
               }}
               onUploadError={setErrorMessage}
             />
-            <button
-              type="button"
-              onClick={() => {
-                setAddingService(false);
-                setNewServiceDetails(emptyServiceDetails());
-              }}
-              className="mt-4 text-sm text-[#666]"
-            >
-              Cancelar
-            </button>
+            <div className="mt-4 flex flex-wrap items-center gap-2 border-t pt-4" style={{ borderColor: BRAND.border }}>
+              <button
+                type="button"
+                onClick={cancelCreateAnuncio}
+                className="rounded-lg border px-4 py-2 text-sm font-semibold"
+                style={{ borderColor: BRAND.border, color: "#666" }}
+              >
+                Cancelar
+              </button>
+              <p className="text-[11px] text-[#888]">
+                Usa «Guardar cambios» arriba para crear el anuncio.
+              </p>
+            </div>
           </div>
         ) : null}
       </Card>
