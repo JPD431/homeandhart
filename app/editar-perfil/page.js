@@ -40,7 +40,6 @@ import {
 import {
   PRIMARY,
   VERTICALS,
-  VERTICAL_DOC_LABELS,
   getServiceHeaderTitle,
   getVerticalColor,
   GREEN,
@@ -171,34 +170,22 @@ const IDIOMAS_DEFAULT = [
 
 const SERVICE_VERTICAL_TAB_ORDER = ["alojamiento", "ninos", "mascotas"];
 
-function getVerticalsFromServices(services) {
-  return [...new Set(services.map((s) => s.vertical).filter(Boolean))];
-}
-
 function resolveTabFromParam(tabParam, services) {
-  const verticalsActivos = getVerticalsFromServices(services);
   const tieneServicios = services.length > 0;
 
   if (!tabParam) return "perfil";
 
-  if (tabParam === "servicios") {
-    if (!tieneServicios) return "perfil";
-    for (const vertical of SERVICE_VERTICAL_TAB_ORDER) {
-      if (verticalsActivos.includes(vertical)) return vertical;
-    }
-    return "perfil";
-  }
+  // Lista completa por id (todas las verticales). Entrada principal desde dashboard/navbar.
+  if (tabParam === "servicios") return "servicios";
 
   if (tabParam === "perfil") return "perfil";
   if (tabParam === "cuenta") return "cuenta";
   if (tabParam === "documentos") {
     return tieneServicios ? "documentos" : "perfil";
   }
-  if (
-    SERVICE_VERTICAL_TAB_ORDER.includes(tabParam) &&
-    verticalsActivos.includes(tabParam)
-  ) {
-    return tabParam;
+  // Legacy: pestañas por vertical → lista (Paso 1; se retiran en Paso 2)
+  if (SERVICE_VERTICAL_TAB_ORDER.includes(tabParam)) {
+    return "servicios";
   }
 
   return "perfil";
@@ -1238,7 +1225,8 @@ function EditarPerfilContent() {
         ? "/editar-perfil"
         : `/editar-perfil?tab=${encodeURIComponent(tabParam)}`;
 
-    if (tabParam === "servicios" || href !== current) {
+    // Canonicaliza legacy ?tab=alojamiento|ninos|mascotas → ?tab=servicios
+    if (href !== current) {
       router.replace(href, { scroll: false });
     }
   }, [loading, services, tabParam, router]);
@@ -1382,27 +1370,190 @@ function EditarPerfilContent() {
 
   const esClienteSinServicios = perfil?.role === "cliente" && services.length === 0;
   const tieneServicios = services.length > 0;
+  const mostrarTabServicios =
+    perfil?.role === "proveedor" || tieneServicios;
   const tabs = [
     { id: "perfil", label: "Perfil personal" },
-    ...(tieneServicios
-      ? [
-          ...verticalsActivos.includes("alojamiento")
-            ? [{ id: "alojamiento", label: VERTICAL_DOC_LABELS.alojamiento }]
-            : [],
-          ...verticalsActivos.includes("ninos")
-            ? [{ id: "ninos", label: VERTICAL_DOC_LABELS.ninos }]
-            : [],
-          ...verticalsActivos.includes("mascotas")
-            ? [{ id: "mascotas", label: VERTICAL_DOC_LABELS.mascotas }]
-            : [],
-          { id: "documentos", label: "Documentos" },
-        ]
+    ...(mostrarTabServicios
+      ? [{ id: "servicios", label: "Mis servicios" }]
       : []),
+    ...(tieneServicios ? [{ id: "documentos", label: "Documentos" }] : []),
     { id: "cuenta", label: "Cuenta" },
   ];
 
+  // Legacy UI B (pestañas por vertical) — sin enlazar en Paso 1; se retira en Paso 2
   function getServiceByVertical(vertical) {
     return services.find((s) => s.vertical === vertical);
+  }
+
+  function renderMisServiciosCard() {
+    return (
+      <Card title="Mis servicios">
+        {perfil?.role === "proveedor" && !puedePublicarServicios && (
+          <div
+            className="mb-4 rounded-lg border px-3 py-2.5 text-xs leading-relaxed"
+            style={{
+              borderColor: "#c47d1a",
+              backgroundColor: "#fdf4e7",
+              color: "#5c4a32",
+            }}
+          >
+            {perfil?.verificado !== true ? (
+              REVISION_PENDIENTE_MSG
+            ) : (
+              <>
+                {COBROS_REQUERIDOS_MSG}{" "}
+                <Link
+                  href="/dashboard?tab=proveedor"
+                  className="font-semibold underline"
+                  style={{ color: PRIMARY }}
+                >
+                  Ir a configurar cobros
+                </Link>
+              </>
+            )}
+          </div>
+        )}
+        <ul className="flex flex-col gap-3">
+          {services.map((service) => {
+            const v = VERTICALS.find((x) => x.id === service.vertical);
+            const isEditing = editingId === service.id;
+            return (
+              <li
+                key={service.id}
+                className="rounded-xl border p-4"
+                style={{ borderColor: BRAND.border }}
+              >
+                <ServiceAvailabilityHeader
+                  service={service}
+                  onToggle={toggleServiceDisponible}
+                  toggling={togglingDisponibleId === service.id}
+                  showMeta
+                  metaLabel={`${v?.label || service.vertical} · ${service.details.precio ? `${service.details.precio}€` : "—"}`}
+                  actions={
+                    <div className="flex gap-2">
+                      <a
+                        href={getProviderAnuncioHref(
+                          service,
+                          perfil,
+                          documentContext,
+                        )}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="rounded-lg border px-3 py-1.5 text-xs font-semibold no-underline transition-colors hover:bg-[#f7f5f2]"
+                        style={{ borderColor: BRAND.border, color: PRIMARY }}
+                      >
+                        Vista previa
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setEditingId(isEditing ? null : service.id)
+                        }
+                        className="rounded-lg border px-3 py-1.5 text-xs font-semibold"
+                        style={{ borderColor: BRAND.border, color: PRIMARY }}
+                      >
+                        {isEditing ? "Cerrar" : "Editar"}
+                      </button>
+                    </div>
+                  }
+                />
+                {isEditing && (
+                  <div
+                    className="mt-4 border-t pt-4"
+                    style={{ borderColor: BRAND.border }}
+                  >
+                    <ServiceEditForm
+                      vertical={service.vertical}
+                      details={service.details}
+                      userId={userId}
+                      serviceId={service.isNew ? null : service.id}
+                      onChange={(details) =>
+                        updateServiceDetails(service.id, details)
+                      }
+                      onUploadError={setErrorMessage}
+                    />
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+        {addingService ? (
+          <div
+            className="mt-4 rounded-xl border p-4"
+            style={{ borderColor: BRAND.border }}
+          >
+            <p className="text-sm font-semibold">Nuevo servicio</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {VERTICALS.map((v) => (
+                <button
+                  key={v.id}
+                  type="button"
+                  onClick={() => {
+                    markDirty();
+                    setNewVertical(v.id);
+                    setNewServiceDetails({
+                      ...emptyServiceDetails(),
+                      ...(v.id === "ninos" || v.id === "mascotas"
+                        ? {
+                            modalidades_cobro: seedModalidadesCobroFromLegacy(
+                              v.id,
+                              {},
+                            ),
+                          }
+                        : {}),
+                    });
+                  }}
+                  className="rounded-full border px-4 py-2 text-sm font-medium"
+                  style={{
+                    borderColor:
+                      newVertical === v.id ? PRIMARY : BRAND.border,
+                    backgroundColor:
+                      newVertical === v.id ? "#e8f0fb" : "#fff",
+                    color: newVertical === v.id ? PRIMARY : "#444",
+                  }}
+                >
+                  {v.label}
+                </button>
+              ))}
+            </div>
+            <ServiceEditForm
+              vertical={newVertical}
+              details={newServiceDetails}
+              userId={userId}
+              onChange={(d) => {
+                markDirty();
+                setNewServiceDetails(d);
+              }}
+              onUploadError={setErrorMessage}
+            />
+            <button
+              type="button"
+              onClick={() => {
+                setAddingService(false);
+                setNewServiceDetails(emptyServiceDetails());
+              }}
+              className="mt-4 text-sm text-[#666]"
+            >
+              Cancelar
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => {
+              markDirty();
+              setAddingService(true);
+            }}
+            className="mt-4 text-sm font-semibold"
+            style={{ color: PRIMARY }}
+          >
+            + Añadir nuevo servicio
+          </button>
+        )}
+      </Card>
+    );
   }
 
   function handleProfilePhotoChange(e) {
@@ -2209,106 +2360,23 @@ function EditarPerfilContent() {
             </div>
           </Card>
 
-          <Card title="Mis servicios">
-            {perfil?.role === "proveedor" && !puedePublicarServicios && (
-              <div
-                className="mb-4 rounded-lg border px-3 py-2.5 text-xs leading-relaxed"
-                style={{
-                  borderColor: "#c47d1a",
-                  backgroundColor: "#fdf4e7",
-                  color: "#5c4a32",
-                }}
+          {/* Acceso rápido: la entrada principal es ?tab=servicios */}
+          {mostrarTabServicios ? (
+            <Card title="Mis servicios">
+              <p className="text-sm text-[#666]">
+                Tienes {services.length}{" "}
+                {services.length === 1 ? "servicio" : "servicios"}.
+              </p>
+              <button
+                type="button"
+                onClick={() => handleTabChange("servicios")}
+                className="mt-3 text-sm font-semibold"
+                style={{ color: PRIMARY }}
               >
-                {perfil?.verificado !== true ? (
-                  REVISION_PENDIENTE_MSG
-                ) : (
-                  <>
-                    {COBROS_REQUERIDOS_MSG}{" "}
-                    <Link
-                      href="/dashboard?tab=proveedor"
-                      className="font-semibold underline"
-                      style={{ color: PRIMARY }}
-                    >
-                      Ir a configurar cobros
-                    </Link>
-                  </>
-                )}
-              </div>
-            )}
-            <ul className="flex flex-col gap-3">
-              {services.map((service) => {
-                const v = VERTICALS.find((x) => x.id === service.vertical);
-                const isEditing = editingId === service.id;
-                return (
-                  <li key={service.id} className="rounded-xl border p-4" style={{ borderColor: BRAND.border }}>
-                    <ServiceAvailabilityHeader
-                      service={service}
-                      onToggle={toggleServiceDisponible}
-                      toggling={togglingDisponibleId === service.id}
-                      showMeta
-                      metaLabel={`${v?.label || service.vertical} · ${service.details.precio ? `${service.details.precio}€` : "—"}`}
-                      actions={
-                        <div className="flex gap-2">
-                          <a
-                            href={getProviderAnuncioHref(service, perfil, documentContext)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="rounded-lg border px-3 py-1.5 text-xs font-semibold no-underline transition-colors hover:bg-[#f7f5f2]"
-                            style={{ borderColor: BRAND.border, color: PRIMARY }}
-                          >
-                            Vista previa
-                          </a>
-                          <button
-                            type="button"
-                            onClick={() => setEditingId(isEditing ? null : service.id)}
-                            className="rounded-lg border px-3 py-1.5 text-xs font-semibold"
-                            style={{ borderColor: BRAND.border, color: PRIMARY }}
-                          >
-                            {isEditing ? "Cerrar" : "Editar"}
-                          </button>
-                        </div>
-                      }
-                    />
-                    {isEditing && (
-                      <div className="mt-4 border-t pt-4" style={{ borderColor: BRAND.border }}>
-                        <ServiceEditForm vertical={service.vertical} details={service.details} userId={userId} serviceId={service.isNew ? null : service.id} onChange={(details) => updateServiceDetails(service.id, details)} onUploadError={setErrorMessage} />
-                      </div>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-            {addingService ? (
-              <div className="mt-4 rounded-xl border p-4" style={{ borderColor: BRAND.border }}>
-                <p className="text-sm font-semibold">Nuevo servicio</p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {VERTICALS.map((v) => (
-                    <button key={v.id} type="button" onClick={() => {
-                      markDirty();
-                      setNewVertical(v.id);
-                      setNewServiceDetails({
-                        ...emptyServiceDetails(),
-                        ...(v.id === "ninos" || v.id === "mascotas"
-                          ? {
-                              modalidades_cobro: seedModalidadesCobroFromLegacy(
-                                v.id,
-                                {},
-                              ),
-                            }
-                          : {}),
-                      });
-                    }} className="rounded-full border px-4 py-2 text-sm font-medium" style={{ borderColor: newVertical === v.id ? PRIMARY : BRAND.border, backgroundColor: newVertical === v.id ? "#e8f0fb" : "#fff", color: newVertical === v.id ? PRIMARY : "#444" }}>
-                      {v.label}
-                    </button>
-                  ))}
-                </div>
-                <ServiceEditForm vertical={newVertical} details={newServiceDetails} userId={userId} onChange={(d) => { markDirty(); setNewServiceDetails(d); }} onUploadError={setErrorMessage} />
-                <button type="button" onClick={() => { setAddingService(false); setNewServiceDetails(emptyServiceDetails()); }} className="mt-4 text-sm text-[#666]">Cancelar</button>
-              </div>
-            ) : (
-              <button type="button" onClick={() => { markDirty(); setAddingService(true); }} className="mt-4 text-sm font-semibold" style={{ color: PRIMARY }}>+ Añadir nuevo servicio</button>
-            )}
-          </Card>
+                Ver y editar todos →
+              </button>
+            </Card>
+          ) : null}
 
           {perfil?.role === "proveedor" && (
             <Card title="Referencias externas">
@@ -2366,6 +2434,11 @@ function EditarPerfilContent() {
       );
     }
 
+    if (activeTab === "servicios") {
+      return renderMisServiciosCard();
+    }
+
+    // Legacy UI B (find por vertical) — sin enlazar; se retira en Paso 2
     if (["alojamiento", "ninos", "mascotas"].includes(activeTab)) {
       const service = getServiceByVertical(activeTab);
       const v = VERTICALS.find((x) => x.id === activeTab);
