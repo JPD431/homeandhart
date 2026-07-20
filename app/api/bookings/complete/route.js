@@ -15,7 +15,10 @@ import {
 } from "@/app/lib/pricing-reserva";
 import { cargarTarifasPorFecha } from "@/app/lib/tarifas";
 import { loadServiceModalidadesRows } from "@/app/lib/service-modalidades-server";
-import { attachContactsToServicesAdmin } from "@/app/lib/service-contact";
+import {
+  attachContactsToServicesAdmin,
+  buildProviderContactEmailFields,
+} from "@/app/lib/service-contact";
 import {
   COBROS_INACTIVE_MSG,
   getProveedorFromService,
@@ -502,10 +505,6 @@ function formatProfileName(profile, fallback = "Usuario") {
   return name || fallback;
 }
 
-function resolveTelefonoProveedor(svc, proveedorProfile) {
-  return svc.telefono_contacto || proveedorProfile?.telefono || undefined;
-}
-
 async function loadClienteProfileForEmails(userId, perfilCliente) {
   if (perfilCliente?.telefono) {
     return perfilCliente;
@@ -544,21 +543,31 @@ async function sendContactEmailsForConfirmedBooking(
   const creditoAplicado = Number(booking.credito_aplicado) || 0;
   const mensaje = booking.mensaje?.trim?.() || booking.mensaje || "";
 
+  // Contacto solo en confirmada (igual canShowProviderContact); desde service_contact.
+  const contactFields = await buildProviderContactEmailFields({
+    estado: "confirmada",
+    serviceId: svc.id,
+    service: svc,
+    telefonoFallback: proveedorProfile?.telefono || null,
+    adminClient: supabaseAdmin,
+  });
+
   await sendBookingEmail({
     tipo: "reserva_confirmada",
     solo_cliente: true,
     cliente_id: booking.cliente_id,
     cliente_nombre: clienteNombre,
     proveedor_nombre: proveedorNombre,
+    proveedor_id: svc.proveedor_id,
+    service_id: svc.id,
     servicio_titulo: svc.titulo || "Servicio",
     fecha_inicio: booking.fecha_inicio,
     fecha_fin: finEmail,
     precio_total: precioTotal,
     credito_aplicado: creditoAplicado,
     mensaje,
-    direccion_exacta: svc.direccion_exacta,
-    telefono_proveedor: resolveTelefonoProveedor(svc, proveedorProfile),
     modalidad: svc.modalidad,
+    ...contactFields,
   });
 
   await sendBookingEmail({
@@ -640,11 +649,13 @@ async function sendPostCompleteBookingEmails({
       getProveedorFromService(svc)?.nombre || "Proveedor",
     );
 
+    const bookingFin =
+      inserted.fecha_fin || inserted.fecha_inicio || finEmail;
     const booking = {
       id: inserted.id,
       cliente_id: userId,
-      fecha_inicio: fechaInicio,
-      fecha_fin: finEmail,
+      fecha_inicio: inserted.fecha_inicio || fechaInicio,
+      fecha_fin: bookingFin,
       precio_total: precioPorServicioMap.get(serviceId),
       precio_base: precioBasePorServicioMap.get(serviceId),
       cliente_sin_comision: clienteSinComision,
@@ -1207,7 +1218,10 @@ async function completePerServicePayments(userId, body) {
   }
 
   const servicesWithMods = await attachModalidadesToServices(servicesRaw);
-  const services = await attachContactsToServicesAdmin(servicesWithMods);
+  const services = await attachContactsToServicesAdmin(
+    servicesWithMods,
+    supabaseAdmin,
+  );
   const serviceMap = new Map(services.map((s) => [s.id, s]));
   const mainService = serviceMap.get(main_service_id);
   if (!mainService) {
@@ -1571,7 +1585,10 @@ export async function POST(request) {
     }
 
     const servicesWithMods = await attachModalidadesToServices(servicesRaw);
-    const services = await attachContactsToServicesAdmin(servicesWithMods);
+    const services = await attachContactsToServicesAdmin(
+      servicesWithMods,
+      supabaseAdmin,
+    );
     const serviceMap = new Map(services.map((s) => [s.id, s]));
     const mainService = serviceMap.get(main_service_id);
     if (!mainService) {

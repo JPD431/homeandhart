@@ -3,7 +3,10 @@ import Stripe from "stripe";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { notifyBookingEvent } from "@/app/lib/notifications";
-import { attachContactToServiceAdmin } from "@/app/lib/service-contact";
+import {
+  attachContactToServiceAdmin,
+  buildProviderContactEmailFields,
+} from "@/app/lib/service-contact";
 
 const supabaseAdmin = createServiceClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -149,7 +152,7 @@ export async function POST(request) {
   }
 
   const service = serviceRaw
-    ? await attachContactToServiceAdmin(serviceRaw)
+    ? await attachContactToServiceAdmin(serviceRaw, supabaseAdmin)
     : null;
 
   if (!service || service.proveedor_id !== user.id) {
@@ -414,22 +417,30 @@ export async function POST(request) {
           const creditoAplicado = Number(bookingFull.credito_aplicado) || 0;
           const mensaje = bookingFull.mensaje || "";
 
+          const contactFields = await buildProviderContactEmailFields({
+            estado: "confirmada",
+            serviceId: service.id || booking.service_id,
+            service: svc,
+            telefonoFallback: proveedorProfile?.telefono || null,
+            adminClient: supabaseAdmin,
+          });
+
           await postBookingEmail(baseUrl, {
             tipo: "reserva_confirmada",
             solo_cliente: true,
             cliente_id: bookingFull.cliente_id,
             cliente_nombre: clienteNombre,
             proveedor_nombre: proveedorNombre,
+            proveedor_id: proveedorId,
+            service_id: service.id || booking.service_id,
             servicio_titulo: svc.titulo || "Servicio",
             fecha_inicio: bookingFull.fecha_inicio,
             fecha_fin: finEmail,
             precio_total: precioTotal,
             credito_aplicado: creditoAplicado,
             mensaje,
-            direccion_exacta: svc.direccion_exacta,
-            telefono_proveedor:
-              svc.telefono_contacto || proveedorProfile?.telefono || undefined,
             modalidad: svc.modalidad,
+            ...contactFields,
           });
 
           console.log(

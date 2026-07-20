@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { Resend } from "resend";
+import { canShowProviderContact } from "@/app/lib/booking-display";
 import { sequences } from "@/app/lib/email-sequences";
 import {
   resolverEmailUsuario,
@@ -18,6 +19,7 @@ import {
   emailLayout,
   marketingEmailLayout,
 } from "@/app/lib/email-layouts";
+import { buildProviderContactEmailFields } from "@/app/lib/service-contact";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -403,7 +405,18 @@ function formatModalidad(modalidad) {
   return labels[modalidad] || modalidad;
 }
 
+function shouldShowProviderContactInEmail(data) {
+  if (!data || data.mostrar_contacto_proveedor === false) return false;
+  if (data.booking_estado) {
+    return canShowProviderContact(data.booking_estado);
+  }
+  // Solo si el caller lo marca explícitamente (reserva ya confirmada).
+  return data.mostrar_contacto_proveedor === true;
+}
+
 function proveedorContactBlock(data) {
+  if (!shouldShowProviderContactInEmail(data)) return "";
+
   const lines = [];
 
   if (data.direccion_exacta) {
@@ -639,6 +652,10 @@ function clienteEmailHtml(data) {
     const contactBlocks = data.servicios
       .map((svc) =>
         proveedorContactBlock({
+          ...svc,
+          mostrar_contacto_proveedor:
+            svc.mostrar_contacto_proveedor ?? data.mostrar_contacto_proveedor,
+          booking_estado: svc.booking_estado ?? data.booking_estado,
           direccion_exacta: svc.direccion_exacta,
           telefono_proveedor: svc.telefono_proveedor,
           modalidad: svc.modalidad,
@@ -1264,6 +1281,36 @@ async function sendReservaConfirmadaEmails(data) {
   if (!payload.proveedor_nombre && payload.proveedor_id) {
     payload.proveedor_nombre =
       (await resolverNombreUsuario(payload.proveedor_id)) || "Proveedor";
+  }
+
+  // Safety net: contacto desde service_contact (nunca columnas dropeadas de services).
+  // Solo para emails de reserva confirmada (cliente ya puede contactar/ir).
+  if (Array.isArray(payload.servicios) && payload.servicios.length > 0) {
+    payload.servicios = await Promise.all(
+      payload.servicios.map(async (svc) => {
+        const contact = await buildProviderContactEmailFields({
+          estado: svc.booking_estado || payload.booking_estado || "confirmada",
+          serviceId: svc.service_id || svc.id,
+          service: svc,
+          telefonoFallback: svc.telefono_proveedor || null,
+        });
+        return { ...svc, ...contact };
+      }),
+    );
+    payload.mostrar_contacto_proveedor = true;
+    payload.booking_estado = payload.booking_estado || "confirmada";
+  } else {
+    const contact = await buildProviderContactEmailFields({
+      estado: payload.booking_estado || "confirmada",
+      serviceId: payload.service_id,
+      service: {
+        id: payload.service_id,
+        direccion_exacta: payload.direccion_exacta,
+        telefono_contacto: null,
+      },
+      telefonoFallback: payload.telefono_proveedor || null,
+    });
+    Object.assign(payload, contact);
   }
 
   const required = [

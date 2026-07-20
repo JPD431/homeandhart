@@ -9,6 +9,7 @@
  */
 
 import { createClient } from "@supabase/supabase-js";
+import { canShowProviderContact } from "@/app/lib/booking-display";
 import { supabase as browserSupabase } from "@/app/lib/supabase";
 
 export const SERVICE_CONTACT_SELECT =
@@ -197,14 +198,17 @@ export async function syncServiceContactAdmin(serviceId, fields) {
   return syncServiceContact(serviceId, fields, admin);
 }
 
-export async function loadServiceContactAdmin(serviceId) {
-  const admin = getAdminClient();
+export async function loadServiceContactAdmin(serviceId, adminClient = null) {
+  const admin = adminClient || getAdminClient();
   if (!admin) return null;
   return loadServiceContact(serviceId, admin);
 }
 
-export async function loadServiceContactsByIdsAdmin(serviceIds) {
-  const admin = getAdminClient();
+export async function loadServiceContactsByIdsAdmin(
+  serviceIds,
+  adminClient = null,
+) {
+  const admin = adminClient || getAdminClient();
   if (!admin) return new Map();
   return loadServiceContactsByIds(serviceIds, admin);
 }
@@ -212,18 +216,99 @@ export async function loadServiceContactsByIdsAdmin(serviceIds) {
 /**
  * Adjunta campos de contacto resueltos a servicios (admin).
  * @param {object[]} services
+ * @param {import("@supabase/supabase-js").SupabaseClient|null} [adminClient]
  */
-export async function attachContactsToServicesAdmin(services) {
+export async function attachContactsToServicesAdmin(
+  services,
+  adminClient = null,
+) {
   const list = Array.isArray(services) ? services : [];
   if (list.length === 0) return list;
-  const map = await loadServiceContactsByIdsAdmin(list.map((s) => s.id));
+  const map = await loadServiceContactsByIdsAdmin(
+    list.map((s) => s.id),
+    adminClient,
+  );
   return list.map((svc) =>
     mergeResolvedContactIntoService(svc, map.get(svc.id) ?? null),
   );
 }
 
-export async function attachContactToServiceAdmin(service) {
+export async function attachContactToServiceAdmin(
+  service,
+  adminClient = null,
+) {
   if (!service?.id) return service;
-  const contact = await loadServiceContactAdmin(service.id);
+  const contact = await loadServiceContactAdmin(service.id, adminClient);
   return mergeResolvedContactIntoService(service, contact);
+}
+
+/**
+ * Campos de contacto del proveedor para emails al cliente.
+ * Solo si la reserva está confirmada / en_curso / completada (canShowProviderContact).
+ * Lee de service_contact (vía admin); NO de columnas dropeadas en services.
+ *
+ * @param {object} opts
+ * @param {string} [opts.estado] — estado de la reserva
+ * @param {string} [opts.serviceId]
+ * @param {object|null} [opts.service] — ya puede traer contacto fusionado
+ * @param {string|null} [opts.telefonoFallback] — p.ej. profiles.telefono
+ * @param {import("@supabase/supabase-js").SupabaseClient|null} [opts.adminClient]
+ * @returns {Promise<{
+ *   mostrar_contacto_proveedor: boolean,
+ *   booking_estado?: string,
+ *   direccion_exacta?: string,
+ *   telefono_proveedor?: string,
+ * }>}
+ */
+export async function buildProviderContactEmailFields({
+  estado,
+  serviceId = null,
+  service = null,
+  telefonoFallback = null,
+  adminClient = null,
+} = {}) {
+  const bookingEstado = estado || null;
+  if (!bookingEstado || !canShowProviderContact(bookingEstado)) {
+    return {
+      mostrar_contacto_proveedor: false,
+      ...(bookingEstado ? { booking_estado: bookingEstado } : {}),
+    };
+  }
+
+  let direccion =
+    typeof service?.direccion_exacta === "string"
+      ? service.direccion_exacta.trim()
+      : service?.direccion_exacta || null;
+  let telefonoContacto =
+    typeof service?.telefono_contacto === "string"
+      ? service.telefono_contacto.trim()
+      : service?.telefono_contacto || null;
+
+  const id = serviceId || service?.id || null;
+  if (id && (!direccion || !telefonoContacto)) {
+    const contact = await loadServiceContactAdmin(id, adminClient);
+    if (contact) {
+      if (!direccion && contact.direccion_exacta) {
+        direccion = String(contact.direccion_exacta).trim() || null;
+      }
+      if (!telefonoContacto && contact.telefono_contacto) {
+        telefonoContacto =
+          String(contact.telefono_contacto).trim() || null;
+      }
+    }
+  }
+
+  const telefono =
+    telefonoContacto ||
+    (typeof telefonoFallback === "string"
+      ? telefonoFallback.trim() || null
+      : telefonoFallback) ||
+    null;
+
+  return {
+    mostrar_contacto_proveedor: true,
+    booking_estado: bookingEstado,
+    ...(direccion ? { direccion_exacta: direccion } : {}),
+    ...(telefono ? { telefono_proveedor: telefono } : {}),
+  };
 }
