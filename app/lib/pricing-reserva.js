@@ -161,7 +161,7 @@ export function resolveBillingForService(svc, modalidadCobroRequested, {
   if (requireModalidad) {
     return {
       kind: "error",
-      error: "Elige cómo quieres contratar este servicio",
+      error: "Elige cómo quieres reservar este servicio",
     };
   }
 

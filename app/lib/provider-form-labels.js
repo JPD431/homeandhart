@@ -45,7 +45,18 @@ export const SERVICE_LABELS = {
   capacidadCamas: "Camas",
   capacidadBanos: "Baños",
   tipoAlojamiento: "Tipo de alojamiento",
-  modalidad: "Modalidad de servicio",
+  // Deprecated alias — usar getModalidadServicioFormCopy(vertical)
+  modalidad: "¿Dónde cuidas a los niños?",
+  modalidadServicio: {
+    ninos: {
+      title: "¿Dónde cuidas a los niños?",
+      help: "Elige dónde ofreces el servicio.",
+    },
+    mascotas: {
+      title: "¿Qué tipo de cuidado ofreces?",
+      help: "Elige cómo cuidas a la mascota.",
+    },
+  },
   descripcionPlaceholder: {
     alojamiento: "Ej.: piso luminoso cerca del centro, ideal para familias con niños…",
     ninos: "Ej.: niñera con experiencia en bebés, actividades al aire libre…",

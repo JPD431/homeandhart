@@ -398,9 +398,11 @@ async function sendMarketingSequenceEmail(data) {
 
 function formatModalidad(modalidad) {
   const labels = {
-    domicilio_cliente: "En domicilio del cliente — yo me desplazo",
-    domicilio_proveedor: "En mi domicilio — el cliente se desplaza",
-    ambas: "Ambas opciones disponibles",
+    domicilio_cliente: "En casa de la familia",
+    domicilio_proveedor: "En mi casa",
+    ambas: "Las dos (el cliente elige)",
+    paseos: "Paseo (recojo a la mascota)",
+    todo_incluido: "Se queda en mi casa (guardería)",
   };
   return labels[modalidad] || modalidad;
 }

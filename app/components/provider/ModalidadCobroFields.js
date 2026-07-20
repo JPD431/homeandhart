@@ -66,13 +66,10 @@ export default function ModalidadCobroFields({
       style={{ borderColor: BRAND.border, backgroundColor: BRAND.warm }}
     >
       <p className="text-xs font-semibold text-[#1a1a1a]">
-        ¿Cómo puedes cobrar este servicio?
+        ¿Cómo cobras?
       </p>
       <p className="mt-1 text-[11px] leading-relaxed text-[#666]">
-        Activa una o varias modalidades. El cliente elegirá al reservar. Si no
-        configuras ninguna, se cobra como hasta ahora (
-        {legacy === "hora" ? "por hora" : "por día"}) con el precio base del
-        servicio.
+        Activa una o varias formas de cobro. El cliente elige al reservar.
       </p>
 
       <div className="mt-4 flex flex-col gap-3">

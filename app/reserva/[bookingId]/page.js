@@ -417,7 +417,7 @@ export default function ReservaDetallePage() {
                 )}
                 {booking.lugar_servicio === "casa_cliente" && (
                   <p className="mt-1 text-[11px] text-[#888]">
-                    El servicio es en tu domicilio
+                    El servicio es en tu casa
                     {booking.direccion_cliente_a_definir
                       ? " (dirección a coordinar)"
                       : ""}

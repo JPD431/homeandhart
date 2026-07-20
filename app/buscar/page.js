@@ -64,9 +64,11 @@ const TIPO_ALOJAMIENTO_LABELS = {
 };
 
 const MODALIDAD_LABELS = {
-  domicilio_cliente: "En tu domicilio",
-  domicilio_proveedor: "En su domicilio",
-  ambas: "Ambas modalidades",
+  domicilio_cliente: "En casa de la familia",
+  domicilio_proveedor: "En casa del profesional",
+  ambas: "Las dos (tú eliges)",
+  paseos: "Paseo (recoge a la mascota)",
+  todo_incluido: "Se queda en casa del profesional (guardería)",
 };
 
 const PIN_POSITIONS = [

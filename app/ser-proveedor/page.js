@@ -115,16 +115,14 @@ const IDIOMAS_DEFAULT = [
 
 import {
   TIPO_ALOJAMIENTO_OPTIONS,
-  MODALIDAD_NINOS_OPTIONS as MODALIDAD_OPTIONS_NINOS,
+  MODALIDAD_NINOS_OPTIONS,
+  MODALIDAD_MASCOTAS_OPTIONS,
+  getModalidadServicioFormCopy,
 } from "@/app/lib/service-form-tags";
 
 const MODALIDAD_OPTIONS = {
-  ninos: MODALIDAD_OPTIONS_NINOS,
-  mascotas: [
-    { value: "domicilio_cliente", label: "En domicilio del cliente" },
-    { value: "domicilio_proveedor", label: "En mi domicilio" },
-    { value: "ambas", label: "Ambas opciones" },
-  ],
+  ninos: MODALIDAD_NINOS_OPTIONS,
+  mascotas: MODALIDAD_MASCOTAS_OPTIONS,
 };
 
 function getDocsForVertical(vertical) {
@@ -1345,7 +1343,12 @@ export default function SerProveedorPage() {
               />
             </div>
             <div className="sm:col-span-2">
-              <p className="mb-2 text-xs font-medium text-[#444]">{SERVICE_LABELS.modalidad}</p>
+              <p className="mb-1 text-xs font-medium text-[#444]">
+                {getModalidadServicioFormCopy("ninos").title}
+              </p>
+              <p className="mb-2 text-[11px] leading-relaxed text-[#666]">
+                {getModalidadServicioFormCopy("ninos").help}
+              </p>
               <div className="flex flex-wrap gap-2">
                 {MODALIDAD_OPTIONS.ninos.map((opt) => (
                   <TagPill key={opt.value} label={opt.label} selected={d.modalidad === opt.value} onClick={() => upd("modalidad", opt.value)} color={GREEN} />
@@ -1452,18 +1455,33 @@ export default function SerProveedorPage() {
               />
             </div>
             <div className="sm:col-span-2">
-              <label className="mb-1.5 block text-xs font-medium text-[#444]">{SERVICE_LABELS.modalidad}</label>
-              <select
-                value={d.modalidad}
-                onChange={(e) => upd("modalidad", e.target.value)}
-                className={inputClass}
-                style={{ borderColor: BRAND.border }}
-              >
-                <option value="domicilio_proveedor">En mi domicilio</option>
-                <option value="domicilio_cliente">En domicilio del cliente</option>
-                <option value="paseos">Paseos</option>
-                <option value="todo_incluido">Todo incluido</option>
-              </select>
+              <p className="mb-1 text-xs font-medium text-[#444]">
+                {getModalidadServicioFormCopy("mascotas").title}
+              </p>
+              <p className="mb-2 text-[11px] leading-relaxed text-[#666]">
+                {getModalidadServicioFormCopy("mascotas").help}
+              </p>
+              <div className="flex flex-col gap-2">
+                {MODALIDAD_OPTIONS.mascotas.map((opt) => {
+                  const selected = d.modalidad === opt.value;
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => upd("modalidad", opt.value)}
+                      className="rounded-xl border p-3 text-left transition-colors"
+                      style={{
+                        borderColor: selected ? ORANGE : BRAND.border,
+                        backgroundColor: selected ? "#fff7ed" : "#fff",
+                      }}
+                    >
+                      <span className="text-sm font-semibold text-[#1a1a1a]">
+                        {opt.label}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
             <DireccionContactoFields d={d} upd={upd} vertical="mascotas" />
           </div>

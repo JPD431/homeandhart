@@ -978,7 +978,7 @@ function ReservaRecibidaCard({
               )}
               {booking.lugar_servicio === 'casa_proveedor' && (
                 <div style={{ marginTop: 4, fontSize: 11, color: '#666' }}>
-                  El servicio es en tu domicilio
+                  El servicio es en tu casa
                 </div>
               )}
             </div>

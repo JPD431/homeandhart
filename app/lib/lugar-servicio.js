@@ -79,15 +79,15 @@ export function needsClienteDireccionBlock(lugarServicio) {
 export function lugarServicioInfoLabel(lugarServicio, modalidadServicio) {
   if (lugarServicio === LUGAR_CASA_PROVEEDOR) {
     if (modalidadServicio === "todo_incluido") {
-      return "La mascota se queda en el domicilio del proveedor";
+      return "La mascota se queda en casa del profesional";
     }
-    return "El servicio es en el domicilio del proveedor";
+    return "El servicio es en casa del profesional";
   }
   if (lugarServicio === LUGAR_CASA_CLIENTE) {
     if (modalidadServicio === "paseos") {
-      return "El proveedor recoge la mascota en tu domicilio";
+      return "El profesional recoge la mascota en tu casa";
     }
-    return "El servicio es en tu domicilio";
+    return "El servicio es en tu casa";
   }
   return null;
 }

@@ -68,9 +68,8 @@ import {
 import { RELACION_OPTIONS } from "@/app/lib/referencias";
 import { buildEditarPerfilTabHref } from "@/app/lib/editar-perfil-routes";
 import {
-  MODALIDAD_MASCOTAS_OPTIONS,
-  MODALIDAD_NINOS_OPTIONS,
   TIPO_ALOJAMIENTO_EDIT_OPTIONS,
+  getModalidadServicioFormCopy,
 } from "@/app/lib/service-form-tags";
 import {
   buildServicePayload,
@@ -802,31 +801,40 @@ function ServiceEditForm({ vertical, details: rawDetails, onChange, userId, serv
         </div>
       ) : (
         <div className="sm:col-span-2">
-          <p className="mb-2 text-xs font-medium text-[#444]">{SERVICE_LABELS.modalidad}</p>
-          <div className="flex flex-col gap-2">
-            {(vertical === "mascotas"
-              ? MODALIDAD_MASCOTAS_OPTIONS
-              : MODALIDAD_NINOS_OPTIONS
-            ).map((option) => {
-              const selected = details.modalidad === option.value;
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => update("modalidad", option.value)}
-                  className="rounded-xl border p-3 text-left transition-colors"
-                  style={{
-                    borderColor: selected ? BRAND.primary : BRAND.border,
-                    backgroundColor: selected ? BRAND.light : "#fff",
-                  }}
-                >
-                  <span className="text-sm font-semibold text-[#1a1a1a]">
-                    {option.label}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+          {(() => {
+            const modalidadCopy = getModalidadServicioFormCopy(vertical);
+            return (
+              <>
+                <p className="mb-1 text-xs font-medium text-[#444]">
+                  {modalidadCopy.title}
+                </p>
+                <p className="mb-2 text-[11px] leading-relaxed text-[#666]">
+                  {modalidadCopy.help}
+                </p>
+                <div className="flex flex-col gap-2">
+                  {modalidadCopy.options.map((option) => {
+                    const selected = details.modalidad === option.value;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => update("modalidad", option.value)}
+                        className="rounded-xl border p-3 text-left transition-colors"
+                        style={{
+                          borderColor: selected ? BRAND.primary : BRAND.border,
+                          backgroundColor: selected ? BRAND.light : "#fff",
+                        }}
+                      >
+                        <span className="text-sm font-semibold text-[#1a1a1a]">
+                          {option.label}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            );
+          })()}
         </div>
       )}
       <DireccionContactoFields d={details} upd={update} vertical={vertical} />

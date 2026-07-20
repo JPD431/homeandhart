@@ -574,11 +574,11 @@ function LugarServicioBookingFields({
             {[
               {
                 value: LUGAR_CASA_PROVEEDOR,
-                label: "En casa del proveedor",
+                label: "En casa del profesional",
               },
               {
                 value: LUGAR_CASA_CLIENTE,
-                label: "En mi domicilio",
+                label: "En mi casa",
               },
             ].map((opt) => {
               const selected = effectiveLugar === opt.value;
@@ -799,7 +799,7 @@ function CartLineBookingFields({
       {showModalidadSelector && (
         <div className="mb-3">
           <p className="mb-2 text-[8px] font-medium uppercase tracking-wide text-[#bbb]">
-            ¿Cómo quieres contratar?
+            ¿Cómo quieres reservar?
           </p>
           <div className="flex flex-col gap-2">
             {modalidades.map((row) => {
@@ -4205,7 +4205,7 @@ export default function ReservarPage() {
               {showModalidadSelector && (
                 <div className="mt-4">
                   <p className="mb-2 text-[8px] font-medium uppercase tracking-wide text-[#bbb]">
-                    ¿Cómo quieres contratar?
+                    ¿Cómo quieres reservar?
                   </p>
                   <div className="flex flex-col gap-2">
                     {modalidadesActivas.map((row) => {

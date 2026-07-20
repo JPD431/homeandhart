@@ -15,17 +15,33 @@ export const TIPO_ALOJAMIENTO_EDIT_OPTIONS = [
 ];
 
 export const MODALIDAD_NINOS_OPTIONS = [
-  { value: "domicilio_cliente", label: "En domicilio del cliente" },
-  { value: "domicilio_proveedor", label: "En mi domicilio" },
-  { value: "ambas", label: "Ambas opciones" },
+  { value: "domicilio_proveedor", label: "En mi casa" },
+  { value: "domicilio_cliente", label: "En casa de la familia" },
+  { value: "ambas", label: "Las dos (el cliente elige)" },
 ];
 
 export const MODALIDAD_MASCOTAS_OPTIONS = [
-  { value: "domicilio_proveedor", label: "En mi domicilio" },
-  { value: "domicilio_cliente", label: "En domicilio del cliente" },
-  { value: "paseos", label: "Paseos" },
-  { value: "todo_incluido", label: "Todo incluido" },
+  { value: "todo_incluido", label: "Se queda en mi casa (guardería)" },
+  { value: "paseos", label: "Paseo (recojo a la mascota)" },
+  { value: "domicilio_cliente", label: "En casa del dueño" },
+  { value: "domicilio_proveedor", label: "En mi casa" },
 ];
+
+/** Copy del bloque services.modalidad en formulario proveedor. */
+export function getModalidadServicioFormCopy(vertical) {
+  if (vertical === "mascotas") {
+    return {
+      title: "¿Qué tipo de cuidado ofreces?",
+      help: "Elige cómo cuidas a la mascota.",
+      options: MODALIDAD_MASCOTAS_OPTIONS,
+    };
+  }
+  return {
+    title: "¿Dónde cuidas a los niños?",
+    help: "Elige dónde ofreces el servicio.",
+    options: MODALIDAD_NINOS_OPTIONS,
+  };
+}
 
 export const EDADES_TAGS = ["0-1", "1-3", "3-6", "6-12", "12+"];
 export const FORMACION_TAGS = [
