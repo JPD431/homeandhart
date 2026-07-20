@@ -4,6 +4,11 @@
  *
  * Valores en bookings: 'casa_proveedor' | 'casa_cliente' | null
  * Valores en services.modalidad: domicilio_proveedor | domicilio_cliente | ambas | paseos | todo_incluido
+ *
+ * Mapeo impuesto (salvo 'ambas'):
+ *   domicilio_proveedor / todo_incluido / alojamiento → casa_proveedor
+ *   domicilio_cliente / paseos                         → casa_cliente
+ *   ambas → elige el cliente
  */
 
 import { needsDireccionFields } from "@/app/lib/service-payload";
@@ -20,18 +25,32 @@ export function needsLugarSelector(modalidadServicio) {
 }
 
 /**
- * Lugar efectivo automático desde services.modalidad (sin selector).
- * - domicilio_proveedor → casa_proveedor
- * - domicilio_cliente → casa_cliente
+ * Lugar efectivo automático desde services.modalidad (+ vertical alojamiento).
+ * - domicilio_proveedor / todo_incluido / alojamiento → casa_proveedor
+ * - domicilio_cliente / paseos → casa_cliente
  * - ambas → null (hay que elegir)
- * - paseos / todo_incluido / alojamiento / desconocido → null
  *
  * @param {string | null | undefined} modalidadServicio
+ * @param {string | null | undefined} [vertical]
  * @returns {'casa_proveedor' | 'casa_cliente' | null}
  */
-export function resolveLugarServicioFromModalidad(modalidadServicio) {
-  if (modalidadServicio === "domicilio_proveedor") return LUGAR_CASA_PROVEEDOR;
-  if (modalidadServicio === "domicilio_cliente") return LUGAR_CASA_CLIENTE;
+export function resolveLugarServicioFromModalidad(
+  modalidadServicio,
+  vertical = null,
+) {
+  if (vertical === "alojamiento") return LUGAR_CASA_PROVEEDOR;
+  if (
+    modalidadServicio === "domicilio_proveedor" ||
+    modalidadServicio === "todo_incluido"
+  ) {
+    return LUGAR_CASA_PROVEEDOR;
+  }
+  if (
+    modalidadServicio === "domicilio_cliente" ||
+    modalidadServicio === "paseos"
+  ) {
+    return LUGAR_CASA_CLIENTE;
+  }
   return null;
 }
 
@@ -39,9 +58,9 @@ export function resolveLugarServicioFromModalidad(modalidadServicio) {
  * Valor inicial al cargar un servicio en el carrito/reserva.
  * Si es 'ambas', null hasta que el cliente elija.
  */
-export function initialLugarServicio(modalidadServicio) {
+export function initialLugarServicio(modalidadServicio, vertical = null) {
   if (needsLugarSelector(modalidadServicio)) return null;
-  return resolveLugarServicioFromModalidad(modalidadServicio);
+  return resolveLugarServicioFromModalidad(modalidadServicio, vertical);
 }
 
 /**
@@ -59,16 +78,16 @@ export function needsClienteDireccionBlock(lugarServicio) {
  */
 export function lugarServicioInfoLabel(lugarServicio, modalidadServicio) {
   if (lugarServicio === LUGAR_CASA_PROVEEDOR) {
+    if (modalidadServicio === "todo_incluido") {
+      return "La mascota se queda en el domicilio del proveedor";
+    }
     return "El servicio es en el domicilio del proveedor";
   }
   if (lugarServicio === LUGAR_CASA_CLIENTE) {
+    if (modalidadServicio === "paseos") {
+      return "El proveedor recoge la mascota en tu domicilio";
+    }
     return "El servicio es en tu domicilio";
-  }
-  if (modalidadServicio === "paseos") {
-    return "Modalidad: paseos (el lugar se coordina con el proveedor)";
-  }
-  if (modalidadServicio === "todo_incluido") {
-    return "Modalidad: todo incluido (el lugar se coordina con el proveedor)";
   }
   return null;
 }
@@ -77,10 +96,10 @@ export function lugarServicioInfoLabel(lugarServicio, modalidadServicio) {
  * Lugar efectivo server-side: NO confiar en el body del cliente salvo modalidad='ambas'.
  *
  * Reglas:
- * - domicilio_proveedor → siempre casa_proveedor (ignora body; sin dirección cliente)
- * - domicilio_cliente → siempre casa_cliente (ignora body de lugar; dirección/a_definir sí)
+ * - alojamiento / domicilio_proveedor / todo_incluido → casa_proveedor (ignora body)
+ * - domicilio_cliente / paseos → casa_cliente (ignora body de lugar; dirección/a_definir sí)
  * - ambas → respeta elección del cliente si es casa_*; si basura/null → casa_proveedor
- * - paseos / todo_incluido / null / otras → lugar null (ignora body; sin dirección cliente)
+ * - otras → null
  *
  * La dirección del cliente SOLO se guarda si el lugar EFECTIVO es casa_cliente.
  *
@@ -90,8 +109,13 @@ export function lugarServicioInfoLabel(lugarServicio, modalidadServicio) {
  *   direccion_cliente_a_definir?: boolean | null,
  * }} raw
  * @param {string | null | undefined} modalidadServicio — services.modalidad real
+ * @param {string | null | undefined} [vertical] — services.vertical (alojamiento)
  */
-export function normalizeLugarPayloadForBooking(raw = {}, modalidadServicio = null) {
+export function normalizeLugarPayloadForBooking(
+  raw = {},
+  modalidadServicio = null,
+  vertical = null,
+) {
   const modalidad = modalidadServicio || null;
   const rawLugar = raw.lugar_servicio ?? null;
   const clientChoseValid =
@@ -99,17 +123,19 @@ export function normalizeLugarPayloadForBooking(raw = {}, modalidadServicio = nu
 
   let lugar = null;
 
-  if (modalidad === "domicilio_proveedor") {
-    // Forzar: el cliente no puede pedir casa_cliente.
+  if (vertical === "alojamiento") {
     lugar = LUGAR_CASA_PROVEEDOR;
-  } else if (modalidad === "domicilio_cliente") {
-    // Forzar: el cliente no puede pedir casa_proveedor.
+  } else if (
+    modalidad === "domicilio_proveedor" ||
+    modalidad === "todo_incluido"
+  ) {
+    lugar = LUGAR_CASA_PROVEEDOR;
+  } else if (modalidad === "domicilio_cliente" || modalidad === "paseos") {
     lugar = LUGAR_CASA_CLIENTE;
   } else if (modalidad === "ambas") {
     // Único caso donde se respeta la elección del cliente.
     lugar = clientChoseValid ? rawLugar : LUGAR_CASA_PROVEEDOR;
   } else {
-    // paseos, todo_incluido, alojamiento (modalidad null), desconocido
     lugar = null;
   }
 
@@ -152,14 +178,21 @@ export function shouldShowProviderDireccion({
 } = {}) {
   if (lugarServicio === LUGAR_CASA_PROVEEDOR) return true;
   if (lugarServicio === LUGAR_CASA_CLIENTE) return false;
-  // Legacy / alojamiento / paseos: misma regla que emails (needsDireccionFields)
+  // Legacy (lugar null): inferir con needsDireccionFields (incl. todo_incluido)
   return needsDireccionFields(vertical, modalidad);
 }
 
 /**
- * ¿Mostrar datos de contacto del cliente al proveedor?
- * (Alineado a canShowProviderContact — el caller debe filtrar por estado.)
+ * ¿Mostrar dirección del cliente al proveedor?
+ * @param {string | null | undefined} lugarServicio
+ * @param {string | null | undefined} [modalidad] — fallback legacy si lugar null
  */
-export function shouldShowClienteDireccionToProvider(lugarServicio) {
-  return lugarServicio === LUGAR_CASA_CLIENTE;
+export function shouldShowClienteDireccionToProvider(
+  lugarServicio,
+  modalidad = null,
+) {
+  if (lugarServicio === LUGAR_CASA_CLIENTE) return true;
+  if (lugarServicio === LUGAR_CASA_PROVEEDOR) return false;
+  // Legacy: inferir desde modalidad del servicio
+  return modalidad === "paseos" || modalidad === "domicilio_cliente";
 }

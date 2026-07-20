@@ -62,7 +62,7 @@ export async function GET(request) {
   const { data: bookings, error: bookingsError } = await admin
     .from("bookings")
     .select(
-      "id, cliente_id, service_id, estado, lugar_servicio, direccion_cliente_a_definir, services:service_id (proveedor_id)",
+      "id, cliente_id, service_id, estado, lugar_servicio, direccion_cliente_a_definir, services:service_id (proveedor_id, modalidad)",
     )
     .in("id", bookingIds);
 
@@ -104,7 +104,11 @@ export async function GET(request) {
 
   const contacts = {};
   for (const b of allowed) {
-    const showDir = shouldShowClienteDireccionToProvider(b.lugar_servicio);
+    const svc = Array.isArray(b.services) ? b.services[0] : b.services;
+    const showDir = shouldShowClienteDireccionToProvider(
+      b.lugar_servicio,
+      svc?.modalidad,
+    );
     contacts[b.id] = {
       telefono: telefonoByCliente.get(b.cliente_id) || null,
       lugar_servicio: b.lugar_servicio ?? null,

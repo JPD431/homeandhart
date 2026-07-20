@@ -175,7 +175,13 @@ export function parseAnosExperienciaFromDb(row) {
 export function needsDireccionFields(vertical, modalidad) {
   if (vertical === "alojamiento") return true;
   if (vertical === "ninos" && modalidad === "domicilio_proveedor") return true;
-  if (vertical === "mascotas" && modalidad === "domicilio_proveedor") return true;
+  // Mascotas: dirección del proveedor cuando la mascota está en su casa
+  if (
+    vertical === "mascotas" &&
+    (modalidad === "domicilio_proveedor" || modalidad === "todo_incluido")
+  ) {
+    return true;
+  }
   return false;
 }
 

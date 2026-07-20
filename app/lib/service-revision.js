@@ -55,7 +55,8 @@ export function getServiceCompleteness(details, vertical, { ciudad = "" } = {}) 
     }
   }
 
-  // Dirección: alojamiento siempre; niñera/mascotas si domicilio_proveedor.
+  // Dirección del proveedor: alojamiento; niñera domicilio_proveedor;
+  // mascotas domicilio_proveedor o todo_incluido.
   if (needsDireccionFields(vertical, d.modalidad)) {
     if (!String(d.direccion_exacta || "").trim()) {
       missing.push("dirección");

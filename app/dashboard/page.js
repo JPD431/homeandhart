@@ -965,7 +965,9 @@ function ReservaRecibidaCard({
                   </a>
                 </div>
               )}
-              {booking.lugar_servicio === 'casa_cliente' && (
+              {(booking.lugar_servicio === 'casa_cliente' ||
+                clienteContacto.direccion_cliente ||
+                clienteContacto.direccion_cliente_a_definir === true) && (
                 <div style={{ marginTop: 4 }}>
                   {clienteContacto.direccion_cliente
                     ? `Dirección: ${clienteContacto.direccion_cliente}`

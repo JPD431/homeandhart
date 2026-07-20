@@ -1290,7 +1290,8 @@ async function sendReservaConfirmadaEmails(data) {
 
   // Safety net: contacto desde service_contact (nunca columnas dropeadas de services).
   // Solo para emails de reserva confirmada (cliente ya puede contactar/ir).
-  // Dirección solo si needsDireccionFields(vertical, modalidad).
+  // Dirección solo si shouldShowProviderDireccion / needsDireccionFields
+  // (alojamiento, domicilio_proveedor, todo_incluido; no paseos/domicilio_cliente).
   if (Array.isArray(payload.servicios) && payload.servicios.length > 0) {
     payload.servicios = await Promise.all(
       payload.servicios.map(async (svc) => {

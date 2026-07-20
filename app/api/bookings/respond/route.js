@@ -435,6 +435,7 @@ export async function POST(request) {
 
           const clienteContactRow = shouldShowClienteDireccionToProvider(
             bookingFull.lugar_servicio,
+            svc.modalidad,
           )
             ? await loadBookingContactClienteAdmin(bookingId, supabaseAdmin)
             : null;

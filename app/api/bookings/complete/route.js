@@ -570,6 +570,7 @@ async function sendContactEmailsForConfirmedBooking(
 
   const clienteContactRow = shouldShowClienteDireccionToProvider(
     booking.lugar_servicio,
+    svc.modalidad,
   )
     ? await loadBookingContactClienteAdmin(booking.id, supabaseAdmin)
     : null;
@@ -852,6 +853,7 @@ function buildBookingRow({
       direccion_cliente_a_definir: direccionClienteADefinir,
     },
     svc.modalidad,
+    svc.vertical,
   );
 
   return {
@@ -899,6 +901,7 @@ async function syncClienteContactsForInsertedBookings(
         direccion_cliente_a_definir: ctx.direccion_cliente_a_definir,
       },
       svc?.modalidad,
+      svc?.vertical,
     );
     await syncBookingContactCliente(
       row.id,

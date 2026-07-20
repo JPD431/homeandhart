@@ -488,7 +488,7 @@ const SERVICE_MODALIDADES_SELECT =
 /** Paso 2a: campos de reserva por servicio en el carrito. */
 function emptyCartBookingFields(service = null) {
   const modalidad = service?.modalidad ?? null;
-  const lugar = initialLugarServicio(modalidad);
+  const lugar = initialLugarServicio(modalidad, service?.vertical);
   return {
     fechaInicio: "",
     fechaFin: "",
@@ -538,17 +538,21 @@ function buildCartEntry(service, fields = {}) {
  */
 function LugarServicioBookingFields({
   modalidad,
+  vertical = null,
   lugarServicio,
   direccionCliente,
   direccionClienteADefinir,
   onChange,
   compact = false,
 }) {
-  if (!modalidad) return null;
+  // Alojamiento: sin selector/bloque (lugar = casa_proveedor implícito).
+  // Niñera/mascotas: modalidad siempre definida.
+  if (!modalidad && vertical !== "alojamiento") return null;
+  if (vertical === "alojamiento") return null;
 
   const showSelector = needsLugarSelector(modalidad);
   const effectiveLugar =
-    lugarServicio ?? initialLugarServicio(modalidad);
+    lugarServicio ?? initialLugarServicio(modalidad, vertical);
   const infoLabel = !showSelector
     ? lugarServicioInfoLabel(effectiveLugar, modalidad)
     : null;
@@ -785,6 +789,7 @@ function CartLineBookingFields({
       <LugarServicioBookingFields
         compact
         modalidad={svc.modalidad}
+        vertical={svc.vertical}
         lugarServicio={entry.lugarServicio}
         direccionCliente={entry.direccionCliente}
         direccionClienteADefinir={entry.direccionClienteADefinir}
@@ -2460,7 +2465,10 @@ export default function ReservarPage() {
         } else {
           setNumHuespedes(null);
         }
-        const lugarInit = initialLugarServicio(serviceWithMods.modalidad);
+        const lugarInit = initialLugarServicio(
+          serviceWithMods.modalidad,
+          serviceWithMods.vertical,
+        );
         setLugarServicio(lugarInit);
         setDireccionCliente("");
         setDireccionClienteADefinir(
@@ -4253,6 +4261,7 @@ export default function ReservarPage() {
 
               <LugarServicioBookingFields
                 modalidad={service?.modalidad}
+                vertical={service?.vertical}
                 lugarServicio={lugarServicio}
                 direccionCliente={direccionCliente}
                 direccionClienteADefinir={direccionClienteADefinir}
