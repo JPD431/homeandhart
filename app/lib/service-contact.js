@@ -10,6 +10,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { canShowProviderContact } from "@/app/lib/booking-display";
+import { needsDireccionFields } from "@/app/lib/service-payload";
 import { supabase as browserSupabase } from "@/app/lib/supabase";
 
 export const SERVICE_CONTACT_SELECT =
@@ -247,10 +248,14 @@ export async function attachContactToServiceAdmin(
  * Solo si la reserva está confirmada / en_curso / completada (canShowProviderContact).
  * Lee de service_contact (vía admin); NO de columnas dropeadas en services.
  *
+ * - Teléfono: siempre (coordinación), en cualquier vertical/modalidad.
+ * - Dirección: solo si needsDireccionFields (alojamiento siempre;
+ *   niñera/mascotas solo domicilio_proveedor — no en domicilio_cliente / paseos / etc.).
+ *
  * @param {object} opts
  * @param {string} [opts.estado] — estado de la reserva
  * @param {string} [opts.serviceId]
- * @param {object|null} [opts.service] — ya puede traer contacto fusionado
+ * @param {object|null} [opts.service] — ya puede traer contacto fusionado + vertical/modalidad
  * @param {string|null} [opts.telefonoFallback] — p.ej. profiles.telefono
  * @param {import("@supabase/supabase-js").SupabaseClient|null} [opts.adminClient]
  * @returns {Promise<{
@@ -275,20 +280,27 @@ export async function buildProviderContactEmailFields({
     };
   }
 
-  let direccion =
-    typeof service?.direccion_exacta === "string"
+  const vertical = service?.vertical || null;
+  const modalidad = service?.modalidad || null;
+  const includeDireccion = needsDireccionFields(vertical, modalidad);
+
+  let direccion = includeDireccion
+    ? typeof service?.direccion_exacta === "string"
       ? service.direccion_exacta.trim()
-      : service?.direccion_exacta || null;
+      : service?.direccion_exacta || null
+    : null;
   let telefonoContacto =
     typeof service?.telefono_contacto === "string"
       ? service.telefono_contacto.trim()
       : service?.telefono_contacto || null;
 
   const id = serviceId || service?.id || null;
-  if (id && (!direccion || !telefonoContacto)) {
+  const needContactLoad =
+    id && ((includeDireccion && !direccion) || !telefonoContacto);
+  if (needContactLoad) {
     const contact = await loadServiceContactAdmin(id, adminClient);
     if (contact) {
-      if (!direccion && contact.direccion_exacta) {
+      if (includeDireccion && !direccion && contact.direccion_exacta) {
         direccion = String(contact.direccion_exacta).trim() || null;
       }
       if (!telefonoContacto && contact.telefono_contacto) {
@@ -308,7 +320,7 @@ export async function buildProviderContactEmailFields({
   return {
     mostrar_contacto_proveedor: true,
     booking_estado: bookingEstado,
-    ...(direccion ? { direccion_exacta: direccion } : {}),
+    ...(includeDireccion && direccion ? { direccion_exacta: direccion } : {}),
     ...(telefono ? { telefono_proveedor: telefono } : {}),
   };
 }

@@ -567,6 +567,7 @@ async function sendContactEmailsForConfirmedBooking(
     credito_aplicado: creditoAplicado,
     mensaje,
     modalidad: svc.modalidad,
+    vertical: svc.vertical,
     ...contactFields,
   });
 

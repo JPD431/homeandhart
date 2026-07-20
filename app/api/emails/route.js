@@ -1285,13 +1285,19 @@ async function sendReservaConfirmadaEmails(data) {
 
   // Safety net: contacto desde service_contact (nunca columnas dropeadas de services).
   // Solo para emails de reserva confirmada (cliente ya puede contactar/ir).
+  // Dirección solo si needsDireccionFields(vertical, modalidad).
   if (Array.isArray(payload.servicios) && payload.servicios.length > 0) {
     payload.servicios = await Promise.all(
       payload.servicios.map(async (svc) => {
         const contact = await buildProviderContactEmailFields({
           estado: svc.booking_estado || payload.booking_estado || "confirmada",
           serviceId: svc.service_id || svc.id,
-          service: svc,
+          service: {
+            ...svc,
+            id: svc.service_id || svc.id,
+            vertical: svc.vertical || payload.vertical,
+            modalidad: svc.modalidad || payload.modalidad,
+          },
           telefonoFallback: svc.telefono_proveedor || null,
         });
         return { ...svc, ...contact };
@@ -1305,6 +1311,8 @@ async function sendReservaConfirmadaEmails(data) {
       serviceId: payload.service_id,
       service: {
         id: payload.service_id,
+        vertical: payload.vertical,
+        modalidad: payload.modalidad,
         direccion_exacta: payload.direccion_exacta,
         telefono_contacto: null,
       },

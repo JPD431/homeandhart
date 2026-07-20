@@ -74,7 +74,9 @@ function mergeServiceEmbed(embed, fallback) {
     direccion_exacta: fallback.direccion_exacta ?? null,
     telefono_contacto: fallback.telefono_contacto ?? null,
     modalidad: raw.modalidad || fallback.modalidad,
+    vertical: raw.vertical || fallback.vertical,
     proveedor_id: raw.proveedor_id || fallback.proveedor_id,
+    id: raw.id || fallback.id,
   };
 }
 
@@ -143,7 +145,7 @@ export async function POST(request) {
 
   const { data: serviceRaw, error: serviceError } = await supabaseAdmin
     .from("services")
-    .select("id, proveedor_id, titulo, modalidad")
+    .select("id, proveedor_id, titulo, modalidad, vertical")
     .eq("id", booking.service_id)
     .maybeSingle();
 
@@ -337,6 +339,7 @@ export async function POST(request) {
           services:service_id (
             titulo,
             modalidad,
+            vertical,
             proveedor_id
           )
         `,
@@ -440,6 +443,7 @@ export async function POST(request) {
             credito_aplicado: creditoAplicado,
             mensaje,
             modalidad: svc.modalidad,
+            vertical: svc.vertical,
             ...contactFields,
           });
 
