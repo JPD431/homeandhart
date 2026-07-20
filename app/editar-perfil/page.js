@@ -70,6 +70,7 @@ import { buildEditarPerfilTabHref } from "@/app/lib/editar-perfil-routes";
 import {
   TIPO_ALOJAMIENTO_EDIT_OPTIONS,
   getModalidadServicioFormCopy,
+  normalizeMascotasModalidadServicio,
 } from "@/app/lib/service-form-tags";
 import {
   buildServicePayload,
@@ -278,13 +279,18 @@ function mergeServiceDetails(rawDetails, vertical) {
 
 function mapServiceFromDb(row) {
   const tiers = normalizeDescuentosDuracion(row.descuentos_duracion);
+  const rawModalidad = row.modalidad || "domicilio_cliente";
+  const modalidad =
+    row.vertical === "mascotas"
+      ? normalizeMascotasModalidadServicio(rawModalidad)
+      : rawModalidad;
   const baseDetails = {
     ...emptyServiceDetails(),
     titulo: row.titulo || "",
     descripcion: getServiceDescription(row),
     precio: row.precio ?? "",
     tipo_alojamiento: row.tipo_alojamiento || "",
-    modalidad: row.modalidad || "domicilio_cliente",
+    modalidad,
     estancia_minima: row.estancia_minima ?? "",
     estancia_maxima: row.estancia_maxima ?? "",
     antelacion_minima: row.antelacion_minima ?? 24,

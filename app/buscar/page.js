@@ -64,11 +64,12 @@ const TIPO_ALOJAMIENTO_LABELS = {
 };
 
 const MODALIDAD_LABELS = {
-  domicilio_cliente: "En casa de la familia",
-  domicilio_proveedor: "En casa del profesional",
+  domicilio_cliente: "En casa del dueño",
+  // Alias legacy mascotas ≡ todo_incluido (mismo texto de guardería)
+  domicilio_proveedor: "En mi casa (guardería)",
   ambas: "Las dos (tú eliges)",
   paseos: "Paseo (recoge a la mascota)",
-  todo_incluido: "Se queda en casa del profesional (guardería)",
+  todo_incluido: "En mi casa (guardería)",
 };
 
 const PIN_POSITIONS = [

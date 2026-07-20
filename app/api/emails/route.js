@@ -396,13 +396,15 @@ async function sendMarketingSequenceEmail(data) {
   return { success: true };
 }
 
-function formatModalidad(modalidad) {
+function formatModalidad(modalidad, vertical = null) {
   const labels = {
-    domicilio_cliente: "En casa de la familia",
-    domicilio_proveedor: "En mi casa",
+    domicilio_cliente:
+      vertical === "mascotas" ? "En casa del dueño" : "En casa de la familia",
+    domicilio_proveedor:
+      vertical === "mascotas" ? "En mi casa (guardería)" : "En mi casa",
     ambas: "Las dos (el cliente elige)",
     paseos: "Paseo (recojo a la mascota)",
-    todo_incluido: "Se queda en mi casa (guardería)",
+    todo_incluido: "En mi casa (guardería)",
   };
   return labels[modalidad] || modalidad;
 }
@@ -428,7 +430,9 @@ function proveedorContactBlock(data) {
     lines.push(`📞 Teléfono: ${data.telefono_proveedor}`);
   }
   if (data.modalidad) {
-    lines.push(`🏠 Modalidad: ${formatModalidad(data.modalidad)}`);
+    lines.push(
+      `🏠 Modalidad: ${formatModalidad(data.modalidad, data.vertical || null)}`,
+    );
   }
 
   if (lines.length === 0) return "";

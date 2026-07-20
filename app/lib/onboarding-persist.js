@@ -5,6 +5,7 @@ import {
   supportsModalidadCobro,
 } from "@/app/lib/modalidad-cobro";
 import { normalizeDescuentosDuracion } from "@/app/lib/descuentosDuracion";
+import { normalizeMascotasModalidadServicio } from "@/app/lib/service-form-tags";
 import { uploadProfilePhoto, uploadServicePhoto } from "@/app/lib/provider-uploads";
 import {
   buildServicePayload,
@@ -287,6 +288,11 @@ export async function upsertDraftService(
 export function mapDraftRowToServiceDetails(row) {
   const tiers = normalizeDescuentosDuracion(row.descuentos_duracion);
   const fotos = parseFotosFromDb(row);
+  const rawModalidad = row.modalidad || "domicilio_cliente";
+  const modalidad =
+    row.vertical === "mascotas"
+      ? normalizeMascotasModalidadServicio(rawModalidad)
+      : rawModalidad;
   const base = {
     titulo: row.titulo || "",
     descripcion: row.descripcion || row.descripcion_anuncio || "",
@@ -295,7 +301,7 @@ export function mapDraftRowToServiceDetails(row) {
     location_lat: null,
     location_lng: null,
     tipo_alojamiento: row.tipo_alojamiento || "",
-    modalidad: row.modalidad || "domicilio_cliente",
+    modalidad,
     estancia_minima: row.estancia_minima != null ? String(row.estancia_minima) : "1",
     estancia_maxima: row.estancia_maxima != null ? String(row.estancia_maxima) : "",
     antelacion_minima: row.antelacion_minima ?? 24,

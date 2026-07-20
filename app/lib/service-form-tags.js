@@ -21,11 +21,34 @@ export const MODALIDAD_NINOS_OPTIONS = [
 ];
 
 export const MODALIDAD_MASCOTAS_OPTIONS = [
-  { value: "todo_incluido", label: "Se queda en mi casa (guardería)" },
+  { value: "todo_incluido", label: "En mi casa (guardería)" },
   { value: "paseos", label: "Paseo (recojo a la mascota)" },
   { value: "domicilio_cliente", label: "En casa del dueño" },
-  { value: "domicilio_proveedor", label: "En mi casa" },
 ];
+
+/**
+ * Alias legacy: en mascotas, domicilio_proveedor ≡ todo_incluido (casa del proveedor).
+ * El form ya no ofrece domicilio_proveedor; al leer se normaliza al canónico.
+ */
+export function normalizeMascotasModalidadServicio(modalidad) {
+  if (modalidad === "domicilio_proveedor") return "todo_incluido";
+  return modalidad;
+}
+
+/** Label visible de services.modalidad (incluye alias legacy en mascotas). */
+export function getModalidadServicioDisplayLabel(modalidad, vertical = null) {
+  if (!modalidad) return "";
+  if (vertical === "mascotas" && modalidad === "domicilio_proveedor") {
+    return "En mi casa (guardería)";
+  }
+  const opts =
+    vertical === "mascotas"
+      ? MODALIDAD_MASCOTAS_OPTIONS
+      : vertical === "ninos"
+        ? MODALIDAD_NINOS_OPTIONS
+        : [...MODALIDAD_NINOS_OPTIONS, ...MODALIDAD_MASCOTAS_OPTIONS];
+  return opts.find((o) => o.value === modalidad)?.label || modalidad;
+}
 
 /** Copy del bloque services.modalidad en formulario proveedor. */
 export function getModalidadServicioFormCopy(vertical) {
