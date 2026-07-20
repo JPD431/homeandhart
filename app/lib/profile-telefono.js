@@ -24,7 +24,7 @@ export const TELEFONO_BANNER_CLIENT_MSG =
   "Completa tu teléfono para poder reservar y que el proveedor pueda contactarte.";
 
 export const PROVIDER_CONTACT_BANNER_MSG =
-  "Completa tus datos de contacto (teléfono y email) para poder activar servicios.";
+  "Completa tu teléfono para poder activar servicios.";
 
 export const TELEFONO_INVALID_MSG =
   "Introduce un teléfono válido (mínimo 9 dígitos).";
@@ -100,20 +100,46 @@ export function isValidEmailContacto(raw) {
 
 /**
  * @param {{ email_contacto?: string | null } | null | undefined} profile
+ * @param {string | null | undefined} [accountEmail] — email de auth/login (fallback)
  * @returns {boolean}
  */
-export function hasEmailContacto(profile) {
-  return isValidEmailContacto(profile?.email_contacto);
+export function hasEmailContacto(profile, accountEmail = null) {
+  if (isValidEmailContacto(profile?.email_contacto)) return true;
+  return isValidEmailContacto(accountEmail);
 }
 
 /**
- * @param {unknown} raw
+ * Valor a mostrar/editar: email_contacto guardado, o email de cuenta si falta.
+ * No inventa texto inválido.
+ * @param {{ email_contacto?: string | null } | null | undefined} profile
+ * @param {string | null | undefined} accountEmail
+ * @returns {string}
+ */
+export function resolveEmailContactoDraft(profile, accountEmail = null) {
+  if (isValidEmailContacto(profile?.email_contacto)) {
+    return normalizeEmailContacto(profile.email_contacto);
+  }
+  if (isValidEmailContacto(accountEmail)) {
+    return normalizeEmailContacto(accountEmail);
+  }
+  return "";
+}
+
+/**
+ * Para guardar: campo explícito si válido; si vacío, email de cuenta.
+ * No pisa un email_contacto distinto ya escrito en el campo.
+ * @param {unknown} raw — valor del input
+ * @param {string | null | undefined} [accountEmailFallback]
  * @returns {string | null}
  */
-export function emailContactoForStorage(raw) {
-  const email = normalizeEmailContacto(raw);
-  if (!isValidEmailContacto(email)) return null;
-  return email;
+export function emailContactoForStorage(raw, accountEmailFallback = null) {
+  const fromField = normalizeEmailContacto(raw);
+  if (isValidEmailContacto(fromField)) return fromField;
+  // Vacío o solo espacios → usar email de cuenta
+  if (!fromField && isValidEmailContacto(accountEmailFallback)) {
+    return normalizeEmailContacto(accountEmailFallback);
+  }
+  return null;
 }
 
 /**

@@ -21,9 +21,9 @@ import { hasDniUploaded, DNI_SUBIR_RUTA } from "@/app/lib/dni";
 import {
   emailContactoForStorage,
   EMAIL_CONTACTO_INVALID_MSG,
-  hasEmailContacto,
   hasTelefono,
   PROVIDER_CONTACT_BANNER_MSG,
+  resolveEmailContactoDraft,
   TELEFONO_BANNER_CLIENT_MSG,
   TELEFONO_INVALID_MSG,
   telefonoForStorage,
@@ -1150,7 +1150,9 @@ function EditarPerfilContent() {
         setApellido(perfilData.apellido || "");
         setCiudad(perfilData.ciudad || "");
         setTelefono(perfilData.telefono || "");
-        setEmailContacto(perfilData.email_contacto || "");
+        setEmailContacto(
+          resolveEmailContactoDraft(perfilData, user.email),
+        );
         const desc = perfilData.descripcion || "";
         const personalidadMatch = desc.match(/Personalidad:\s*(.+?)(?:\n\n|$)/s);
         const motivacionParts = desc.split(/\n\nPersonalidad:/);
@@ -1263,6 +1265,7 @@ function EditarPerfilContent() {
   const verticalsActivos = [...new Set(services.map((s) => s.vertical))];
   const documentContext = useMemo(
     () => ({
+      accountEmail: userEmail || null,
       profile: perfil
         ? {
             doc_dni_url: perfil.doc_dni_url,
@@ -1277,7 +1280,7 @@ function EditarPerfilContent() {
         details: s.details,
       })),
     }),
-    [perfil, providerDocuments, services],
+    [perfil, providerDocuments, services, userEmail],
   );
 
   const documentosMissingForReminder = useMemo(() => {
@@ -1574,14 +1577,14 @@ function EditarPerfilContent() {
       }
 
       const emailTrim = emailContacto.trim();
-      if (emailTrim && !emailContactoForStorage(emailTrim)) {
+      const emailStored = emailContactoForStorage(emailTrim, userEmail);
+      if (emailTrim && !emailStored) {
         setErrorMessage(EMAIL_CONTACTO_INVALID_MSG);
         setSubmitting(false);
         return;
       }
 
       const telefonoStored = telefonoForStorage(telefonoTrim);
-      const emailStored = emailContactoForStorage(emailTrim);
 
       const { error: profileError } = await supabase.from("profiles").upsert({
         id: userId,
@@ -1611,6 +1614,7 @@ function EditarPerfilContent() {
             }
           : prev,
       );
+      if (emailStored) setEmailContacto(emailStored);
 
       const revisionOutcomes = [];
 
@@ -2131,10 +2135,13 @@ function EditarPerfilContent() {
               </div>
               <div>
                 <label className="mb-1.5 block text-xs font-medium text-[#444]">Teléfono móvil</label>
-                {providerMissingContactBanner({
-                  telefono,
-                  email_contacto: emailContacto,
-                }) && (
+                {providerMissingContactBanner(
+                  {
+                    telefono,
+                    email_contacto: emailContacto,
+                  },
+                  userEmail,
+                ) && (
                   <p
                     className="mb-2 rounded-lg px-3 py-2 text-[11px] leading-relaxed sm:col-span-2"
                     style={{ backgroundColor: "#e8f0fb", color: "#1d4f91" }}
@@ -2175,7 +2182,8 @@ function EditarPerfilContent() {
                   style={{ borderColor: BRAND.border }}
                 />
                 <p className="mt-1 text-[10px] text-[#aaa]">
-                  Para que clientes y Home&amp;Heart puedan contactarte por email
+                  Por defecto usamos el email de tu cuenta; cámbialo si quieres otro de
+                  contacto
                 </p>
               </div>
               <div>
@@ -2471,10 +2479,13 @@ function EditarPerfilContent() {
         <div className="mx-6 mt-4 rounded-lg bg-green-50 px-4 py-3 text-sm text-green-700">{successMessage}</div>
       )}
       {!esClienteSinServicios &&
-        providerMissingContactBanner({
-          telefono,
-          email_contacto: emailContacto,
-        }) && (
+        providerMissingContactBanner(
+          {
+            telefono,
+            email_contacto: emailContacto,
+          },
+          userEmail,
+        ) && (
           <div
             className="mx-6 mt-4 rounded-lg px-4 py-3 text-sm leading-relaxed"
             style={{ backgroundColor: "#e8f0fb", color: "#1d4f91" }}

@@ -260,7 +260,8 @@ function DashboardContent() {
         </div>
       )}
 
-      {enModoProveedor && providerMissingContactBanner(perfil) && (
+      {enModoProveedor &&
+        providerMissingContactBanner(perfil, user?.email) && (
         <div
           style={{
             background: '#e8f0fb',

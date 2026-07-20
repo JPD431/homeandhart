@@ -86,6 +86,7 @@ export function getServiceActivationBlockers(
   documentContext = null,
 ) {
   const blockers = [];
+  const accountEmail = documentContext?.accountEmail ?? null;
 
   if (!hasDniUploaded(perfil)) {
     blockers.push(DNI_REQUIRED_PROVIDER_MSG);
@@ -99,7 +100,8 @@ export function getServiceActivationBlockers(
   if (!hasTelefono(perfil)) {
     blockers.push(TELEFONO_REQUIRED_PROVIDER_MSG);
   }
-  if (!hasEmailContacto(perfil)) {
+  // Email de cuenta (login) vale como email_contacto — no bloquear si ya lo tenemos.
+  if (!hasEmailContacto(perfil, accountEmail)) {
     blockers.push(EMAIL_CONTACTO_REQUIRED_PROVIDER_MSG);
   }
   if (
@@ -151,12 +153,14 @@ export function getActivacionBloqueoMensaje(
 }
 
 /**
- * ¿Faltan datos de contacto del proveedor (perfil) para el banner suave?
+ * ¿Faltan datos de contacto del proveedor para el banner suave?
+ * Email de cuenta cuenta como email_contacto.
  * @param {object|null|undefined} perfil
+ * @param {string | null | undefined} [accountEmail]
  */
-export function providerMissingContactBanner(perfil) {
+export function providerMissingContactBanner(perfil, accountEmail = null) {
   if (!perfil) return false;
-  return !hasTelefono(perfil) || !hasEmailContacto(perfil);
+  return !hasTelefono(perfil) || !hasEmailContacto(perfil, accountEmail);
 }
 
 /**

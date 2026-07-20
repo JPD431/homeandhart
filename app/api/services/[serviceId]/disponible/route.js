@@ -105,6 +105,7 @@ export async function PATCH(request, { params }) {
     const contact = await loadServiceContactAdmin(serviceId, supabaseAdmin);
 
     const documentContext = {
+      accountEmail: user.email || null,
       profile: {
         doc_dni_url: perfil.doc_dni_url,
         doc_antecedentes_url: perfil.doc_antecedentes_url,
