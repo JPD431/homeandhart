@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { createClient } from "@supabase/supabase-js";
 import { getServiceCoverPhoto } from "@/app/lib/service-card-display";
-import { supabase } from "@/app/lib/supabase";
 import { SERIF } from "@/app/components/brand";
 
 const PRIMARY = "#1d4f91";
@@ -10,6 +10,18 @@ const WARM = "#f7f5f2";
 
 const CIUDADES = ["madrid", "barcelona", "valencia", "sevilla", "bilbao"];
 const VERTICALES = ["nineras", "alojamiento", "mascotas"];
+
+/** Cliente anon sin cookies — lecturas públicas en RSC/ISR (no browser client). */
+function getPublicSupabase() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !key) {
+    throw new Error("Faltan NEXT_PUBLIC_SUPABASE_URL o NEXT_PUBLIC_SUPABASE_ANON_KEY");
+  }
+  return createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+}
 
 const VERTICAL_DB = {
   nineras: "ninos",
@@ -153,10 +165,16 @@ function isValidRoute(ciudad, vertical) {
   return CIUDADES.includes(ciudad) && VERTICALES.includes(vertical);
 }
 
+/**
+ * No pre-renderizar las 15 landings en el build (Vercel corta a 60s/ruta).
+ * Se generan bajo demanda y se cachean con ISR (revalidate).
+ * SEO: las URLs siguen indexables; el HTML se cachea tras el primer hit.
+ */
+export const revalidate = 3600;
+export const dynamicParams = true;
+
 export async function generateStaticParams() {
-  return CIUDADES.flatMap((ciudad) =>
-    VERTICALES.map((vertical) => ({ ciudad, vertical })),
-  );
+  return [];
 }
 
 export async function generateMetadata({ params }) {
@@ -276,7 +294,10 @@ function FaqAccordion({ items }) {
 }
 
 async function fetchLandingData(ciudadCapital, verticalDB) {
-  const { data: servicios } = await supabase
+  const supabase = getPublicSupabase();
+  const ciudadFilter = `ciudad.ilike.%${ciudadCapital}%,location_zone.ilike.%${ciudadCapital}%`;
+
+  const servicesQuery = supabase
     .from("services")
     .select(
       `
@@ -301,8 +322,24 @@ async function fetchLandingData(ciudadCapital, verticalDB) {
     .eq("vertical", verticalDB)
     .eq("disponible", true)
     .eq("profiles_public.verificado", true)
-    .or(`ciudad.ilike.%${ciudadCapital}%,location_zone.ilike.%${ciudadCapital}%`)
+    .or(ciudadFilter)
     .limit(6);
+
+  const countQuery = supabase
+    .from("services")
+    .select("id, profiles_public!inner(verificado)", {
+      count: "exact",
+      head: true,
+    })
+    .eq("vertical", verticalDB)
+    .eq("disponible", true)
+    .eq("profiles_public.verificado", true)
+    .or(ciudadFilter);
+
+  const [{ data: servicios }, { count: totalProveedores }] = await Promise.all([
+    servicesQuery,
+    countQuery,
+  ]);
 
   const lista = servicios ?? [];
   const proveedorIds = [
@@ -318,7 +355,10 @@ async function fetchLandingData(ciudadCapital, verticalDB) {
       .in("proveedor_id", proveedorIds);
 
     if (reviews?.length) {
-      const sum = reviews.reduce((acc, r) => acc + (Number(r.valoracion) || 0), 0);
+      const sum = reviews.reduce(
+        (acc, r) => acc + (Number(r.valoracion) || 0),
+        0,
+      );
       avgRating = (sum / reviews.length).toFixed(1);
     }
 
@@ -330,14 +370,6 @@ async function fetchLandingData(ciudadCapital, verticalDB) {
       ratingsByProveedor[rev.proveedor_id].count += 1;
     }
   }
-
-  const { count: totalProveedores } = await supabase
-    .from("services")
-    .select("id, profiles_public!inner(verificado)", { count: "exact", head: true })
-    .eq("vertical", verticalDB)
-    .eq("disponible", true)
-    .eq("profiles_public.verificado", true)
-    .or(`ciudad.ilike.%${ciudadCapital}%,location_zone.ilike.%${ciudadCapital}%`);
 
   return {
     servicios: lista,
