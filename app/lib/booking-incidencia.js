@@ -1,5 +1,3 @@
-import { sendPlatformEmail } from "@/app/lib/send-platform-email";
-
 /** Estados en los que cliente o proveedor pueden reportar una incidencia. */
 export const ESTADOS_REPORTABLES_INCIDENCIA = new Set([
   "confirmada",
@@ -108,21 +106,4 @@ export async function registrarIncidenciaReserva(supabaseAdmin, {
     motivoFinal,
     descripcion,
   };
-}
-
-export async function enviarEmailIncidenciaReserva(_baseUrl, payload) {
-  try {
-    const result = await sendPlatformEmail({
-      tipo: "incidencia_reserva",
-      ...payload,
-    });
-    if (!result.ok) {
-      console.error(
-        "[incidencia_reserva] Email falló:",
-        result.error || result.status,
-      );
-    }
-  } catch (err) {
-    console.error("[incidencia_reserva] Email error:", err);
-  }
 }

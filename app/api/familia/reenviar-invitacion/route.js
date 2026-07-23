@@ -1,7 +1,7 @@
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { sendPlatformEmail } from "@/app/lib/send-platform-email";
+import { dispatchPlatformEmail } from "@/app/lib/platform-email-dispatch";
 import {
   resolverNombreUsuario,
   resolverUserIdPorEmail,
@@ -107,7 +107,7 @@ export async function POST(request) {
     ? `${baseUrl}/login?email=${encodeURIComponent(email)}`
     : `${baseUrl}/registro?email=${encodeURIComponent(email)}`;
 
-  const result = await sendPlatformEmail({
+  const result = await dispatchPlatformEmail({
     tipo: emailTipo,
     destinatario_email: email,
     invitador_nombre: invitadorNombre,
@@ -117,6 +117,11 @@ export async function POST(request) {
   });
 
   if (!result.ok) {
+    console.error(
+      "[familia/reenviar-invitacion] FALLO email",
+      result.status,
+      result.error,
+    );
     return NextResponse.json(
       { error: result.error || "No se pudo reenviar la invitación" },
       { status: result.status || 500 },

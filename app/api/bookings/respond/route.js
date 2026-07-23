@@ -88,13 +88,18 @@ async function postBookingEmail(_baseUrl, payload) {
     const result = await sendPlatformEmail(payload);
     if (!result.ok) {
       console.error(
-        "[bookings/respond] Error enviando email:",
-        payload.tipo,
+        "[bookings/respond] FALLO email (flujo NO abortado)",
+        `tipo=${payload?.tipo || "?"}`,
+        `status=${result.status ?? "?"}`,
         result.error || result.status,
       );
     }
   } catch (err) {
-    console.error("[bookings/respond] Error enviando email:", payload.tipo, err);
+    console.error(
+      "[bookings/respond] EXCEPCIÓN email (flujo NO abortado)",
+      payload?.tipo,
+      err,
+    );
   }
 }
 

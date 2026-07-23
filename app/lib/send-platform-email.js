@@ -1,49 +1,36 @@
-import {
-  getAppBaseUrl,
-  getInternalApiSecret,
-  internalApiHeaders,
-} from "@/app/lib/internal-api-auth";
+import { dispatchPlatformEmail } from "@/app/lib/platform-email-dispatch";
 
 /**
- * Envía un email de plataforma vía POST /api/emails (solo server-side).
- * Añade el secreto interno; nunca llamar desde el navegador.
+ * Envía un email de plataforma desde código server-side.
+ * Llama DIRECTAMENTE a dispatchPlatformEmail (sin fetch HTTP, sin Bearer,
+ * sin NEXT_PUBLIC_URL ni CRON_SECRET).
  *
  * @param {Record<string, unknown>} payload — { tipo, ...campos }
  * @returns {Promise<{ ok: boolean, status: number, data?: object, error?: string }>}
  */
 export async function sendPlatformEmail(payload) {
-  if (!getInternalApiSecret()) {
-    console.error("[sendPlatformEmail] CRON_SECRET no configurado");
-    return {
-      ok: false,
-      status: 500,
-      error: "CRON_SECRET no está configurado",
-    };
-  }
-
-  const baseUrl = getAppBaseUrl();
+  const tipo =
+    typeof payload?.tipo === "string" ? payload.tipo : "(sin tipo)";
 
   try {
-    const res = await fetch(`${baseUrl}/api/emails`, {
-      method: "POST",
-      headers: internalApiHeaders(),
-      body: JSON.stringify(payload),
-    });
+    const result = await dispatchPlatformEmail(payload);
 
-    const data = await res.json().catch(() => ({}));
-
-    if (!res.ok) {
-      return {
-        ok: false,
-        status: res.status,
-        error: data.error || `Email failed: ${res.status}`,
-        data,
-      };
+    if (!result.ok) {
+      console.error(
+        "[sendPlatformEmail] FALLO",
+        `tipo=${tipo}`,
+        `status=${result.status ?? "?"}`,
+        result.error || "Error desconocido",
+      );
     }
 
-    return { ok: true, status: res.status, data };
+    return result;
   } catch (err) {
-    console.error("[sendPlatformEmail]", err);
+    console.error(
+      "[sendPlatformEmail] EXCEPCIÓN",
+      `tipo=${tipo}`,
+      err?.message || err,
+    );
     return {
       ok: false,
       status: 500,

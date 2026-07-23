@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import {
   enviarEmailIncidenciaReserva,
+} from "@/app/lib/booking-incidencia-email";
+import {
   registrarIncidenciaReserva,
 } from "@/app/lib/booking-incidencia";
 

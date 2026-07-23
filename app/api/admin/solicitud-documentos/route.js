@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAdminUser } from "@/lib/auth/requireAdmin";
-import { sendPlatformEmail } from "@/app/lib/send-platform-email";
+import { dispatchPlatformEmail } from "@/app/lib/platform-email-dispatch";
 
 /**
  * Admin solicita documentación adicional a un proveedor.
@@ -45,7 +45,7 @@ export async function POST(request) {
 
   const baseUrl = process.env.NEXT_PUBLIC_URL || "https://homeandheart.es";
 
-  const result = await sendPlatformEmail({
+  const result = await dispatchPlatformEmail({
     tipo: "solicitud_documentos",
     proveedor_id: proveedorId,
     proveedor_nombre: proveedorNombre,
@@ -56,6 +56,11 @@ export async function POST(request) {
   });
 
   if (!result.ok) {
+    console.error(
+      "[admin/solicitud-documentos] FALLO email",
+      result.status,
+      result.error,
+    );
     return NextResponse.json(
       { error: result.error || "No se pudo enviar la solicitud" },
       { status: result.status || 500 },

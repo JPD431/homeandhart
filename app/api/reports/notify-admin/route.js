@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { sendPlatformEmail } from "@/app/lib/send-platform-email";
+import { dispatchPlatformEmail } from "@/app/lib/platform-email-dispatch";
 import { resolverNombreUsuario } from "@/app/lib/email-usuario";
 
 /**
@@ -45,7 +45,7 @@ export async function POST(request) {
   const reporterNombre =
     (await resolverNombreUsuario(user.id)) || "Usuario";
 
-  const result = await sendPlatformEmail({
+  const result = await dispatchPlatformEmail({
     tipo: "incidencia",
     booking_id: bookingId || "—",
     cliente_nombre: reporterNombre,
@@ -55,6 +55,11 @@ export async function POST(request) {
   });
 
   if (!result.ok) {
+    console.error(
+      "[reports/notify-admin] FALLO email",
+      result.status,
+      result.error,
+    );
     return NextResponse.json(
       { error: result.error || "No se pudo notificar" },
       { status: result.status || 500 },

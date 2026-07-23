@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { sendPlatformEmail } from "@/app/lib/send-platform-email";
+import { dispatchPlatformEmail } from "@/app/lib/platform-email-dispatch";
 import { resolverNombreUsuario } from "@/app/lib/email-usuario";
 
 /**
@@ -38,7 +38,7 @@ export async function POST(request) {
     (await resolverNombreUsuario(user.id)) ||
     user.email.split("@")[0];
 
-  const result = await sendPlatformEmail({
+  const result = await dispatchPlatformEmail({
     tipo: "nuevo_proveedor",
     nombre,
     email: user.email,
@@ -46,6 +46,11 @@ export async function POST(request) {
   });
 
   if (!result.ok) {
+    console.error(
+      "[onboarding/notify-nuevo-proveedor] FALLO email",
+      result.status,
+      result.error,
+    );
     return NextResponse.json(
       { error: result.error || "No se pudo enviar la notificación" },
       { status: result.status || 500 },

@@ -1,7 +1,7 @@
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { sendPlatformEmail } from "@/app/lib/send-platform-email";
+import { dispatchPlatformEmail } from "@/app/lib/platform-email-dispatch";
 import { resolverNombreUsuario } from "@/app/lib/email-usuario";
 
 const supabaseAdmin = createServiceClient(
@@ -81,7 +81,7 @@ export async function POST(request) {
     (await resolverNombreUsuario(user.id)) || "Un usuario";
   const baseUrl = process.env.NEXT_PUBLIC_URL || "https://homeandheart.es";
 
-  const result = await sendPlatformEmail({
+  const result = await dispatchPlatformEmail({
     tipo: "mensaje_nuevo",
     destinatario_id: destinatarioId,
     remitente_nombre: remitenteNombre,
@@ -90,6 +90,11 @@ export async function POST(request) {
   });
 
   if (!result.ok) {
+    console.error(
+      "[chat/notify-mensaje] FALLO email",
+      result.status,
+      result.error,
+    );
     return NextResponse.json(
       { error: result.error || "No se pudo enviar el email" },
       { status: result.status || 500 },

@@ -492,13 +492,18 @@ async function sendBookingEmail(payload) {
     const result = await sendPlatformEmail(payload);
     if (!result.ok) {
       console.error(
-        "[bookings/complete] Error enviando email:",
-        payload.tipo,
+        "[bookings/complete] FALLO email (reserva NO abortada)",
+        `tipo=${payload?.tipo || "?"}`,
+        `status=${result.status ?? "?"}`,
         result.error || result.status,
       );
     }
   } catch (err) {
-    console.error("[bookings/complete] Error enviando email:", payload.tipo, err);
+    console.error(
+      "[bookings/complete] EXCEPCIÓN email (reserva NO abortada)",
+      payload?.tipo,
+      err,
+    );
   }
 }
 
