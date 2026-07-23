@@ -2189,24 +2189,21 @@ function EditarPerfilContent() {
 
     if (!confirmacion) return;
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
     try {
       const res = await fetch("/api/auth/delete-account", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: user.id }),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
 
-      if (data.success) {
+      if (res.ok && data.success) {
         await supabase.auth.signOut();
         router.push("/");
       } else {
-        alert("Error al eliminar la cuenta: " + (data.error || "Inténtalo de nuevo"));
+        alert(
+          "Error al eliminar la cuenta: " +
+            (data.error || "Inténtalo de nuevo"),
+        );
       }
     } catch {
       alert("Error al eliminar la cuenta");
