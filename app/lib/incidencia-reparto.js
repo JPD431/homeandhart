@@ -14,6 +14,7 @@ import {
   devolverCreditoCliente,
   roundMoney,
 } from "@/app/lib/stripe-reembolso";
+import { sendPlatformEmail } from "@/app/lib/send-platform-email";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const LOG_PREFIX = "[reparto]";
@@ -568,12 +569,6 @@ export async function enviarEmailsRepartoIncidencia(
   importeProveedor,
   boteInfo,
 ) {
-  const baseUrl = process.env.NEXT_PUBLIC_URL;
-  if (!baseUrl) {
-    console.error(LOG_PREFIX, "NEXT_PUBLIC_URL no configurada, emails omitidos");
-    return;
-  }
-
   const proveedor = service?.profiles_public ?? service?.profiles;
   const proveedorNombre =
     [proveedor?.nombre, proveedor?.apellido].filter(Boolean).join(" ").trim() || undefined;
@@ -585,18 +580,17 @@ export async function enviarEmailsRepartoIncidencia(
 
   if (importeCliente > 0) {
     try {
-      await fetch(`${baseUrl}/api/emails`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tipo: "incidencia_reembolso_cliente",
-          cliente_id: booking.cliente_id,
-          servicio_titulo: service?.titulo || "Servicio Home&Heart",
-          reembolso_total: roundMoney(importeCliente),
-          reembolso_tarjeta: roundMoney(tarjeta),
-          reembolso_credito: roundMoney(credito),
-        }),
+      const result = await sendPlatformEmail({
+        tipo: "incidencia_reembolso_cliente",
+        cliente_id: booking.cliente_id,
+        servicio_titulo: service?.titulo || "Servicio Home&Heart",
+        reembolso_total: roundMoney(importeCliente),
+        reembolso_tarjeta: roundMoney(tarjeta),
+        reembolso_credito: roundMoney(credito),
       });
+      if (!result.ok) {
+        console.error(LOG_PREFIX, "email cliente error:", result.error || result.status);
+      }
     } catch (err) {
       console.error(LOG_PREFIX, "email cliente error:", err);
     }
@@ -604,18 +598,17 @@ export async function enviarEmailsRepartoIncidencia(
 
   if (importeProveedor > 0) {
     try {
-      await fetch(`${baseUrl}/api/emails`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tipo: "incidencia_liberado_proveedor",
-          proveedor_id: service?.proveedor_id,
-          proveedor_nombre: proveedorNombre,
-          servicio_titulo: service?.titulo || "Servicio Home&Heart",
-          importe_proveedor: roundMoney(importeProveedor),
-          booking_id: booking.id,
-        }),
+      const result = await sendPlatformEmail({
+        tipo: "incidencia_liberado_proveedor",
+        proveedor_id: service?.proveedor_id,
+        proveedor_nombre: proveedorNombre,
+        servicio_titulo: service?.titulo || "Servicio Home&Heart",
+        importe_proveedor: roundMoney(importeProveedor),
+        booking_id: booking.id,
       });
+      if (!result.ok) {
+        console.error(LOG_PREFIX, "email proveedor error:", result.error || result.status);
+      }
     } catch (err) {
       console.error(LOG_PREFIX, "email proveedor error:", err);
     }

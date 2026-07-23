@@ -6,6 +6,7 @@ import {
   contarBookingsPorPaymentIntent,
   roundMoney,
 } from "@/app/lib/stripe-reembolso";
+import { sendPlatformEmail } from "@/app/lib/send-platform-email";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const LOG_PREFIX = "[liberar-proveedor]";
@@ -308,46 +309,38 @@ export async function enviarEmailsLiberarProveedorIncidencia(
   service,
   importeProveedor,
 ) {
-  const baseUrl = process.env.NEXT_PUBLIC_URL;
-  if (!baseUrl) {
-    console.error(LOG_PREFIX, "NEXT_PUBLIC_URL no configurada, emails omitidos");
-    return;
-  }
-
   const proveedor = service?.profiles_public ?? service?.profiles;
   const proveedorId = service?.proveedor_id;
   const proveedorNombre =
     [proveedor?.nombre, proveedor?.apellido].filter(Boolean).join(" ").trim() || undefined;
 
   try {
-    await fetch(`${baseUrl}/api/emails`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        tipo: "incidencia_liberado_proveedor",
-        proveedor_id: proveedorId,
-        proveedor_nombre: proveedorNombre,
-        servicio_titulo: service?.titulo || "Servicio Home&Heart",
-        importe_proveedor: roundMoney(importeProveedor),
-        booking_id: booking.id,
-      }),
+    const result = await sendPlatformEmail({
+      tipo: "incidencia_liberado_proveedor",
+      proveedor_id: proveedorId,
+      proveedor_nombre: proveedorNombre,
+      servicio_titulo: service?.titulo || "Servicio Home&Heart",
+      importe_proveedor: roundMoney(importeProveedor),
+      booking_id: booking.id,
     });
+    if (!result.ok) {
+      console.error(LOG_PREFIX, "email proveedor error:", result.error || result.status);
+    }
   } catch (err) {
     console.error(LOG_PREFIX, "email proveedor error:", err);
   }
 
   try {
-    await fetch(`${baseUrl}/api/emails`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        tipo: "incidencia_resuelta_cliente",
-        cliente_id: booking.cliente_id,
-        servicio_titulo: service?.titulo || "Servicio Home&Heart",
-        proveedor_nombre: proveedorNombre,
-        resolucion: "liberado_proveedor",
-      }),
+    const result = await sendPlatformEmail({
+      tipo: "incidencia_resuelta_cliente",
+      cliente_id: booking.cliente_id,
+      servicio_titulo: service?.titulo || "Servicio Home&Heart",
+      proveedor_nombre: proveedorNombre,
+      resolucion: "liberado_proveedor",
     });
+    if (!result.ok) {
+      console.error(LOG_PREFIX, "email cliente error:", result.error || result.status);
+    }
   } catch (err) {
     console.error(LOG_PREFIX, "email cliente error:", err);
   }

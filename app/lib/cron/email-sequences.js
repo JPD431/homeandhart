@@ -3,6 +3,7 @@ import { sequences } from "@/app/lib/email-sequences";
 import { isExcludedFromUserEmailSequences } from "@/app/lib/email-sequence-recipients";
 import { resolverEmailUsuario } from "@/app/lib/email-usuario";
 import { canLeaveReview } from "@/app/lib/reviews";
+import { sendPlatformEmail } from "@/app/lib/send-platform-email";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -10,7 +11,6 @@ const supabase = createClient(
 );
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const BASE_URL = process.env.NEXT_PUBLIC_URL || "https://homeandheart.es";
 
 function windowIso(hoursAgoStart, hoursAgoEnd) {
   const now = Date.now();
@@ -61,18 +61,13 @@ async function isProveedorOnboardingPendiente(userId) {
 }
 
 async function sendSequenceEmail(payload) {
-  const response = await fetch(`${BASE_URL}/api/emails`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
+  const result = await sendPlatformEmail(payload);
 
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({}));
-    throw new Error(body.error || `Email failed: ${response.status}`);
+  if (!result.ok) {
+    throw new Error(result.error || `Email failed: ${result.status}`);
   }
 
-  return response.json();
+  return result.data ?? {};
 }
 
 /** Destinatario de secuencia de usuario: excluye admin/internos. */

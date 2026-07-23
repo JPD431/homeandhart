@@ -5,6 +5,7 @@ import {
   resolverNombreUsuario,
   resolverUserIdPorEmail,
 } from "@/app/lib/email-usuario";
+import { sendPlatformEmail } from "@/app/lib/send-platform-email";
 
 const supabaseAdmin = createServiceClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -156,24 +157,19 @@ export async function POST(request) {
     : `${baseUrl}/registro?email=${encodeURIComponent(email)}`;
 
   try {
-    const emailRes = await fetch(`${baseUrl}/api/emails`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        tipo: emailTipo,
-        destinatario_email: email,
-        invitador_nombre: invitadorNombre,
-        familia_nombre: familiaNombre,
-        accion_url: accionUrl,
-        aceptar_url: `${baseUrl}/familia?aceptar=${invitacion.id}`,
-      }),
+    const result = await sendPlatformEmail({
+      tipo: emailTipo,
+      destinatario_email: email,
+      invitador_nombre: invitadorNombre,
+      familia_nombre: familiaNombre,
+      accion_url: accionUrl,
+      aceptar_url: `${baseUrl}/familia?aceptar=${invitacion.id}`,
     });
 
-    if (!emailRes.ok) {
-      const errBody = await emailRes.json().catch(() => ({}));
+    if (!result.ok) {
       console.error(
         "[familia/invitar] Error enviando email de invitación:",
-        errBody.error || emailRes.status,
+        result.error || result.status,
       );
     }
   } catch (emailErr) {

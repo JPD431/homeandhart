@@ -6,6 +6,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { getAdminUserIds } from "@/lib/auth/admin";
 import { createNotification } from "@/app/lib/notifications";
+import { sendPlatformEmail } from "@/app/lib/send-platform-email";
 import {
   REVISION_APROBADO,
   REVISION_EN_REVISION,
@@ -147,27 +148,17 @@ export async function notifyAdminsServicioPendiente(serviceId) {
   let emailSent = false;
   if (anyFresh || adminIds.length === 0) {
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_URL;
-      if (!baseUrl) {
-        console.error(LOG_PREFIX, "NEXT_PUBLIC_URL no configurada, email omitido");
+      const result = await sendPlatformEmail({
+        tipo: "admin_servicio_pendiente",
+        nombre,
+        titulo: tituloSvc,
+        service_id: serviceId,
+        vertical: row.vertical,
+      });
+      if (!result.ok) {
+        console.error(LOG_PREFIX, "Email falló:", result.error || result.status);
       } else {
-        const res = await fetch(`${baseUrl}/api/emails`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            tipo: "admin_servicio_pendiente",
-            nombre,
-            titulo: tituloSvc,
-            service_id: serviceId,
-            vertical: row.vertical,
-          }),
-        });
-        if (!res.ok) {
-          const payload = await res.json().catch(() => ({}));
-          console.error(LOG_PREFIX, "Email falló:", payload.error || res.status);
-        } else {
-          emailSent = true;
-        }
+        emailSent = true;
       }
     } catch (err) {
       console.error(LOG_PREFIX, "Email excepción:", err?.message || err);
@@ -265,29 +256,18 @@ export async function notifyProveedorServicioRevision({
 
   let emailSent = false;
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_URL;
-    if (!baseUrl) {
-      console.error(LOG_PREFIX, "NEXT_PUBLIC_URL no configurada, email omitido");
+    const result = await sendPlatformEmail({
+      tipo: accion === "aprobar" ? "servicio_publicado" : "servicio_rechazado",
+      user_id: row.proveedor_id,
+      nombre,
+      titulo: tituloSvc,
+      service_id: serviceId,
+      motivo: motivoTrim || undefined,
+    });
+    if (!result.ok) {
+      console.error(LOG_PREFIX, "Email proveedor falló:", result.error || result.status);
     } else {
-      const res = await fetch(`${baseUrl}/api/emails`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tipo:
-            accion === "aprobar" ? "servicio_publicado" : "servicio_rechazado",
-          user_id: row.proveedor_id,
-          nombre,
-          titulo: tituloSvc,
-          service_id: serviceId,
-          motivo: motivoTrim || undefined,
-        }),
-      });
-      if (!res.ok) {
-        const payload = await res.json().catch(() => ({}));
-        console.error(LOG_PREFIX, "Email proveedor falló:", payload.error || res.status);
-      } else {
-        emailSent = true;
-      }
+      emailSent = true;
     }
   } catch (err) {
     console.error(LOG_PREFIX, "Email proveedor excepción:", err?.message || err);

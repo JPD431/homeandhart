@@ -340,40 +340,13 @@ function FamiliaPageContent() {
     await loadFamilia(userId);
   }
 
-  async function sendInviteEmail(email, invitacionId, tieneCuenta) {
-    const { data: invitador } = await supabase
-      .from("profiles")
-      .select("nombre, apellido")
-      .eq("id", userId)
-      .single();
+  async function sendInviteEmail(_email, invitacionId, _tieneCuenta) {
+    if (!invitacionId) return;
 
-    const invitadorNombre =
-      [invitador?.nombre, invitador?.apellido].filter(Boolean).join(" ") ||
-      "Un miembro";
-
-    const baseUrl =
-      typeof window !== "undefined"
-        ? window.location.origin
-        : process.env.NEXT_PUBLIC_URL || "";
-    const encodedEmail = encodeURIComponent(email);
-    const emailTipo = tieneCuenta
-      ? "invitacion_familia_login"
-      : "invitacion_familia_registro";
-    const accionUrl = tieneCuenta
-      ? `${baseUrl}/login?email=${encodedEmail}`
-      : `${baseUrl}/registro?email=${encodedEmail}`;
-
-    await fetch("/api/emails", {
+    await fetch("/api/familia/reenviar-invitacion", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        tipo: emailTipo,
-        destinatario_email: email,
-        invitador_nombre: invitadorNombre,
-        familia_nombre: familia.nombre,
-        accion_url: accionUrl,
-        aceptar_url: `${baseUrl}/familia?aceptar=${invitacionId}`,
-      }),
+      body: JSON.stringify({ invitacion_id: invitacionId }),
     });
   }
 

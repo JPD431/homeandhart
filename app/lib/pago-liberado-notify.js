@@ -6,6 +6,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { createNotification } from "@/app/lib/notifications";
 import { getIngresoProveedorFromBooking, roundMoney } from "@/app/lib/ingresos-proveedor";
+import { sendPlatformEmail } from "@/app/lib/send-platform-email";
 
 const LOG_PREFIX = "[pago-liberado-notify]";
 export const PAGO_LIBERADO_TIPO = "pago_liberado";
@@ -125,33 +126,27 @@ export async function notifyProveedorPagoLiberado(bookingId) {
         .maybeSingle();
 
       if (!existingLog) {
-        const baseUrl = process.env.NEXT_PUBLIC_URL;
-        if (!baseUrl) {
-          console.error(LOG_PREFIX, "NEXT_PUBLIC_URL no configurada, email omitido");
-        } else {
-          const res = await fetch(`${baseUrl}/api/emails`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              tipo: PAGO_LIBERADO_EMAIL_TIPO,
-              user_id: proveedorId,
-              nombre,
-              titulo: tituloServicio,
-              importe: importeLabel,
-              importe_num: importe,
-              booking_id: bookingId,
-            }),
+        try {
+          const result = await sendPlatformEmail({
+            tipo: PAGO_LIBERADO_EMAIL_TIPO,
+            user_id: proveedorId,
+            nombre,
+            titulo: tituloServicio,
+            importe: importeLabel,
+            importe_num: importe,
+            booking_id: bookingId,
           });
-          if (!res.ok) {
-            const payload = await res.json().catch(() => ({}));
+          if (!result.ok) {
             console.error(
               LOG_PREFIX,
               "Email falló:",
-              payload.error || res.status,
+              result.error || result.status,
             );
           } else {
             emailSent = true;
           }
+        } catch (emailErr) {
+          console.error(LOG_PREFIX, "Email excepción:", emailErr?.message || emailErr);
         }
       }
     } catch (emailErr) {

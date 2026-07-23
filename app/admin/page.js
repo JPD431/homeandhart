@@ -905,17 +905,15 @@ function AdminPageInner() {
     setSuccessMessage("");
 
     try {
-      const response = await fetch("/api/emails", {
+      const response = await fetch("/api/admin/solicitud-documentos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          tipo: "solicitud_documentos",
           proveedor_id: provider.id,
           proveedor_nombre: fullName(provider),
           documentos: documentLabels,
           mensaje: requestMessage.trim() || "",
           asunto: "Home&Heart — Necesitamos documentación adicional",
-          perfil_url: `${window.location.origin}/ser-proveedor`,
         }),
       });
 

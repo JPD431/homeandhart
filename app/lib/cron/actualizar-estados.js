@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { capturarYTransferirPago } from "@/app/lib/capturar-y-transferir";
 import { createNotification } from "@/app/lib/notifications";
+import { sendPlatformEmail } from "@/app/lib/send-platform-email";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -62,15 +63,18 @@ export async function runActualizarEstados() {
       .eq("id", booking.id);
 
     try {
-      await fetch(`${process.env.NEXT_PUBLIC_URL}/api/emails`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tipo: "servicio_completado",
-          booking_id: booking.id,
-          cliente_id: booking.cliente_id,
-        }),
+      const result = await sendPlatformEmail({
+        tipo: "servicio_completado",
+        booking_id: booking.id,
+        cliente_id: booking.cliente_id,
       });
+      if (!result.ok) {
+        console.error(
+          "[cron/actualizar-estados] Error email servicio_completado",
+          booking.id,
+          result.error || result.status,
+        );
+      }
     } catch (emailErr) {
       console.error(
         "[cron/actualizar-estados] Error email servicio_completado",

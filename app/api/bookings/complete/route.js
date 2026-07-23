@@ -1,3 +1,4 @@
+import { sendPlatformEmail } from "@/app/lib/send-platform-email";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import Stripe from "stripe";
 import { NextResponse } from "next/server";
@@ -487,27 +488,13 @@ async function rollbackInsertedBookings(bookingIds, paymentIntentId) {
 }
 
 async function sendBookingEmail(payload) {
-  const baseUrl = process.env.NEXT_PUBLIC_URL;
-  if (!baseUrl) {
-    console.error(
-      "[bookings/complete] NEXT_PUBLIC_URL no configurada, email omitido:",
-      payload.tipo,
-    );
-    return;
-  }
-
   try {
-    const res = await fetch(`${baseUrl}/api/emails`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
+    const result = await sendPlatformEmail(payload);
+    if (!result.ok) {
       console.error(
         "[bookings/complete] Error enviando email:",
         payload.tipo,
-        data.error || res.status,
+        result.error || result.status,
       );
     }
   } catch (err) {

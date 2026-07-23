@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getBookingPrecioBase } from "@/app/lib/ingresos-proveedor";
 import { notifyBookingEvent } from "@/app/lib/notifications";
 import { registrarCancelacion } from "@/app/lib/cancelaciones";
+import { sendPlatformEmail } from "@/app/lib/send-platform-email";
 
 const supabaseAdmin = createServiceClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -259,21 +260,17 @@ async function activarGarantiaCliente(booking, service) {
   const alternativas = garantiaData.alternativas ?? [];
 
   if (clienteEmail) {
-    const emailRes = await fetch(`${baseUrl}/api/emails`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        tipo: "cancelacion_garantia",
-        cliente_email: clienteEmail,
-        cliente_nombre: clienteNombre,
-        precio_original: booking.precio_total,
-        alternativas,
-      }),
+    const result = await sendPlatformEmail({
+      tipo: "cancelacion_garantia",
+      cliente_email: clienteEmail,
+      cliente_nombre: clienteNombre,
+      precio_original: booking.precio_total,
+      alternativas,
     });
 
-    const emailData = await emailRes.json();
-    if (!emailRes.ok || emailData.error) {
-      throw new Error(emailData.error || "Error al enviar email de garantía");
+    const emailData = result.data ?? {};
+    if (!result.ok || emailData.error) {
+      throw new Error(emailData.error || result.error || "Error al enviar email de garantía");
     }
   }
 

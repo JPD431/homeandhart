@@ -1,6 +1,7 @@
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { getAdminUser } from "@/lib/auth/requireAdmin";
 import { createClient } from "@/lib/supabase/server";
+import { isInternalApiAuthorized } from "@/app/lib/internal-api-auth";
 
 const supabaseAdmin = createServiceClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -8,8 +9,7 @@ const supabaseAdmin = createServiceClient(
 );
 
 export function isCronInternalCall(request) {
-  const authHeader = request.headers.get("authorization");
-  return authHeader === `Bearer ${process.env.CRON_SECRET}`;
+  return isInternalApiAuthorized(request);
 }
 
 /** Llamadas server-to-server (cron, rollback interno futuro). */

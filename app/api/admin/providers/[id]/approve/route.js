@@ -8,6 +8,7 @@ import {
 } from "@/app/lib/onboarding-persist";
 import { servicioRevisionAprobada } from "@/app/lib/provider-publicacion";
 import { resolveServicioPendienteNotifications } from "@/app/lib/service-revision-notify";
+import { sendPlatformEmail } from "@/app/lib/send-platform-email";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -19,18 +20,18 @@ async function sendProveedorVerificadoEmail(userId, nombre) {
     return;
   }
 
-  const baseUrl = process.env.NEXT_PUBLIC_URL || "https://homeandheart.es";
-
   try {
-    await fetch(`${baseUrl}/api/emails`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        tipo: "proveedor_verificado",
-        user_id: userId,
-        nombre,
-      }),
+    const result = await sendPlatformEmail({
+      tipo: "proveedor_verificado",
+      user_id: userId,
+      nombre,
     });
+    if (!result.ok) {
+      console.error(
+        "[approve] Error enviando email proveedor_verificado:",
+        result.error || result.status,
+      );
+    }
   } catch (err) {
     console.error("[approve] Error enviando email proveedor_verificado:", err);
   }

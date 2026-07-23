@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { capturarYTransferirPago } from "@/app/lib/capturar-y-transferir";
 import { verificarTokenConfirmacion } from "@/app/lib/confirmar-token";
+import { isInternalApiAuthorized } from "@/app/lib/internal-api-auth";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -9,9 +10,7 @@ const supabase = createClient(
 
 export async function POST(request) {
   try {
-    const authHeader = request.headers.get("authorization");
-    const isInternalCall =
-      authHeader === `Bearer ${process.env.CRON_SECRET}`;
+    const isInternalCall = isInternalApiAuthorized(request);
 
     const { paymentIntentId, bookingId, token } = await request.json();
 

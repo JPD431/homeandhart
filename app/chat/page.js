@@ -931,33 +931,12 @@ export default function ChatPage() {
   async function maybeNotifyRecipient(conversationId, messageContent) {
     if (!userId || !selectedConversation) return;
 
-    const otroParticipanteId =
-      selectedConversation.participant_a_id === userId
-        ? selectedConversation.participant_b_id
-        : selectedConversation.participant_a_id;
-
-    const debeEnviarEmail = true;
-    if (!debeEnviarEmail) return;
-
-    const { data: senderProfile } = await supabase
-      .from("profiles")
-      .select("nombre, apellido")
-      .eq("id", userId)
-      .single();
-
-    const remitenteNombre =
-      formatShortName(senderProfile?.nombre, senderProfile?.apellido) ||
-      "Un usuario";
-
-    const response = await fetch("/api/emails", {
+    const response = await fetch("/api/chat/notify-mensaje", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        tipo: "mensaje_nuevo",
-        destinatario_id: otroParticipanteId,
-        remitente_nombre: remitenteNombre,
+        conversation_id: conversationId,
         mensaje_preview: messageContent,
-        chat_url: `${window.location.origin}/chat?conversation=${conversationId}`,
       }),
     });
 

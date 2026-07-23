@@ -76,17 +76,6 @@ export default function ReportarModal({
       return;
     }
 
-    const { data: reporterProfile } = await supabase
-      .from("profiles")
-      .select("nombre, apellido")
-      .eq("id", user.id)
-      .single();
-
-    const reporterNombre =
-      [reporterProfile?.nombre, reporterProfile?.apellido]
-        .filter(Boolean)
-        .join(" ") || "Usuario";
-
     const { error: insertError } = await supabase.from("reports").insert({
       reporter_id: user.id,
       reported_id: reportedId,
@@ -103,16 +92,17 @@ export default function ReportarModal({
       return;
     }
 
-    await fetch("/api/emails", {
+    await fetch("/api/reports/notify-admin", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        tipo: "incidencia",
-        booking_id: bookingId || "—",
-        cliente_nombre: reporterNombre,
-        fecha_inicio: fechaInicio || "—",
-        fecha_fin: fechaFin || fechaInicio || "—",
-        descripcion: `Nuevo reporte (${tipo})\nMotivo: ${motivo}\nReportado: ${reportedName}\n\n${descripcion.trim()}`,
+        tipo,
+        motivo,
+        descripcion: descripcion.trim(),
+        reported_name: reportedName,
+        booking_id: bookingId || null,
+        fecha_inicio: fechaInicio || null,
+        fecha_fin: fechaFin || null,
       }),
     });
 

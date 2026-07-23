@@ -6,6 +6,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { getAdminUserIds } from "@/lib/auth/admin";
 import { createNotification } from "@/app/lib/notifications";
+import { sendPlatformEmail } from "@/app/lib/send-platform-email";
 
 const LOG_PREFIX = "[dni-admin-notify]";
 export const DNI_PENDIENTE_TIPO = "dni_pendiente_revision";
@@ -131,25 +132,15 @@ export async function notifyAdminsDniPendiente(uploaderUserId) {
   // Si no hay ADMIN_USER_IDS, igual avisamos por email a soporte@.
   if (anyFresh || adminIds.length === 0) {
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_URL;
-      if (!baseUrl) {
-        console.error(LOG_PREFIX, "NEXT_PUBLIC_URL no configurada, email omitido");
+      const result = await sendPlatformEmail({
+        tipo: "admin_dni_pendiente",
+        nombre,
+        user_id: uploaderUserId,
+      });
+      if (!result.ok) {
+        console.error(LOG_PREFIX, "Email falló:", result.error || result.status);
       } else {
-        const res = await fetch(`${baseUrl}/api/emails`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            tipo: "admin_dni_pendiente",
-            nombre,
-            user_id: uploaderUserId,
-          }),
-        });
-        if (!res.ok) {
-          const payload = await res.json().catch(() => ({}));
-          console.error(LOG_PREFIX, "Email falló:", payload.error || res.status);
-        } else {
-          emailSent = true;
-        }
+        emailSent = true;
       }
     } catch (err) {
       console.error(LOG_PREFIX, "Email excepción:", err?.message || err);

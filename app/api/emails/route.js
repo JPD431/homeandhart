@@ -10,6 +10,10 @@ import {
 import { getIngresoProveedorFromBooking } from "@/app/lib/ingresos-proveedor";
 import { firmarTokenConfirmacion } from "@/app/lib/confirmar-token";
 import {
+  isInternalApiAuthorized,
+  unauthorizedInternalResponse,
+} from "@/app/lib/internal-api-auth";
+import {
   BASE_URL,
   BRAND_PRIMARY,
   BRAND_LIGHT,
@@ -1730,8 +1734,17 @@ async function sendMensajeNuevoEmail(data) {
   return { success: true };
 }
 
+/**
+ * Solo server-to-server con Authorization: Bearer CRON_SECRET.
+ * El navegador no debe llamar aquí: usar rutas autenticadas que
+ * invocan sendPlatformEmail() (app/lib/send-platform-email.js).
+ */
 export async function POST(request) {
   try {
+    if (!isInternalApiAuthorized(request)) {
+      return unauthorizedInternalResponse();
+    }
+
     if (!process.env.RESEND_API_KEY) {
       return Response.json(
         { error: "RESEND_API_KEY no está configurada" },

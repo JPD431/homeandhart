@@ -1,8 +1,16 @@
+import {
+  isInternalApiAuthorized,
+  unauthorizedInternalResponse,
+} from "@/app/lib/internal-api-auth";
+
+/**
+ * Auth de crons Vercel / disparos internos.
+ * Delega en la implementación fail-closed + timing-safe central.
+ */
 export function verifyCronAuth(request) {
-  const authHeader = request.headers.get("authorization");
-  return authHeader === `Bearer ${process.env.CRON_SECRET}`;
+  return isInternalApiAuthorized(request);
 }
 
 export function unauthorizedCronResponse() {
-  return Response.json({ error: "Unauthorized" }, { status: 401 });
+  return unauthorizedInternalResponse();
 }

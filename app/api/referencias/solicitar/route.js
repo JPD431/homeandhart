@@ -2,6 +2,7 @@ import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { RELACION_OPTIONS } from "@/app/lib/referencias";
+import { sendPlatformEmail } from "@/app/lib/send-platform-email";
 
 const supabaseAdmin = createServiceClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -11,26 +12,13 @@ const supabaseAdmin = createServiceClient(
 const RELACION_VALUES = new Set(RELACION_OPTIONS);
 
 async function sendSolicitudReferenciaEmail(payload) {
-  const baseUrl = process.env.NEXT_PUBLIC_URL;
-  if (!baseUrl) {
-    console.error(
-      "[referencias/solicitar] NEXT_PUBLIC_URL no configurada, email omitido",
-    );
-    return;
-  }
-
   try {
-    const res = await fetch(`${baseUrl}/api/emails`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+    const result = await sendPlatformEmail(payload);
 
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
+    if (!result.ok) {
       console.error(
         "[referencias/solicitar] Error enviando email:",
-        data.error || res.status,
+        result.error || result.status,
       );
     }
   } catch (err) {

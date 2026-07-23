@@ -9,6 +9,7 @@ import {
 } from "@/app/lib/service-contact";
 import { loadBookingContactClienteAdmin } from "@/app/lib/booking-contact-cliente";
 import { shouldShowClienteDireccionToProvider } from "@/app/lib/lugar-servicio";
+import { sendPlatformEmail } from "@/app/lib/send-platform-email";
 
 const supabaseAdmin = createServiceClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -82,19 +83,14 @@ function mergeServiceEmbed(embed, fallback) {
   };
 }
 
-async function postBookingEmail(baseUrl, payload) {
+async function postBookingEmail(_baseUrl, payload) {
   try {
-    const res = await fetch(`${baseUrl}/api/emails`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) {
-      const errBody = await res.json().catch(() => ({}));
+    const result = await sendPlatformEmail(payload);
+    if (!result.ok) {
       console.error(
         "[bookings/respond] Error enviando email:",
         payload.tipo,
-        errBody.error || res.status,
+        result.error || result.status,
       );
     }
   } catch (err) {

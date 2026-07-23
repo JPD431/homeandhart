@@ -3,6 +3,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse } from "next/server";
 import { linkPendingInvitesToProfile } from "@/app/lib/familia-invites";
 import { isExcludedFromUserEmailSequences } from "@/app/lib/email-sequence-recipients";
+import { sendPlatformEmail } from "@/app/lib/send-platform-email";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -52,18 +53,22 @@ async function sendWelcomeEmail(user) {
 
   if (existingLog) return;
 
-  const baseUrl = process.env.NEXT_PUBLIC_URL || "https://homeandheart.es";
-
-  await fetch(`${baseUrl}/api/emails`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
+  try {
+    const result = await sendPlatformEmail({
       tipo,
       email: user.email,
       nombre,
       user_id: user.id,
-    }),
-  });
+    });
+    if (!result.ok) {
+      console.error(
+        "[auth/callback] Error enviando email bienvenida:",
+        result.error || result.status,
+      );
+    }
+  } catch (err) {
+    console.error("[auth/callback] Error enviando email bienvenida:", err);
+  }
 }
 
 async function runPostVerificationSideEffects(user) {

@@ -6,6 +6,7 @@ import {
   devolverCreditoCliente,
   roundMoney,
 } from "@/app/lib/stripe-reembolso";
+import { sendPlatformEmail } from "@/app/lib/send-platform-email";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const LOG_PREFIX = "[reembolso]";
@@ -407,36 +408,29 @@ export async function ejecutarReembolsoTotalIncidencia(supabaseAdmin, booking, a
 }
 
 export async function enviarEmailReembolsoIncidencia(booking, service, reembolso) {
-  const baseUrl = process.env.NEXT_PUBLIC_URL;
-  if (!baseUrl) {
-    console.error(LOG_PREFIX, "NEXT_PUBLIC_URL no configurada, email omitido");
-    return;
-  }
-
   const proveedor = service?.profiles ?? service?.profiles_public;
   const proveedorNombre =
     [proveedor?.nombre, proveedor?.apellido].filter(Boolean).join(" ").trim() || undefined;
 
   try {
-    const res = await fetch(`${baseUrl}/api/emails`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        tipo: "incidencia_reembolso_cliente",
-        cliente_id: booking.cliente_id,
-        servicio_titulo: service?.titulo || "Servicio Home&Heart",
-        proveedor_nombre: proveedorNombre,
-        fecha_inicio: booking.fecha_inicio,
-        fecha_fin: booking.fecha_fin,
-        reembolso_total: roundMoney(reembolso.bruto),
-        reembolso_tarjeta: roundMoney(reembolso.tarjeta),
-        reembolso_credito: roundMoney(reembolso.credito),
-      }),
+    const result = await sendPlatformEmail({
+      tipo: "incidencia_reembolso_cliente",
+      cliente_id: booking.cliente_id,
+      servicio_titulo: service?.titulo || "Servicio Home&Heart",
+      proveedor_nombre: proveedorNombre,
+      fecha_inicio: booking.fecha_inicio,
+      fecha_fin: booking.fecha_fin,
+      reembolso_total: roundMoney(reembolso.bruto),
+      reembolso_tarjeta: roundMoney(reembolso.tarjeta),
+      reembolso_credito: roundMoney(reembolso.credito),
     });
 
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      console.error(LOG_PREFIX, "Error enviando email:", data.error || res.status);
+    if (!result.ok) {
+      console.error(
+        LOG_PREFIX,
+        "Error enviando email:",
+        result.error || result.status,
+      );
     }
   } catch (err) {
     console.error(LOG_PREFIX, "Error enviando email:", err);

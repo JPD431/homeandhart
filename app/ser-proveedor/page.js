@@ -981,13 +981,11 @@ export default function SerProveedorPage() {
         }
       }
 
-      await fetch("/api/emails", {
+      await fetch("/api/onboarding/notify-nuevo-proveedor", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          tipo: "nuevo_proveedor",
           nombre: nombre.trim(),
-          email: user.email,
           verticales: verticalesSeleccionados,
         }),
       });
