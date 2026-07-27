@@ -31,10 +31,6 @@ export async function POST(request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  if (!verificarTokenConfirmacion(bookingId, token)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   const { data: booking, error: bookingError } = await supabaseAdmin
     .from("bookings")
     .select(
@@ -45,6 +41,7 @@ export async function POST(request) {
       estado,
       fecha_inicio,
       fecha_fin,
+      payment_intent_id,
       services:service_id (
         titulo,
         proveedor_id,
@@ -57,6 +54,17 @@ export async function POST(request) {
 
   if (bookingError || !booking) {
     return NextResponse.json({ error: "Reserva no encontrada" }, { status: 404 });
+  }
+
+  // Token HMAC atado a bookingId + paymentIntentId + expiración.
+  if (
+    !verificarTokenConfirmacion(
+      bookingId,
+      booking.payment_intent_id || "",
+      token,
+    )
+  ) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const service = booking.services ?? {};

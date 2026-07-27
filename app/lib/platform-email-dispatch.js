@@ -1680,7 +1680,24 @@ async function sendServicioCompletadoEmail(data) {
       (await resolverNombreUsuario(data.cliente_id)) || "Cliente";
   }
 
-  const confirmToken = firmarTokenConfirmacion(data.booking_id);
+  let paymentIntentId = data.payment_intent_id || null;
+  if (!paymentIntentId) {
+    const supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY,
+    );
+    const { data: bookingRow } = await supabaseAdmin
+      .from("bookings")
+      .select("payment_intent_id")
+      .eq("id", data.booking_id)
+      .maybeSingle();
+    paymentIntentId = bookingRow?.payment_intent_id || "";
+  }
+
+  const confirmToken = firmarTokenConfirmacion(
+    data.booking_id,
+    paymentIntentId || "",
+  );
   if (!confirmToken) {
     return { error: "No se pudo generar el token de confirmación" };
   }

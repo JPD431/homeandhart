@@ -67,6 +67,7 @@ export async function runActualizarEstados() {
         tipo: "servicio_completado",
         booking_id: booking.id,
         cliente_id: booking.cliente_id,
+        payment_intent_id: booking.payment_intent_id || "",
       });
       if (!result.ok) {
         console.error(

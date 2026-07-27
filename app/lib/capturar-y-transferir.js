@@ -203,7 +203,79 @@ export async function capturarYTransferirPago(
     return { success: true, already_processed: true };
   }
 
-  const paymentIntent = await stripe.paymentIntents.capture(paymentIntentId);
+  if (!existingBookings?.length) {
+    return {
+      success: false,
+      error: "PaymentIntent no asociado a ninguna reserva",
+      error_code: "pi_unlinked",
+    };
+  }
+
+  let paymentIntent;
+  try {
+    paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+  } catch (retrieveErr) {
+    return {
+      success: false,
+      error: retrieveErr?.message ?? String(retrieveErr),
+      error_code: "pi_retrieve_failed",
+    };
+  }
+
+  const piStatus = paymentIntent.status;
+
+  if (piStatus === "canceled") {
+    return {
+      success: false,
+      error: "El PaymentIntent está cancelado; no se puede capturar",
+      error_code: "pi_canceled",
+      pi_status: piStatus,
+    };
+  }
+
+  if (piStatus === "requires_capture") {
+    try {
+      paymentIntent = await stripe.paymentIntents.capture(
+        paymentIntentId,
+        {},
+        { idempotencyKey: `capture-payment:${paymentIntentId}` },
+      );
+    } catch (captureErr) {
+      // Carrera / reintento: si Stripe ya capturó, recuperar estado actual.
+      if (
+        captureErr?.code === "payment_intent_unexpected_state" ||
+        /already been captured/i.test(captureErr?.message || "")
+      ) {
+        paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+        if (paymentIntent.status !== "succeeded") {
+          return {
+            success: false,
+            error: captureErr?.message ?? String(captureErr),
+            error_code: "pi_capture_failed",
+            pi_status: paymentIntent.status,
+          };
+        }
+      } else {
+        return {
+          success: false,
+          error: captureErr?.message ?? String(captureErr),
+          error_code: "pi_capture_failed",
+          pi_status: piStatus,
+        };
+      }
+    }
+  } else if (piStatus === "succeeded") {
+    // Idempotencia: ya capturado (reintento tras fallo de transferencia).
+    // Seguimos con el reparto / marcado de pago_liberado_at.
+  } else {
+    return {
+      success: false,
+      error: `PaymentIntent no capturable (estado: ${piStatus})`,
+      error_code: "pi_not_capturable",
+      pi_status: piStatus,
+    };
+  }
+
   const chargeId = paymentIntent.latest_charge;
 
   const {
