@@ -1,15 +1,70 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient as createServiceClient } from "@supabase/supabase-js";
+import { getAdminUser } from "@/lib/auth/requireAdmin";
+import { createClient } from "@/lib/supabase/server";
 import { resolverEmailUsuario } from "@/app/lib/email-usuario";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY,
-);
+const FORBIDDEN = { error: "No autorizado" };
 
-export async function GET(request, { params }) {
+function getServiceRoleClient() {
+  if (
+    !process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    !process.env.SUPABASE_SERVICE_ROLE_KEY
+  ) {
+    return null;
+  }
+  return createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+    { auth: { persistSession: false, autoRefreshToken: false } },
+  );
+}
+
+/**
+ * Factura HTML de una reserva.
+ * Auth: sesión obligatoria.
+ * Autorización: solo el CLIENTE de la reserva o un ADMIN verificado.
+ * (El proveedor no: la factura incluye email/PII del cliente y el UI
+ * solo la ofrece al cliente en /historial y /reserva/[id].)
+ */
+export async function GET(_request, { params }) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return Response.json({ error: "No autenticado" }, { status: 401 });
+  }
+
   const { bookingId } = await params;
+  if (!bookingId || typeof bookingId !== "string") {
+    return Response.json(FORBIDDEN, { status: 403 });
+  }
 
-  const { data: booking } = await supabase
+  const adminUser = await getAdminUser();
+  const isAdmin = Boolean(adminUser);
+
+  // Service role solo tras autenticación (y se usa primero solo para authz mínima).
+  const supabaseAdmin = getServiceRoleClient();
+  if (!supabaseAdmin) {
+    return Response.json({ error: "Configuración incompleta" }, { status: 500 });
+  }
+
+  const { data: authzRow } = await supabaseAdmin
+    .from("bookings")
+    .select("id, cliente_id")
+    .eq("id", bookingId)
+    .maybeSingle();
+
+  // Misma respuesta si no existe o no tiene derecho (anti-enumeración / no filtrar).
+  const isCliente = authzRow?.cliente_id === user.id;
+  if (!authzRow || (!isCliente && !isAdmin)) {
+    return Response.json(FORBIDDEN, { status: 403 });
+  }
+
+  // Autorizado: cargar datos completos y generar factura.
+  const { data: booking } = await supabaseAdmin
     .from("bookings")
     .select(
       `
@@ -22,7 +77,7 @@ export async function GET(request, { params }) {
     .single();
 
   if (!booking) {
-    return Response.json({ error: "Reserva no encontrada" }, { status: 404 });
+    return Response.json(FORBIDDEN, { status: 403 });
   }
 
   const clienteEmail =
