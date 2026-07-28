@@ -40,7 +40,7 @@ import {
   restoreBundleStateFromSession,
   writeBundleStateToSession,
 } from "@/app/lib/bundle-persist";
-import { getHoyDateStr, getPrecioEfectivo, isOfertaActiva } from "@/app/lib/ofertas";
+import { getPrecioEfectivo, isOfertaActiva } from "@/app/lib/ofertas";
 import {
   applyClientPrice,
   billingNeedsDuracionHoras,
@@ -2163,8 +2163,7 @@ export default function ReservarPage() {
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const serviceId = params.serviceId;
-  const precioEspecialParam = searchParams.get("precio_especial");
-  const validaHastaParam = searchParams.get("valida_hasta");
+  // Oferta de chat vía ?precio_especial= ya no afecta al cobro (F1: solo BD).
   const cancelarBookingId = searchParams.get("cancelar_booking");
 
   const [loading, setLoading] = useState(true);
@@ -2710,15 +2709,10 @@ export default function ReservarPage() {
   };
   const profile = service?.profiles_public ?? {};
   const unitPrice = Number(service?.precio) || 0;
-  const precioEspecialChat = useMemo(() => {
-    const precio = Number(precioEspecialParam);
-    if (!precio || precio <= 0 || !validaHastaParam) return null;
-    if (validaHastaParam < getHoyDateStr()) return null;
-    return precio;
-  }, [precioEspecialParam, validaHastaParam]);
+  // Ofertas de chat (query precio_especial) NO rebajan el cobro: no hay fila en BD.
+  // Solo se aplican ofertas de services.oferta_descuento vía getPrecioEfectivo / calculateServiceBasePrice.
   const precioEfectivo = service ? getPrecioEfectivo(service) : 0;
-  const ofertaActiva =
-    service && !precioEspecialChat ? isOfertaActiva(service) : false;
+  const ofertaActiva = service ? isOfertaActiva(service) : false;
   const cancelPolicy = getCancelPolicy(service?.cancellation_policy);
 
   const serviceStartAt = useMemo(
@@ -3165,12 +3159,10 @@ export default function ReservarPage() {
       }
 
       const dateContext = buildDateContextFromCartEntry(entry);
-      const unitOverride =
-        svc.id === service.id ? precioEspecialChat : null;
       const calc = calculateServiceBasePrice(
         svcForPrice,
         dateContext,
-        unitOverride,
+        null,
         tarifasPorServicio[svc.id] ?? {},
       );
       let ready = calc.ready;
@@ -3265,7 +3257,6 @@ export default function ReservarPage() {
     service,
     selectedServices,
     cartByServiceId,
-    precioEspecialChat,
     perfilCliente,
     tarifasPorServicio,
   ]);
@@ -3741,8 +3732,6 @@ export default function ReservarPage() {
           mensaje,
           familia_id:
             reservarComoFamilia && familiaInfo?.id ? familiaInfo.id : null,
-          precio_especial: precioEspecialChat,
-          valida_hasta: validaHastaParam || null,
           num_huespedes: serviceNeedsUnidadesSelector(service)
             ? numHuespedes
             : null,
@@ -3782,8 +3771,6 @@ export default function ReservarPage() {
       reservarComoFamilia,
       familiaInfo,
       precioListo,
-      precioEspecialChat,
-      validaHastaParam,
     ],
   );
 
@@ -3841,8 +3828,6 @@ export default function ReservarPage() {
           mensaje,
           familia_id:
             reservarComoFamilia && familiaInfo?.id ? familiaInfo.id : null,
-          precio_especial: precioEspecialChat,
-          valida_hasta: validaHastaParam || null,
           num_huespedes: serviceNeedsUnidadesSelector(service)
             ? numHuespedes
             : null,
@@ -3879,8 +3864,6 @@ export default function ReservarPage() {
       reservarComoFamilia,
       familiaInfo,
       precioListo,
-      precioEspecialChat,
-      validaHastaParam,
     ],
   );
 
@@ -4509,11 +4492,9 @@ export default function ReservarPage() {
                 </div>
               )}
 
-              {(precioEspecialChat || ofertaActiva) && (
+              {ofertaActiva && (
                 <p className="mt-3 text-[11px] font-medium text-green-700">
-                  {precioEspecialChat
-                    ? "Precio especial acordado con el proveedor 🏷️"
-                    : `Oferta activa: ${precioEfectivo}€${verticalConfig.priceSuffix}`}
+                  {`Oferta activa: ${precioEfectivo}€${verticalConfig.priceSuffix}`}
                 </p>
               )}
             </section>
@@ -5119,13 +5100,6 @@ export default function ReservarPage() {
                       </div>
                     );
                   })}
-
-                  {precioListo && precioEspecialChat && (
-                    <div className="mt-2 flex items-center justify-between text-[11px] font-medium text-green-700">
-                      <span>Precio especial 🏷️</span>
-                      <span>Aplicado</span>
-                    </div>
-                  )}
 
                   {precioListo &&
                     priceSummary.lines

@@ -3,7 +3,6 @@ import { createClient as createServiceClient } from "@supabase/supabase-js";
 import Stripe from "stripe";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { getHoyDateStr } from "@/app/lib/ofertas";
 import {
   applyClientPrice,
   billingNeedsDuracionHoras,
@@ -120,13 +119,6 @@ function validateServicesBookable(services) {
     }
   }
   return { ok: true };
-}
-
-function getPrecioEspecialOverride(precioEspecial, validaHasta) {
-  const precio = Number(precioEspecial);
-  if (!precio || precio <= 0 || !validaHasta) return null;
-  if (validaHasta < getHoyDateStr()) return null;
-  return precio;
 }
 
 function roundMoney(amount) {
@@ -296,8 +288,6 @@ async function computePreciosPorServicioConContextos({
   serviceMap,
   contextByServiceId,
   numHuespedesPorServicio,
-  mainServiceId,
-  precioEspecialOverride,
   clienteSinComision,
 }) {
   const preciosPorServicio = [];
@@ -352,9 +342,8 @@ async function computePreciosPorServicioConContextos({
       };
     }
 
-    const unitOverride =
-      serviceId === mainServiceId ? precioEspecialOverride : null;
-
+    // Precio solo desde BD (services / modalidades / tarifas / oferta_descuento).
+    // Nunca unitPriceOverride desde el body (precio_especial del cliente).
     const calc = calculateServiceBasePrice(
       svc,
       {
@@ -366,7 +355,7 @@ async function computePreciosPorServicioConContextos({
         numHuespedes: numHuespedesPorServicio.get(serviceId),
         requireModalidad: serviceNeedsRequireModalidad(svc),
       },
-      unitOverride,
+      null,
       tarifasPorFecha,
     );
 
@@ -1248,8 +1237,6 @@ async function completePerServicePayments(userId, body) {
     duracion_horas = null,
     mensaje = null,
     familia_id = null,
-    precio_especial = null,
-    valida_hasta = null,
     num_huespedes = null,
     modalidad_cobro = null,
   } = body ?? {};
@@ -1345,11 +1332,6 @@ async function completePerServicePayments(userId, body) {
     return NextResponse.json({ error: perfilError.message }, { status: 500 });
   }
 
-  const precioEspecialOverride = getPrecioEspecialOverride(
-    precio_especial,
-    valida_hasta,
-  );
-
   const clienteSinComision = getReservasSinComisionCliente(perfilCliente) > 0;
 
   const priced = await computePreciosPorServicioConContextos({
@@ -1357,8 +1339,6 @@ async function completePerServicePayments(userId, body) {
     serviceMap,
     contextByServiceId,
     numHuespedesPorServicio,
-    mainServiceId: main_service_id,
-    precioEspecialOverride,
     clienteSinComision,
   });
   if (!priced.ok) return priced.response;
@@ -1621,8 +1601,6 @@ export async function POST(request) {
       duracion_horas = null,
       mensaje = null,
       familia_id = null,
-      precio_especial = null,
-      valida_hasta = null,
       num_huespedes = null,
       modalidad_cobro = null,
     } = body ?? {};
@@ -1728,11 +1706,6 @@ export async function POST(request) {
       return NextResponse.json({ error: perfilError.message }, { status: 500 });
     }
 
-    const precioEspecialOverride = getPrecioEspecialOverride(
-      precio_especial,
-      valida_hasta,
-    );
-
     const clienteSinComision = getReservasSinComisionCliente(perfilCliente) > 0;
 
     const priced = await computePreciosPorServicioConContextos({
@@ -1740,8 +1713,6 @@ export async function POST(request) {
       serviceMap,
       contextByServiceId,
       numHuespedesPorServicio,
-      mainServiceId: main_service_id,
-      precioEspecialOverride,
       clienteSinComision,
     });
     if (!priced.ok) return priced.response;
