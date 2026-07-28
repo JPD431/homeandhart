@@ -77,6 +77,7 @@ async function devolverCreditoRepartoIdempotente(
     booking.cliente_id,
     creditoADevolver,
     LOG_PREFIX,
+    { idempotencyKey: `credit:incidencia-reparto:${booking.id}` },
   );
 
   return { credito_devuelto: creditoADevolver, skipped: false };

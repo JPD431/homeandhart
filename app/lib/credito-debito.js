@@ -59,3 +59,37 @@ export async function releaseCreditoDebito(supabaseAdmin, idempotencyKey) {
 
   return Math.round(Number(data) * 100) / 100 || 0;
 }
+
+/**
+ * Abono atómico de crédito vía RPC (F4 cancelaciones / reembolsos).
+ * Idempotente por idempotencyKey: reintento devuelve el mismo amount sin re-abonar.
+ *
+ * @param {import("@supabase/supabase-js").SupabaseClient} supabaseAdmin
+ * @param {string} userId
+ * @param {number} amount
+ * @param {string} idempotencyKey p.ej. credit:cancel-cliente:${bookingId}
+ * @returns {Promise<number>} crédito realmente abonado (o el previo si ya existía la key)
+ */
+export async function creditCreditoDisponible(
+  supabaseAdmin,
+  userId,
+  amount,
+  idempotencyKey,
+) {
+  const value = Math.round(Number(amount) * 100) / 100;
+  if (!userId || !idempotencyKey || !(value > 0)) {
+    return 0;
+  }
+
+  const { data, error } = await supabaseAdmin.rpc("credit_credito_disponible", {
+    p_user_id: userId,
+    p_amount: value,
+    p_idempotency_key: idempotencyKey,
+  });
+
+  if (error) {
+    throw new Error(error.message || "Error al abonar crédito");
+  }
+
+  return Math.round(Number(data) * 100) / 100 || 0;
+}

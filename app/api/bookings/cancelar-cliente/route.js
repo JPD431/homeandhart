@@ -72,13 +72,7 @@ async function calcularYAplicarReembolso(booking, service) {
 
   const reembolsoTarjeta = roundMoney(reembolsoBruto - reembolsoCredito);
 
-  await devolverCreditoCliente(
-    supabaseAdmin,
-    booking.cliente_id,
-    reembolsoCredito,
-    "[bookings/cancelar-cliente]",
-  );
-
+  // Orden F4: primero Stripe (idempotente), luego crédito (idempotente).
   let stripe_ok = true;
   let stripe_error;
 
@@ -110,6 +104,7 @@ async function calcularYAplicarReembolso(booking, service) {
           stripe,
           booking.payment_intent_id,
           reembolsoTarjeta,
+          { idempotencyKey: `refund:cancel-cliente:${booking.id}` },
         );
         stripe_ok = stripeResult.stripe_ok;
         stripe_error = stripeResult.stripe_error;
@@ -126,6 +121,25 @@ async function calcularYAplicarReembolso(booking, service) {
           reembolsoTarjeta,
         },
       );
+    }
+  }
+
+  if (reembolsoCredito > 0) {
+    try {
+      await devolverCreditoCliente(
+        supabaseAdmin,
+        booking.cliente_id,
+        reembolsoCredito,
+        "[bookings/cancelar-cliente]",
+        { idempotencyKey: `credit:cancel-cliente:${booking.id}` },
+      );
+    } catch (creditErr) {
+      console.error(
+        "[bookings/cancelar-cliente] Error abonando crédito:",
+        creditErr?.message ?? creditErr,
+        { bookingId: booking.id, reembolsoCredito },
+      );
+      // El claim de estado ya ganó; el reintento reutiliza la misma key de abono.
     }
   }
 
@@ -189,9 +203,13 @@ async function asegurarCapturaStripeParaCompensacion(
       return { ok: true, chargeId: null, capturado_neto: 0 };
     }
 
-    const captured = await stripe.paymentIntents.capture(paymentIntentId, {
-      amount_to_capture: amountToCapture,
-    });
+    const captured = await stripe.paymentIntents.capture(
+      paymentIntentId,
+      {
+        amount_to_capture: amountToCapture,
+      },
+      { idempotencyKey: `capture:cancel-cliente-comp:${paymentIntentId}:${amountToCapture}` },
+    );
 
     return {
       ok: true,
@@ -577,6 +595,9 @@ export async function POST(request) {
       hora,
       grupo_reserva,
       compensacion_cancelacion,
+      reembolso_cliente_pct,
+      reembolso_cliente_total,
+      reembolso_cliente_credito,
       services:service_id (
         titulo,
         vertical,
@@ -605,26 +626,81 @@ export async function POST(request) {
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   }
 
-  if (!ESTADOS_CANCELABLES.has(booking.estado)) {
-    return NextResponse.json(
-      { error: "Esta reserva no se puede cancelar" },
-      { status: 409 },
-    );
-  }
-
   const service = booking.services;
   const canceladoAt = new Date().toISOString();
 
-  const { error: updateError } = await supabaseAdmin
+  // F4: claim atómico — solo la primera petición pasa a refund/crédito.
+  const { data: claimedRows, error: claimError } = await supabaseAdmin
     .from("bookings")
     .update({
       estado: "cancelada",
       cancelado_at: canceladoAt,
     })
-    .eq("id", bookingId);
+    .eq("id", bookingId)
+    .in("estado", [...ESTADOS_CANCELABLES])
+    .select(
+      "id, estado, cancelado_at, reembolso_cliente_pct, reembolso_cliente_total, reembolso_cliente_credito",
+    );
 
-  if (updateError) {
-    return NextResponse.json({ error: updateError.message }, { status: 500 });
+  if (claimError) {
+    return NextResponse.json({ error: claimError.message }, { status: 500 });
+  }
+
+  const wonClaim = Array.isArray(claimedRows) && claimedRows.length > 0;
+
+  if (!wonClaim) {
+    const { data: current, error: currentError } = await supabaseAdmin
+      .from("bookings")
+      .select(
+        "id, estado, reembolso_cliente_pct, reembolso_cliente_total, reembolso_cliente_credito, compensacion_cancelacion",
+      )
+      .eq("id", bookingId)
+      .maybeSingle();
+
+    if (currentError) {
+      return NextResponse.json(
+        { error: currentError.message },
+        { status: 500 },
+      );
+    }
+
+    if (current?.estado === "cancelada") {
+      // Ya cancelada: si el reembolso quedó persistido, no repetir side-effects.
+      if (current.reembolso_cliente_pct != null) {
+        return NextResponse.json({
+          ok: true,
+          already_processed: true,
+          estado: "cancelada",
+          reembolso: {
+            pct: Number(current.reembolso_cliente_pct) || 0,
+            bruto: Number(current.reembolso_cliente_total) || 0,
+            credito: Number(current.reembolso_cliente_credito) || 0,
+            tarjeta: roundMoney(
+              (Number(current.reembolso_cliente_total) || 0) -
+                (Number(current.reembolso_cliente_credito) || 0),
+            ),
+            stripe_ok: true,
+          },
+          compensacion: {
+            aplicada: current.compensacion_cancelacion != null,
+            skipped: true,
+            motivo: "ya_procesada",
+            compensacion_cancelacion:
+              current.compensacion_cancelacion != null
+                ? Number(current.compensacion_cancelacion)
+                : null,
+          },
+        });
+      }
+
+      // Claim ganado por otra petición que aún no persistió reembolso:
+      // reanudar con ops idempotentes (refund/credit keys) sin volver a claim.
+    } else {
+      return NextResponse.json(
+        { error: "Esta reserva no se puede cancelar" },
+        { status: 409 },
+      );
+    }
   }
 
   try {
@@ -655,58 +731,62 @@ export async function POST(request) {
       reembolso,
     );
 
-  await enviarEmailReservaCanceladaCliente(booking, service, reembolso);
+  // Email/notif solo en el claim ganador (evita spam en reanudación concurrente).
+  if (wonClaim) {
+    await enviarEmailReservaCanceladaCliente(booking, service, reembolso);
 
-  try {
-    const proveedor = getProveedorFromService(service);
-    const proveedorId = service?.proveedor_id;
-    const { data: clienteProfile } = await supabaseAdmin
-      .from("profiles")
-      .select("nombre, apellido")
-      .eq("id", booking.cliente_id)
-      .maybeSingle();
-    const clienteNombre =
-      [clienteProfile?.nombre, clienteProfile?.apellido]
-        .filter(Boolean)
-        .join(" ")
-        .trim() || undefined;
-    const finEmail = booking.fecha_fin || booking.fecha_inicio;
+    try {
+      const proveedor = getProveedorFromService(service);
+      const proveedorId = service?.proveedor_id;
+      const { data: clienteProfile } = await supabaseAdmin
+        .from("profiles")
+        .select("nombre, apellido")
+        .eq("id", booking.cliente_id)
+        .maybeSingle();
+      const clienteNombre =
+        [clienteProfile?.nombre, clienteProfile?.apellido]
+          .filter(Boolean)
+          .join(" ")
+          .trim() || undefined;
+      const finEmail = booking.fecha_fin || booking.fecha_inicio;
 
-    console.log(
-      "[bookings/cancelar-cliente] Creando notificación reserva_cancelada_cliente",
-      { bookingId, proveedorId },
-    );
+      console.log(
+        "[bookings/cancelar-cliente] Creando notificación reserva_cancelada_cliente",
+        { bookingId, proveedorId },
+      );
 
-    const cancelNotif = await notifyBookingEvent(supabaseAdmin, {
-      tipo: "reserva_cancelada_cliente",
-      bookingId,
-      proveedorId,
-      clienteNombre,
-      proveedorNombre:
-        [proveedor?.nombre, proveedor?.apellido].filter(Boolean).join(" ") ||
-        undefined,
-      servicioTitulo: service?.titulo,
-      fechaInicio: booking.fecha_inicio,
-      fechaFin: finEmail,
-    });
+      const cancelNotif = await notifyBookingEvent(supabaseAdmin, {
+        tipo: "reserva_cancelada_cliente",
+        bookingId,
+        proveedorId,
+        clienteNombre,
+        proveedorNombre:
+          [proveedor?.nombre, proveedor?.apellido].filter(Boolean).join(" ") ||
+          undefined,
+        servicioTitulo: service?.titulo,
+        fechaInicio: booking.fecha_inicio,
+        fechaFin: finEmail,
+      });
 
-    if (!cancelNotif?.ok) {
+      if (!cancelNotif?.ok) {
+        console.error(
+          "[bookings/cancelar-cliente] Notificación reserva_cancelada_cliente NO creada:",
+          cancelNotif,
+        );
+      }
+    } catch (notifErr) {
       console.error(
-        "[bookings/cancelar-cliente] Notificación reserva_cancelada_cliente NO creada:",
-        cancelNotif,
+        "[bookings/cancelar-cliente] Error creando notificación reserva_cancelada_cliente:",
+        notifErr,
+        { bookingId },
       );
     }
-  } catch (notifErr) {
-    console.error(
-      "[bookings/cancelar-cliente] Error creando notificación reserva_cancelada_cliente:",
-      notifErr,
-      { bookingId },
-    );
   }
 
   return NextResponse.json({
     ok: true,
     estado: "cancelada",
+    already_processed: !wonClaim,
     reembolso,
     compensacion,
   });

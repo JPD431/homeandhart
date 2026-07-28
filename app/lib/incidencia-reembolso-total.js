@@ -99,6 +99,7 @@ async function devolverCreditoResolucionIdempotente(
     booking.cliente_id,
     credito,
     LOG_PREFIX,
+    { idempotencyKey: `credit:incidencia-reembolso-total:${booking.id}` },
   );
 
   console.error(`${LOG_PREFIX} credito`, {

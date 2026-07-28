@@ -1,3 +1,5 @@
+import { creditCreditoDisponible } from "@/app/lib/credito-debito";
+
 /** PI pre-captura: cancel o capture parcial liberan el resto. */
 export const CANCELABLE_PI_STATUSES = new Set([
   "requires_capture",
@@ -11,10 +13,31 @@ export function roundMoney(amount) {
   return Math.round(Number(amount) * 100) / 100;
 }
 
-export async function devolverCreditoCliente(supabaseAdmin, clienteId, importe, logPrefix) {
-  if (!importe || importe <= 0) return;
+/**
+ * Devuelve crédito al cliente.
+ * Con idempotencyKey: abono atómico vía RPC (no doble abono en reintento).
+ * Sin key: fallback read→update (legacy; preferir siempre key).
+ */
+export async function devolverCreditoCliente(
+  supabaseAdmin,
+  clienteId,
+  importe,
+  logPrefix,
+  { idempotencyKey } = {},
+) {
+  const value = roundMoney(importe);
+  if (!clienteId || !(value > 0)) return 0;
 
   try {
+    if (idempotencyKey) {
+      return await creditCreditoDisponible(
+        supabaseAdmin,
+        clienteId,
+        value,
+        idempotencyKey,
+      );
+    }
+
     const { data: profile, error: readError } = await supabaseAdmin
       .from("profiles")
       .select("credito_disponible")
@@ -27,27 +50,31 @@ export async function devolverCreditoCliente(supabaseAdmin, clienteId, importe, 
         readError?.message || "Perfil no encontrado",
         { clienteId },
       );
-      return;
+      return 0;
     }
 
     const actual = Number(profile.credito_disponible) || 0;
-    const { error: updateError } = await supabaseAdmin
+    const { error: writeError } = await supabaseAdmin
       .from("profiles")
-      .update({ credito_disponible: roundMoney(actual + importe) })
+      .update({ credito_disponible: roundMoney(actual + value) })
       .eq("id", clienteId);
 
-    if (updateError) {
+    if (writeError) {
       console.error(
         `${logPrefix} No se pudo devolver credito_disponible:`,
-        updateError,
-        { clienteId, importe },
+        writeError,
+        { clienteId, importe: value },
       );
+      return 0;
     }
+    return value;
   } catch (err) {
     console.error(`${logPrefix} No se pudo devolver credito_disponible:`, err, {
       clienteId,
-      importe,
+      importe: value,
+      idempotencyKey,
     });
+    throw err;
   }
 }
 
