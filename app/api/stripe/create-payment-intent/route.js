@@ -11,6 +11,11 @@ const supabaseAdmin = createServiceClient(
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
+/** Mínimo de Stripe para cargos EUR (manual capture / holds). */
+const MIN_AMOUNT_EUR = 0.5;
+/** Tope de sanidad: evita holds gigantes por manipulación del body. */
+const MAX_AMOUNT_EUR = 50_000;
+
 export async function POST(request) {
   try {
     const {
@@ -36,6 +41,32 @@ export async function POST(request) {
       );
     }
 
+    const amountEur = Number(amount);
+    if (!Number.isFinite(amountEur)) {
+      return Response.json(
+        { error: "Importe de retención inválido." },
+        { status: 400 },
+      );
+    }
+
+    const amountCents = Math.round(amountEur * 100);
+    if (amountCents < Math.round(MIN_AMOUNT_EUR * 100)) {
+      return Response.json(
+        {
+          error: `El importe mínimo de retención es ${MIN_AMOUNT_EUR.toFixed(2).replace(".", ",")}€.`,
+        },
+        { status: 400 },
+      );
+    }
+    if (amountCents > Math.round(MAX_AMOUNT_EUR * 100)) {
+      return Response.json(
+        {
+          error: `El importe de retención supera el máximo permitido (${MAX_AMOUNT_EUR.toLocaleString("es-ES")}€).`,
+        },
+        { status: 400 },
+      );
+    }
+
     const dniCheck = await assertUserIsDniVerified(supabaseAdmin, clienteId);
     if (!dniCheck.ok) {
       return Response.json(dniCheck.body, { status: dniCheck.status });
@@ -48,8 +79,10 @@ export async function POST(request) {
       });
     }
 
+    // El amount sigue viniendo del cliente (tarjeta tras crédito, por servicio).
+    // complete recalcula desde BD y rechaza si no cuadra ±2¢ (autoritativo).
     const intentParams = {
-      amount: Math.round(amount * 100),
+      amount: amountCents,
       currency,
       capture_method: "manual",
       metadata,
