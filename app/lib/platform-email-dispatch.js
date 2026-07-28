@@ -2404,6 +2404,76 @@ export async function dispatchPlatformEmail(payload = {}) {
       return { ok: true, status: 200, data: { success: true } };
     }
 
+    if (tipo === "admin_stripe_descuadre") {
+      const adminEmail = process.env.ADMIN_EMAIL || FROM;
+      const baseUrl = process.env.NEXT_PUBLIC_URL || "https://homeandheart.es";
+      const esc = (v) =>
+        String(v ?? "—")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
+      const bookingIds = Array.isArray(data.booking_ids)
+        ? data.booking_ids.filter(Boolean)
+        : [];
+      const firstBookingId = bookingIds[0] || null;
+      const reservaUrl = firstBookingId
+        ? `${baseUrl}/reserva/${firstBookingId}`
+        : `${baseUrl}/admin`;
+      const pi = data.payment_intent_id || null;
+      const charge = data.charge_id || null;
+      const stripeUrl = pi
+        ? `https://dashboard.stripe.com/payments/${encodeURIComponent(pi)}`
+        : charge
+          ? `https://dashboard.stripe.com/payments/${encodeURIComponent(charge)}`
+          : "https://dashboard.stripe.com";
+      const details = data.details && typeof data.details === "object"
+        ? data.details
+        : {};
+      const detailRows = Object.entries(details)
+        .map(
+          ([k, v]) =>
+            `<p style="margin:0 0 6px;font-size:13px;line-height:1.5;color:#444;"><strong>${esc(k)}:</strong> ${esc(typeof v === "object" ? JSON.stringify(v) : v)}</p>`,
+        )
+        .join("");
+
+      const result = await resend.emails.send({
+        from: FROM,
+        to: adminEmail,
+        subject: `⚠️ Descuadre Stripe — ${data.kind || "anomalia"}`,
+        html: emailLayout({
+          title: "Descuadre Stripe detectado",
+          bodyHtml: `
+            <h1 style="margin:0 0 16px;font-size:20px;color:#b45309;">Descuadre / anomalía Stripe</h1>
+            <p style="margin:0 0 12px;font-size:14px;line-height:1.6;color:#444;">
+              ${esc(data.summary)}
+            </p>
+            <p style="margin:0 0 6px;font-size:14px;line-height:1.6;"><strong>Tipo:</strong> ${esc(data.kind)}</p>
+            <p style="margin:0 0 6px;font-size:14px;line-height:1.6;"><strong>Evento Stripe:</strong> ${esc(data.event_type)} (${esc(data.event_id)})</p>
+            <p style="margin:0 0 6px;font-size:14px;line-height:1.6;"><strong>PaymentIntent:</strong> ${esc(pi)}</p>
+            <p style="margin:0 0 6px;font-size:14px;line-height:1.6;"><strong>Charge:</strong> ${esc(charge)}</p>
+            <p style="margin:0 0 16px;font-size:14px;line-height:1.6;"><strong>Reservas:</strong> ${esc(bookingIds.join(", ") || "—")}</p>
+            ${detailRows ? `<div style="margin:0 0 20px;padding:12px;background:#fff7ed;border-radius:8px;">${detailRows}</div>` : ""}
+            <p style="margin:0 0 12px;text-align:center;">
+              <a href="${stripeUrl}" style="display:inline-block;background-color:#635bff;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:8px;font-size:14px;font-weight:600;">
+                Abrir en Stripe →
+              </a>
+            </p>
+            <p style="margin:0;text-align:center;">
+              <a href="${reservaUrl}" style="display:inline-block;background-color:${BRAND_PRIMARY};color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:8px;font-size:14px;font-weight:600;">
+                Ver reserva / admin →
+              </a>
+            </p>
+          `,
+        }),
+      });
+
+      if (result.error) {
+        return { ok: false, status: 400, error: result.error.message };
+      }
+
+      return { ok: true, status: 200, data: { success: true } };
+    }
+
     if (tipo === "incidencia") {
       const adminEmail = process.env.ADMIN_EMAIL || FROM;
       const result = await resend.emails.send({

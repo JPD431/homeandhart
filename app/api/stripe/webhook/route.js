@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import Stripe from "stripe";
 import { NextResponse } from "next/server";
 import { servicioRevisionAprobada } from "@/app/lib/provider-publicacion";
+import { alertStripeDescuadre } from "@/app/lib/stripe-descuadre-alert";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
@@ -14,7 +15,7 @@ export const runtime = "nodejs";
 
 const ACTIVE_BOOKING_STATES = new Set(["confirmada", "pendiente", "en_curso"]);
 
-const REFUND_MISMATCH_TOLERANCE_EUR = 0.02;
+const MONEY_MISMATCH_TOLERANCE_EUR = 0.02;
 
 function getPaymentIntentId(ref) {
   if (!ref) return null;
@@ -34,7 +35,7 @@ async function findBookingsByPaymentIntentId(paymentIntentId) {
   const { data, error } = await supabase
     .from("bookings")
     .select(
-      "id, estado, payment_intent_id, reembolso_cliente_total, reembolso_cliente_credito",
+      "id, estado, payment_intent_id, precio_total, credito_aplicado, reembolso_cliente_total, reembolso_cliente_credito",
     )
     .eq("payment_intent_id", paymentIntentId);
 
@@ -48,6 +49,85 @@ async function findBookingsByPaymentIntentId(paymentIntentId) {
   }
 
   return { bookings: data ?? [], queryError: null };
+}
+
+function expectedTarjetaEurFromBookings(bookings) {
+  let subtotal = 0;
+  let credito = 0;
+  for (const b of bookings) {
+    subtotal += Number(b.precio_total) || 0;
+    credito += Number(b.credito_aplicado) || 0;
+  }
+  return roundMoney(Math.max(0, subtotal - credito));
+}
+
+async function handlePaymentIntentSucceeded(event) {
+  const paymentIntent = event.data.object;
+  const paymentIntentId = paymentIntent?.id;
+  const amountPaidEur = roundMoney((Number(paymentIntent?.amount) || 0) / 100);
+
+  if (!paymentIntentId) {
+    console.warn(
+      "[stripe/webhook] payment_intent.succeeded sin id",
+      { event_id: event.id },
+    );
+    return;
+  }
+
+  const { bookings, queryError } =
+    await findBookingsByPaymentIntentId(paymentIntentId);
+
+  if (queryError) {
+    return;
+  }
+
+  if (bookings.length === 0) {
+    // Puede ser carrera con complete (PI confirmado antes del insert).
+    // No alertamos: ruido alto. Solo log.
+    console.log(
+      "[stripe/webhook] payment_intent.succeeded sin bookings en BD",
+      { payment_intent_id: paymentIntentId, event_id: event.id },
+    );
+    return;
+  }
+
+  const expectedEur = expectedTarjetaEurFromBookings(bookings);
+  const diff = roundMoney(Math.abs(amountPaidEur - expectedEur));
+
+  if (diff > MONEY_MISMATCH_TOLERANCE_EUR) {
+    console.warn(
+      "[stripe/webhook] DESCUADRE payment_intent.succeeded: importe Stripe difiere del esperado",
+      {
+        payment_intent_id: paymentIntentId,
+        stripe_amount_eur: amountPaidEur,
+        expected_tarjeta_eur: expectedEur,
+        diff_eur: diff,
+        booking_ids: bookings.map((b) => b.id),
+        event_id: event.id,
+      },
+    );
+
+    await alertStripeDescuadre({
+      event,
+      kind: "pi_amount_mismatch",
+      summary: `Importe pagado (${amountPaidEur}€) ≠ esperado en reservas (${expectedEur}€). Diferencia ${diff}€.`,
+      paymentIntentId,
+      bookingIds: bookings.map((b) => b.id),
+      details: {
+        stripe_amount_eur: amountPaidEur,
+        expected_tarjeta_eur: expectedEur,
+        diff_eur: diff,
+        booking_estados: bookings.map((b) => ({
+          id: b.id,
+          estado: b.estado,
+          precio_total: b.precio_total,
+          credito_aplicado: b.credito_aplicado,
+        })),
+        accion:
+          "Revisar el PaymentIntent en Stripe y las reservas en admin; posible cobro incorrecto o datos de precio desalineados.",
+      },
+    });
+  }
 }
 
 async function handlePaymentIntentCanceled(event) {
@@ -101,19 +181,46 @@ async function handlePaymentIntentCanceled(event) {
         event_id: event.id,
       },
     );
+
+    await alertStripeDescuadre({
+      event,
+      kind: "pi_canceled_activo",
+      bookingId: booking.id,
+      bookingIds: [booking.id],
+      paymentIntentId,
+      summary: `PaymentIntent cancelado en Stripe pero la reserva ${booking.id} sigue en estado «${booking.estado}».`,
+      details: {
+        booking_id: booking.id,
+        estado: booking.estado,
+        accion:
+          "Revisar si la reserva debe cancelarse/reembolsarse en la plataforma o si el PI se canceló por error.",
+      },
+    });
   }
 }
 
 async function handleChargeRefunded(event) {
   const charge = event.data.object;
   const paymentIntentId = getPaymentIntentId(charge?.payment_intent);
+  const chargeId = charge?.id || null;
   const amountRefundedCents = Number(charge?.amount_refunded) || 0;
   const amountRefundedEur = roundMoney(amountRefundedCents / 100);
 
   if (!paymentIntentId) {
     console.warn("[stripe/webhook] charge.refunded sin payment_intent", {
-      charge_id: charge?.id,
+      charge_id: chargeId,
       event_id: event.id,
+    });
+    await alertStripeDescuadre({
+      event,
+      kind: "refund_sin_pi",
+      chargeId,
+      summary: `charge.refunded sin payment_intent asociado (reembolsado ${amountRefundedEur}€).`,
+      details: {
+        charge_id: chargeId,
+        stripe_amount_refunded_eur: amountRefundedEur,
+        accion: "Revisar el charge en Stripe; no se pudo atar a una reserva.",
+      },
     });
     return;
   }
@@ -128,10 +235,25 @@ async function handleChargeRefunded(event) {
   if (bookings.length === 0) {
     console.log("[stripe/webhook] charge.refunded sin bookings en BD", {
       payment_intent_id: paymentIntentId,
-      charge_id: charge?.id,
+      charge_id: chargeId,
       amount_refunded_eur: amountRefundedEur,
       event_id: event.id,
     });
+
+    if (amountRefundedEur > 0) {
+      await alertStripeDescuadre({
+        event,
+        kind: "refund_sin_booking",
+        paymentIntentId,
+        chargeId,
+        summary: `Reembolso Stripe de ${amountRefundedEur}€ sin reservas en BD para el PI.`,
+        details: {
+          stripe_amount_refunded_eur: amountRefundedEur,
+          accion:
+            "Hay movimiento de dinero en Stripe sin reserva vinculada; investigar el PI y posibles holds huérfanos.",
+        },
+      });
+    }
     return;
   }
 
@@ -152,7 +274,7 @@ async function handleChargeRefunded(event) {
     const logPayload = {
       booking_id: booking.id,
       payment_intent_id: paymentIntentId,
-      charge_id: charge?.id,
+      charge_id: chargeId,
       stripe_amount_refunded_eur: amountRefundedEur,
       reembolso_cliente_total: reembolsoTotal,
       reembolso_cliente_credito: reembolsoCredito,
@@ -169,15 +291,49 @@ async function handleChargeRefunded(event) {
         "[stripe/webhook] charge.refunded registrado (sin reembolso_cliente_total en booking)",
         logPayload,
       );
+
+      // Reembolso en Stripe sin registro de reembolso en BD → anomalía.
+      if (amountRefundedEur > 0) {
+        await alertStripeDescuadre({
+          event,
+          kind: "refund_sin_registro_bd",
+          bookingId: booking.id,
+          bookingIds: [booking.id],
+          paymentIntentId,
+          chargeId,
+          summary: `Reembolso Stripe ${amountRefundedEur}€ en reserva ${booking.id} sin reembolso_cliente_total en BD.`,
+          details: {
+            ...logPayload,
+            accion:
+              "Puede ser reembolso manual en Stripe o fallo al persistir el reembolso en la plataforma.",
+          },
+        });
+      }
       continue;
     }
 
     const diff = Math.abs(amountRefundedEur - compareAgainst);
-    if (diff > REFUND_MISMATCH_TOLERANCE_EUR) {
+    if (diff > MONEY_MISMATCH_TOLERANCE_EUR) {
       console.warn(
         "[stripe/webhook] DESCUADRE charge.refunded: importe Stripe difiere del esperado",
         { ...logPayload, diff_eur: roundMoney(diff) },
       );
+
+      await alertStripeDescuadre({
+        event,
+        kind: "refund_mismatch",
+        bookingId: booking.id,
+        bookingIds: [booking.id],
+        paymentIntentId,
+        chargeId,
+        summary: `Reembolso Stripe (${amountRefundedEur}€) ≠ esperado en BD (${compareAgainst}€) para reserva ${booking.id}. Diff ${roundMoney(diff)}€.`,
+        details: {
+          ...logPayload,
+          diff_eur: roundMoney(diff),
+          accion:
+            "Comparar el charge en Stripe con reembolso_cliente_total / crédito de la reserva.",
+        },
+      });
     } else {
       console.log(
         "[stripe/webhook] charge.refunded coherente con booking",
@@ -268,6 +424,7 @@ async function handleAccountUpdated(account) {
 /** Handlers de reconciliación (Fase B). Sin acciones de dinero. */
 const eventHandlers = {
   "account.updated": (event) => handleAccountUpdated(event.data.object),
+  "payment_intent.succeeded": handlePaymentIntentSucceeded,
   "payment_intent.canceled": handlePaymentIntentCanceled,
   "charge.refunded": handleChargeRefunded,
 };
