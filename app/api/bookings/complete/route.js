@@ -38,6 +38,7 @@ import {
   debitCreditoDisponible,
   releaseCreditoDebito,
 } from "@/app/lib/credito-debito";
+import { CANCELABLE_PI_STATUSES } from "@/app/lib/stripe-reembolso";
 
 const MAX_CREDITO_PORCENTAJE = 0.6;
 
@@ -465,7 +466,65 @@ async function hasDisponibilidadSolapamiento(serviceId, fechaInicio, fechaFin) {
   return (data?.length ?? 0) > 0;
 }
 
-async function rollbackInsertedBookings(bookingIds, paymentIntentId) {
+/**
+ * Libera holds de Stripe tras rollback de disponibilidad (M5).
+ * Idempotente por PI: cancel-pi:complete-disponibilidad:${piId}
+ */
+async function cancelOrphanPaymentIntents(paymentIntentIds) {
+  const unique = [
+    ...new Set(
+      (Array.isArray(paymentIntentIds)
+        ? paymentIntentIds
+        : paymentIntentIds
+          ? [paymentIntentIds]
+          : []
+      ).filter((id) => typeof id === "string" && id.length > 0),
+    ),
+  ];
+
+  for (const paymentIntentId of unique) {
+    try {
+      const paymentIntent =
+        await stripe.paymentIntents.retrieve(paymentIntentId);
+      const { status } = paymentIntent;
+
+      if (status === "canceled") continue;
+
+      if (!CANCELABLE_PI_STATUSES.has(status)) {
+        console.warn(
+          "[bookings/complete] PI no cancelable tras conflicto de disponibilidad:",
+          { payment_intent_id: paymentIntentId, status },
+        );
+        continue;
+      }
+
+      await stripe.paymentIntents.cancel(
+        paymentIntentId,
+        {},
+        {
+          idempotencyKey: `cancel-pi:complete-disponibilidad:${paymentIntentId}`,
+        },
+      );
+    } catch (err) {
+      const message = (err?.message || "").toLowerCase();
+      if (
+        err?.code === "payment_intent_unexpected_state" ||
+        message.includes("already been canceled") ||
+        message.includes("cannot be canceled") ||
+        message.includes("cannot cancel")
+      ) {
+        continue;
+      }
+      console.error(
+        "[bookings/complete] Error cancelando PI tras conflicto de disponibilidad:",
+        paymentIntentId,
+        err?.message ?? err,
+      );
+    }
+  }
+}
+
+async function rollbackInsertedBookings(bookingIds, paymentIntentIds) {
   const { error } = await supabaseAdmin
     .from("bookings")
     .delete()
@@ -475,9 +534,11 @@ async function rollbackInsertedBookings(bookingIds, paymentIntentId) {
     console.error(
       "[bookings/complete] Fallo al revertir bookings tras conflicto de disponibilidad:",
       error,
-      { payment_intent_id: paymentIntentId, booking_ids: bookingIds },
+      { payment_intent_ids: paymentIntentIds, booking_ids: bookingIds },
     );
   }
+
+  await cancelOrphanPaymentIntents(paymentIntentIds);
 }
 
 async function sendBookingEmail(payload) {
@@ -1105,7 +1166,8 @@ async function finalizeInsertedBookings({
   creditoIdempotencyKey = null,
   insertedBookings,
   insertedBookingIds,
-  rollbackPaymentIntentId,
+  rollbackPaymentIntentIds = null,
+  rollbackPaymentIntentId = null,
   fechaInicio,
   fechaFin,
   familiaId,
@@ -1121,6 +1183,10 @@ async function finalizeInsertedBookings({
   mensaje,
   grupoReserva,
 }) {
+  const paymentIntentIdsForRollback =
+    rollbackPaymentIntentIds ??
+    (rollbackPaymentIntentId ? [rollbackPaymentIntentId] : []);
+
   const { error: disponibilidadError } = await supabaseAdmin
     .from("disponibilidad")
     .insert(
@@ -1138,7 +1204,10 @@ async function finalizeInsertedBookings({
     );
 
   if (disponibilidadError) {
-    await rollbackInsertedBookings(insertedBookingIds, rollbackPaymentIntentId);
+    await rollbackInsertedBookings(
+      insertedBookingIds,
+      paymentIntentIdsForRollback,
+    );
     if (creditoIdempotencyKey) {
       try {
         await releaseCreditoDebito(supabaseAdmin, creditoIdempotencyKey);
@@ -1163,7 +1232,7 @@ async function finalizeInsertedBookings({
       "[bookings/complete] No se pudo bloquear disponibilidad tras crear bookings:",
       disponibilidadError,
       {
-        payment_intent_id: rollbackPaymentIntentId,
+        payment_intent_ids: paymentIntentIdsForRollback,
         booking_ids: insertedBookingIds,
       },
     );
@@ -1549,7 +1618,7 @@ async function completePerServicePayments(userId, body) {
   const { data: insertedBookings, error: insertError } = await supabaseAdmin
     .from("bookings")
     .insert(bookingRows)
-    .select("id, service_id, fecha_inicio, fecha_fin, lugar_servicio, direccion_cliente_a_definir");
+    .select("id, service_id, fecha_inicio, fecha_fin, lugar_servicio, direccion_cliente_a_definir, payment_intent_id");
 
   if (insertError) {
     try {
@@ -1570,8 +1639,14 @@ async function completePerServicePayments(userId, body) {
   );
 
   const insertedBookingIds = insertedBookings.map((b) => b.id);
-  const rollbackPaymentIntentId =
-    [...paymentsByService.values()].find((pi) => typeof pi === "string") ?? null;
+  const rollbackPaymentIntentIds = [
+    ...new Set(
+      [
+        ...paymentsByService.values(),
+        ...insertedBookings.map((b) => b.payment_intent_id),
+      ].filter((pi) => typeof pi === "string" && pi.length > 0),
+    ),
+  ];
 
   // Fechas del main solo para emails de grupo; disponibilidad usa fechas de cada booking.
   const mainCtx = contextByServiceId.get(main_service_id);
@@ -1585,7 +1660,7 @@ async function completePerServicePayments(userId, body) {
     creditoIdempotencyKey,
     insertedBookings,
     insertedBookingIds,
-    rollbackPaymentIntentId,
+    rollbackPaymentIntentIds,
     fechaInicio: mainCtx?.fecha_inicio ?? fecha_inicio,
     fechaFin: mainCtx?.fecha_fin ?? fecha_fin,
     familiaId: familia_id,
@@ -2060,7 +2135,7 @@ export async function POST(request) {
     const { data: insertedBookings, error: insertError } = await supabaseAdmin
       .from("bookings")
       .insert(bookingRows)
-      .select("id, service_id, fecha_inicio, fecha_fin, lugar_servicio, direccion_cliente_a_definir");
+      .select("id, service_id, fecha_inicio, fecha_fin, lugar_servicio, direccion_cliente_a_definir, payment_intent_id");
 
     if (insertError) {
       try {
@@ -2091,7 +2166,7 @@ export async function POST(request) {
       creditoIdempotencyKey,
       insertedBookings,
       insertedBookingIds,
-      rollbackPaymentIntentId: payment_intent_id,
+      rollbackPaymentIntentIds: [payment_intent_id],
       fechaInicio:
         contextByServiceId.get(main_service_id)?.fecha_inicio ?? fecha_inicio,
       fechaFin:
