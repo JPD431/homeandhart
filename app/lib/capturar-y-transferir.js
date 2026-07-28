@@ -5,7 +5,7 @@ import {
   roundMoney,
 } from "@/app/lib/ingresos-proveedor";
 import { calcularCapturaRepartoCents, validarCapturaRepartoStripe } from "@/app/lib/incidencia-reparto-bote";
-import { ejecutarTransferProveedorConDeudaSaldo } from "@/app/lib/transfer-proveedor";
+import { ejecutarTransferProveedorConDeudaSaldo, createStripeTransferWithIdempotency } from "@/app/lib/transfer-proveedor";
 import { CANCELABLE_PI_STATUSES } from "@/app/lib/stripe-reembolso";
 import { notifyProveedoresPagosLiberados } from "@/app/lib/pago-liberado-notify";
 
@@ -367,6 +367,44 @@ export async function capturarYTransferirPago(
         );
       }
 
+      // Claim atómico: solo un proceso puede marcar pago_liberado_at.
+      // Si el transfer falla después, liberamos el claim para permitir reintento
+      // (Stripe idempotency evita doble payout si el transfer ya existía).
+      const claimAt = new Date().toISOString();
+      const { data: claimedRows, error: claimError } = await supabase
+        .from("bookings")
+        .update({ pago_liberado_at: claimAt })
+        .in("id", plan.bookingIds)
+        .is("pago_liberado_at", null)
+        .select("id");
+
+      if (claimError) {
+        throw claimError;
+      }
+
+      if (!claimedRows?.length) {
+        summary.skipped = true;
+        summary.success = true;
+        transferSummaries.push(summary);
+        continue;
+      }
+
+      if (claimedRows.length !== plan.bookingIds.length) {
+        await supabase
+          .from("bookings")
+          .update({ pago_liberado_at: null })
+          .in(
+            "id",
+            claimedRows.map((r) => r.id),
+          )
+          .eq("pago_liberado_at", claimAt);
+        throw new Error(
+          `Estado inconsistente: claim parcial para proveedor ${plan.proveedorId}`,
+        );
+      }
+
+      const claimedIds = claimedRows.map((r) => r.id);
+
       try {
         let saldo_pendiente_nuevo = plan.saldo_pendiente_anterior;
 
@@ -381,7 +419,11 @@ export async function capturarYTransferirPago(
             transferParams.source_transaction = chargeId;
           }
 
-          const transfer = await stripe.transfers.create(transferParams);
+          const transfer = await createStripeTransferWithIdempotency(
+            stripe,
+            transferParams,
+            `transfer:${paymentIntentId}:${plan.proveedorId}`,
+          );
           transfers.push(transfer);
           summary.amount_transferido = plan.total_a_transferir;
           summary.transferido_stripe = plan.total_a_transferir;
@@ -444,8 +486,22 @@ export async function capturarYTransferirPago(
         }
 
         summary.success = true;
-        bookingIdsLiberados.push(...plan.bookingIds);
+        bookingIdsLiberados.push(...claimedIds);
       } catch (providerError) {
+        // Liberar claim solo si aún tenemos el mismo timestamp (no pisar otro proceso).
+        try {
+          await supabase
+            .from("bookings")
+            .update({ pago_liberado_at: null })
+            .in("id", claimedIds)
+            .eq("pago_liberado_at", claimAt);
+        } catch (releaseErr) {
+          console.error(
+            `${logPrefix} Error liberando claim tras fallo de transfer:`,
+            releaseErr?.message ?? releaseErr,
+          );
+        }
+
         const errorMessage = providerError?.message ?? String(providerError);
         summary.error = errorMessage;
         console.error(
@@ -463,10 +519,9 @@ export async function capturarYTransferirPago(
             error: errorMessage,
             booking_ids: plan.bookingIds,
           });
-        } else {
-          summary.success = true;
-          bookingIdsLiberados.push(...plan.bookingIds);
         }
+        // Claim liberado → reintento del cron/confirmación puede completar.
+        // Idempotency key evita doble payout si Stripe ya creó la transfer.
       }
 
       transferSummaries.push(summary);
@@ -700,6 +755,7 @@ export async function capturarRepartoIncidencia(
       amountBruto: importeProveedor,
       chargeId: usePlatformBalance ? null : chargeId,
       usePlatformBalance,
+      idempotencyKey: `transfer:reparto:${bookingId}`,
       logPrefix,
     });
 

@@ -136,6 +136,7 @@ async function transferirProveedorRepartoSucceeded(
     amountBruto: importeProveedor,
     chargeId,
     usePlatformBalance: creditoAplicado > 0,
+    idempotencyKey: `transfer:incidencia-reparto:${booking.id}`,
     logPrefix: LOG_PREFIX,
   });
 

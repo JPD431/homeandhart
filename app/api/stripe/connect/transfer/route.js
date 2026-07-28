@@ -1,5 +1,6 @@
 import Stripe from "stripe";
 import { authorizeAdminOrCron } from "@/app/lib/stripe-api-auth";
+import { createStripeTransferWithIdempotency } from "@/app/lib/transfer-proveedor";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
@@ -12,14 +13,25 @@ export async function POST(request) {
 
     const { paymentIntentId, proveedores } = await request.json();
 
+    if (!paymentIntentId || !Array.isArray(proveedores)) {
+      return Response.json(
+        { error: "Faltan paymentIntentId o proveedores" },
+        { status: 400 },
+      );
+    }
+
     const transfers = await Promise.all(
-      proveedores.map((p) =>
-        stripe.transfers.create({
-          amount: Math.round(p.amount * 100),
-          currency: "eur",
-          destination: p.stripe_account_id,
-          source_transaction: paymentIntentId,
-        }),
+      proveedores.map((p, index) =>
+        createStripeTransferWithIdempotency(
+          stripe,
+          {
+            amount: Math.round(p.amount * 100),
+            currency: "eur",
+            destination: p.stripe_account_id,
+            source_transaction: paymentIntentId,
+          },
+          `transfer:admin-connect:${paymentIntentId}:${p.stripe_account_id}:${index}`,
+        ),
       ),
     );
 

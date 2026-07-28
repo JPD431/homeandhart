@@ -394,6 +394,7 @@ async function aplicarCompensacionProveedorCancelacionCliente(
     amountBruto: reparto.parte_proveedor,
     chargeId,
     usePlatformBalance,
+    idempotencyKey: `transfer:cancel-cliente:${booking.id}`,
     logPrefix: "[bookings/cancelar-cliente]",
   });
 

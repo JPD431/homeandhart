@@ -4,6 +4,25 @@ import { roundMoney } from "@/app/lib/ingresos-proveedor";
 export const STRIPE_MIN_TRANSFER_EUR = 0.5;
 
 /**
+ * Crea una Transfer de Stripe con idempotency key obligatoria (anti doble payout).
+ * Reintentos con la misma key devuelven la misma transfer, no una nueva.
+ *
+ * @param {import("stripe").Stripe} stripe
+ * @param {object} transferParams
+ * @param {string} idempotencyKey clave estable (ej. transfer:pi_xxx:proveedorUuid)
+ */
+export async function createStripeTransferWithIdempotency(
+  stripe,
+  transferParams,
+  idempotencyKey,
+) {
+  if (!idempotencyKey || typeof idempotencyKey !== "string") {
+    throw new Error("idempotencyKey es obligatoria para transfers.create");
+  }
+  return stripe.transfers.create(transferParams, { idempotencyKey });
+}
+
+/**
  * Calcula deuda, saldo acumulado y si hace falta transferir (misma lógica que capture-payment).
  *
  * @param {number} amountBruto Importe bruto a repartir al proveedor en este ciclo.
@@ -47,6 +66,7 @@ export function prepareTransferConDeudaSaldo(amountBruto, profile) {
  * @param {number} params.amountBruto parte_proveedor antes de deuda/saldo.
  * @param {string|null} params.chargeId Charge de Stripe para source_transaction (null = solo balance).
  * @param {boolean} params.usePlatformBalance Si true, transfer sin source_transaction.
+ * @param {string} params.idempotencyKey Clave Stripe estable (requerida si hay transfer).
  * @param {string} [params.logPrefix]
  */
 export async function ejecutarTransferProveedorConDeudaSaldo({
@@ -58,6 +78,7 @@ export async function ejecutarTransferProveedorConDeudaSaldo({
   amountBruto,
   chargeId,
   usePlatformBalance,
+  idempotencyKey,
   logPrefix = "[transfer-proveedor]",
 }) {
   const cobrosActivos = profile?.cobros_activos === true;
@@ -103,7 +124,11 @@ export async function ejecutarTransferProveedorConDeudaSaldo({
         transferParams.source_transaction = chargeId;
       }
 
-      await stripe.transfers.create(transferParams);
+      await createStripeTransferWithIdempotency(
+        stripe,
+        transferParams,
+        idempotencyKey,
+      );
       summary.transferido_stripe = prepared.total_a_transferir;
       saldo_pendiente_nuevo = 0;
     } else if (prepared.total_a_transferir > 0) {
