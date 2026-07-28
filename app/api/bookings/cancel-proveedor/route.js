@@ -6,6 +6,11 @@ import { getBookingPrecioBase } from "@/app/lib/ingresos-proveedor";
 import { notifyBookingEvent } from "@/app/lib/notifications";
 import { registrarCancelacion } from "@/app/lib/cancelaciones";
 import { sendPlatformEmail } from "@/app/lib/send-platform-email";
+import {
+  aplicarReembolsoStripeBooking,
+  devolverCreditoCliente,
+  roundMoney,
+} from "@/app/lib/stripe-reembolso";
 
 const supabaseAdmin = createServiceClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -14,14 +19,7 @@ const supabaseAdmin = createServiceClient(
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
-/** Estados del PI en los que cancel libera la retención (previos a captura). */
-const CANCELABLE_PI_STATUSES = new Set([
-  "requires_capture",
-  "requires_confirmation",
-  "requires_action",
-  "requires_payment_method",
-  "processing",
-]);
+const ESTADOS_CANCELABLES = ["confirmada"];
 
 async function contarBookingsPorPaymentIntent(paymentIntentId) {
   if (!paymentIntentId) return 1;
@@ -56,32 +54,24 @@ function warnLegacySharedPaymentIntentCancelProveedor(
   );
 }
 
-async function handleStripeForCancellation(paymentIntentId) {
+/**
+ * Cancel/refund completo del PI con idempotency key determinista (F5).
+ */
+async function handleStripeForCancellation(paymentIntentId, bookingId) {
+  if (!paymentIntentId) {
+    return { stripe_ok: true, stripe_action: "sin_pi" };
+  }
+
   const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
-  const { status } = paymentIntent;
+  const amountEuros = roundMoney((Number(paymentIntent.amount) || 0) / 100);
+  const idempotencyKey = `refund:cancel-proveedor:${bookingId}`;
 
-  if (CANCELABLE_PI_STATUSES.has(status)) {
-    await stripe.paymentIntents.cancel(paymentIntentId);
-    return { stripe_ok: true };
-  }
-
-  if (status === "succeeded") {
-    await stripe.refunds.create({ payment_intent: paymentIntentId });
-    return { stripe_ok: true };
-  }
-
-  if (status === "canceled") {
-    return { stripe_ok: true };
-  }
-
-  return {
-    stripe_ok: false,
-    stripe_error: `Estado del PaymentIntent no manejado: ${status}`,
-  };
-}
-
-function roundMoney(amount) {
-  return Math.round(Number(amount) * 100) / 100;
+  return aplicarReembolsoStripeBooking(
+    stripe,
+    paymentIntentId,
+    amountEuros,
+    { idempotencyKey },
+  );
 }
 
 function calcularRepartoIndemnizacion(fechaInicio, booking) {
@@ -126,6 +116,9 @@ function calcularRepartoIndemnizacion(fechaInicio, booking) {
   };
 }
 
+/**
+ * Deuda/penalización al proveedor (RPC ledger) + crédito indemnización al cliente (F4 RPC).
+ */
 async function aplicarPenalizacionProveedor(proveedorId, booking) {
   const reparto = calcularRepartoIndemnizacion(booking.fecha_inicio, booking);
   const {
@@ -135,80 +128,57 @@ async function aplicarPenalizacionProveedor(proveedorId, booking) {
     parte_plataforma,
   } = reparto;
 
-  const { data: profile, error: profileError } = await supabaseAdmin
-    .from("profiles")
-    .select(
-      "cancelaciones_proveedor_count, deuda_pendiente, penalizacion_valoracion, compensaciones_plataforma_acumuladas",
-    )
-    .eq("id", proveedorId)
-    .single();
+  const { data, error } = await supabaseAdmin.rpc(
+    "aplicar_penalizacion_cancel_proveedor",
+    {
+      p_idempotency_key: `penalizacion:cancel-proveedor:${booking.id}`,
+      p_booking_id: booking.id,
+      p_proveedor_id: proveedorId,
+      p_base_indemnizacion: base_indemnizacion,
+      p_indemnizacion_total: indemnizacion_total,
+      p_parte_cliente: parte_cliente,
+      p_parte_plataforma: parte_plataforma,
+    },
+  );
 
-  if (profileError || !profile) {
-    throw new Error(profileError?.message || "Perfil del proveedor no encontrado");
+  if (error) {
+    throw new Error(error.message || "Error aplicando penalización");
   }
 
-  const { data: clienteProfile, error: clienteError } = await supabaseAdmin
-    .from("profiles")
-    .select("credito_disponible")
-    .eq("id", booking.cliente_id)
-    .single();
+  const result = data && typeof data === "object" ? data : {};
 
-  if (clienteError || !clienteProfile) {
-    throw new Error(clienteError?.message || "Perfil del cliente no encontrado");
-  }
+  let credito_cliente_nuevo = null;
+  if (parte_cliente > 0) {
+    await devolverCreditoCliente(
+      supabaseAdmin,
+      booking.cliente_id,
+      parte_cliente,
+      "[bookings/cancel-proveedor]",
+      { idempotencyKey: `credit:cancel-proveedor:${booking.id}` },
+    );
 
-  const cancelacionesActuales = Number(profile.cancelaciones_proveedor_count) || 0;
-  const deudaActual = Number(profile.deuda_pendiente) || 0;
-  const penalizacionActual = Number(profile.penalizacion_valoracion) || 0;
-  const compensacionesPlataformaActual =
-    Number(profile.compensaciones_plataforma_acumuladas) || 0;
-  const creditoClienteActual = Number(clienteProfile.credito_disponible) || 0;
-
-  const cancelaciones_count = cancelacionesActuales + 1;
-  const nueva_deuda = roundMoney(deudaActual + indemnizacion_total);
-  const credito_cliente_nuevo = roundMoney(creditoClienteActual + parte_cliente);
-  const requiere_revision = cancelaciones_count >= 3;
-
-  const profileUpdate = {
-    cancelaciones_proveedor_count: cancelaciones_count,
-    deuda_pendiente: nueva_deuda,
-    penalizacion_valoracion: penalizacionActual + 0.5,
-    compensaciones_plataforma_acumuladas: roundMoney(
-      compensacionesPlataformaActual + parte_plataforma,
-    ),
-  };
-
-  if (requiere_revision) {
-    profileUpdate.requiere_revision_admin = true;
-  }
-
-  const { error: updateProfileError } = await supabaseAdmin
-    .from("profiles")
-    .update(profileUpdate)
-    .eq("id", proveedorId);
-
-  if (updateProfileError) {
-    throw new Error(updateProfileError.message);
-  }
-
-  const { error: updateClienteError } = await supabaseAdmin
-    .from("profiles")
-    .update({ credito_disponible: credito_cliente_nuevo })
-    .eq("id", booking.cliente_id);
-
-  if (updateClienteError) {
-    throw new Error(updateClienteError.message);
+    const { data: clienteProfile } = await supabaseAdmin
+      .from("profiles")
+      .select("credito_disponible")
+      .eq("id", booking.cliente_id)
+      .maybeSingle();
+    credito_cliente_nuevo =
+      clienteProfile?.credito_disponible != null
+        ? roundMoney(clienteProfile.credito_disponible)
+        : null;
   }
 
   return {
-    base_indemnizacion,
-    indemnizacion_total,
-    parte_cliente,
-    parte_plataforma,
+    base_indemnizacion: Number(result.base_indemnizacion) || base_indemnizacion,
+    indemnizacion_total: Number(result.indemnizacion_total) || indemnizacion_total,
+    parte_cliente: Number(result.parte_cliente) || parte_cliente,
+    parte_plataforma: Number(result.parte_plataforma) || parte_plataforma,
     credito_cliente_nuevo,
-    nueva_deuda,
-    cancelaciones_count,
-    requiere_revision,
+    nueva_deuda:
+      result.nueva_deuda != null ? Number(result.nueva_deuda) : undefined,
+    cancelaciones_count: Number(result.cancelaciones_count) || 0,
+    requiere_revision: result.requiere_revision === true,
+    already_processed: result.already_processed === true,
   };
 }
 
@@ -270,7 +240,9 @@ async function activarGarantiaCliente(booking, service) {
 
     const emailData = result.data ?? {};
     if (!result.ok || emailData.error) {
-      throw new Error(emailData.error || result.error || "Error al enviar email de garantía");
+      throw new Error(
+        emailData.error || result.error || "Error al enviar email de garantía",
+      );
     }
   }
 
@@ -331,11 +303,78 @@ export async function POST(request) {
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   }
 
-  if (booking.estado !== "confirmada") {
-    return NextResponse.json(
-      { error: "Solo se pueden cancelar reservas confirmadas" },
-      { status: 409 },
-    );
+  const canceladoAt = new Date().toISOString();
+
+  // F5: claim atómico ANTES de cualquier operación de dinero.
+  const { data: claimedRows, error: claimError } = await supabaseAdmin
+    .from("bookings")
+    .update({
+      estado: "cancelada_proveedor",
+      cancelado_at: canceladoAt,
+    })
+    .eq("id", bookingId)
+    .in("estado", ESTADOS_CANCELABLES)
+    .select("id, estado");
+
+  if (claimError) {
+    return NextResponse.json({ error: claimError.message }, { status: 500 });
+  }
+
+  const wonClaim = Array.isArray(claimedRows) && claimedRows.length > 0;
+
+  if (!wonClaim) {
+    const { data: current, error: currentError } = await supabaseAdmin
+      .from("bookings")
+      .select("id, estado")
+      .eq("id", bookingId)
+      .maybeSingle();
+
+    if (currentError) {
+      return NextResponse.json(
+        { error: currentError.message },
+        { status: 500 },
+      );
+    }
+
+    if (current?.estado === "cancelada_proveedor") {
+      // Ya cancelada: reanudar solo ops idempotentes (recovery tras crash post-claim).
+      // Si el ledger de penalización ya existe, devolver already_processed limpio.
+      const { data: existingPenalizacion } = await supabaseAdmin
+        .from("proveedor_penalizaciones")
+        .select(
+          "indemnizacion_total, base_indemnizacion, parte_cliente, parte_plataforma, cancelaciones_count, requiere_revision",
+        )
+        .eq("booking_id", bookingId)
+        .maybeSingle();
+
+      if (existingPenalizacion) {
+        return NextResponse.json({
+          success: true,
+          already_processed: true,
+          estado: "cancelada_proveedor",
+          stripe_ok: true,
+          penalizacion_ok: true,
+          garantia_ok: true,
+          num_alternativas: 0,
+          indemnizacion: Number(existingPenalizacion.indemnizacion_total) || 0,
+          indemnizacion_total:
+            Number(existingPenalizacion.indemnizacion_total) || 0,
+          base_indemnizacion:
+            Number(existingPenalizacion.base_indemnizacion) || 0,
+          parte_cliente: Number(existingPenalizacion.parte_cliente) || 0,
+          parte_plataforma: Number(existingPenalizacion.parte_plataforma) || 0,
+          cancelaciones_count:
+            Number(existingPenalizacion.cancelaciones_count) || 0,
+          requiere_revision: existingPenalizacion.requiere_revision === true,
+        });
+      }
+      // Fall through: claim perdido pero money aún no aplicado → ops idempotentes.
+    } else {
+      return NextResponse.json(
+        { error: "Solo se pueden cancelar reservas confirmadas" },
+        { status: 409 },
+      );
+    }
   }
 
   let stripe_ok = true;
@@ -362,8 +401,9 @@ export async function POST(request) {
 
       const stripeResult = await handleStripeForCancellation(
         booking.payment_intent_id,
+        booking.id,
       );
-      stripe_ok = stripeResult.stripe_ok;
+      stripe_ok = stripeResult.stripe_ok !== false;
       stripe_error = stripeResult.stripe_error;
     } catch (err) {
       stripe_ok = false;
@@ -374,19 +414,6 @@ export async function POST(request) {
         stripe_error,
       );
     }
-  }
-
-  const { error: updateError } = await supabaseAdmin
-    .from("bookings")
-    .update({
-      estado: "cancelada_proveedor",
-      cancelado_at: new Date().toISOString(),
-    })
-    .eq("id", bookingId)
-    .eq("estado", "confirmada");
-
-  if (updateError) {
-    return NextResponse.json({ error: updateError.message }, { status: 500 });
   }
 
   try {
@@ -445,63 +472,67 @@ export async function POST(request) {
   let garantia_ok = true;
   let num_alternativas = 0;
 
-  try {
-    const garantiaResult = await activarGarantiaCliente(booking, service);
-    num_alternativas = garantiaResult.num_alternativas;
-  } catch (err) {
-    garantia_ok = false;
-    console.error(
-      "Error activando garantía al cancelar reserva (proveedor):",
-      bookingId,
-      err?.message ?? err,
-    );
-  }
-
-  try {
-    const finEmail = booking.fecha_fin || booking.fecha_inicio;
-    const { data: proveedorProfile } = await supabaseAdmin
-      .from("profiles")
-      .select("nombre, apellido")
-      .eq("id", service.proveedor_id)
-      .maybeSingle();
-    const proveedorNombre =
-      [proveedorProfile?.nombre, proveedorProfile?.apellido]
-        .filter(Boolean)
-        .join(" ")
-        .trim() || undefined;
-
-    console.log(
-      "[bookings/cancel-proveedor] Creando notificación reserva_cancelada_proveedor",
-      { bookingId, clienteId: booking.cliente_id },
-    );
-
-    const cancelNotif = await notifyBookingEvent(supabaseAdmin, {
-      tipo: "reserva_cancelada_proveedor",
-      bookingId,
-      clienteId: booking.cliente_id,
-      proveedorNombre,
-      servicioTitulo: service.titulo,
-      fechaInicio: booking.fecha_inicio,
-      fechaFin: finEmail,
-    });
-
-    if (!cancelNotif?.ok) {
+  // Garantía / email / notif solo en el claim ganador (evita spam en resume).
+  if (wonClaim) {
+    try {
+      const garantiaResult = await activarGarantiaCliente(booking, service);
+      num_alternativas = garantiaResult.num_alternativas;
+    } catch (err) {
+      garantia_ok = false;
       console.error(
-        "[bookings/cancel-proveedor] Notificación reserva_cancelada_proveedor NO creada:",
-        cancelNotif,
+        "Error activando garantía al cancelar reserva (proveedor):",
+        bookingId,
+        err?.message ?? err,
       );
     }
-  } catch (notifErr) {
-    console.error(
-      "[bookings/cancel-proveedor] Error creando notificación reserva_cancelada_proveedor:",
-      notifErr,
-      { bookingId },
-    );
+
+    try {
+      const finEmail = booking.fecha_fin || booking.fecha_inicio;
+      const { data: proveedorProfile } = await supabaseAdmin
+        .from("profiles")
+        .select("nombre, apellido")
+        .eq("id", service.proveedor_id)
+        .maybeSingle();
+      const proveedorNombre =
+        [proveedorProfile?.nombre, proveedorProfile?.apellido]
+          .filter(Boolean)
+          .join(" ")
+          .trim() || undefined;
+
+      console.log(
+        "[bookings/cancel-proveedor] Creando notificación reserva_cancelada_proveedor",
+        { bookingId, clienteId: booking.cliente_id },
+      );
+
+      const cancelNotif = await notifyBookingEvent(supabaseAdmin, {
+        tipo: "reserva_cancelada_proveedor",
+        bookingId,
+        clienteId: booking.cliente_id,
+        proveedorNombre,
+        servicioTitulo: service.titulo,
+        fechaInicio: booking.fecha_inicio,
+        fechaFin: finEmail,
+      });
+
+      if (!cancelNotif?.ok) {
+        console.error(
+          "[bookings/cancel-proveedor] Notificación reserva_cancelada_proveedor NO creada:",
+          cancelNotif,
+        );
+      }
+    } catch (notifErr) {
+      console.error(
+        "[bookings/cancel-proveedor] Error creando notificación reserva_cancelada_proveedor:",
+        notifErr,
+        { bookingId },
+      );
+    }
   }
 
   return NextResponse.json({
     success: true,
     estado: "cancelada_proveedor",
+    already_processed: !wonClaim,
     stripe_ok,
     penalizacion_ok,
     garantia_ok,
