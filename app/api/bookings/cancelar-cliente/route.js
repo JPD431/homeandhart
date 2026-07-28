@@ -12,6 +12,7 @@ import { getProveedorFromService } from "@/app/lib/service-bookable";
 import {
   aplicarReembolsoStripeBooking,
   CANCELABLE_PI_STATUSES,
+  contarBookingsActivosPorPaymentIntent,
   contarBookingsPorPaymentIntent,
   devolverCreditoCliente,
   roundMoney,
@@ -104,7 +105,11 @@ async function calcularYAplicarReembolso(booking, service) {
           stripe,
           booking.payment_intent_id,
           reembolsoTarjeta,
-          { idempotencyKey: `refund:cancel-cliente:${booking.id}` },
+          {
+            idempotencyKey: `refund:cancel-cliente:${booking.id}`,
+            supabaseAdmin,
+            bookingId: booking.id,
+          },
         );
         stripe_ok = stripeResult.stripe_ok;
         stripe_error = stripeResult.stripe_error;
@@ -174,6 +179,7 @@ function warnLegacySharedPaymentIntent(bookingId, paymentIntentId, bookingsEnGru
 async function asegurarCapturaStripeParaCompensacion(
   paymentIntentId,
   reembolsoTarjeta,
+  { bookingId = null } = {},
 ) {
   if (!paymentIntentId) {
     return { ok: true, chargeId: null, capturado_neto: 0 };
@@ -193,12 +199,46 @@ async function asegurarCapturaStripeParaCompensacion(
   if (CANCELABLE_PI_STATUSES.has(status)) {
     const reembolsoCents = Math.round((Number(reembolsoTarjeta) || 0) * 100);
 
+    let otrosActivos = 0;
+    try {
+      otrosActivos = await contarBookingsActivosPorPaymentIntent(
+        supabaseAdmin,
+        paymentIntentId,
+        { excludeBookingId: bookingId },
+      );
+    } catch (err) {
+      console.error(
+        "[bookings/cancelar-cliente] Error contando PI compartido en captura compensación:",
+        err?.message ?? err,
+      );
+    }
+
+    // M9: no cancelar el PI entero si otras reservas activas lo comparten.
+    if (otrosActivos > 0 && reembolsoCents >= piAmountCents) {
+      return {
+        ok: false,
+        chargeId: null,
+        capturado_neto: 0,
+        error:
+          "PI compartido: no se puede liberar/cancelar todo el hold; otras reservas activas dependen de él.",
+      };
+    }
+
     if (reembolsoCents >= piAmountCents) {
       return { ok: true, chargeId: null, capturado_neto: 0 };
     }
 
     const amountToCapture = piAmountCents - reembolsoCents;
     if (amountToCapture <= 0) {
+      if (otrosActivos > 0) {
+        return {
+          ok: false,
+          chargeId: null,
+          capturado_neto: 0,
+          error:
+            "PI compartido: cancel del hold bloqueado (otras reservas activas).",
+        };
+      }
       await stripe.paymentIntents.cancel(paymentIntentId);
       return { ok: true, chargeId: null, capturado_neto: 0 };
     }
@@ -365,6 +405,7 @@ async function aplicarCompensacionProveedorCancelacionCliente(
       const captura = await asegurarCapturaStripeParaCompensacion(
         booking.payment_intent_id,
         reembolso.tarjeta,
+        { bookingId: booking.id },
       );
       observabilidad.captura_ok = captura.ok;
       observabilidad.capturado_neto = captura.capturado_neto;

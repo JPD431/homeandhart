@@ -263,7 +263,11 @@ async function ejecutarStripeRepartoIncidencia(
           stripe,
           booking.payment_intent_id,
           tarjetaCliente,
-          { idempotencyKey: `${idempotencyKey}-refund` },
+          {
+            idempotencyKey: `${idempotencyKey}-refund`,
+            supabaseAdmin,
+            bookingId: booking.id,
+          },
         );
         stripeResult = { ...stripeResult, refund: refundResult };
         if (!refundResult.stripe_ok) {

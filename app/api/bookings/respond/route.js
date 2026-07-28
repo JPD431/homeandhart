@@ -10,7 +10,10 @@ import {
 import { loadBookingContactClienteAdmin } from "@/app/lib/booking-contact-cliente";
 import { shouldShowClienteDireccionToProvider } from "@/app/lib/lugar-servicio";
 import { sendPlatformEmail } from "@/app/lib/send-platform-email";
-import { CANCELABLE_PI_STATUSES } from "@/app/lib/stripe-reembolso";
+import {
+  aplicarReembolsoStripeBooking,
+  calcularReembolsoTotal,
+} from "@/app/lib/stripe-reembolso";
 
 const supabaseAdmin = createServiceClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -35,51 +38,48 @@ function buildProveedorIngresoEmailFields(booking, proveedorProfile) {
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
-function isStripeAlreadyCanceledError(err) {
-  const message = (err?.message || "").toLowerCase();
-  return (
-    err?.code === "payment_intent_unexpected_state" ||
-    message.includes("already been canceled") ||
-    message.includes("cannot be canceled") ||
-    message.includes("cannot cancel")
-  );
-}
-
 /**
- * Libera el hold del PI al rechazar (F6). Idempotente por bookingId.
- * No reembolsa un PI already succeeded: el reject solo aplica a pendientes pre-captura.
+ * Libera el hold de ESTA línea al rechazar (F6 + M9).
+ * Idempotente por bookingId. Si el PI es compartido con otras reservas activas,
+ * hace capture parcial (no cancela el PI entero).
  */
-async function cancelPaymentIntentOnReject(paymentIntentId, bookingId) {
+async function cancelPaymentIntentOnReject(booking) {
+  const paymentIntentId = booking?.payment_intent_id;
   if (!paymentIntentId) {
     return { ok: true, action: "sin_pi" };
   }
 
-  const idempotencyKey = `cancel-pi:respond-reject:${bookingId}`;
-  const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
-  const { status } = paymentIntent;
-
-  if (status === "canceled") {
-    return { ok: true, action: "already_canceled", pi_status: status };
+  const { tarjeta } = calcularReembolsoTotal(booking);
+  // Solo crédito / sin tarjeta: no tocar el PI (puede estar compartido).
+  if (tarjeta <= 0) {
+    return { ok: true, action: "sin_cargo_tarjeta" };
   }
 
-  if (!CANCELABLE_PI_STATUSES.has(status)) {
+  const result = await aplicarReembolsoStripeBooking(
+    stripe,
+    paymentIntentId,
+    tarjeta,
+    {
+      idempotencyKey: `cancel-pi:respond-reject:${booking.id}`,
+      supabaseAdmin,
+      bookingId: booking.id,
+    },
+  );
+
+  if (result.stripe_ok === false) {
     return {
       ok: false,
-      action: null,
-      pi_status: status,
-      error: `Estado del PaymentIntent no cancelable en reject: ${status}`,
+      action: result.stripe_action,
+      pi_status: result.pi_status,
+      error: result.stripe_error,
     };
   }
 
-  try {
-    await stripe.paymentIntents.cancel(paymentIntentId, {}, { idempotencyKey });
-    return { ok: true, action: "canceled", pi_status: status };
-  } catch (err) {
-    if (isStripeAlreadyCanceledError(err)) {
-      return { ok: true, action: "already_canceled", pi_status: "canceled" };
-    }
-    throw err;
-  }
+  return {
+    ok: true,
+    action: result.stripe_action,
+    pi_status: result.pi_status,
+  };
 }
 
 async function contarBookingsPorPaymentIntent(paymentIntentId) {
@@ -181,7 +181,7 @@ export async function POST(request) {
   const { data: booking, error: bookingError } = await supabaseAdmin
     .from("bookings")
     .select(
-      "id, service_id, payment_intent_id, estado, cliente_id, fecha_inicio, fecha_fin, precio_total, mensaje",
+      "id, service_id, payment_intent_id, estado, cliente_id, fecha_inicio, fecha_fin, precio_total, credito_aplicado, mensaje",
     )
     .eq("id", bookingId)
     .maybeSingle();
@@ -297,10 +297,7 @@ export async function POST(request) {
         );
       }
 
-      const cancelResult = await cancelPaymentIntentOnReject(
-        booking.payment_intent_id,
-        booking.id,
-      );
+      const cancelResult = await cancelPaymentIntentOnReject(booking);
       if (!cancelResult.ok) {
         console.error(
           "[bookings/respond] No se pudo cancelar PaymentIntent al rechazar:",

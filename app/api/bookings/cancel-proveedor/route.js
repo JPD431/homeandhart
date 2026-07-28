@@ -8,6 +8,7 @@ import { registrarCancelacion } from "@/app/lib/cancelaciones";
 import { sendPlatformEmail } from "@/app/lib/send-platform-email";
 import {
   aplicarReembolsoStripeBooking,
+  calcularReembolsoTotal,
   devolverCreditoCliente,
   roundMoney,
 } from "@/app/lib/stripe-reembolso";
@@ -45,7 +46,7 @@ function warnLegacySharedPaymentIntentCancelProveedor(
   if (bookingsEnGrupo <= 1) return;
 
   console.warn(
-    "[bookings/cancel-proveedor] PI compartido detectado en cancel-proveedor — el cancel/refund afectará a varios bookings",
+    "[bookings/cancel-proveedor] PI compartido (legacy) — se reembolsa solo el importe de esta línea (M9)",
     {
       bookingId,
       payment_intent_id: paymentIntentId,
@@ -55,22 +56,28 @@ function warnLegacySharedPaymentIntentCancelProveedor(
 }
 
 /**
- * Cancel/refund completo del PI con idempotency key determinista (F5).
+ * Reembolso de ESTA reserva (tarjeta de la línea), no del PI entero (M9 / F5).
+ * En flujo nuevo (1 PI = 1 línea) tarjeta ≈ importe del PI.
+ * En legacy compartido: solo la parte de esta línea; nunca cancela el PI entero
+ * si hay otras reservas activas.
  */
-async function handleStripeForCancellation(paymentIntentId, bookingId) {
-  if (!paymentIntentId) {
+async function handleStripeForCancellation(booking) {
+  if (!booking?.payment_intent_id) {
     return { stripe_ok: true, stripe_action: "sin_pi" };
   }
 
-  const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
-  const amountEuros = roundMoney((Number(paymentIntent.amount) || 0) / 100);
-  const idempotencyKey = `refund:cancel-proveedor:${bookingId}`;
+  const { tarjeta } = calcularReembolsoTotal(booking);
+  const idempotencyKey = `refund:cancel-proveedor:${booking.id}`;
 
   return aplicarReembolsoStripeBooking(
     stripe,
-    paymentIntentId,
-    amountEuros,
-    { idempotencyKey },
+    booking.payment_intent_id,
+    tarjeta,
+    {
+      idempotencyKey,
+      supabaseAdmin,
+      bookingId: booking.id,
+    },
   );
 }
 
@@ -276,7 +283,7 @@ export async function POST(request) {
   const { data: booking, error: bookingError } = await supabaseAdmin
     .from("bookings")
     .select(
-      "id, service_id, cliente_id, payment_intent_id, estado, precio_total, precio_base, cliente_sin_comision, fecha_inicio, fecha_fin",
+      "id, service_id, cliente_id, payment_intent_id, estado, precio_total, precio_base, credito_aplicado, cliente_sin_comision, fecha_inicio, fecha_fin",
     )
     .eq("id", bookingId)
     .maybeSingle();
@@ -399,10 +406,7 @@ export async function POST(request) {
         );
       }
 
-      const stripeResult = await handleStripeForCancellation(
-        booking.payment_intent_id,
-        booking.id,
-      );
+      const stripeResult = await handleStripeForCancellation(booking);
       stripe_ok = stripeResult.stripe_ok !== false;
       stripe_error = stripeResult.stripe_error;
     } catch (err) {

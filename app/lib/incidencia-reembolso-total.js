@@ -213,7 +213,11 @@ export async function ejecutarReembolsoTotalIncidencia(supabaseAdmin, booking, a
         stripe,
         booking.payment_intent_id,
         reembolso.tarjeta,
-        { idempotencyKey },
+        {
+          idempotencyKey,
+          supabaseAdmin,
+          bookingId: booking.id,
+        },
       );
       console.error(`${LOG_PREFIX} stripe-despues`, {
         bookingId: booking.id,
