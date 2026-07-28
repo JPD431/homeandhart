@@ -1,4 +1,6 @@
 import { roundMoney } from "@/app/lib/ingresos-proveedor";
+import { resolveConnectDestinationForPayout } from "@/app/lib/connect-account";
+import { alertStripeDescuadre } from "@/app/lib/stripe-descuadre-alert";
 
 /** Mínimo de Stripe para crear una transfer a cuenta Connect (EUR). */
 export const STRIPE_MIN_TRANSFER_EUR = 0.5;
@@ -104,20 +106,50 @@ export async function ejecutarTransferProveedorConDeudaSaldo({
     return summary;
   }
 
-  if (!stripeAccountId) {
+  if (!stripeAccountId && !proveedorId) {
     summary.error = "Proveedor sin stripe_account_id";
     return summary;
   }
 
   try {
     let saldo_pendiente_nuevo = prepared.saldo_pendiente_anterior;
+    let destination = stripeAccountId;
 
     if (prepared.transfer_required && cobrosActivos) {
+      // M7: cuenta ACTUAL del perfil + validación Stripe antes de transferir.
+      const resolved = await resolveConnectDestinationForPayout(
+        stripe,
+        supabase,
+        proveedorId,
+      );
+      if (!resolved.ok) {
+        summary.error = resolved.error;
+        summary.skip_reason = "cuenta_connect_invalida";
+        await alertStripeDescuadre({
+          eventId: `payout-cuenta:${idempotencyKey || proveedorId}`,
+          eventType: "internal.payout_cuenta_invalida",
+          kind: "payout_cuenta_invalida",
+          summary: `Payout bloqueado: cuenta Connect inválida para proveedor ${proveedorId}.`,
+          paymentIntentId: null,
+          bookingIds: [],
+          details: {
+            proveedor_id: proveedorId,
+            stripe_account_id: resolved.stripeAccountId,
+            reason: resolved.reason,
+            error: resolved.error,
+            accion:
+              "El importe queda pendiente de reintento. El proveedor debe completar/reactivar Connect; el cron o un admin reintentará el payout.",
+          },
+        });
+        return summary;
+      }
+      destination = resolved.stripeAccountId;
+
       summary.transfer_attempted = true;
       const transferParams = {
         amount: Math.round(prepared.total_a_transferir * 100),
         currency: "eur",
-        destination: stripeAccountId,
+        destination,
       };
 
       if (!usePlatformBalance && chargeId) {

@@ -6,6 +6,8 @@ import {
   getIngresoProveedorFromBooking,
   roundMoney,
 } from "@/app/lib/ingresos-proveedor";
+import { resolveConnectDestinationForPayout } from "@/app/lib/connect-account";
+import { alertStripeDescuadre } from "@/app/lib/stripe-descuadre-alert";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
@@ -402,8 +404,44 @@ export async function POST(request) {
       }
 
       const { amountEur } = amountResolved;
-      const destination = item.plan.stripe_account_id;
       const amountCents = Math.round(amountEur * 100);
+
+      // M7: cuenta ACTUAL del perfil + validación Stripe antes de transferir.
+      const connect = await resolveConnectDestinationForPayout(
+        stripe,
+        supabaseAdmin,
+        item.plan.proveedorId,
+      );
+      if (!connect.ok) {
+        await alertStripeDescuadre({
+          eventId: `payout-cuenta:admin:${paymentIntentId}:${item.plan.proveedorId}`,
+          eventType: "internal.payout_cuenta_invalida",
+          kind: "payout_cuenta_invalida",
+          summary: `Transfer admin bloqueada: cuenta Connect inválida para proveedor ${item.plan.proveedorId}.`,
+          paymentIntentId,
+          bookingIds: item.plan.bookings.map((b) => b.id),
+          details: {
+            proveedor_id: item.plan.proveedorId,
+            stripe_account_id: connect.stripeAccountId,
+            reason: connect.reason,
+            error: connect.error,
+            amount_eur: amountEur,
+            accion:
+              "No se transfirió. El proveedor debe reactivar Connect; reintentar el payout después.",
+          },
+        });
+        return Response.json(
+          {
+            error: connect.error,
+            reason: connect.reason,
+            proveedorId: item.plan.proveedorId,
+            stripe_account_id: connect.stripeAccountId,
+          },
+          { status: 409 },
+        );
+      }
+
+      const destination = connect.stripeAccountId;
       // Incluye céntimos para que un segundo pago parcial legítimo no colisione
       // con la idempotency del primero; el mismo reintento reutiliza la misma key.
       const idempotencyKey = `transfer:admin-connect:${paymentIntentId}:${item.plan.proveedorId}:${amountCents}`;

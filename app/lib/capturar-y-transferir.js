@@ -12,6 +12,8 @@ import {
   claimReservaSinComision,
   releaseReservaSinComision,
 } from "@/app/lib/sin-comision-claim";
+import { resolveConnectDestinationForPayout } from "@/app/lib/connect-account";
+import { alertStripeDescuadre } from "@/app/lib/stripe-descuadre-alert";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
@@ -451,10 +453,39 @@ export async function capturarYTransferirPago(
         let saldo_pendiente_nuevo = plan.saldo_pendiente_anterior;
 
         if (plan.transfer_required) {
+          // M7: destino = cuenta ACTUAL en BD + validación Stripe (payouts_enabled).
+          const destination = await resolveConnectDestinationForPayout(
+            stripe,
+            supabase,
+            plan.proveedorId,
+          );
+          if (!destination.ok) {
+            await alertStripeDescuadre({
+              eventId: `payout-cuenta:${paymentIntentId}:${plan.proveedorId}`,
+              eventType: "internal.payout_cuenta_invalida",
+              kind: "payout_cuenta_invalida",
+              summary: `Payout bloqueado: cuenta Connect inválida para proveedor ${plan.proveedorId} (PI ${paymentIntentId}).`,
+              paymentIntentId,
+              bookingIds: plan.bookingIds,
+              details: {
+                proveedor_id: plan.proveedorId,
+                stripe_account_id: destination.stripeAccountId,
+                reason: destination.reason,
+                error: destination.error,
+                amount_eur: plan.total_a_transferir,
+                accion:
+                  "No se marcó pago_liberado_at. El importe permanece en plataforma; reintento automático cuando la cuenta esté activa.",
+              },
+            });
+            throw new Error(destination.error);
+          }
+
+          plan.stripe_account_id = destination.stripeAccountId;
+
           const transferParams = {
             amount: Math.round(plan.total_a_transferir * 100),
             currency: "eur",
-            destination: plan.stripe_account_id,
+            destination: destination.stripeAccountId,
           };
 
           if (!usePlatformBalance) {

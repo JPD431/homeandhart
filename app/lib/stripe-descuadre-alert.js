@@ -21,8 +21,10 @@ function getSupabaseAdmin() {
 
 /**
  * @param {object} params
- * @param {import("stripe").Stripe.Event} params.event
- * @param {string} params.kind clave estable (ej. pi_canceled_activo, refund_mismatch)
+ * @param {import("stripe").Stripe.Event|null} [params.event] evento Stripe (webhook); o usar eventId
+ * @param {string|null} [params.eventId] id sintético para alertas internas (payout, etc.)
+ * @param {string|null} [params.eventType]
+ * @param {string} params.kind clave estable (ej. pi_canceled_activo, payout_cuenta_invalida)
  * @param {string} params.summary frase corta para el email
  * @param {Record<string, unknown>} [params.details]
  * @param {string|null} [params.paymentIntentId]
@@ -31,7 +33,9 @@ function getSupabaseAdmin() {
  * @param {string|null} [params.bookingId] si se pasa, entra en dedupe_key (1 email por booking)
  */
 export async function alertStripeDescuadre({
-  event,
+  event = null,
+  eventId = null,
+  eventType = null,
   kind,
   summary,
   details = {},
@@ -41,13 +45,26 @@ export async function alertStripeDescuadre({
   bookingId = null,
 }) {
   try {
-    if (!event?.id || !kind || !summary) {
+    const resolvedEvent = event?.id
+      ? event
+      : eventId
+        ? {
+            id: eventId,
+            type: eventType || "internal",
+            livemode: null,
+          }
+        : null;
+
+    if (!resolvedEvent?.id || !kind || !summary) {
       console.error("[stripe-descuadre] alert incompleta", {
         kind,
-        event_id: event?.id,
+        event_id: resolvedEvent?.id,
       });
       return { ok: false, reason: "invalid" };
     }
+
+    // Normalizar para el resto de la función.
+    event = resolvedEvent;
 
     const ids = bookingId
       ? [bookingId]
