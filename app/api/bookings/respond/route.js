@@ -10,6 +10,7 @@ import {
 import { loadBookingContactClienteAdmin } from "@/app/lib/booking-contact-cliente";
 import { shouldShowClienteDireccionToProvider } from "@/app/lib/lugar-servicio";
 import { sendPlatformEmail } from "@/app/lib/send-platform-email";
+import { CANCELABLE_PI_STATUSES } from "@/app/lib/stripe-reembolso";
 
 const supabaseAdmin = createServiceClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -33,6 +34,53 @@ function buildProveedorIngresoEmailFields(booking, proveedorProfile) {
 }
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+
+function isStripeAlreadyCanceledError(err) {
+  const message = (err?.message || "").toLowerCase();
+  return (
+    err?.code === "payment_intent_unexpected_state" ||
+    message.includes("already been canceled") ||
+    message.includes("cannot be canceled") ||
+    message.includes("cannot cancel")
+  );
+}
+
+/**
+ * Libera el hold del PI al rechazar (F6). Idempotente por bookingId.
+ * No reembolsa un PI already succeeded: el reject solo aplica a pendientes pre-captura.
+ */
+async function cancelPaymentIntentOnReject(paymentIntentId, bookingId) {
+  if (!paymentIntentId) {
+    return { ok: true, action: "sin_pi" };
+  }
+
+  const idempotencyKey = `cancel-pi:respond-reject:${bookingId}`;
+  const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+  const { status } = paymentIntent;
+
+  if (status === "canceled") {
+    return { ok: true, action: "already_canceled", pi_status: status };
+  }
+
+  if (!CANCELABLE_PI_STATUSES.has(status)) {
+    return {
+      ok: false,
+      action: null,
+      pi_status: status,
+      error: `Estado del PaymentIntent no cancelable en reject: ${status}`,
+    };
+  }
+
+  try {
+    await stripe.paymentIntents.cancel(paymentIntentId, {}, { idempotencyKey });
+    return { ok: true, action: "canceled", pi_status: status };
+  } catch (err) {
+    if (isStripeAlreadyCanceledError(err)) {
+      return { ok: true, action: "already_canceled", pi_status: "canceled" };
+    }
+    throw err;
+  }
+}
 
 async function contarBookingsPorPaymentIntent(paymentIntentId) {
   if (!paymentIntentId) return 1;
@@ -164,13 +212,72 @@ export async function POST(request) {
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   }
 
-  if (booking.estado !== "pendiente") {
+  const nuevoEstado = action === "aceptar" ? "confirmada" : "rechazada";
+
+  // F6: claim atómico ANTES de tocar Stripe. Solo uno de accept/reject gana.
+  const { data: claimedRows, error: claimError } = await supabaseAdmin
+    .from("bookings")
+    .update({ estado: nuevoEstado })
+    .eq("id", bookingId)
+    .eq("estado", "pendiente")
+    .select("id, estado");
+
+  if (claimError) {
+    return NextResponse.json({ error: claimError.message }, { status: 500 });
+  }
+
+  const wonClaim = Array.isArray(claimedRows) && claimedRows.length > 0;
+
+  if (!wonClaim) {
+    const { data: current, error: currentError } = await supabaseAdmin
+      .from("bookings")
+      .select("id, estado, payment_intent_id")
+      .eq("id", bookingId)
+      .maybeSingle();
+
+    if (currentError) {
+      return NextResponse.json(
+        { error: currentError.message },
+        { status: 500 },
+      );
+    }
+
+    // Idempotencia: mismo action ya aplicado.
+    if (current?.estado === nuevoEstado) {
+      // Reject reintento: asegurar cancel del PI (idempotente) por si falló tras el claim.
+      if (action === "rechazar" && current.payment_intent_id) {
+        try {
+          await cancelPaymentIntentOnReject(
+            current.payment_intent_id,
+            bookingId,
+          );
+        } catch (err) {
+          console.error(
+            "[bookings/respond] Error reintentando cancel PI (already_processed):",
+            current.payment_intent_id,
+            err?.message ?? err,
+          );
+        }
+      }
+
+      return NextResponse.json({
+        success: true,
+        already_processed: true,
+        estado: nuevoEstado,
+      });
+    }
+
+    // Accept vs reject concurrente / estado incompatible: no tocar el PI.
     return NextResponse.json(
-      { error: "La reserva ya no está pendiente" },
+      {
+        error: "La reserva ya no está pendiente",
+        estado: current?.estado ?? null,
+      },
       { status: 409 },
     );
   }
 
+  // Solo el ganador del claim libera el pago en reject.
   if (action === "rechazar" && booking.payment_intent_id) {
     try {
       try {
@@ -190,7 +297,18 @@ export async function POST(request) {
         );
       }
 
-      await stripe.paymentIntents.cancel(booking.payment_intent_id);
+      const cancelResult = await cancelPaymentIntentOnReject(
+        booking.payment_intent_id,
+        booking.id,
+      );
+      if (!cancelResult.ok) {
+        console.error(
+          "[bookings/respond] No se pudo cancelar PaymentIntent al rechazar:",
+          booking.payment_intent_id,
+          cancelResult.error,
+          { pi_status: cancelResult.pi_status },
+        );
+      }
     } catch (err) {
       console.error(
         "Error cancelando PaymentIntent al rechazar reserva:",
@@ -200,17 +318,8 @@ export async function POST(request) {
     }
   }
 
-  const nuevoEstado = action === "aceptar" ? "confirmada" : "rechazada";
-
-  const { error: updateError } = await supabaseAdmin
-    .from("bookings")
-    .update({ estado: nuevoEstado })
-    .eq("id", bookingId)
-    .eq("estado", "pendiente");
-
-  if (updateError) {
-    return NextResponse.json({ error: updateError.message }, { status: 500 });
-  }
+  // Accept: no captura aquí (manual capture posterior). El claim a confirmada
+  // impide que un reject posterior libere el hold.
 
   if (action === "rechazar") {
     try {
@@ -513,5 +622,9 @@ export async function POST(request) {
     }
   }
 
-  return NextResponse.json({ success: true, estado: nuevoEstado });
+  return NextResponse.json({
+    success: true,
+    estado: nuevoEstado,
+    already_processed: false,
+  });
 }
