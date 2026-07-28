@@ -34,6 +34,10 @@ import { assertUserHasTelefono } from "@/app/lib/profile-telefono";
 import { notifyBookingEvent } from "@/app/lib/notifications";
 import { validateNumHuespedesParaReserva } from "@/app/lib/huespedes-precio";
 import { supportsModalidadCobro } from "@/app/lib/modalidad-cobro";
+import {
+  debitCreditoDisponible,
+  releaseCreditoDebito,
+} from "@/app/lib/credito-debito";
 
 const MAX_CREDITO_PORCENTAJE = 0.6;
 
@@ -1096,9 +1100,9 @@ async function finalizeInsertedBookings({
   userId,
   perfilCliente,
   clienteSinComision,
-  creditoDisponible,
   creditoAplicado,
   creditoPorServicioMap,
+  creditoIdempotencyKey = null,
   insertedBookings,
   insertedBookingIds,
   rollbackPaymentIntentId,
@@ -1135,6 +1139,16 @@ async function finalizeInsertedBookings({
 
   if (disponibilidadError) {
     await rollbackInsertedBookings(insertedBookingIds, rollbackPaymentIntentId);
+    if (creditoIdempotencyKey) {
+      try {
+        await releaseCreditoDebito(supabaseAdmin, creditoIdempotencyKey);
+      } catch (releaseErr) {
+        console.error(
+          "[bookings/complete] Error liberando crédito tras fallo disponibilidad:",
+          releaseErr?.message ?? releaseErr,
+        );
+      }
+    }
 
     if (isDisponibilidadExclusionError(disponibilidadError)) {
       return NextResponse.json(
@@ -1171,28 +1185,6 @@ async function finalizeInsertedBookings({
     } catch (err) {
       console.error(
         "[bookings/complete] No se pudo restar reservas_sin_comision_cliente:",
-        err,
-      );
-    }
-  }
-
-  if (creditoAplicado > 0) {
-    try {
-      const { error: creditError } = await supabaseAdmin
-        .from("profiles")
-        .update({
-          credito_disponible: Math.max(0, creditoDisponible - creditoAplicado),
-        })
-        .eq("id", userId);
-      if (creditError) {
-        console.error(
-          "[bookings/complete] No se pudo restar credito_disponible:",
-          creditError,
-        );
-      }
-    } catch (err) {
-      console.error(
-        "[bookings/complete] No se pudo restar credito_disponible:",
         err,
       );
     }
@@ -1324,7 +1316,7 @@ async function completePerServicePayments(userId, body) {
 
   const { data: perfilCliente, error: perfilError } = await supabaseAdmin
     .from("profiles")
-    .select("reservas_sin_comision_cliente, credito_disponible, nombre")
+    .select("reservas_sin_comision_cliente, nombre")
     .eq("id", userId)
     .maybeSingle();
 
@@ -1350,9 +1342,7 @@ async function completePerServicePayments(userId, body) {
     : roundMoney(subtotalGrupo * COMMISSION_RATE);
   const totalGrupo = roundMoney(subtotalGrupo + comision);
 
-  const creditoDisponible = Number(perfilCliente?.credito_disponible) || 0;
   const topeCredito = roundMoney(totalGrupo * MAX_CREDITO_PORCENTAJE);
-  const creditoAplicado = Math.min(creditoDisponible, topeCredito);
 
   const precioPorServicioMap = new Map(
     preciosPorServicio.map((p) => [p.service_id, p.precio_total]),
@@ -1363,6 +1353,41 @@ async function completePerServicePayments(userId, body) {
   const modalidadPorServicioMap = new Map(
     preciosPorServicio.map((p) => [p.service_id, p.modalidad_cobro ?? null]),
   );
+
+  if (familia_id) {
+    const familiaError = await validateFamiliaMembership(userId, familia_id);
+    if (familiaError) return familiaError;
+  }
+
+  // Idempotencia antes del débito: reintento del mismo grupo no vuelve a debitar.
+  const idempotency = await checkPerServiceIdempotency({
+    userId,
+    grupoReserva: grupo_reserva,
+    serviceIds: uniqueServiceIds,
+    paymentsByService,
+  });
+  if (idempotency.error) return idempotency.error;
+  if (idempotency.earlyResponse) return idempotency.earlyResponse;
+
+  const creditoIdempotencyKey = `complete:grupo:${grupo_reserva}`;
+  let creditoAplicado = 0;
+  try {
+    creditoAplicado = await debitCreditoDisponible(
+      supabaseAdmin,
+      userId,
+      topeCredito,
+      creditoIdempotencyKey,
+    );
+  } catch (debitErr) {
+    console.error(
+      "[bookings/complete] Error en débito atómico de crédito:",
+      debitErr?.message ?? debitErr,
+    );
+    return NextResponse.json(
+      { error: debitErr?.message || "Error al aplicar crédito" },
+      { status: 500 },
+    );
+  }
 
   const creditoPorServicioMap = splitCreditoPorServicio(
     preciosPorServicio,
@@ -1380,6 +1405,14 @@ async function completePerServicePayments(userId, body) {
 
     if (tarjetaEsperada <= 0) {
       if (paymentIntentId != null) {
+        try {
+          await releaseCreditoDebito(supabaseAdmin, creditoIdempotencyKey);
+        } catch (releaseErr) {
+          console.error(
+            "[bookings/complete] Error liberando crédito tras PI sobrante:",
+            releaseErr?.message ?? releaseErr,
+          );
+        }
         return NextResponse.json(
           {
             error: `El servicio ${serviceId} no requiere pago con tarjeta (cubierto con crédito)`,
@@ -1392,6 +1425,14 @@ async function completePerServicePayments(userId, body) {
     }
 
     if (!paymentIntentId) {
+      try {
+        await releaseCreditoDebito(supabaseAdmin, creditoIdempotencyKey);
+      } catch (releaseErr) {
+        console.error(
+          "[bookings/complete] Error liberando crédito tras falta de PI:",
+          releaseErr?.message ?? releaseErr,
+        );
+      }
       return NextResponse.json(
         {
           error: `Falta payment_intent_id para el servicio ${serviceId}`,
@@ -1411,6 +1452,14 @@ async function completePerServicePayments(userId, body) {
     });
 
     if (validation.error) {
+      try {
+        await releaseCreditoDebito(supabaseAdmin, creditoIdempotencyKey);
+      } catch (releaseErr) {
+        console.error(
+          "[bookings/complete] Error liberando crédito tras PI inválido:",
+          releaseErr?.message ?? releaseErr,
+        );
+      }
       const svc = serviceMap.get(serviceId);
       return NextResponse.json(
         {
@@ -1424,20 +1473,6 @@ async function completePerServicePayments(userId, body) {
     }
   }
 
-  if (familia_id) {
-    const familiaError = await validateFamiliaMembership(userId, familia_id);
-    if (familiaError) return familiaError;
-  }
-
-  const idempotency = await checkPerServiceIdempotency({
-    userId,
-    grupoReserva: grupo_reserva,
-    serviceIds: uniqueServiceIds,
-    paymentsByService,
-  });
-  if (idempotency.error) return idempotency.error;
-  if (idempotency.earlyResponse) return idempotency.earlyResponse;
-
   for (const serviceId of uniqueServiceIds) {
     const ctx = contextByServiceId.get(serviceId);
     const inicio = ctx.fecha_inicio;
@@ -1450,6 +1485,14 @@ async function completePerServicePayments(userId, body) {
         fin,
       );
     } catch (overlapError) {
+      try {
+        await releaseCreditoDebito(supabaseAdmin, creditoIdempotencyKey);
+      } catch (releaseErr) {
+        console.error(
+          "[bookings/complete] Error liberando crédito tras solapamiento:",
+          releaseErr?.message ?? releaseErr,
+        );
+      }
       return NextResponse.json(
         { error: overlapError.message, service_id: serviceId },
         { status: 500 },
@@ -1457,6 +1500,14 @@ async function completePerServicePayments(userId, body) {
     }
 
     if (solapamiento) {
+      try {
+        await releaseCreditoDebito(supabaseAdmin, creditoIdempotencyKey);
+      } catch (releaseErr) {
+        console.error(
+          "[bookings/complete] Error liberando crédito tras fechas ocupadas:",
+          releaseErr?.message ?? releaseErr,
+        );
+      }
       const svc = serviceMap.get(serviceId);
       return NextResponse.json(
         {
@@ -1501,6 +1552,14 @@ async function completePerServicePayments(userId, body) {
     .select("id, service_id, fecha_inicio, fecha_fin, lugar_servicio, direccion_cliente_a_definir");
 
   if (insertError) {
+    try {
+      await releaseCreditoDebito(supabaseAdmin, creditoIdempotencyKey);
+    } catch (releaseErr) {
+      console.error(
+        "[bookings/complete] Error liberando crédito tras fallo insert:",
+        releaseErr?.message ?? releaseErr,
+      );
+    }
     return NextResponse.json({ error: insertError.message }, { status: 500 });
   }
 
@@ -1521,9 +1580,9 @@ async function completePerServicePayments(userId, body) {
     userId,
     perfilCliente,
     clienteSinComision,
-    creditoDisponible,
     creditoAplicado,
     creditoPorServicioMap,
+    creditoIdempotencyKey,
     insertedBookings,
     insertedBookingIds,
     rollbackPaymentIntentId,
@@ -1698,7 +1757,7 @@ export async function POST(request) {
 
     const { data: perfilCliente, error: perfilError } = await supabaseAdmin
       .from("profiles")
-      .select("reservas_sin_comision_cliente, credito_disponible, nombre")
+      .select("reservas_sin_comision_cliente, nombre")
       .eq("id", userId)
       .maybeSingle();
 
@@ -1724,45 +1783,17 @@ export async function POST(request) {
       : roundMoney(subtotalGrupo * COMMISSION_RATE);
     const totalGrupo = roundMoney(subtotalGrupo + comision);
 
-    const creditoDisponible = Number(perfilCliente?.credito_disponible) || 0;
     const topeCredito = roundMoney(totalGrupo * MAX_CREDITO_PORCENTAJE);
-    const creditoAplicado = Math.min(creditoDisponible, topeCredito);
-    const totalAPagar = roundMoney(totalGrupo - creditoAplicado);
 
-    const paymentIntent = await stripe.paymentIntents.retrieve(
-      payment_intent_id,
+    const precioPorServicioMap = new Map(
+      preciosPorServicio.map((p) => [p.service_id, p.precio_total]),
     );
-
-    if (paymentIntent.metadata?.cliente_id !== userId) {
-      return NextResponse.json(
-        { error: "El pago no pertenece a este usuario" },
-        { status: 403 },
-      );
-    }
-
-    if (paymentIntent.metadata?.grupo_reserva !== grupo_reserva) {
-      return NextResponse.json(
-        { error: "grupo_reserva no coincide con el pago" },
-        { status: 400 },
-      );
-    }
-
-    const validStatuses = ["requires_capture", "succeeded"];
-    if (!validStatuses.includes(paymentIntent.status)) {
-      return NextResponse.json(
-        { error: "El pago no está confirmado" },
-        { status: 400 },
-      );
-    }
-
-    const expectedAmountCents = Math.round(totalAPagar * 100);
-    const amountDiff = Math.abs(paymentIntent.amount - expectedAmountCents);
-    if (amountDiff > 2) {
-      return NextResponse.json(
-        { error: "El importe del pago no coincide" },
-        { status: 400 },
-      );
-    }
+    const precioBasePorServicioMap = new Map(
+      preciosPorServicio.map((p) => [p.service_id, p.precio_base]),
+    );
+    const modalidadPorServicioMap = new Map(
+      preciosPorServicio.map((p) => [p.service_id, p.modalidad_cobro ?? null]),
+    );
 
     if (familia_id) {
       const { data: membership, error: membershipError } = await supabaseAdmin
@@ -1788,15 +1819,167 @@ export async function POST(request) {
       }
     }
 
-    const precioPorServicioMap = new Map(
-      preciosPorServicio.map((p) => [p.service_id, p.precio_total]),
-    );
-    const precioBasePorServicioMap = new Map(
-      preciosPorServicio.map((p) => [p.service_id, p.precio_base]),
-    );
-    const modalidadPorServicioMap = new Map(
-      preciosPorServicio.map((p) => [p.service_id, p.modalidad_cobro ?? null]),
-    );
+    // Idempotencia por grupo / PI antes del débito.
+    const { data: existingByGrupo, error: existingGrupoError } =
+      await supabaseAdmin
+        .from("bookings")
+        .select("id, service_id, payment_intent_id")
+        .eq("grupo_reserva", grupo_reserva)
+        .eq("cliente_id", userId)
+        .in("service_id", uniqueServiceIds);
+
+    if (existingGrupoError) {
+      return NextResponse.json(
+        { error: existingGrupoError.message },
+        { status: 500 },
+      );
+    }
+
+    if ((existingByGrupo ?? []).length > 0) {
+      const existingServiceIds = new Set(
+        existingByGrupo.map((b) => b.service_id),
+      );
+      const allPresent = uniqueServiceIds.every((id) =>
+        existingServiceIds.has(id),
+      );
+      if (allPresent) {
+        return NextResponse.json({
+          ok: true,
+          already_created: true,
+          booking_ids: existingByGrupo.map((b) => b.id),
+          grupo_reserva,
+        });
+      }
+      return NextResponse.json(
+        {
+          error:
+            "Estado inconsistente: algunas reservas del grupo ya existen y otras no",
+        },
+        { status: 409 },
+      );
+    }
+
+    const { data: existingByPi, error: existingPiError } = await supabaseAdmin
+      .from("bookings")
+      .select("id, payment_intent_id, grupo_reserva")
+      .eq("payment_intent_id", payment_intent_id)
+      .limit(1);
+
+    if (existingPiError) {
+      return NextResponse.json(
+        { error: existingPiError.message },
+        { status: 500 },
+      );
+    }
+
+    if ((existingByPi ?? []).length > 0) {
+      return NextResponse.json(
+        {
+          error: `payment_intent_id ${payment_intent_id} ya está asociado a otra reserva`,
+        },
+        { status: 409 },
+      );
+    }
+
+    const creditoIdempotencyKey = `complete:pi:${payment_intent_id}`;
+    let creditoAplicado = 0;
+    try {
+      creditoAplicado = await debitCreditoDisponible(
+        supabaseAdmin,
+        userId,
+        topeCredito,
+        creditoIdempotencyKey,
+      );
+    } catch (debitErr) {
+      console.error(
+        "[bookings/complete] Error en débito atómico de crédito:",
+        debitErr?.message ?? debitErr,
+      );
+      return NextResponse.json(
+        { error: debitErr?.message || "Error al aplicar crédito" },
+        { status: 500 },
+      );
+    }
+
+    const totalAPagar = roundMoney(totalGrupo - creditoAplicado);
+
+    let paymentIntent;
+    try {
+      paymentIntent = await stripe.paymentIntents.retrieve(payment_intent_id);
+    } catch (piErr) {
+      try {
+        await releaseCreditoDebito(supabaseAdmin, creditoIdempotencyKey);
+      } catch (releaseErr) {
+        console.error(
+          "[bookings/complete] Error liberando crédito tras fallo PI:",
+          releaseErr?.message ?? releaseErr,
+        );
+      }
+      throw piErr;
+    }
+
+    if (paymentIntent.metadata?.cliente_id !== userId) {
+      try {
+        await releaseCreditoDebito(supabaseAdmin, creditoIdempotencyKey);
+      } catch (releaseErr) {
+        console.error(
+          "[bookings/complete] Error liberando crédito tras PI ajeno:",
+          releaseErr?.message ?? releaseErr,
+        );
+      }
+      return NextResponse.json(
+        { error: "El pago no pertenece a este usuario" },
+        { status: 403 },
+      );
+    }
+
+    if (paymentIntent.metadata?.grupo_reserva !== grupo_reserva) {
+      try {
+        await releaseCreditoDebito(supabaseAdmin, creditoIdempotencyKey);
+      } catch (releaseErr) {
+        console.error(
+          "[bookings/complete] Error liberando crédito tras grupo mismatch:",
+          releaseErr?.message ?? releaseErr,
+        );
+      }
+      return NextResponse.json(
+        { error: "grupo_reserva no coincide con el pago" },
+        { status: 400 },
+      );
+    }
+
+    const validStatuses = ["requires_capture", "succeeded"];
+    if (!validStatuses.includes(paymentIntent.status)) {
+      try {
+        await releaseCreditoDebito(supabaseAdmin, creditoIdempotencyKey);
+      } catch (releaseErr) {
+        console.error(
+          "[bookings/complete] Error liberando crédito tras PI no confirmado:",
+          releaseErr?.message ?? releaseErr,
+        );
+      }
+      return NextResponse.json(
+        { error: "El pago no está confirmado" },
+        { status: 400 },
+      );
+    }
+
+    const expectedAmountCents = Math.round(totalAPagar * 100);
+    const amountDiff = Math.abs(paymentIntent.amount - expectedAmountCents);
+    if (amountDiff > 2) {
+      try {
+        await releaseCreditoDebito(supabaseAdmin, creditoIdempotencyKey);
+      } catch (releaseErr) {
+        console.error(
+          "[bookings/complete] Error liberando crédito tras importe mismatch:",
+          releaseErr?.message ?? releaseErr,
+        );
+      }
+      return NextResponse.json(
+        { error: "El importe del pago no coincide" },
+        { status: 400 },
+      );
+    }
 
     const creditoPorServicioMap = splitCreditoPorServicio(
       preciosPorServicio,
@@ -1814,6 +1997,14 @@ export async function POST(request) {
           ctx.fecha_fin || ctx.fecha_inicio,
         );
       } catch (overlapError) {
+        try {
+          await releaseCreditoDebito(supabaseAdmin, creditoIdempotencyKey);
+        } catch (releaseErr) {
+          console.error(
+            "[bookings/complete] Error liberando crédito tras solapamiento:",
+            releaseErr?.message ?? releaseErr,
+          );
+        }
         return NextResponse.json(
           { error: overlapError.message, service_id: serviceId },
           { status: 500 },
@@ -1821,6 +2012,14 @@ export async function POST(request) {
       }
 
       if (solapamiento) {
+        try {
+          await releaseCreditoDebito(supabaseAdmin, creditoIdempotencyKey);
+        } catch (releaseErr) {
+          console.error(
+            "[bookings/complete] Error liberando crédito tras fechas ocupadas:",
+            releaseErr?.message ?? releaseErr,
+          );
+        }
         const svc = serviceMap.get(serviceId);
         return NextResponse.json(
           {
@@ -1864,6 +2063,14 @@ export async function POST(request) {
       .select("id, service_id, fecha_inicio, fecha_fin, lugar_servicio, direccion_cliente_a_definir");
 
     if (insertError) {
+      try {
+        await releaseCreditoDebito(supabaseAdmin, creditoIdempotencyKey);
+      } catch (releaseErr) {
+        console.error(
+          "[bookings/complete] Error liberando crédito tras fallo insert:",
+          releaseErr?.message ?? releaseErr,
+        );
+      }
       return NextResponse.json({ error: insertError.message }, { status: 500 });
     }
 
@@ -1875,110 +2082,32 @@ export async function POST(request) {
 
     const insertedBookingIds = insertedBookings.map((b) => b.id);
 
-    const { error: disponibilidadError } = await supabaseAdmin
-      .from("disponibilidad")
-      .insert(
-        insertedBookings.map((booking) => ({
-          service_id: booking.service_id,
-          fecha_inicio: booking.fecha_inicio,
-          fecha_fin: booking.fecha_fin || booking.fecha_inicio,
-          booking_id: booking.id,
-          tipo: "reserva",
-        })),
-      );
-
-    if (disponibilidadError) {
-      await rollbackInsertedBookings(insertedBookingIds, payment_intent_id);
-
-      if (isDisponibilidadExclusionError(disponibilidadError)) {
-        return NextResponse.json(
-          {
-            error:
-              "Estas fechas se acaban de ocupar. Por favor elige otras.",
-          },
-          { status: 409 },
-        );
-      }
-
-      console.error(
-        "[bookings/complete] No se pudo bloquear disponibilidad tras crear bookings:",
-        disponibilidadError,
-        {
-          payment_intent_id,
-          booking_ids: insertedBookingIds,
-        },
-      );
-      return NextResponse.json(
-        { error: disponibilidadError.message },
-        { status: 500 },
-      );
-    }
-
-    try {
-      await rewardReferidorPrimeraReserva(userId, supabaseAdmin);
-    } catch (err) {
-      console.error("[bookings/complete] rewardReferidorPrimeraReserva:", err);
-    }
-
-    if (clienteSinComision) {
-      try {
-        await decrementReservasSinComisionCliente(userId, perfilCliente);
-      } catch (err) {
-        console.error(
-          "[bookings/complete] No se pudo restar reservas_sin_comision_cliente:",
-          err,
-        );
-      }
-    }
-
-    if (creditoAplicado > 0) {
-      try {
-        const { error: creditError } = await supabaseAdmin
-          .from("profiles")
-          .update({
-            credito_disponible: Math.max(0, creditoDisponible - creditoAplicado),
-          })
-          .eq("id", userId);
-        if (creditError) {
-          console.error(
-            "[bookings/complete] No se pudo restar credito_disponible:",
-            creditError,
-          );
-        }
-      } catch (err) {
-        console.error(
-          "[bookings/complete] No se pudo restar credito_disponible:",
-          err,
-        );
-      }
-    }
-
-    await sendPostCompleteBookingEmails({
+    return finalizeInsertedBookings({
       userId,
       perfilCliente,
-      insertedBookings,
-      serviceIds: service_ids,
-      serviceMap,
-      precioPorServicioMap,
-      precioBasePorServicioMap,
       clienteSinComision,
-      mainService,
+      creditoAplicado,
+      creditoPorServicioMap,
+      creditoIdempotencyKey,
+      insertedBookings,
+      insertedBookingIds,
+      rollbackPaymentIntentId: payment_intent_id,
       fechaInicio:
         contextByServiceId.get(main_service_id)?.fecha_inicio ?? fecha_inicio,
       fechaFin:
         contextByServiceId.get(main_service_id)?.fecha_fin ?? fecha_fin,
+      familiaId: familia_id,
+      mainService,
+      mainServiceId: main_service_id,
+      serviceIds: service_ids,
+      serviceMap,
+      precioPorServicioMap,
+      precioBasePorServicioMap,
       totalGrupo,
       subtotalGrupo,
       comision,
       mensaje,
-      creditoAplicado,
-      creditoPorServicioMap,
-    });
-
-    return NextResponse.json({
-      ok: true,
-      booking_ids: insertedBookings.map((b) => b.id),
-      grupo_reserva,
+      grupoReserva: grupo_reserva,
     });
   } catch (error) {
     console.error("[bookings/complete]", error);
