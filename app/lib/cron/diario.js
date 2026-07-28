@@ -1,6 +1,7 @@
 import { runActualizarEstados } from "@/app/lib/cron/actualizar-estados";
 import { runCalcularRespuesta } from "@/app/lib/cron/calcular-respuesta";
 import { runEmailSequences } from "@/app/lib/cron/email-sequences";
+import { runCancelHoldsHuerfanos } from "@/app/lib/cron/holds-huerfanos";
 
 async function runTask(name, fn) {
   try {
@@ -27,11 +28,16 @@ export async function runCronDiario() {
     runCalcularRespuesta,
   );
   const email_sequences = await runTask("email-sequences", runEmailSequences);
+  const holds_huerfanos = await runTask(
+    "holds-huerfanos",
+    runCancelHoldsHuerfanos,
+  );
 
   const tasks = {
     actualizar_estados,
     calcular_respuesta,
     email_sequences,
+    holds_huerfanos,
   };
 
   const allOk = Object.values(tasks).every((t) => t.status === "ok");
@@ -50,6 +56,7 @@ function buildCronSummary(tasks) {
   const ae = tasks.actualizar_estados;
   const es = tasks.email_sequences;
   const cr = tasks.calcular_respuesta;
+  const hh = tasks.holds_huerfanos;
 
   if (ae?.status === "ok" && ae.result) {
     const { iniciadas = 0, completadas = 0, liberadas = 0 } = ae.result;
@@ -81,6 +88,12 @@ function buildCronSummary(tasks) {
     parts.push(`calcular-respuesta: error (${cr.error})`);
   } else if (cr?.status === "ok") {
     parts.push("tiempos de respuesta actualizados");
+  }
+
+  if (hh?.status === "ok" && hh.result) {
+    parts.push(`${hh.result.canceled ?? 0} holds huérfanos cancelados`);
+  } else if (hh?.status === "error") {
+    parts.push(`holds-huerfanos: error (${hh.error})`);
   }
 
   return parts.length > 0

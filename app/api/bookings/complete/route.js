@@ -38,13 +38,13 @@ import {
   debitCreditoDisponible,
   releaseCreditoDebito,
 } from "@/app/lib/credito-debito";
+import {
+  claimReservaSinComision,
+  releaseReservaSinComision,
+} from "@/app/lib/sin-comision-claim";
 import { CANCELABLE_PI_STATUSES } from "@/app/lib/stripe-reembolso";
 
 const MAX_CREDITO_PORCENTAJE = 0.6;
-
-function getReservasSinComisionCliente(perfil) {
-  return Number(perfil?.reservas_sin_comision_cliente) || 0;
-}
 
 function getReservasSinComisionProveedor(perfil) {
   return Number(perfil?.reservas_sin_comision_proveedor) || 0;
@@ -62,22 +62,8 @@ function buildProveedorIngresoEmailFields(booking, proveedorProfile) {
   };
 }
 
-async function decrementReservasSinComisionCliente(userId, perfilCliente) {
-  const actual = getReservasSinComisionCliente(perfilCliente);
-  const nuevo = Math.max(0, actual - 1);
-  const { error: sinComisionError } = await supabaseAdmin
-    .from("profiles")
-    .update({
-      reservas_sin_comision_cliente: nuevo,
-    })
-    .eq("id", userId);
-
-  if (sinComisionError) {
-    console.error(
-      "[bookings/complete] No se pudo restar reservas_sin_comision_cliente:",
-      sinComisionError,
-    );
-  }
+function sinComisionClienteIdempotencyKey(grupoReserva) {
+  return `sin-comision:cliente:grupo:${grupoReserva}`;
 }
 
 const supabaseAdmin = createServiceClient(
@@ -467,8 +453,8 @@ async function hasDisponibilidadSolapamiento(serviceId, fechaInicio, fechaFin) {
 }
 
 /**
- * Libera holds de Stripe tras rollback de disponibilidad (M5).
- * Idempotente por PI: cancel-pi:complete-disponibilidad:${piId}
+ * Libera holds de Stripe si complete aborta sin reserva (M3/M5).
+ * Idempotente por PI: cancel-pi:complete-abort:${piId}
  */
 async function cancelOrphanPaymentIntents(paymentIntentIds) {
   const unique = [
@@ -492,7 +478,7 @@ async function cancelOrphanPaymentIntents(paymentIntentIds) {
 
       if (!CANCELABLE_PI_STATUSES.has(status)) {
         console.warn(
-          "[bookings/complete] PI no cancelable tras conflicto de disponibilidad:",
+          "[bookings/complete] PI no cancelable en abort de complete:",
           { payment_intent_id: paymentIntentId, status },
         );
         continue;
@@ -502,7 +488,7 @@ async function cancelOrphanPaymentIntents(paymentIntentIds) {
         paymentIntentId,
         {},
         {
-          idempotencyKey: `cancel-pi:complete-disponibilidad:${paymentIntentId}`,
+          idempotencyKey: `cancel-pi:complete-abort:${paymentIntentId}`,
         },
       );
     } catch (err) {
@@ -516,12 +502,72 @@ async function cancelOrphanPaymentIntents(paymentIntentIds) {
         continue;
       }
       console.error(
-        "[bookings/complete] Error cancelando PI tras conflicto de disponibilidad:",
+        "[bookings/complete] Error cancelando PI en abort:",
         paymentIntentId,
         err?.message ?? err,
       );
     }
   }
+}
+
+/**
+ * Rollback de un complete fallido: libera crédito debitado + cancela holds.
+ * No borra bookings (usar rollbackInsertedBookings si ya se insertaron).
+ */
+async function abortIncompleteComplete({
+  creditoIdempotencyKey = null,
+  sinComisionIdempotencyKey = null,
+  paymentIntentIds = [],
+  logContext = "",
+} = {}) {
+  if (sinComisionIdempotencyKey) {
+    try {
+      await releaseReservaSinComision(
+        supabaseAdmin,
+        sinComisionIdempotencyKey,
+      );
+    } catch (releaseErr) {
+      console.error(
+        `[bookings/complete] Error liberando claim sin comisión${logContext}:`,
+        releaseErr?.message ?? releaseErr,
+      );
+    }
+  }
+  if (creditoIdempotencyKey) {
+    try {
+      await releaseCreditoDebito(supabaseAdmin, creditoIdempotencyKey);
+    } catch (releaseErr) {
+      console.error(
+        `[bookings/complete] Error liberando crédito${logContext}:`,
+        releaseErr?.message ?? releaseErr,
+      );
+    }
+  }
+  await cancelOrphanPaymentIntents(paymentIntentIds);
+}
+
+function collectPaymentIntentIds(...sources) {
+  const ids = [];
+  for (const source of sources) {
+    if (!source) continue;
+    if (typeof source === "string") {
+      ids.push(source);
+      continue;
+    }
+    if (source instanceof Map) {
+      for (const value of source.values()) {
+        if (typeof value === "string" && value.length > 0) ids.push(value);
+      }
+      continue;
+    }
+    if (Array.isArray(source)) {
+      for (const value of source) {
+        if (typeof value === "string" && value.length > 0) ids.push(value);
+        else if (value?.payment_intent_id) ids.push(value.payment_intent_id);
+      }
+    }
+  }
+  return [...new Set(ids)];
 }
 
 async function rollbackInsertedBookings(bookingIds, paymentIntentIds) {
@@ -1164,6 +1210,7 @@ async function finalizeInsertedBookings({
   creditoAplicado,
   creditoPorServicioMap,
   creditoIdempotencyKey = null,
+  sinComisionIdempotencyKey = null,
   insertedBookings,
   insertedBookingIds,
   rollbackPaymentIntentIds = null,
@@ -1208,6 +1255,19 @@ async function finalizeInsertedBookings({
       insertedBookingIds,
       paymentIntentIdsForRollback,
     );
+    if (sinComisionIdempotencyKey) {
+      try {
+        await releaseReservaSinComision(
+          supabaseAdmin,
+          sinComisionIdempotencyKey,
+        );
+      } catch (releaseErr) {
+        console.error(
+          "[bookings/complete] Error liberando claim sin comisión tras fallo disponibilidad:",
+          releaseErr?.message ?? releaseErr,
+        );
+      }
+    }
     if (creditoIdempotencyKey) {
       try {
         await releaseCreditoDebito(supabaseAdmin, creditoIdempotencyKey);
@@ -1246,17 +1306,6 @@ async function finalizeInsertedBookings({
     await rewardReferidorPrimeraReserva(userId, supabaseAdmin);
   } catch (err) {
     console.error("[bookings/complete] rewardReferidorPrimeraReserva:", err);
-  }
-
-  if (clienteSinComision) {
-    try {
-      await decrementReservasSinComisionCliente(userId, perfilCliente);
-    } catch (err) {
-      console.error(
-        "[bookings/complete] No se pudo restar reservas_sin_comision_cliente:",
-        err,
-      );
-    }
   }
 
   await sendPostCompleteBookingEmails({
@@ -1385,7 +1434,7 @@ async function completePerServicePayments(userId, body) {
 
   const { data: perfilCliente, error: perfilError } = await supabaseAdmin
     .from("profiles")
-    .select("reservas_sin_comision_cliente, nombre")
+    .select("nombre")
     .eq("id", userId)
     .maybeSingle();
 
@@ -1393,8 +1442,44 @@ async function completePerServicePayments(userId, body) {
     return NextResponse.json({ error: perfilError.message }, { status: 500 });
   }
 
-  const clienteSinComision = getReservasSinComisionCliente(perfilCliente) > 0;
+  if (familia_id) {
+    const familiaError = await validateFamiliaMembership(userId, familia_id);
+    if (familiaError) return familiaError;
+  }
 
+  // Idempotencia antes del claim/débito: reintento del mismo grupo no vuelve a gastar cupo.
+  const idempotency = await checkPerServiceIdempotency({
+    userId,
+    grupoReserva: grupo_reserva,
+    serviceIds: uniqueServiceIds,
+    paymentsByService,
+  });
+  if (idempotency.error) return idempotency.error;
+  if (idempotency.earlyResponse) return idempotency.earlyResponse;
+
+  const paymentIntentIds = collectPaymentIntentIds(paymentsByService);
+  const sinComisionIdempotencyKey =
+    sinComisionClienteIdempotencyKey(grupo_reserva);
+  let clienteSinComision = false;
+  try {
+    clienteSinComision = await claimReservaSinComision(
+      supabaseAdmin,
+      userId,
+      "cliente",
+      sinComisionIdempotencyKey,
+    );
+  } catch (claimErr) {
+    console.error(
+      "[bookings/complete] Error en claim atómico sin comisión:",
+      claimErr?.message ?? claimErr,
+    );
+    return NextResponse.json(
+      { error: claimErr?.message || "Error al aplicar exención de comisión" },
+      { status: 500 },
+    );
+  }
+
+  // Precio y comisión según el resultado del claim atómico (no lectura previa).
   const priced = await computePreciosPorServicioConContextos({
     serviceIds: service_ids,
     serviceMap,
@@ -1402,7 +1487,14 @@ async function completePerServicePayments(userId, body) {
     numHuespedesPorServicio,
     clienteSinComision,
   });
-  if (!priced.ok) return priced.response;
+  if (!priced.ok) {
+    await abortIncompleteComplete({
+      sinComisionIdempotencyKey,
+      paymentIntentIds,
+      logContext: " tras fallo pricing",
+    });
+    return priced.response;
+  }
 
   const { preciosPorServicio } = priced;
   let subtotalGrupo = priced.subtotalGrupo;
@@ -1423,21 +1515,6 @@ async function completePerServicePayments(userId, body) {
     preciosPorServicio.map((p) => [p.service_id, p.modalidad_cobro ?? null]),
   );
 
-  if (familia_id) {
-    const familiaError = await validateFamiliaMembership(userId, familia_id);
-    if (familiaError) return familiaError;
-  }
-
-  // Idempotencia antes del débito: reintento del mismo grupo no vuelve a debitar.
-  const idempotency = await checkPerServiceIdempotency({
-    userId,
-    grupoReserva: grupo_reserva,
-    serviceIds: uniqueServiceIds,
-    paymentsByService,
-  });
-  if (idempotency.error) return idempotency.error;
-  if (idempotency.earlyResponse) return idempotency.earlyResponse;
-
   const creditoIdempotencyKey = `complete:grupo:${grupo_reserva}`;
   let creditoAplicado = 0;
   try {
@@ -1452,6 +1529,11 @@ async function completePerServicePayments(userId, body) {
       "[bookings/complete] Error en débito atómico de crédito:",
       debitErr?.message ?? debitErr,
     );
+    await abortIncompleteComplete({
+      sinComisionIdempotencyKey,
+      paymentIntentIds,
+      logContext: " tras fallo débito",
+    });
     return NextResponse.json(
       { error: debitErr?.message || "Error al aplicar crédito" },
       { status: 500 },
@@ -1474,14 +1556,12 @@ async function completePerServicePayments(userId, body) {
 
     if (tarjetaEsperada <= 0) {
       if (paymentIntentId != null) {
-        try {
-          await releaseCreditoDebito(supabaseAdmin, creditoIdempotencyKey);
-        } catch (releaseErr) {
-          console.error(
-            "[bookings/complete] Error liberando crédito tras PI sobrante:",
-            releaseErr?.message ?? releaseErr,
-          );
-        }
+        await abortIncompleteComplete({
+          creditoIdempotencyKey,
+          sinComisionIdempotencyKey,
+          paymentIntentIds,
+          logContext: " tras PI sobrante",
+        });
         return NextResponse.json(
           {
             error: `El servicio ${serviceId} no requiere pago con tarjeta (cubierto con crédito)`,
@@ -1494,14 +1574,12 @@ async function completePerServicePayments(userId, body) {
     }
 
     if (!paymentIntentId) {
-      try {
-        await releaseCreditoDebito(supabaseAdmin, creditoIdempotencyKey);
-      } catch (releaseErr) {
-        console.error(
-          "[bookings/complete] Error liberando crédito tras falta de PI:",
-          releaseErr?.message ?? releaseErr,
-        );
-      }
+      await abortIncompleteComplete({
+        creditoIdempotencyKey,
+        sinComisionIdempotencyKey,
+        paymentIntentIds,
+        logContext: " tras falta de PI",
+      });
       return NextResponse.json(
         {
           error: `Falta payment_intent_id para el servicio ${serviceId}`,
@@ -1521,14 +1599,12 @@ async function completePerServicePayments(userId, body) {
     });
 
     if (validation.error) {
-      try {
-        await releaseCreditoDebito(supabaseAdmin, creditoIdempotencyKey);
-      } catch (releaseErr) {
-        console.error(
-          "[bookings/complete] Error liberando crédito tras PI inválido:",
-          releaseErr?.message ?? releaseErr,
-        );
-      }
+      await abortIncompleteComplete({
+        creditoIdempotencyKey,
+        sinComisionIdempotencyKey,
+        paymentIntentIds,
+        logContext: " tras PI inválido",
+      });
       const svc = serviceMap.get(serviceId);
       return NextResponse.json(
         {
@@ -1554,14 +1630,12 @@ async function completePerServicePayments(userId, body) {
         fin,
       );
     } catch (overlapError) {
-      try {
-        await releaseCreditoDebito(supabaseAdmin, creditoIdempotencyKey);
-      } catch (releaseErr) {
-        console.error(
-          "[bookings/complete] Error liberando crédito tras solapamiento:",
-          releaseErr?.message ?? releaseErr,
-        );
-      }
+      await abortIncompleteComplete({
+        creditoIdempotencyKey,
+        sinComisionIdempotencyKey,
+        paymentIntentIds,
+        logContext: " tras error solapamiento",
+      });
       return NextResponse.json(
         { error: overlapError.message, service_id: serviceId },
         { status: 500 },
@@ -1569,14 +1643,12 @@ async function completePerServicePayments(userId, body) {
     }
 
     if (solapamiento) {
-      try {
-        await releaseCreditoDebito(supabaseAdmin, creditoIdempotencyKey);
-      } catch (releaseErr) {
-        console.error(
-          "[bookings/complete] Error liberando crédito tras fechas ocupadas:",
-          releaseErr?.message ?? releaseErr,
-        );
-      }
+      await abortIncompleteComplete({
+        creditoIdempotencyKey,
+        sinComisionIdempotencyKey,
+        paymentIntentIds,
+        logContext: " tras fechas ocupadas",
+      });
       const svc = serviceMap.get(serviceId);
       return NextResponse.json(
         {
@@ -1621,14 +1693,12 @@ async function completePerServicePayments(userId, body) {
     .select("id, service_id, fecha_inicio, fecha_fin, lugar_servicio, direccion_cliente_a_definir, payment_intent_id");
 
   if (insertError) {
-    try {
-      await releaseCreditoDebito(supabaseAdmin, creditoIdempotencyKey);
-    } catch (releaseErr) {
-      console.error(
-        "[bookings/complete] Error liberando crédito tras fallo insert:",
-        releaseErr?.message ?? releaseErr,
-      );
-    }
+    await abortIncompleteComplete({
+      creditoIdempotencyKey,
+      sinComisionIdempotencyKey,
+      paymentIntentIds,
+      logContext: " tras fallo insert",
+    });
     return NextResponse.json({ error: insertError.message }, { status: 500 });
   }
 
@@ -1658,6 +1728,7 @@ async function completePerServicePayments(userId, body) {
     creditoAplicado,
     creditoPorServicioMap,
     creditoIdempotencyKey,
+    sinComisionIdempotencyKey,
     insertedBookings,
     insertedBookingIds,
     rollbackPaymentIntentIds,
@@ -1832,43 +1903,13 @@ export async function POST(request) {
 
     const { data: perfilCliente, error: perfilError } = await supabaseAdmin
       .from("profiles")
-      .select("reservas_sin_comision_cliente, nombre")
+      .select("nombre")
       .eq("id", userId)
       .maybeSingle();
 
     if (perfilError) {
       return NextResponse.json({ error: perfilError.message }, { status: 500 });
     }
-
-    const clienteSinComision = getReservasSinComisionCliente(perfilCliente) > 0;
-
-    const priced = await computePreciosPorServicioConContextos({
-      serviceIds: service_ids,
-      serviceMap,
-      contextByServiceId,
-      numHuespedesPorServicio,
-      clienteSinComision,
-    });
-    if (!priced.ok) return priced.response;
-
-    const { preciosPorServicio } = priced;
-    const subtotalGrupo = priced.subtotalGrupo;
-    const comision = clienteSinComision
-      ? 0
-      : roundMoney(subtotalGrupo * COMMISSION_RATE);
-    const totalGrupo = roundMoney(subtotalGrupo + comision);
-
-    const topeCredito = roundMoney(totalGrupo * MAX_CREDITO_PORCENTAJE);
-
-    const precioPorServicioMap = new Map(
-      preciosPorServicio.map((p) => [p.service_id, p.precio_total]),
-    );
-    const precioBasePorServicioMap = new Map(
-      preciosPorServicio.map((p) => [p.service_id, p.precio_base]),
-    );
-    const modalidadPorServicioMap = new Map(
-      preciosPorServicio.map((p) => [p.service_id, p.modalidad_cobro ?? null]),
-    );
 
     if (familia_id) {
       const { data: membership, error: membershipError } = await supabaseAdmin
@@ -1894,7 +1935,7 @@ export async function POST(request) {
       }
     }
 
-    // Idempotencia por grupo / PI antes del débito.
+    // Idempotencia por grupo / PI antes del claim/débito.
     const { data: existingByGrupo, error: existingGrupoError } =
       await supabaseAdmin
         .from("bookings")
@@ -1956,6 +1997,66 @@ export async function POST(request) {
       );
     }
 
+    const paymentIntentIds = collectPaymentIntentIds(payment_intent_id);
+    const sinComisionIdempotencyKey =
+      sinComisionClienteIdempotencyKey(grupo_reserva);
+    let clienteSinComision = false;
+    try {
+      clienteSinComision = await claimReservaSinComision(
+        supabaseAdmin,
+        userId,
+        "cliente",
+        sinComisionIdempotencyKey,
+      );
+    } catch (claimErr) {
+      console.error(
+        "[bookings/complete] Error en claim atómico sin comisión:",
+        claimErr?.message ?? claimErr,
+      );
+      return NextResponse.json(
+        {
+          error:
+            claimErr?.message || "Error al aplicar exención de comisión",
+        },
+        { status: 500 },
+      );
+    }
+
+    const priced = await computePreciosPorServicioConContextos({
+      serviceIds: service_ids,
+      serviceMap,
+      contextByServiceId,
+      numHuespedesPorServicio,
+      clienteSinComision,
+    });
+    if (!priced.ok) {
+      await abortIncompleteComplete({
+        sinComisionIdempotencyKey,
+        paymentIntentIds,
+        logContext: " tras fallo pricing",
+      });
+      return priced.response;
+    }
+
+    const { preciosPorServicio } = priced;
+    const subtotalGrupo = priced.subtotalGrupo;
+    const comision = clienteSinComision
+      ? 0
+      : roundMoney(subtotalGrupo * COMMISSION_RATE);
+    const totalGrupo = roundMoney(subtotalGrupo + comision);
+
+    const topeCredito = roundMoney(totalGrupo * MAX_CREDITO_PORCENTAJE);
+
+    const precioPorServicioMap = new Map(
+      preciosPorServicio.map((p) => [p.service_id, p.precio_total]),
+    );
+    const precioBasePorServicioMap = new Map(
+      preciosPorServicio.map((p) => [p.service_id, p.precio_base]),
+    );
+    const modalidadPorServicioMap = new Map(
+      preciosPorServicio.map((p) => [p.service_id, p.modalidad_cobro ?? null]),
+    );
+
     const creditoIdempotencyKey = `complete:pi:${payment_intent_id}`;
     let creditoAplicado = 0;
     try {
@@ -1970,6 +2071,11 @@ export async function POST(request) {
         "[bookings/complete] Error en débito atómico de crédito:",
         debitErr?.message ?? debitErr,
       );
+      await abortIncompleteComplete({
+        sinComisionIdempotencyKey,
+        paymentIntentIds,
+        logContext: " tras fallo débito",
+      });
       return NextResponse.json(
         { error: debitErr?.message || "Error al aplicar crédito" },
         { status: 500 },
@@ -1982,26 +2088,22 @@ export async function POST(request) {
     try {
       paymentIntent = await stripe.paymentIntents.retrieve(payment_intent_id);
     } catch (piErr) {
-      try {
-        await releaseCreditoDebito(supabaseAdmin, creditoIdempotencyKey);
-      } catch (releaseErr) {
-        console.error(
-          "[bookings/complete] Error liberando crédito tras fallo PI:",
-          releaseErr?.message ?? releaseErr,
-        );
-      }
+      await abortIncompleteComplete({
+        creditoIdempotencyKey,
+        sinComisionIdempotencyKey,
+        paymentIntentIds,
+        logContext: " tras fallo PI",
+      });
       throw piErr;
     }
 
     if (paymentIntent.metadata?.cliente_id !== userId) {
-      try {
-        await releaseCreditoDebito(supabaseAdmin, creditoIdempotencyKey);
-      } catch (releaseErr) {
-        console.error(
-          "[bookings/complete] Error liberando crédito tras PI ajeno:",
-          releaseErr?.message ?? releaseErr,
-        );
-      }
+      await abortIncompleteComplete({
+        creditoIdempotencyKey,
+        sinComisionIdempotencyKey,
+        paymentIntentIds,
+        logContext: " tras PI ajeno",
+      });
       return NextResponse.json(
         { error: "El pago no pertenece a este usuario" },
         { status: 403 },
@@ -2009,14 +2111,12 @@ export async function POST(request) {
     }
 
     if (paymentIntent.metadata?.grupo_reserva !== grupo_reserva) {
-      try {
-        await releaseCreditoDebito(supabaseAdmin, creditoIdempotencyKey);
-      } catch (releaseErr) {
-        console.error(
-          "[bookings/complete] Error liberando crédito tras grupo mismatch:",
-          releaseErr?.message ?? releaseErr,
-        );
-      }
+      await abortIncompleteComplete({
+        creditoIdempotencyKey,
+        sinComisionIdempotencyKey,
+        paymentIntentIds,
+        logContext: " tras grupo mismatch",
+      });
       return NextResponse.json(
         { error: "grupo_reserva no coincide con el pago" },
         { status: 400 },
@@ -2025,14 +2125,12 @@ export async function POST(request) {
 
     const validStatuses = ["requires_capture", "succeeded"];
     if (!validStatuses.includes(paymentIntent.status)) {
-      try {
-        await releaseCreditoDebito(supabaseAdmin, creditoIdempotencyKey);
-      } catch (releaseErr) {
-        console.error(
-          "[bookings/complete] Error liberando crédito tras PI no confirmado:",
-          releaseErr?.message ?? releaseErr,
-        );
-      }
+      await abortIncompleteComplete({
+        creditoIdempotencyKey,
+        sinComisionIdempotencyKey,
+        paymentIntentIds,
+        logContext: " tras PI no confirmado",
+      });
       return NextResponse.json(
         { error: "El pago no está confirmado" },
         { status: 400 },
@@ -2042,14 +2140,12 @@ export async function POST(request) {
     const expectedAmountCents = Math.round(totalAPagar * 100);
     const amountDiff = Math.abs(paymentIntent.amount - expectedAmountCents);
     if (amountDiff > 2) {
-      try {
-        await releaseCreditoDebito(supabaseAdmin, creditoIdempotencyKey);
-      } catch (releaseErr) {
-        console.error(
-          "[bookings/complete] Error liberando crédito tras importe mismatch:",
-          releaseErr?.message ?? releaseErr,
-        );
-      }
+      await abortIncompleteComplete({
+        creditoIdempotencyKey,
+        sinComisionIdempotencyKey,
+        paymentIntentIds,
+        logContext: " tras importe mismatch",
+      });
       return NextResponse.json(
         { error: "El importe del pago no coincide" },
         { status: 400 },
@@ -2072,14 +2168,12 @@ export async function POST(request) {
           ctx.fecha_fin || ctx.fecha_inicio,
         );
       } catch (overlapError) {
-        try {
-          await releaseCreditoDebito(supabaseAdmin, creditoIdempotencyKey);
-        } catch (releaseErr) {
-          console.error(
-            "[bookings/complete] Error liberando crédito tras solapamiento:",
-            releaseErr?.message ?? releaseErr,
-          );
-        }
+        await abortIncompleteComplete({
+          creditoIdempotencyKey,
+          sinComisionIdempotencyKey,
+          paymentIntentIds,
+          logContext: " tras error solapamiento",
+        });
         return NextResponse.json(
           { error: overlapError.message, service_id: serviceId },
           { status: 500 },
@@ -2087,14 +2181,12 @@ export async function POST(request) {
       }
 
       if (solapamiento) {
-        try {
-          await releaseCreditoDebito(supabaseAdmin, creditoIdempotencyKey);
-        } catch (releaseErr) {
-          console.error(
-            "[bookings/complete] Error liberando crédito tras fechas ocupadas:",
-            releaseErr?.message ?? releaseErr,
-          );
-        }
+        await abortIncompleteComplete({
+          creditoIdempotencyKey,
+          sinComisionIdempotencyKey,
+          paymentIntentIds,
+          logContext: " tras fechas ocupadas",
+        });
         const svc = serviceMap.get(serviceId);
         return NextResponse.json(
           {
@@ -2138,14 +2230,12 @@ export async function POST(request) {
       .select("id, service_id, fecha_inicio, fecha_fin, lugar_servicio, direccion_cliente_a_definir, payment_intent_id");
 
     if (insertError) {
-      try {
-        await releaseCreditoDebito(supabaseAdmin, creditoIdempotencyKey);
-      } catch (releaseErr) {
-        console.error(
-          "[bookings/complete] Error liberando crédito tras fallo insert:",
-          releaseErr?.message ?? releaseErr,
-        );
-      }
+      await abortIncompleteComplete({
+        creditoIdempotencyKey,
+        sinComisionIdempotencyKey,
+        paymentIntentIds,
+        logContext: " tras fallo insert",
+      });
       return NextResponse.json({ error: insertError.message }, { status: 500 });
     }
 
@@ -2164,6 +2254,7 @@ export async function POST(request) {
       creditoAplicado,
       creditoPorServicioMap,
       creditoIdempotencyKey,
+      sinComisionIdempotencyKey,
       insertedBookings,
       insertedBookingIds,
       rollbackPaymentIntentIds: [payment_intent_id],

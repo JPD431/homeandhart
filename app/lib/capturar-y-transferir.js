@@ -8,13 +8,17 @@ import { calcularCapturaRepartoCents, validarCapturaRepartoStripe } from "@/app/
 import { ejecutarTransferProveedorConDeudaSaldo, createStripeTransferWithIdempotency } from "@/app/lib/transfer-proveedor";
 import { CANCELABLE_PI_STATUSES } from "@/app/lib/stripe-reembolso";
 import { notifyProveedoresPagosLiberados } from "@/app/lib/pago-liberado-notify";
+import {
+  claimReservaSinComision,
+  releaseReservaSinComision,
+} from "@/app/lib/sin-comision-claim";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 const STRIPE_MIN_TRANSFER_EUR = 0.5;
 
-function getReservasSinComisionProveedor(profile) {
-  return Number(profile?.reservas_sin_comision_proveedor) || 0;
+function sinComisionProveedorIdempotencyKey(paymentIntentId, proveedorId) {
+  return `sin-comision:proveedor:transfer:${paymentIntentId}:${proveedorId}`;
 }
 
 function splitTransferAmount(amountFinal, bookings) {
@@ -85,7 +89,6 @@ async function buildTransfersForPayment(supabase, paymentIntentId) {
       profiles!proveedor_id (
         id,
         stripe_account_id,
-        reservas_sin_comision_proveedor,
         deuda_pendiente,
         saldo_pendiente_transferir
       )
@@ -108,10 +111,9 @@ async function buildTransfersForPayment(supabase, paymentIntentId) {
       proveedorMap.set(proveedorId, {
         proveedorId,
         stripe_account_id: profile.stripe_account_id,
-        reservas_sin_comision_proveedor: getReservasSinComisionProveedor(profile),
         profile,
         serviceIds: new Set(),
-        amount: 0,
+        amountBase: 0,
         bookingIds: [],
         bookings: [],
       });
@@ -123,7 +125,7 @@ async function buildTransfersForPayment(supabase, paymentIntentId) {
   for (const booking of bookings) {
     for (const entry of proveedorMap.values()) {
       if (!entry.serviceIds.has(booking.service_id)) continue;
-      entry.amount += getBookingPrecioBase(booking);
+      entry.amountBase += getBookingPrecioBase(booking);
       entry.bookingIds.push(booking.id);
       entry.bookings.push(booking);
     }
@@ -132,21 +134,19 @@ async function buildTransfersForPayment(supabase, paymentIntentId) {
   const plans = [];
 
   for (const entry of proveedorMap.values()) {
-    if (entry.amount <= 0) continue;
+    if (entry.amountBase <= 0) continue;
 
-    const proveedorSinComision = entry.reservas_sin_comision_proveedor > 0;
-    const amountBruto = getIngresoProveedorDesdeBase(entry.amount, {
-      sinComision: proveedorSinComision,
-    });
+    // amount_bruto se fija tras claim atómico de sin comisión (en el loop de transfer).
     plans.push({
       proveedorId: entry.proveedorId,
       stripe_account_id: entry.stripe_account_id,
-      amount: amountBruto,
-      amount_bruto: amountBruto,
+      amountBase: entry.amountBase,
       deuda_actual: Number(entry.profile?.deuda_pendiente) || 0,
       profile: entry.profile,
-      proveedorSinComision,
-      decrementSinComision: proveedorSinComision,
+      sinComisionClaimKey: sinComisionProveedorIdempotencyKey(
+        paymentIntentId,
+        entry.proveedorId,
+      ),
       bookingIds: entry.bookingIds,
       bookings: entry.bookings,
     });
@@ -284,9 +284,14 @@ export async function capturarYTransferirPago(
     grupoUsaCredito,
   } = await buildTransfersForPayment(supabase, paymentIntentId);
 
+  // Provisional con sin-comisión=true (tope) solo para decidir financiación Stripe.
+  // El importe real se fija tras el claim atómico en el loop.
   const preparedPlans = transferPlan.map((plan) => {
-    const deuda_a_descontar = Math.min(plan.deuda_actual, plan.amount_bruto);
-    const amount_este_ciclo = roundMoney(plan.amount_bruto - deuda_a_descontar);
+    const amount_bruto_tope = getIngresoProveedorDesdeBase(plan.amountBase, {
+      sinComision: true,
+    });
+    const deuda_a_descontar = Math.min(plan.deuda_actual, amount_bruto_tope);
+    const amount_este_ciclo = roundMoney(amount_bruto_tope - deuda_a_descontar);
     const saldo_pendiente_anterior = roundMoney(
       plan.profile?.saldo_pendiente_transferir,
     );
@@ -295,12 +300,14 @@ export async function capturarYTransferirPago(
     );
     return {
       ...plan,
+      amount_bruto: amount_bruto_tope,
       deuda_a_descontar,
       amount_este_ciclo,
       amount_final: amount_este_ciclo,
       saldo_pendiente_anterior,
       total_a_transferir,
       transfer_required: total_a_transferir >= STRIPE_MIN_TRANSFER_EUR,
+      proveedorSinComision: false,
     };
   });
 
@@ -404,8 +411,43 @@ export async function capturarYTransferirPago(
       }
 
       const claimedIds = claimedRows.map((r) => r.id);
+      let sinComisionClaimed = false;
 
       try {
+        // Exención según claim atómico (no lectura previa). Idempotente por PI+proveedor.
+        const proveedorSinComision = await claimReservaSinComision(
+          supabase,
+          plan.proveedorId,
+          "proveedor",
+          plan.sinComisionClaimKey,
+        );
+        sinComisionClaimed = true;
+        plan.proveedorSinComision = proveedorSinComision;
+
+        const amount_bruto = getIngresoProveedorDesdeBase(plan.amountBase, {
+          sinComision: proveedorSinComision,
+        });
+        const deuda_a_descontar = Math.min(plan.deuda_actual, amount_bruto);
+        const amount_este_ciclo = roundMoney(amount_bruto - deuda_a_descontar);
+        const total_a_transferir = roundMoney(
+          plan.saldo_pendiente_anterior + amount_este_ciclo,
+        );
+        const transfer_required =
+          total_a_transferir >= STRIPE_MIN_TRANSFER_EUR;
+
+        plan.amount_bruto = amount_bruto;
+        plan.deuda_a_descontar = deuda_a_descontar;
+        plan.amount_este_ciclo = amount_este_ciclo;
+        plan.amount_final = amount_este_ciclo;
+        plan.total_a_transferir = total_a_transferir;
+        plan.transfer_required = transfer_required;
+
+        summary.amount_bruto = amount_bruto;
+        summary.amount_este_ciclo = amount_este_ciclo;
+        summary.amount_final = amount_este_ciclo;
+        summary.total_a_transferir = total_a_transferir;
+        summary.transfer_required = transfer_required;
+
         let saldo_pendiente_nuevo = plan.saldo_pendiente_anterior;
 
         if (plan.transfer_required) {
@@ -475,16 +517,6 @@ export async function capturarYTransferirPago(
           );
         }
 
-        if (plan.decrementSinComision) {
-          const current = getReservasSinComisionProveedor(plan.profile);
-          await supabase
-            .from("profiles")
-            .update({
-              reservas_sin_comision_proveedor: Math.max(0, current - 1),
-            })
-            .eq("id", plan.proveedorId);
-        }
-
         summary.success = true;
         bookingIdsLiberados.push(...claimedIds);
       } catch (providerError) {
@@ -500,6 +532,17 @@ export async function capturarYTransferirPago(
             `${logPrefix} Error liberando claim tras fallo de transfer:`,
             releaseErr?.message ?? releaseErr,
           );
+        }
+
+        if (sinComisionClaimed && plan.sinComisionClaimKey) {
+          try {
+            await releaseReservaSinComision(supabase, plan.sinComisionClaimKey);
+          } catch (releaseSinErr) {
+            console.error(
+              `${logPrefix} Error liberando claim sin comisión tras fallo:`,
+              releaseSinErr?.message ?? releaseSinErr,
+            );
+          }
         }
 
         const errorMessage = providerError?.message ?? String(providerError);
