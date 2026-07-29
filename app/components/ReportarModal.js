@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { BRAND } from "@/app/components/brand";
+import { MOTIVOS_REPORTE_PERFIL } from "@/app/lib/report-severity";
 import { supabase } from "@/app/lib/supabase";
 
 // -- CREATE TABLE reports (
@@ -16,14 +17,7 @@ import { supabase } from "@/app/lib/supabase";
 // --   created_at timestamp with time zone DEFAULT now()
 // -- );
 
-const MOTIVOS = [
-  "Información falsa o engañosa",
-  "Comportamiento inapropiado",
-  "No se presentó al servicio",
-  "Perfil suplantado",
-  "Contenido ofensivo",
-  "Otro",
-];
+const MOTIVOS = MOTIVOS_REPORTE_PERFIL;
 
 const inputClass =
   "w-full rounded-xl border px-4 py-3 text-sm text-[#1a1a1a] outline-none focus:ring-2 focus:ring-[#1d4f91]/30";

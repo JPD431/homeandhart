@@ -1,18 +1,13 @@
+import { MOTIVOS_INCIDENCIA_RESERVA } from "@/app/lib/report-severity";
+
+export { MOTIVOS_INCIDENCIA_RESERVA } from "@/app/lib/report-severity";
+
 /** Estados en los que cliente o proveedor pueden reportar una incidencia. */
 export const ESTADOS_REPORTABLES_INCIDENCIA = new Set([
   "confirmada",
   "en_curso",
   "completada",
 ]);
-
-export const MOTIVOS_INCIDENCIA_RESERVA = [
-  "Servicio no cumplió lo acordado",
-  "No se presentó al servicio",
-  "Comportamiento inapropiado",
-  "Problema con el alojamiento o instalaciones",
-  "Problema con el pago o cobro",
-  "Otro",
-];
 
 export function puedeReportarIncidencia(estado) {
   const key = estado === "cancelada_garantia" ? "cancelada" : estado;
@@ -67,6 +62,16 @@ export async function registrarIncidenciaReserva(supabaseAdmin, {
     reporterRol === "cliente" ? service.proveedor_id : booking.cliente_id;
   const motivoFinal = motivo?.trim() || "Incidencia en reserva";
   const descripcion = comentario?.trim() || "";
+
+  // Validar motivo conocido (lista UI); permitir legacy genérico de reportar-problema.
+  const motivoPermitido =
+    MOTIVOS_INCIDENCIA_RESERVA.includes(motivoFinal) ||
+    motivoFinal === "Incidencia reportada tras el servicio (email)" ||
+    motivoFinal === "Incidencia en reserva";
+
+  if (!motivoPermitido) {
+    return { error: "Motivo de incidencia no válido", status: 400 };
+  }
 
   const { error: reportError } = await supabaseAdmin.from("reports").insert({
     reporter_id: reporterId,
