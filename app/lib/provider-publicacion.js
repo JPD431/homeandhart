@@ -1,6 +1,7 @@
 import { REVISION_APROBADO } from "@/app/lib/onboarding-persist";
 import { alojamientoNruPublishReady } from "@/app/lib/provider-documents";
 import { hasDniUploaded, DNI_REQUIRED_PROVIDER_MSG } from "@/app/lib/dni";
+import { isAlojamientoNruVerificado } from "@/app/lib/nru";
 import { needsDireccionFields } from "@/app/lib/service-payload";
 import {
   DIRECCION_REQUIRED_PROVIDER_MSG,
@@ -22,6 +23,12 @@ export const REVISION_PENDIENTE_MSG =
 
 export const NRU_PDF_REQUERIDO_MSG =
   "Para publicar tu alojamiento, sube el PDF de la resolución del NRU en tus documentos.";
+
+/** Código estable: NRU del servicio de alojamiento no verificado por admin. */
+export const NRU_PENDIENTE_CODE = "nru_pendiente";
+
+export const NRU_PENDIENTE_MSG =
+  "El número de registro turístico (NRU) de este alojamiento debe ser verificado por el equipo antes de activarlo.";
 
 /** Código estable para API/UI cuando la cuenta está en suspensión cautelar. */
 export const SUSPENDIDO_CAUTELAR_CODE = "suspendido_cautelar";
@@ -55,7 +62,7 @@ export function servicioRevisionAprobada(revisionEstado) {
 
 /**
  * ¿El servicio puede ponerse disponible automáticamente (approve/webhook)?
- * Respeta suspensión cautelar + revisión + mayoría de edad + docs niñera/mascotas.
+ * Respeta suspensión cautelar + revisión + mayoría de edad + docs niñera/mascotas + NRU (servicio).
  */
 export function serviceEligibleForAutoDisponible(service, perfil) {
   if (perfil?.suspendido_cautelar === true) return false;
@@ -70,6 +77,12 @@ export function serviceEligibleForAutoDisponible(service, perfil) {
   if (
     service?.vertical === "mascotas" &&
     perfil?.mascotas_documentacion_aprobada !== true
+  ) {
+    return false;
+  }
+  if (
+    service?.vertical === "alojamiento" &&
+    !isAlojamientoNruVerificado(service)
   ) {
     return false;
   }
@@ -124,7 +137,7 @@ export function serviceRequiresDireccionForActivation(service) {
  * Suspensión cautelar → DNI → 18+ → verificado → (ninos/mascotas: docs) → cobros / teléfono / email / NRU / dirección.
  *
  * @param {object} perfil
- * @param {{ vertical?: string, modalidad?: string, details?: object, direccion_exacta?: string } | null} [service]
+ * @param {{ vertical?: string, modalidad?: string, nru?: string, nru_estado?: string, details?: object, direccion_exacta?: string } | null} [service]
  * @param {import("@/app/lib/provider-documents").DocumentContext} [documentContext]
  * @returns {string[]} mensajes (vacío = puede activar)
  */
@@ -159,6 +172,12 @@ export function getServiceActivationBlockers(
     perfil?.mascotas_documentacion_aprobada !== true
   ) {
     blockers.push(MASCOTAS_DOCUMENTACION_PENDIENTE_MSG);
+  }
+  if (
+    service?.vertical === "alojamiento" &&
+    !isAlojamientoNruVerificado(service)
+  ) {
+    blockers.push(NRU_PENDIENTE_MSG);
   }
   if (perfil?.cobros_activos !== true) {
     blockers.push(COBROS_REQUERIDOS_MSG);
@@ -213,6 +232,8 @@ export function getFirstActivationBlocker(
     code = NINOS_DOCUMENTACION_PENDIENTE_CODE;
   } else if (message === MASCOTAS_DOCUMENTACION_PENDIENTE_MSG) {
     code = MASCOTAS_DOCUMENTACION_PENDIENTE_CODE;
+  } else if (message === NRU_PENDIENTE_MSG) {
+    code = NRU_PENDIENTE_CODE;
   }
   return { code, message };
 }
@@ -320,6 +341,17 @@ export function getServiceVisibilidadEstado(perfil, disponible, options = {}) {
     };
   }
 
+  if (
+    service?.vertical === "alojamiento" &&
+    !isAlojamientoNruVerificado(service)
+  ) {
+    return {
+      label: "NRU pendiente de verificación",
+      subtitle: NRU_PENDIENTE_MSG,
+      color: "#c47d1a",
+    };
+  }
+
   if (perfil?.cobros_activos !== true) {
     return {
       label: "Falta configurar cobros",
@@ -350,8 +382,8 @@ export function getServiceVisibilidadEstado(perfil, disponible, options = {}) {
 
 /**
  * Disponible efectivo al guardar: no desactiva legacy ya activo; bloquea activaciones nuevas sin requisitos.
- * Sin grandfathering si suspensión cautelar, falta mayoría de edad, o docs niñera/mascotas.
- * @param {{ disponible?: boolean, disponibleOnLoad?: boolean, vertical?: string, details?: object }} service
+ * Sin grandfathering si suspensión cautelar, falta mayoría de edad, docs niñera/mascotas o NRU.
+ * @param {{ disponible?: boolean, disponibleOnLoad?: boolean, vertical?: string, nru?: string, nru_estado?: string, details?: object }} service
  */
 export function resolveDisponibleForSave(service, perfil, documentContext) {
   if (!service.disponible) return false;
@@ -374,6 +406,13 @@ export function resolveDisponibleForSave(service, perfil, documentContext) {
   if (
     service.vertical === "mascotas" &&
     perfil?.mascotas_documentacion_aprobada !== true
+  ) {
+    return false;
+  }
+
+  if (
+    service.vertical === "alojamiento" &&
+    !isAlojamientoNruVerificado(service)
   ) {
     return false;
   }

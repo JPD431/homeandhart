@@ -2317,6 +2317,67 @@ export async function dispatchPlatformEmail(payload = {}) {
       return { ok: true, status: 200, data: { success: true } };
     }
 
+    if (tipo === "nru_verificado" || tipo === "nru_rechazado") {
+      const userId = data.user_id || data.proveedor_id;
+      const email =
+        data.email || (userId ? await resolverEmailUsuario(userId) : null);
+      if (!email) {
+        return {
+          ok: false,
+          status: 400,
+          error: "No se encontró el email del destinatario",
+        };
+      }
+      const baseUrl = process.env.NEXT_PUBLIC_URL || "https://homeandheart.es";
+      const nombre = (data.nombre || "proveedor").replace(/</g, "&lt;");
+      const titulo = (data.titulo || "Tu alojamiento").replace(/</g, "&lt;");
+      const ok = tipo === "nru_verificado";
+
+      const result = await resend.emails.send({
+        from: FROM,
+        to: email,
+        subject: ok
+          ? "NRU verificado · Home&Heart"
+          : "NRU rechazado · Home&Heart",
+        html: emailLayout({
+          title: ok ? "NRU verificado" : "NRU rechazado",
+          bodyHtml: ok
+            ? `
+            <h1 style="margin:0 0 16px;font-size:20px;color:${BRAND_PRIMARY};">NRU verificado</h1>
+            <p style="margin:0 0 12px;font-size:14px;line-height:1.6;color:#444;">
+              Hola <strong>${nombre}</strong>, el número de registro turístico (NRU) de
+              <strong>${titulo}</strong> ha sido verificado por el equipo.
+              Si el resto de requisitos están listos, ya puedes activar el anuncio.
+            </p>
+            <p style="margin:0;text-align:center;">
+              <a href="${baseUrl}/editar-perfil" style="display:inline-block;background-color:${BRAND_PRIMARY};color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:8px;font-size:15px;font-weight:600;">
+                Ir a mi perfil →
+              </a>
+            </p>
+          `
+            : `
+            <h1 style="margin:0 0 16px;font-size:20px;color:${BRAND_PRIMARY};">NRU rechazado</h1>
+            <p style="margin:0 0 12px;font-size:14px;line-height:1.6;color:#444;">
+              Hola <strong>${nombre}</strong>, el NRU declarado en
+              <strong>${titulo}</strong> no ha podido verificarse.
+              Corrige el número en tu perfil y lo revisaremos de nuevo.
+            </p>
+            <p style="margin:0;text-align:center;">
+              <a href="${baseUrl}/editar-perfil" style="display:inline-block;background-color:${BRAND_PRIMARY};color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:8px;font-size:15px;font-weight:600;">
+                Corregir NRU →
+              </a>
+            </p>
+          `,
+        }),
+      });
+
+      if (result.error) {
+        return { ok: false, status: 400, error: result.error.message };
+      }
+
+      return { ok: true, status: 200, data: { success: true } };
+    }
+
     if (tipo === "mascotas_documentacion_aprobada") {
       const userId = data.user_id || data.proveedor_id;
       const email =

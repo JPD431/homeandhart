@@ -76,6 +76,7 @@ import {
   isServiceBookable,
 } from "@/app/lib/service-bookable";
 import { resolveServiceCardPricing } from "@/app/lib/service-card-display";
+import { VERIFICADO_BADGE_TOOLTIP_ES } from "@/app/lib/verification-copy";
 import { verticalEmojiLabel } from "@/app/lib/vertical-emojis";
 import {
   LodgingIcon,
@@ -1356,11 +1357,12 @@ function StarRating({ value, size = 10 }) {
   );
 }
 
-function ServiceTag({ text, light, color }) {
+function ServiceTag({ text, light, color, title }) {
   return (
     <span
       className="rounded-full px-2 py-0.5 text-[9px] font-semibold"
       style={{ backgroundColor: light, color }}
+      title={title}
     >
       {text}
     </span>
@@ -4199,7 +4201,12 @@ export default function ReservarPage() {
                       {fullProviderName}
                     </p>
                     {profile.verificado === true && (
-                      <ServiceTag text="Verificada ✓" light="#e8f0fb" color="#163a6b" />
+                      <ServiceTag
+                        text="Verificada ✓"
+                        light="#e8f0fb"
+                        color="#163a6b"
+                        title={VERIFICADO_BADGE_TOOLTIP_ES}
+                      />
                     )}
                   </div>
                   <p className="mt-0.5 text-[11px] text-[#888]">

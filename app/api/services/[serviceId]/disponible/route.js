@@ -52,7 +52,7 @@ export async function PATCH(request, { params }) {
   const { data: owned, error: ownerError } = await supabase
     .from("services")
     .select(
-      "id, proveedor_id, vertical, revision_estado, nru, modalidad, disponible",
+      "id, proveedor_id, vertical, revision_estado, nru, nru_estado, modalidad, disponible",
     )
     .eq("id", serviceId)
     .eq("proveedor_id", user.id)
@@ -124,6 +124,8 @@ export async function PATCH(request, { params }) {
     const serviceForGate = {
       vertical: owned.vertical,
       modalidad: owned.modalidad,
+      nru: owned.nru,
+      nru_estado: owned.nru_estado,
       details: {
         nru: owned.nru,
         modalidad: owned.modalidad,

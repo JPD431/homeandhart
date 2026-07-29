@@ -20,6 +20,7 @@ import { normalizeCancelPolicy } from "@/app/lib/cancelacion-politica";
 import { getReferenteInitial } from "@/app/lib/referencias";
 import { getServiceDescription } from "@/app/lib/service-card-display";
 import { supabase } from "@/app/lib/supabase";
+import { VERIFICADO_BADGE_TOOLTIP_ES } from "@/app/lib/verification-copy";
 
 const VERTICAL_THEME = {
   alojamiento: {
@@ -135,11 +136,12 @@ function StarRating({ value, size = 12 }) {
   );
 }
 
-function Tag({ children, light, color }) {
+function Tag({ children, light, color, title }) {
   return (
     <span
       className="rounded-full px-2 py-0.5 text-[9px] font-semibold"
       style={{ backgroundColor: light, color }}
+      title={title}
     >
       {children}
     </span>
@@ -480,7 +482,11 @@ export default async function ProveedorPage({ params }) {
 
               <div className="mt-2 flex flex-wrap items-center justify-center gap-2 lg:justify-start">
                 {isVerified && (
-                  <Tag light="#e8f0fb" color="#163a6b">
+                  <Tag
+                    light="#e8f0fb"
+                    color="#163a6b"
+                    title={VERIFICADO_BADGE_TOOLTIP_ES}
+                  >
                     Verificado ✓
                   </Tag>
                 )}

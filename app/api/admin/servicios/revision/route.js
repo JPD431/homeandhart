@@ -29,7 +29,7 @@ export async function GET() {
   const { data, error } = await supabaseAdmin
     .from("services")
     .select(
-      "id, titulo, vertical, precio, ciudad, location_zone, created_at, proveedor_id, revision_estado, disponible, profiles!proveedor_id(id, nombre, apellido, verificado, cobros_activos, ciudad)",
+      "id, titulo, vertical, precio, ciudad, location_zone, created_at, proveedor_id, revision_estado, disponible, nru, nru_estado, profiles!proveedor_id(id, nombre, apellido, verificado, cobros_activos, ciudad)",
     )
     .eq("revision_estado", REVISION_EN_REVISION)
     .order("created_at", { ascending: true });
@@ -50,6 +50,8 @@ export async function GET() {
       proveedor_id: row.proveedor_id,
       revision_estado: row.revision_estado,
       disponible: row.disponible,
+      nru: row.nru || null,
+      nru_estado: row.nru_estado || "pendiente",
       proveedor_nombre: [profile.nombre, profile.apellido]
         .filter(Boolean)
         .join(" ")

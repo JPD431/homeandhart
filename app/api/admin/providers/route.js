@@ -38,7 +38,7 @@ export async function GET() {
       supabaseAdmin
         .from("services")
         .select(
-          "id, proveedor_id, vertical, titulo, precio, ciudad, revision_estado, disponible, nru",
+          "id, proveedor_id, vertical, titulo, precio, ciudad, revision_estado, disponible, nru, nru_estado, nru_aprobado_at",
         )
         .in("proveedor_id", providerIds),
     ]);

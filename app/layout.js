@@ -22,7 +22,7 @@ export const metadata = {
     template: "%s · Home&Heart",
   },
   description:
-    "Encuentra alojamiento verificado, niñeras certificadas y cuidadores de mascotas. Todo coordinado, un solo pago protegido. Garantía de 30 minutos.",
+    "Alojamiento, niñeras y cuidadores de mascotas con documentación revisada por nuestro equipo. Todo coordinado, un solo pago protegido. Garantía de 30 minutos.",
   keywords: [
     "niñera Madrid",
     "cuidador mascotas Madrid",
@@ -39,7 +39,7 @@ export const metadata = {
     title:
       "Home&Heart · Alojamiento, niñera y mascotas en un solo lugar",
     description:
-      "Encuentra alojamiento verificado, niñeras certificadas y cuidadores de mascotas. Todo coordinado, un solo pago protegido.",
+      "Alojamiento, niñeras y cuidadores de mascotas con documentación revisada por nuestro equipo. Todo coordinado, un solo pago protegido.",
     images: [
       {
         url: "/og-image.png",
@@ -54,7 +54,7 @@ export const metadata = {
     title:
       "Home&Heart · Alojamiento, niñera y mascotas en un solo lugar",
     description:
-      "Encuentra alojamiento verificado, niñeras certificadas y cuidadores de mascotas.",
+      "Alojamiento, niñeras y cuidadores de mascotas con documentación revisada por nuestro equipo.",
     images: ["/og-image.png"],
   },
   icons: {

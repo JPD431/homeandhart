@@ -291,6 +291,7 @@ export default function ServiceCard({
               key={tag.text}
               className="shrink-0 rounded-full px-1.5 py-px text-[8px] font-semibold leading-tight"
               style={{ backgroundColor: tag.light, color: tag.color }}
+              title={tag.title}
             >
               {tag.text}
             </span>

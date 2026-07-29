@@ -1,4 +1,5 @@
 import { parseFotosFromDb } from "@/app/lib/service-photos";
+import { getVerificadoBadgeTooltip } from "@/app/lib/verification-copy";
 import {
   MODALIDAD_COBRO_VALUES,
   getModalidadCobroPriceSuffix,
@@ -247,7 +248,12 @@ export function getServiceCardTags(service, profile, lang = "es", options = {}) 
   }
 
   if (!options.isPreview && profile?.verificado === true) {
-    tags.push({ text: "Verificado ✓", light: "#e8f0fb", color: "#163a6b" });
+    tags.push({
+      text: "Verificado ✓",
+      light: "#e8f0fb",
+      color: "#163a6b",
+      title: getVerificadoBadgeTooltip(lang),
+    });
   }
 
   if (

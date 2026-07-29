@@ -172,8 +172,8 @@ function AuthShell({ children }) {
                 marginTop: 14,
               }}
             >
-              Alojamiento, niñera y cuidado de mascotas verificados por personas
-              reales de tu comunidad.
+              Alojamiento, niñera y cuidado de mascotas con documentación
+              revisada por nuestro equipo.
             </p>
 
             <div

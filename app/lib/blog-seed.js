@@ -317,7 +317,7 @@ Ya sea coche, tren o avión, prepara **bolsa de mano de emergencia**: toallitas,
 
 ## 5. Apóyate en redes locales
 
-Una **niñera en Madrid** o en la ciudad que visites, contratada por horas, te permite cenar en pareja o asistir a un evento sin culpa. Reserva con antelación en temporada alta y verifica referencias. En Home&Heart los perfiles pasan verificación de antecedentes.
+Una **niñera en Madrid** o en la ciudad que visites, contratada por horas, te permite cenar en pareja o asistir a un evento sin culpa. Reserva con antelación en temporada alta y verifica referencias. En Home&Heart, antes de activar un perfil de niñera revisamos DNI, antecedentes penales, certificado de delitos sexuales y mayoría de edad.
 
 ## 6. Comida: flexibilidad con límites
 

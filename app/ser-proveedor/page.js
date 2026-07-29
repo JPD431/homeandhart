@@ -15,6 +15,7 @@ import ToggleRow from "@/app/components/provider/ToggleRow";
 import ServiceOperationalFields from "@/app/components/ServiceOperationalFields";
 import { BRAND, SERIF } from "@/app/components/brand";
 import { validateHuespedesPrecio } from "@/app/lib/huespedes-precio";
+import { validateNruLax } from "@/app/lib/nru";
 import {
   seedModalidadesCobroFromLegacy,
   validateModalidadCobro,
@@ -820,9 +821,12 @@ export default function SerProveedorPage() {
         setErrorMessage("Completa título, precio y tipo de alojamiento.");
         return false;
       }
-      if (!d.nru?.trim()) {
-        setErrorMessage("El NRU es obligatorio para alojamiento.");
-        return false;
+      {
+        const nruCheck = validateNruLax(d.nru);
+        if (!nruCheck.ok) {
+          setErrorMessage(nruCheck.error);
+          return false;
+        }
       }
       const huespedesError = validateHuespedesPrecio(d, "alojamiento");
       if (huespedesError) {

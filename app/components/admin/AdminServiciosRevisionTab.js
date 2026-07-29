@@ -39,6 +39,7 @@ export default function AdminServiciosRevisionTab({
   const [loading, setLoading] = useState(true);
   const [servicios, setServicios] = useState([]);
   const [actionLoading, setActionLoading] = useState(null);
+  const [nruActionLoading, setNruActionLoading] = useState(null);
   const [rejectingId, setRejectingId] = useState(null);
   const [rejectReason, setRejectReason] = useState("");
   const onSuccessRef = useRef(onSuccess);
@@ -114,6 +115,32 @@ export default function AdminServiciosRevisionTab({
     }
   }
 
+  async function handleNruEstado(serviceId, estado) {
+    setNruActionLoading(serviceId);
+    onErrorRef.current?.("");
+    try {
+      const res = await fetch(`/api/admin/services/${serviceId}/nru-estado`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ estado }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(payload.error || "No se pudo actualizar el NRU");
+      }
+      onSuccessRef.current?.(
+        estado === "verificado"
+          ? "NRU verificado ✓"
+          : "NRU rechazado. El proveedor podrá corregirlo.",
+      );
+      await load();
+    } catch (err) {
+      onErrorRef.current?.(err.message || "Error al actualizar el NRU");
+    } finally {
+      setNruActionLoading(null);
+    }
+  }
+
   if (loading) {
     return (
       <p className="mt-8 text-center text-sm text-[#666]">
@@ -182,6 +209,63 @@ export default function AdminServiciosRevisionTab({
                 <p className="mt-1 text-xs text-[#888]">
                   Creado: {formatDate(svc.created_at)}
                 </p>
+                {svc.vertical === "alojamiento" && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                    <span className="text-[#666]">
+                      NRU:{" "}
+                      <strong className="font-mono text-[#1a1a1a]">
+                        {(svc.nru || "").trim() || "— sin declarar —"}
+                      </strong>
+                    </span>
+                    <span
+                      className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                      style={{
+                        backgroundColor:
+                          svc.nru_estado === "verificado"
+                            ? "#e6f4f0"
+                            : svc.nru_estado === "rechazado"
+                              ? "#fee2e2"
+                              : "#fef3c7",
+                        color:
+                          svc.nru_estado === "verificado"
+                            ? "#0e7a5c"
+                            : svc.nru_estado === "rechazado"
+                              ? "#b91c1c"
+                              : "#c47d1a",
+                      }}
+                    >
+                      {svc.nru_estado || "pendiente"}
+                    </span>
+                    {svc.nru_estado !== "verificado" && (
+                      <button
+                        type="button"
+                        disabled={
+                          !(svc.nru || "").trim() ||
+                          nruActionLoading === svc.id ||
+                          isBusy
+                        }
+                        onClick={() => handleNruEstado(svc.id, "verificado")}
+                        className="rounded-lg px-2 py-1 text-[11px] font-semibold text-white disabled:opacity-50"
+                        style={{ backgroundColor: "#0e7a5c" }}
+                      >
+                        {nruActionLoading === svc.id
+                          ? "…"
+                          : "Verificar NRU"}
+                      </button>
+                    )}
+                    {svc.nru_estado !== "rechazado" && (
+                      <button
+                        type="button"
+                        disabled={nruActionLoading === svc.id || isBusy}
+                        onClick={() => handleNruEstado(svc.id, "rechazado")}
+                        className="rounded-lg border px-2 py-1 text-[11px] font-semibold text-red-700 disabled:opacity-50"
+                        style={{ borderColor: "#fecaca" }}
+                      >
+                        Rechazar NRU
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
               <a
                 href={`/anuncio/${svc.id}?preview=1`}

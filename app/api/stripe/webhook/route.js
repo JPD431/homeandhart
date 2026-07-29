@@ -389,7 +389,7 @@ async function handleAccountUpdated(account) {
   if (lista && profile.verificado === true) {
     const { data: services, error: servicesFetchError } = await supabase
       .from("services")
-      .select("id, revision_estado, vertical")
+      .select("id, revision_estado, vertical, nru, nru_estado")
       .eq("proveedor_id", profile.id);
 
     if (servicesFetchError) {

@@ -6,6 +6,7 @@ import {
   supportsModalidadCobro,
 } from "@/app/lib/modalidad-cobro";
 import { serializeDescuentosDuracionForDb } from "@/app/lib/descuentosDuracion";
+import { normalizeNru } from "@/app/lib/nru";
 import { parseFotosFromDb, syncServicePhotos } from "@/app/lib/service-photos";
 
 export const DIAS_SEMANA = [
@@ -280,8 +281,7 @@ export function buildServicePayload(details, vertical, ciudad, proveedorId, disp
     modalidad: vertical === "alojamiento" ? null : details.modalidad || null,
     tipo_alojamiento:
       vertical === "alojamiento" ? details.tipo_alojamiento || null : null,
-    nru:
-      vertical === "alojamiento" ? details.nru?.trim() || null : null,
+    nru: vertical === "alojamiento" ? normalizeNru(details.nru) || null : null,
     oferta_titulo: details.oferta_activa
       ? details.oferta_titulo?.trim() || null
       : null,

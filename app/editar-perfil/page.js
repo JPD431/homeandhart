@@ -73,6 +73,10 @@ import {
   normalizeMascotasModalidadServicio,
 } from "@/app/lib/service-form-tags";
 import {
+  nruChanged,
+  validateNruLax,
+} from "@/app/lib/nru";
+import {
   buildServicePayload,
   DEFAULT_NORMAS,
   DIAS_DISPONIBLES_DEFAULT,
@@ -351,6 +355,8 @@ function mapServiceFromDb(row) {
     disponible: row.disponible !== false,
     disponibleOnLoad: row.disponible !== false,
     revision_estado: row.revision_estado ?? null,
+    nru: row.nru || "",
+    nru_estado: row.nru_estado || "pendiente",
     isNew: false,
     details: mergeServiceDetails(
       {
@@ -1771,6 +1777,14 @@ function EditarPerfilContent() {
           setSubmitting(false);
           return;
         }
+        if (service.vertical === "alojamiento") {
+          const nruCheck = validateNruLax(service.details?.nru);
+          if (!nruCheck.ok) {
+            setErrorMessage(nruCheck.error);
+            setSubmitting(false);
+            return;
+          }
+        }
       }
       if (addingService) {
         const cobroError = validateModalidadCobro(
@@ -1790,6 +1804,14 @@ function EditarPerfilContent() {
           setErrorMessage(unidadesError);
           setSubmitting(false);
           return;
+        }
+        if (newVertical === "alojamiento") {
+          const nruCheck = validateNruLax(newServiceDetails?.nru);
+          if (!nruCheck.ok) {
+            setErrorMessage(nruCheck.error);
+            setSubmitting(false);
+            return;
+          }
         }
       }
 
@@ -1885,10 +1907,29 @@ function EditarPerfilContent() {
             service.vertical,
             ciudad,
             userId,
-            resolveDisponibleForSave(service, perfil, documentContext),
+            resolveDisponibleForSave(
+              {
+                ...service,
+                nru: service.details?.nru,
+                nru_estado: service.nru_estado,
+              },
+              perfil,
+              documentContext,
+            ),
           ),
           revision_estado: revisionMeta.revision_estado,
         };
+
+        if (service.vertical === "alojamiento") {
+          const nextNru = payload.nru;
+          if (service.isNew || nruChanged(service.nru, nextNru)) {
+            payload.nru_estado = "pendiente";
+            payload.nru_aprobado_at = null;
+            payload.nru_aprobado_por = null;
+          } else {
+            payload.nru_estado = service.nru_estado || "pendiente";
+          }
+        }
 
         console.log("[editar-perfil] guardar — payload servicio", {
           serviceId: service.id,
@@ -2061,10 +2102,23 @@ function EditarPerfilContent() {
             newVertical,
             ciudad,
             userId,
-            puedeActivarServicio(nuevoServicio, perfil, nuevoContext),
+            puedeActivarServicio(
+              {
+                ...nuevoServicio,
+                nru: newServiceDetails.nru,
+                nru_estado: "pendiente",
+              },
+              perfil,
+              nuevoContext,
+            ),
           ),
           revision_estado: revisionMeta.revision_estado,
         };
+        if (newVertical === "alojamiento") {
+          payload.nru_estado = "pendiente";
+          payload.nru_aprobado_at = null;
+          payload.nru_aprobado_por = null;
+        }
         const { data, error } = await supabase
           .from("services")
           .insert(payload)

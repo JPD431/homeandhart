@@ -3,6 +3,12 @@ import { notFound } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 import { getServiceCoverPhoto } from "@/app/lib/service-card-display";
 import { SERIF } from "@/app/components/brand";
+import {
+  VERIFICACION_ALOJAMIENTO_ES,
+  VERIFICACION_MASCOTAS_ES,
+  VERIFICACION_NINERAS_ES,
+  VERIFICADO_BADGE_TOOLTIP_ES,
+} from "@/app/lib/verification-copy";
 
 const PRIMARY = "#1d4f91";
 const BORDER = "#e8e4de";
@@ -58,20 +64,20 @@ const VERTICAL_THEME = {
 
 const TITULOS = {
   nineras: (ciudad) =>
-    `Niñeras en ${ciudad} · Certificadas y verificadas · Home&Heart`,
+    `Niñeras en ${ciudad} · Documentación revisada · Home&Heart`,
   alojamiento: (ciudad) =>
-    `Alojamiento pet-friendly en ${ciudad} · NRU verificado · Home&Heart`,
+    `Alojamiento pet-friendly en ${ciudad} · NRU revisado · Home&Heart`,
   mascotas: (ciudad) =>
-    `Cuidadores de mascotas en ${ciudad} · Verificados · Home&Heart`,
+    `Cuidadores de mascotas en ${ciudad} · Documentación revisada · Home&Heart`,
 };
 
 const DESCRIPCIONES = {
   nineras: (ciudad) =>
-    `Encuentra niñeras certificadas en ${ciudad} con antecedentes verificados. Disponibles por horas o días. Reserva online con pago protegido.`,
+    `Encuentra niñeras en ${ciudad}. Antes de activar el perfil revisamos DNI, antecedentes penales, certificado de delitos sexuales y mayoría de edad. Reserva online con pago protegido.`,
   alojamiento: (ciudad) =>
-    `Apartamentos y casas pet-friendly en ${ciudad} con NRU registrado. Check-in flexible, reserva inmediata y pago protegido.`,
+    `Apartamentos y casas pet-friendly en ${ciudad}. Los anfitriones verifican su identidad y aportan el NRU, que revisamos antes de publicar. Reserva con pago protegido.`,
   mascotas: (ciudad) =>
-    `Cuidadores de mascotas verificados en ${ciudad}. Paseos incluidos, fotos y actualizaciones. Reserva online con garantía Home&Heart.`,
+    `Cuidadores de mascotas en ${ciudad}. Presentan DNI y antecedentes penales, revisados por nuestro equipo antes de activar el perfil. Reserva online con pago protegido.`,
 };
 
 const H1S = {
@@ -81,10 +87,9 @@ const H1S = {
 };
 
 const SUBTITULOS = {
-  nineras:
-    "Certificadas, con antecedentes verificados y disponibles cuando las necesitas",
-  alojamiento: "Con NRU registrado, pet-friendly y reserva inmediata",
-  mascotas: "Verificados, con jardín y paseos incluidos",
+  nineras: VERIFICACION_NINERAS_ES,
+  alojamiento: VERIFICACION_ALOJAMIENTO_ES,
+  mascotas: VERIFICACION_MASCOTAS_ES,
 };
 
 const PROVEEDOR_CTA = {
@@ -104,7 +109,7 @@ function getFaqs(ciudad) {
     nineras: [
       {
         q: `¿Cómo se verifican las niñeras en ${ciudad}?`,
-        a: "Todas las niñeras pasan por verificación de antecedentes penales, antecedentes de delitos sexuales y comprobación de documentos de identidad.",
+        a: VERIFICACION_NINERAS_ES,
       },
       {
         q: `¿Cuánto cuesta una niñera en ${ciudad}?`,
@@ -122,7 +127,7 @@ function getFaqs(ciudad) {
     alojamiento: [
       {
         q: `¿Qué es el NRU en alojamientos de ${ciudad}?`,
-        a: "El Número de Registro Único es obligatorio para alquileres turísticos en España. Todos los alojamientos en Home&Heart tienen NRU verificado.",
+        a: "El Número de Registro Único (NRU) identifica alojamientos turísticos registrados. Antes de publicar, revisamos el NRU declarado por el anfitrión junto con su identidad.",
       },
       {
         q: "¿Todos los alojamientos son pet-friendly?",
@@ -132,11 +137,15 @@ function getFaqs(ciudad) {
         q: "¿Qué pasa si el anfitrión cancela?",
         a: "La Garantía Home&Heart te busca alojamiento alternativo verificado en 30 minutos si la cancelación es con menos de 24h.",
       },
+      {
+        q: `¿Cómo se verifican los anfitriones en ${ciudad}?`,
+        a: VERIFICACION_ALOJAMIENTO_ES,
+      },
     ],
     mascotas: [
       {
         q: `¿Cómo se verifican los cuidadores de mascotas en ${ciudad}?`,
-        a: "Todos los cuidadores tienen antecedentes penales verificados y documento de identidad comprobado.",
+        a: VERIFICACION_MASCOTAS_ES,
       },
       {
         q: "¿Puedo ver fotos de mi mascota mientras está al cuidado?",
@@ -254,7 +263,10 @@ function ProviderCard({ service, theme, rating }) {
             <p className="mt-0.5 truncate text-[10px] text-[#aaa]">{service.titulo}</p>
           )}
           {profile.verificado && (
-            <span className="mt-1.5 inline-block text-[9px] font-semibold text-[#0e7a5c]">
+            <span
+              className="mt-1.5 inline-block text-[9px] font-semibold text-[#0e7a5c]"
+              title={VERIFICADO_BADGE_TOOLTIP_ES}
+            >
               ✓ Verificado
             </span>
           )}
@@ -417,14 +429,32 @@ export default async function LandingPage({ params }) {
           : "20€-40€/día",
   };
 
-  const beneficios = [
-    {
+  const beneficiosByVertical = {
+    nineras: {
       icon: "✓",
-      title: "Verificados",
-      text: "Antecedentes penales, identidad y documentos comprobados antes de publicar.",
+      title: "Documentación revisada",
+      text: VERIFICACION_NINERAS_ES,
       color: "#0e7a5c",
       light: "#e6f4f0",
     },
+    alojamiento: {
+      icon: "✓",
+      title: "Identidad + NRU",
+      text: VERIFICACION_ALOJAMIENTO_ES,
+      color: "#0e7a5c",
+      light: "#e6f4f0",
+    },
+    mascotas: {
+      icon: "✓",
+      title: "Documentación revisada",
+      text: VERIFICACION_MASCOTAS_ES,
+      color: "#0e7a5c",
+      light: "#e6f4f0",
+    },
+  };
+
+  const beneficios = [
+    beneficiosByVertical[vertical],
     {
       icon: "🔒",
       title: "Pago protegido",

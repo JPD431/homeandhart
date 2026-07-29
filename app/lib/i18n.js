@@ -65,16 +65,19 @@ export const translations = {
       subtitulo:
         "Un marketplace donde encuentras alojamiento, cuidado de niños y mascotas. Todo verificado, todo en un pago.",
       disponible: "DISPONIBLE AHORA",
-      alojDesc: "Apartamentos con NRU registrado. Sin sorpresas al llegar.",
-      ninosDesc: "Niñeras certificadas con antecedentes verificados.",
-      mascotasDesc: "Cuidadores verificados para que tu mascota esté bien.",
+      alojDesc:
+        "Los anfitriones verifican su identidad y aportan el NRU de su alojamiento, que revisamos antes de publicarlo.",
+      ninosDesc:
+        "Antes de activar el perfil, revisamos DNI, antecedentes penales, certificado de delitos sexuales y mayoría de edad.",
+      mascotasDesc:
+        "Presentan DNI y antecedentes penales, revisados por nuestro equipo antes de activar el perfil.",
       aloj1: "Pet-friendly disponible",
-      aloj2: "NRU verificado",
+      aloj2: "NRU revisado por el equipo",
       aloj3: "Check-in flexible",
-      ninos1: "Antecedentes verificados",
+      ninos1: "DNI + antecedentes + delitos sexuales",
       ninos2: "Idiomas indicados",
       ninos3: "Por horas o días",
-      masc1: "Paseos incluidos",
+      masc1: "DNI + antecedentes penales",
       masc2: "Fotos y actualizaciones",
       masc3: "Cobertura veterinaria",
     },
@@ -97,12 +100,13 @@ export const translations = {
       label: "Confianza",
       titulo: "Por qué confiar en Home&Heart",
       mensaje:
-        "Construimos una red de confianza real, con personas que cuidan cada detalle. Verificamos a cada proveedor para que tu familia esté segura.",
-      identidadTitulo: "Identidad verificada",
-      identidadDesc: "Todos los usuarios suben su DNI.",
-      antecedentesTitulo: "Antecedentes comprobados",
+        "Verificamos la identidad de todos los profesionales. Además, niñeras y cuidadores de mascotas presentan antecedentes penales (las niñeras, también el certificado de delitos sexuales), y los alojamientos su licencia turística. Todo revisado por nuestro equipo antes de publicar.",
+      identidadTitulo: "Identidad y mayoría de edad",
+      identidadDesc:
+        "Todos los profesionales confirman su identidad con DNI/NIE/pasaporte y su mayoría de edad; nuestro equipo revisa estos datos antes de publicar.",
+      antecedentesTitulo: "Documentación por servicio",
       antecedentesDesc:
-        "Los proveedores de niñera y mascotas presentan certificado de antecedentes penales; las niñeras además el certificado de delitos sexuales.",
+        "Niñeras: antecedentes penales y certificado de delitos de naturaleza sexual. Mascotas: antecedentes penales. Alojamiento: número de registro turístico (NRU). Todo revisado por nuestro equipo.",
       pagoTitulo: "Pago protegido",
       pagoDesc:
         "El pago se retiene y no se libera hasta que el servicio se confirma; si hay un problema, se puede reembolsar.",
@@ -110,6 +114,8 @@ export const translations = {
       garantiaDesc:
         "Si tu proveedor cancela con menos de 24 horas, activamos la red de emergencia y te proponemos alternativas verificadas en 30 minutos.",
       garantiaLink: "Saber más sobre la garantía →",
+      badgeVerificadoTooltip:
+        "Identidad verificada por nuestro equipo. Según el servicio, también revisamos antecedentes penales (niñeras y mascotas), certificado de delitos sexuales (niñeras) o licencia turística (alojamiento).",
     },
     landingReviews: {
       label: "LO QUE DICEN LAS FAMILIAS",
@@ -134,7 +140,7 @@ export const translations = {
         "En lugar de resignarnos, en familia nos pusimos a trabajar. Durante casi dos años investigamos, estudiamos cada vertical a fondo, definimos qué era lo verdaderamente importante y reunimos toda la información necesaria para hacer las cosas bien. Sin atajos.\nDe ese esfuerzo nació Home&Heart: un ecosistema que reúne las tres cosas que más necesita cualquier familia —alojamiento, cuidado de niños y cuidado de mascotas— en un solo lugar. Puedes usarlo para una sola vertical, para dos o para las tres. Y en todas, con la misma tranquilidad.",
       s4titulo: 'Qué significa "verificado" para nosotros.',
       s4texto:
-        "No lo decimos por decir. Cada persona que forma parte de Home&Heart pasa por un proceso real: verificamos la identidad de todos con su documento oficial; los proveedores de cuidado de niños y mascotas presentan su certificado de antecedentes penales; y quienes cuidan de niños aportan además el certificado de delitos sexuales. A eso sumamos pagos protegidos —el importe queda retenido y no se libera hasta que el servicio se confirma— y la Garantía Home&Heart, para acompañarte también si algo no sale como esperabas. Porque queremos que todas las familias se sientan seguras y acompañadas en cada momento.",
+        "No lo decimos por decir. Antes de publicar, nuestro equipo revisa la documentación de cada proveedor: identidad (DNI/NIE/pasaporte) y mayoría de edad en todos los casos; antecedentes penales y certificado de delitos de naturaleza sexual para niñeras; antecedentes penales para cuidadores de mascotas; y el número de registro turístico (NRU) para alojamientos. Es una verificación documental —no una garantía de seguridad—: usa también tu propio criterio. A eso sumamos pagos protegidos —el importe queda retenido y no se libera hasta que el servicio se confirma— y la Garantía Home&Heart si tu proveedor cancela con poca antelación.",
       s5titulo: "Esto también es para ti, si quieres cuidar.",
       s5texto:
         "Home&Heart no es solo para las familias que buscan: es también para las personas que quieren ofrecer sus servicios en un entorno serio, donde su trabajo se valora y donde los clientes confían porque saben que detrás hay verificación de verdad. Si tienes algo bueno que ofrecer —tu casa, tu experiencia con niños o tu cariño por los animales— aquí tienes un lugar hecho con cuidado para crecer.",
@@ -312,16 +318,19 @@ export const translations = {
       subtitulo:
         "A marketplace where you find accommodation, childcare and pet sitting. All verified, all in one payment.",
       disponible: "AVAILABLE NOW",
-      alojDesc: "Apartments with registered NRU. No surprises on arrival.",
-      ninosDesc: "Certified babysitters with verified background checks.",
-      mascotasDesc: "Verified carers to keep your pet happy while you enjoy.",
+      alojDesc:
+        "Hosts verify their identity and provide their accommodation's NRU, which we review before publishing.",
+      ninosDesc:
+        "Before activating a profile, we review ID, criminal records, a sexual offences certificate and confirm they are 18+.",
+      mascotasDesc:
+        "They submit ID and a criminal record certificate, reviewed by our team before their profile goes live.",
       aloj1: "Pet-friendly available",
-      aloj2: "Registered NRU",
+      aloj2: "NRU reviewed by our team",
       aloj3: "Flexible check-in",
-      ninos1: "Verified background",
+      ninos1: "ID + criminal + sexual offences docs",
       ninos2: "Languages listed",
       ninos3: "By hour or day",
-      masc1: "Walks included",
+      masc1: "ID + criminal record certificate",
       masc2: "Photos and updates",
       masc3: "Vet coverage",
     },
@@ -344,12 +353,13 @@ export const translations = {
       label: "Trust",
       titulo: "Why trust Home&Heart",
       mensaje:
-        "We are building a network of real trust, with people who care about every detail. We verify every provider so your family is safe.",
-      identidadTitulo: "Verified identity",
-      identidadDesc: "Every user uploads their ID.",
-      antecedentesTitulo: "Background checks",
+        "We verify every professional's identity. In addition, babysitters and pet carers submit criminal record certificates (babysitters also submit a sexual offences certificate), and hosts submit their tourist registration number (NRU). Everything is reviewed by our team before publishing.",
+      identidadTitulo: "Identity and age of majority",
+      identidadDesc:
+        "Every professional confirms their identity with an official ID and that they are 18+; our team reviews this before publishing.",
+      antecedentesTitulo: "Documents by service",
       antecedentesDesc:
-        "Childcare and pet care providers submit a criminal record certificate; babysitters also submit a sexual offences certificate.",
+        "Childcare: criminal record and sexual offences certificates. Pet care: criminal record certificate. Accommodation: tourist registration number (NRU). All reviewed by our team.",
       pagoTitulo: "Protected payment",
       pagoDesc:
         "Payment is held and not released until the service is confirmed; if something goes wrong, you can get a refund.",
@@ -357,6 +367,8 @@ export const translations = {
       garantiaDesc:
         "If your provider cancels with less than 24 hours notice, we activate the emergency network and offer verified alternatives within 30 minutes.",
       garantiaLink: "Learn more about the guarantee →",
+      badgeVerificadoTooltip:
+        "Identity reviewed by our team. Depending on the service, we also review criminal record certificates (childcare and pet care), a sexual offences certificate (childcare), or the tourist registration number (accommodation).",
     },
     landingReviews: {
       label: "WHAT FAMILIES SAY",
@@ -381,7 +393,7 @@ export const translations = {
         "Instead of accepting it, we got to work as a family. For nearly two years we researched, studied each vertical in depth, defined what truly mattered, and gathered all the information needed to do things properly. No shortcuts.\nFrom that effort, Home&Heart was born: an ecosystem that brings together the three things every family needs most — accommodation, childcare, and pet care — in one place. You can use it for one vertical, for two, or for all three. And in all of them, with the same peace of mind.",
       s4titulo: 'What “verified” means to us.',
       s4texto:
-        "We don't say it lightly. Everyone who becomes part of Home&Heart goes through a real process: we verify everyone's identity with an official document; childcare and pet care providers submit a criminal record certificate; and those who care for children also provide a sexual offences certificate. On top of that we add protected payments — the amount is held and not released until the service is confirmed — and the Home&Heart Guarantee, to support you even if something doesn't go as expected. Because we want every family to feel safe and supported at every moment.",
+        "We don't say it lightly. Before publishing, our team reviews each provider's documents: identity (official ID) and confirmation they are 18+ in every case; criminal record and sexual offences certificates for childcare; a criminal record certificate for pet carers; and the tourist registration number (NRU) for accommodation. This is a documentary review by our team — not a guarantee of safety — so please use your own judgement too. On top of that we add protected payments — the amount is held and not released until the service is confirmed — and the Home&Heart Guarantee if your provider cancels at short notice.",
       s5titulo: "This is for you too, if you want to provide care.",
       s5texto:
         "Home&Heart is not only for families who are searching: it's also for people who want to offer their services in a serious environment where their work is valued, and where clients trust because they know real verification sits behind it. If you have something good to offer — your home, your experience with children, or your love for animals — here you have a place built with care to grow.",

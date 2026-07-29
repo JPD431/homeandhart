@@ -134,7 +134,7 @@ export async function POST(_request, { params }) {
   if (proveedor?.cobros_activos === true) {
     const { data: services, error: fetchError } = await supabaseAdmin
       .from("services")
-      .select("id, revision_estado, vertical")
+      .select("id, revision_estado, vertical, nru, nru_estado")
       .eq("proveedor_id", id);
 
     if (fetchError) {

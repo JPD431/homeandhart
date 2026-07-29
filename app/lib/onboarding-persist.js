@@ -213,6 +213,12 @@ export async function upsertDraftService(
     ...buildServicePayload(servicioData, vertical, ciudad, userId, false),
     revision_estado,
   };
+  if (vertical === "alojamiento") {
+    // Nuevo o cambio de NRU → siempre pendiente hasta verificación admin.
+    payload.nru_estado = "pendiente";
+    payload.nru_aprobado_at = null;
+    payload.nru_aprobado_por = null;
+  }
   syncServicePhotos(payload, allFotos);
 
   if (draftId) {

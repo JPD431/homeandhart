@@ -241,6 +241,7 @@ function AdminPageInner() {
   const [requestMessage, setRequestMessage] = useState("");
   const [requestSending, setRequestSending] = useState(null);
   const [actionLoading, setActionLoading] = useState(null);
+  const [nruActionLoading, setNruActionLoading] = useState(null);
   const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [completedBookings, setCompletedBookings] = useState([]);
@@ -656,6 +657,34 @@ function AdminPageInner() {
         : "Reporte desestimado.",
     );
     await loadData();
+  }
+
+  async function handleNruEstado(serviceId, estado) {
+    setNruActionLoading(serviceId);
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    try {
+      const res = await fetch(`/api/admin/services/${serviceId}/nru-estado`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ estado }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(payload.error || "No se pudo actualizar el NRU");
+      }
+      setSuccessMessage(
+        estado === "verificado"
+          ? "NRU verificado. El proveedor podrá activar el alojamiento si cumple el resto."
+          : "NRU rechazado. El anuncio queda en pausa hasta que corrija el número.",
+      );
+      await loadData();
+    } catch (err) {
+      setErrorMessage(err.message || "Error al actualizar el NRU");
+    } finally {
+      setNruActionLoading(null);
+    }
   }
 
   function formatReembolsoError(result, response) {
@@ -2811,39 +2840,106 @@ function AdminPageInner() {
                           const revisionBadge = getRevisionEstadoBadge(
                             svc.revision_estado,
                           );
+                          const isAloj = svc.vertical === "alojamiento";
+                          const nruText = (svc.nru || "").trim();
+                          const nruEstado = svc.nru_estado || "pendiente";
+                          const nruBusy = nruActionLoading === svc.id;
                           return (
                             <li
                               key={svc.id}
-                              className="flex flex-wrap items-center gap-2 text-sm"
+                              className="flex flex-col gap-1.5 rounded-lg border px-2.5 py-2 text-sm"
+                              style={{ borderColor: BRAND.border }}
                             >
-                              <span
-                                className="rounded-full px-2 py-0.5 text-[11px] font-semibold"
-                                style={{
-                                  backgroundColor: BRAND.light,
-                                  color: BRAND.primary,
-                                }}
-                              >
-                                {verticalConfig.label}
-                              </span>
-                              <span className="text-[#444]">
-                                {svc.titulo || verticalConfig.label}
-                              </span>
-                              <span className="font-semibold" style={{ color: BRAND.primary }}>
-                                {formatPrice(svc.precio, svc.vertical)}
-                              </span>
-                              <span
-                                className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
-                                style={{
-                                  backgroundColor: revisionBadge.bg,
-                                  color: revisionBadge.color,
-                                }}
-                              >
-                                {revisionBadge.label}
-                              </span>
-                              {svc.disponible && (
-                                <span className="text-[10px] font-medium text-[#0e7a5c]">
-                                  · Activo
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span
+                                  className="rounded-full px-2 py-0.5 text-[11px] font-semibold"
+                                  style={{
+                                    backgroundColor: BRAND.light,
+                                    color: BRAND.primary,
+                                  }}
+                                >
+                                  {verticalConfig.label}
                                 </span>
+                                <span className="text-[#444]">
+                                  {svc.titulo || verticalConfig.label}
+                                </span>
+                                <span className="font-semibold" style={{ color: BRAND.primary }}>
+                                  {formatPrice(svc.precio, svc.vertical)}
+                                </span>
+                                <span
+                                  className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                                  style={{
+                                    backgroundColor: revisionBadge.bg,
+                                    color: revisionBadge.color,
+                                  }}
+                                >
+                                  {revisionBadge.label}
+                                </span>
+                                {svc.disponible && (
+                                  <span className="text-[10px] font-medium text-[#0e7a5c]">
+                                    · Activo
+                                  </span>
+                                )}
+                              </div>
+                              {isAloj && (
+                                <div className="flex flex-wrap items-center gap-2 text-xs">
+                                  <span className="text-[#666]">
+                                    NRU:{" "}
+                                    <strong className="font-mono text-[#1a1a1a]">
+                                      {nruText || "— sin declarar —"}
+                                    </strong>
+                                  </span>
+                                  <span
+                                    className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                                    style={{
+                                      backgroundColor:
+                                        nruEstado === "verificado"
+                                          ? "#e6f4f0"
+                                          : nruEstado === "rechazado"
+                                            ? "#fee2e2"
+                                            : "#fef3c7",
+                                      color:
+                                        nruEstado === "verificado"
+                                          ? "#0e7a5c"
+                                          : nruEstado === "rechazado"
+                                            ? "#b91c1c"
+                                            : "#c47d1a",
+                                    }}
+                                  >
+                                    {nruEstado}
+                                  </span>
+                                  {nruEstado !== "verificado" && (
+                                    <button
+                                      type="button"
+                                      disabled={!nruText || nruBusy || isBusy}
+                                      onClick={() =>
+                                        handleNruEstado(svc.id, "verificado")
+                                      }
+                                      title={
+                                        nruText
+                                          ? "Verificar NRU"
+                                          : "Falta NRU declarado"
+                                      }
+                                      className="rounded-lg px-2 py-1 text-[11px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                                      style={{ backgroundColor: "#0e7a5c" }}
+                                    >
+                                      {nruBusy ? "…" : "Verificar NRU"}
+                                    </button>
+                                  )}
+                                  {nruEstado !== "rechazado" && (
+                                    <button
+                                      type="button"
+                                      disabled={nruBusy || isBusy}
+                                      onClick={() =>
+                                        handleNruEstado(svc.id, "rechazado")
+                                      }
+                                      className="rounded-lg border px-2 py-1 text-[11px] font-semibold text-red-700 disabled:opacity-50"
+                                      style={{ borderColor: "#fecaca" }}
+                                    >
+                                      Rechazar NRU
+                                    </button>
+                                  )}
+                                </div>
                               )}
                             </li>
                           );
