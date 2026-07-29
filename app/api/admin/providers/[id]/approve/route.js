@@ -45,6 +45,31 @@ export async function POST(_request, { params }) {
 
   const { id } = await params;
 
+  const { data: existing, error: existingError } = await supabaseAdmin
+    .from("profiles")
+    .select("id, role, mayor_de_edad_confirmada, cobros_activos, ninos_documentacion_aprobada, nombre")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (existingError) {
+    return NextResponse.json({ error: existingError.message }, { status: 500 });
+  }
+
+  if (!existing || existing.role !== "proveedor") {
+    return NextResponse.json({ error: "Proveedor no encontrado" }, { status: 404 });
+  }
+
+  if (existing.mayor_de_edad_confirmada !== true) {
+    return NextResponse.json(
+      {
+        error:
+          "Confirma la mayoría de edad revisando el DNI antes de aprobar",
+        code: "mayor_de_edad_pendiente",
+      },
+      { status: 400 },
+    );
+  }
+
   const { data: proveedor, error: profileError } = await supabaseAdmin
     .from("profiles")
     .update({ verificado: true, rechazado: false })

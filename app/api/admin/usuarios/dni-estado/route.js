@@ -13,7 +13,11 @@ const ESTADOS_VALIDOS = new Set(["verificado", "rechazado"]);
 
 /**
  * POST /api/admin/usuarios/dni-estado
- * Body: { userId: string, estado: 'verificado' | 'rechazado' }
+ * Body: {
+ *   userId: string,
+ *   estado: 'verificado' | 'rechazado',
+ *   confirmar_mayor_de_edad?: boolean  // obligatorio true si estado === 'verificado'
+ * }
  */
 export async function POST(request) {
   const admin = await getAdminUser();
@@ -30,6 +34,7 @@ export async function POST(request) {
 
   const userId = typeof body?.userId === "string" ? body.userId.trim() : "";
   const estado = typeof body?.estado === "string" ? body.estado.trim() : "";
+  const confirmarMayorDeEdad = body?.confirmar_mayor_de_edad === true;
 
   if (!userId) {
     return NextResponse.json({ error: "Falta userId" }, { status: 400 });
@@ -38,6 +43,17 @@ export async function POST(request) {
   if (!ESTADOS_VALIDOS.has(estado)) {
     return NextResponse.json(
       { error: "estado debe ser 'verificado' o 'rechazado'" },
+      { status: 400 },
+    );
+  }
+
+  if (estado === "verificado" && !confirmarMayorDeEdad) {
+    return NextResponse.json(
+      {
+        error:
+          "Debes confirmar la mayoría de edad (18+) según el DNI antes de verificar el documento",
+        code: "mayor_de_edad_requerida",
+      },
       { status: 400 },
     );
   }
@@ -63,15 +79,31 @@ export async function POST(request) {
     );
   }
 
+  const now = new Date().toISOString();
+  const updatePayload =
+    estado === "verificado"
+      ? {
+          dni_estado: "verificado",
+          dni_verificado_at: now,
+          dni_verificado_por: admin.id,
+          mayor_de_edad_confirmada: true,
+          mayor_de_edad_confirmada_at: now,
+          mayor_de_edad_confirmada_por: admin.id,
+        }
+      : {
+          // Rechazo: no tocar el flag de mayoría de edad.
+          dni_estado: "rechazado",
+          dni_verificado_at: now,
+          dni_verificado_por: admin.id,
+        };
+
   const { data: updated, error: updateError } = await supabaseAdmin
     .from("profiles")
-    .update({
-      dni_estado: estado,
-      dni_verificado_at: new Date().toISOString(),
-      dni_verificado_por: admin.id,
-    })
+    .update(updatePayload)
     .eq("id", userId)
-    .select("id, dni_estado, dni_verificado_at, dni_verificado_por")
+    .select(
+      "id, dni_estado, dni_verificado_at, dni_verificado_por, mayor_de_edad_confirmada, mayor_de_edad_confirmada_at, mayor_de_edad_confirmada_por",
+    )
     .single();
 
   if (updateError) {

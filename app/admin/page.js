@@ -544,6 +544,67 @@ function AdminPageInner() {
     await loadData();
   }
 
+  async function handleConfirmarMayorDeEdadProveedor(provider) {
+    if (!provider?.id) return;
+    if (!provider.doc_dni_url) {
+      setErrorMessage("Este proveedor no tiene DNI subido.");
+      return;
+    }
+
+    setActionLoading(provider.id);
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    try {
+      const res = await fetch("/api/admin/usuarios/confirmar-mayor-de-edad", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: provider.id }),
+      });
+      const payload = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(payload.error || "No se pudo confirmar la mayoría de edad");
+      }
+
+      setSuccessMessage(
+        payload.already_confirmed
+          ? "La mayoría de edad ya estaba confirmada."
+          : "Mayoría de edad (18+) confirmada. El proveedor ya puede activar servicios si cumple el resto de requisitos.",
+      );
+      await loadData();
+    } catch (err) {
+      setErrorMessage(err.message || "Error al confirmar la mayoría de edad");
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  async function handleOpenProviderDni(provider) {
+    if (!provider?.doc_dni_url) {
+      setErrorMessage("Este proveedor no tiene DNI subido.");
+      return;
+    }
+
+    setActionLoading(`dni-${provider.id}`);
+    setErrorMessage("");
+
+    try {
+      const res = await fetch(
+        `/api/admin/documento-url?storedUrl=${encodeURIComponent(provider.doc_dni_url)}`,
+      );
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok || !payload.url) {
+        throw new Error(payload.error || "No se pudo abrir el DNI");
+      }
+      window.open(payload.url, "_blank", "noopener,noreferrer");
+    } catch (err) {
+      setErrorMessage(err.message || "No se pudo abrir el DNI");
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
   async function handlePenalizarProveedor(proveedorId) {
     setActionLoading(proveedorId);
     setErrorMessage("");
@@ -2553,7 +2614,14 @@ function AdminPageInner() {
               const isRejecting = rejectingId === provider.id;
               const isRequestingDocs = requestingDocsId === provider.id;
               const isBusy = actionLoading === provider.id;
+              const isOpeningDni = actionLoading === `dni-${provider.id}`;
               const hasAlojamiento = services.some((s) => s.vertical === "alojamiento");
+              const mayorDeEdadOk = provider.mayor_de_edad_confirmada === true;
+              const dniVerificado = provider.dni_estado === "verificado";
+              const needsLegacyAgeConfirm =
+                Boolean(provider.doc_dni_url) &&
+                dniVerificado &&
+                !mayorDeEdadOk;
               const docSummary = getMissingMandatoryDocumentsSummary(
                 provider,
                 provider.providerDocuments ?? [],
@@ -2595,6 +2663,15 @@ function AdminPageInner() {
                         >
                           {provider.verificado ? "Verificado ✓" : "Pendiente de verificar"}
                         </span>
+                        <span
+                          className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                          style={{
+                            backgroundColor: mayorDeEdadOk ? "#e6f4f0" : "#fdf4e7",
+                            color: mayorDeEdadOk ? "#085041" : "#92400e",
+                          }}
+                        >
+                          {mayorDeEdadOk ? "18+ confirmada" : "18+ pendiente"}
+                        </span>
                         {docSummary.missingCount > 0 && (
                           <span
                             className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
@@ -2613,6 +2690,43 @@ function AdminPageInner() {
                           </span>
                         )}
                       </div>
+                      {needsLegacyAgeConfirm && (
+                        <div
+                          className="mt-3 rounded-xl border px-3 py-2.5 text-sm"
+                          style={{
+                            borderColor: "#fcd34d",
+                            backgroundColor: "#fffbeb",
+                            color: "#92400e",
+                          }}
+                        >
+                          <p>
+                            DNI ya verificado, pero falta confirmar mayoría de edad.
+                            Abre el DNI, comprueba la fecha de nacimiento y confirma.
+                          </p>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              disabled={isBusy || isOpeningDni}
+                              onClick={() => handleOpenProviderDni(provider)}
+                              className="rounded-lg border px-3 py-1.5 text-xs font-semibold disabled:opacity-60"
+                              style={{ borderColor: BRAND.primary, color: BRAND.primary }}
+                            >
+                              {isOpeningDni ? "Abriendo…" : "Ver DNI"}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isBusy || isOpeningDni}
+                              onClick={() =>
+                                handleConfirmarMayorDeEdadProveedor(provider)
+                              }
+                              className="rounded-lg px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
+                              style={{ backgroundColor: "#085041" }}
+                            >
+                              {isBusy ? "Guardando…" : "Confirmar 18+ según el DNI"}
+                            </button>
+                          </div>
+                        </div>
+                      )}
                       {provider.email_contacto && (
                         <p className="mt-0.5 text-sm text-[#666]">
                           {provider.email_contacto}
@@ -2831,9 +2945,14 @@ function AdminPageInner() {
                         <div className="flex flex-wrap gap-2">
                           <button
                             type="button"
-                            disabled={isBusy}
+                            disabled={isBusy || !mayorDeEdadOk}
+                            title={
+                              mayorDeEdadOk
+                                ? "Aprobar proveedor"
+                                : "Confirma la mayoría de edad (18+) revisando el DNI antes de aprobar"
+                            }
                             onClick={() => handleApprove(provider.id)}
-                            className="rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                            className="rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             {isBusy ? "Guardando…" : "Aprobar ✓"}
                           </button>
