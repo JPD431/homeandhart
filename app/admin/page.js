@@ -9,6 +9,7 @@ import AdminProviderDocuments, {
 import AdminUsersTab from "@/app/components/admin/AdminUsersTab";
 import AdminCancelacionesTab from "@/app/components/admin/AdminCancelacionesTab";
 import AdminServiciosRevisionTab from "@/app/components/admin/AdminServiciosRevisionTab";
+import AdminSuspensionesCautelaresTab from "@/app/components/admin/AdminSuspensionesCautelaresTab";
 import { BRAND, SERIF } from "@/app/components/brand";
 import { articulosIniciales, slugify } from "@/app/lib/blog-seed";
 import { getIngresoProveedorFromBooking } from "@/app/lib/ingresos-proveedor";
@@ -24,6 +25,7 @@ const TABS = [
   { id: "usuarios", label: "Usuarios" },
   { id: "cancelaciones", label: "Cancelaciones" },
   { id: "servicios-revision", label: "Servicios pendientes de revisión" },
+  { id: "suspensiones", label: "Suspensiones cautelares" },
   { id: "pendientes", label: "Pendientes de verificar" },
   { id: "verificados", label: "Verificados" },
   { id: "rechazados", label: "Rechazados" },
@@ -266,6 +268,7 @@ function AdminPageInner() {
   const [blogSeeding, setBlogSeeding] = useState(false);
   const [usuariosSummary, setUsuariosSummary] = useState({ pendientes: 0, sin_dni: 0 });
   const [serviciosRevisionPendientes, setServiciosRevisionPendientes] = useState(0);
+  const [suspensionesCount, setSuspensionesCount] = useState(0);
   const [cancelacionesActivas, setCancelacionesActivas] = useState(0);
 
   const loadData = useCallback(async () => {
@@ -335,6 +338,9 @@ function AdminPageInner() {
       const providerList = providersPayload.providers ?? [];
       setProviders(providerList);
       setServicesByProvider(providersPayload.servicesByProvider ?? {});
+      setSuspensionesCount(
+        providerList.filter((p) => p.suspendido_cautelar === true).length,
+      );
 
       const usuariosRes = await fetch("/api/admin/usuarios?filtro=todos&limit=1");
       const usuariosPayload = await usuariosRes.json().catch(() => ({}));
@@ -473,6 +479,7 @@ function AdminPageInner() {
       usuarios: usuariosSummary.pendientes,
       cancelaciones: cancelacionesActivas,
       "servicios-revision": serviciosRevisionPendientes,
+      suspensiones: suspensionesCount,
       pendientes: 0,
       verificados: 0,
       rechazados: 0,
@@ -489,7 +496,7 @@ function AdminPageInner() {
     result.ingresos = completedBookings.length;
     result.blog = blogPosts.length;
     return result;
-  }, [providers, completedBookings, reports, incidencias, blogPosts, usuariosSummary, cancelacionesActivas, serviciosRevisionPendientes]);
+  }, [providers, completedBookings, reports, incidencias, blogPosts, usuariosSummary, cancelacionesActivas, serviciosRevisionPendientes, suspensionesCount]);
 
   const pendingReports = useMemo(
     () => reports.filter((r) => r.estado === "pendiente"),
@@ -1263,6 +1270,26 @@ function AdminPageInner() {
           </button>
         )}
 
+        {suspensionesCount > 0 && (
+          <button
+            type="button"
+            onClick={() => setActiveTab("suspensiones")}
+            className="mb-4 flex w-full items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left transition-opacity hover:opacity-90"
+            style={{
+              borderColor: "#ef4444",
+              backgroundColor: "#fef2f2",
+              color: "#b91c1c",
+            }}
+          >
+            <span className="text-sm font-semibold">
+              🚨 Suspensiones cautelares pendientes ({suspensionesCount})
+            </span>
+            <span className="shrink-0 text-xs font-medium underline">
+              Revisar →
+            </span>
+          </button>
+        )}
+
         <div className="flex flex-wrap gap-2">
           {TABS.map((tab) => {
             const isActive = activeTab === tab.id;
@@ -1294,7 +1321,8 @@ function AdminPageInner() {
                         (tab.id === "usuarios" && usuariosSummary.pendientes > 0 && !isActive) ||
                         (tab.id === "servicios-revision" &&
                           serviciosRevisionPendientes > 0 &&
-                          !isActive)
+                          !isActive) ||
+                        (tab.id === "suspensiones" && suspensionesCount > 0 && !isActive)
                           ? "#fef3c7"
                           : isActive
                             ? BRAND.primary
@@ -1303,7 +1331,8 @@ function AdminPageInner() {
                         (tab.id === "usuarios" && usuariosSummary.pendientes > 0 && !isActive) ||
                         (tab.id === "servicios-revision" &&
                           serviciosRevisionPendientes > 0 &&
-                          !isActive)
+                          !isActive) ||
+                        (tab.id === "suspensiones" && suspensionesCount > 0 && !isActive)
                           ? "#92400e"
                           : isActive
                             ? "#fff"
@@ -1358,6 +1387,19 @@ function AdminPageInner() {
               setSuccessMessage("");
             }}
             onCountChange={(n) => setServiciosRevisionPendientes(n)}
+          />
+        ) : activeTab === "suspensiones" ? (
+          <AdminSuspensionesCautelaresTab
+            onSuccess={(msg) => {
+              setSuccessMessage(msg);
+              setErrorMessage("");
+              loadData();
+            }}
+            onError={(msg) => {
+              setErrorMessage(msg);
+              setSuccessMessage("");
+            }}
+            onMeta={(n) => setSuspensionesCount(n)}
           />
         ) : activeTab === "cancelaciones" ? (
           <AdminCancelacionesTab
@@ -2672,6 +2714,14 @@ function AdminPageInner() {
                         >
                           {mayorDeEdadOk ? "18+ confirmada" : "18+ pendiente"}
                         </span>
+                        {provider.suspendido_cautelar === true && (
+                          <span
+                            className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                            style={{ backgroundColor: "#fef2f2", color: "#b91c1c" }}
+                          >
+                            Suspensión cautelar
+                          </span>
+                        )}
                         {docSummary.missingCount > 0 && (
                           <span
                             className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
