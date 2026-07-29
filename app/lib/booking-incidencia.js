@@ -17,6 +17,7 @@ export function puedeReportarIncidencia(estado) {
 /**
  * Registra incidencia en `reports` y marca la reserva como `incidencia`.
  * Coherente con el panel admin (pestaña Reportes) y retención de pago vía cron.
+ * La suspensión cautelar se dispara desde las rutas API tras un resultado exitoso.
  */
 export async function registrarIncidenciaReserva(supabaseAdmin, {
   booking,
@@ -63,7 +64,6 @@ export async function registrarIncidenciaReserva(supabaseAdmin, {
   const motivoFinal = motivo?.trim() || "Incidencia en reserva";
   const descripcion = comentario?.trim() || "";
 
-  // Validar motivo conocido (lista UI); permitir legacy genérico de reportar-problema.
   const motivoPermitido =
     MOTIVOS_INCIDENCIA_RESERVA.includes(motivoFinal) ||
     motivoFinal === "Incidencia reportada tras el servicio (email)" ||
@@ -73,17 +73,21 @@ export async function registrarIncidenciaReserva(supabaseAdmin, {
     return { error: "Motivo de incidencia no válido", status: 400 };
   }
 
-  const { error: reportError } = await supabaseAdmin.from("reports").insert({
-    reporter_id: reporterId,
-    reported_id: reportedId,
-    booking_id: booking.id,
-    tipo: "servicio",
-    motivo: motivoFinal,
-    descripcion: descripcion
-      ? `Reportado por ${reporterRol}: ${descripcion}`
-      : `Reportado por ${reporterRol}`,
-    estado: "pendiente",
-  });
+  const { data: insertedReport, error: reportError } = await supabaseAdmin
+    .from("reports")
+    .insert({
+      reporter_id: reporterId,
+      reported_id: reportedId,
+      booking_id: booking.id,
+      tipo: "servicio",
+      motivo: motivoFinal,
+      descripcion: descripcion
+        ? `Reportado por ${reporterRol}: ${descripcion}`
+        : `Reportado por ${reporterRol}`,
+      estado: "pendiente",
+    })
+    .select("id")
+    .single();
 
   if (reportError) {
     return { error: reportError.message, status: 500 };
@@ -110,5 +114,7 @@ export async function registrarIncidenciaReserva(supabaseAdmin, {
     reporterRol,
     motivoFinal,
     descripcion,
+    report_id: insertedReport?.id,
+    reported_id: reportedId,
   };
 }

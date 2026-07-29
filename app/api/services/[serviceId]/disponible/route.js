@@ -85,7 +85,7 @@ export async function PATCH(request, { params }) {
     const { data: perfil, error: profileError } = await supabaseAdmin
       .from("profiles")
       .select(
-        "id, verificado, cobros_activos, mayor_de_edad_confirmada, ninos_documentacion_aprobada, doc_dni_url, doc_antecedentes_url, doc_antecedentes_sexuales_url, dni_estado, telefono, email_contacto",
+        "id, verificado, cobros_activos, suspendido_cautelar, mayor_de_edad_confirmada, ninos_documentacion_aprobada, doc_dni_url, doc_antecedentes_url, doc_antecedentes_sexuales_url, dni_estado, telefono, email_contacto",
       )
       .eq("id", user.id)
       .maybeSingle();

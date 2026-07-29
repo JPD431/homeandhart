@@ -7,6 +7,7 @@ import {
 import {
   registrarIncidenciaReserva,
 } from "@/app/lib/booking-incidencia";
+import { maybeSuspenderPorReporteGrave } from "@/app/lib/suspension-cautelar";
 
 const supabaseAdmin = createServiceClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -102,6 +103,22 @@ export async function POST(request) {
       { error: result.error },
       { status: result.status ?? 500 },
     );
+  }
+
+  if (reporterRol === "cliente") {
+    try {
+      await maybeSuspenderPorReporteGrave({
+        reportedId: service.proveedor_id,
+        motivo: result.motivoFinal,
+        reportId: result.report_id,
+        reportedIsProveedor: true,
+      });
+    } catch (err) {
+      console.error(
+        "[reportar-incidencia] suspensión cautelar:",
+        err?.message || err,
+      );
+    }
   }
 
   const { data: reporterProfile } = await supabaseAdmin

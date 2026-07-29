@@ -23,6 +23,12 @@ export const REVISION_PENDIENTE_MSG =
 export const NRU_PDF_REQUERIDO_MSG =
   "Para publicar tu alojamiento, sube el PDF de la resolución del NRU en tus documentos.";
 
+/** Código estable para API/UI cuando la cuenta está en suspensión cautelar. */
+export const SUSPENDIDO_CAUTELAR_CODE = "suspendido_cautelar";
+
+export const SUSPENDIDO_CAUTELAR_MSG =
+  "Tu cuenta está en revisión por el equipo de seguridad. Contacta con soporte.";
+
 /** Código estable para API/UI cuando falta confirmación de mayoría de edad. */
 export const MAYOR_DE_EDAD_PENDIENTE_CODE = "mayor_de_edad_pendiente";
 
@@ -42,9 +48,10 @@ export function servicioRevisionAprobada(revisionEstado) {
 
 /**
  * ¿El servicio puede ponerse disponible automáticamente (approve/webhook)?
- * Respeta revisión + mayoría de edad + docs niñera.
+ * Respeta suspensión cautelar + revisión + mayoría de edad + docs niñera.
  */
 export function serviceEligibleForAutoDisponible(service, perfil) {
+  if (perfil?.suspendido_cautelar === true) return false;
   if (!servicioRevisionAprobada(service?.revision_estado)) return false;
   if (perfil?.mayor_de_edad_confirmada !== true) return false;
   if (
@@ -101,7 +108,7 @@ export function serviceRequiresDireccionForActivation(service) {
 
 /**
  * Bloqueos de activación/publicación (orden de prioridad).
- * DNI subido → 18+ → verificado → (ninos: docs) → cobros / teléfono / email / NRU / dirección.
+ * Suspensión cautelar → DNI → 18+ → verificado → (ninos: docs) → cobros / teléfono / email / NRU / dirección.
  *
  * @param {object} perfil
  * @param {{ vertical?: string, modalidad?: string, details?: object, direccion_exacta?: string } | null} [service]
@@ -116,6 +123,9 @@ export function getServiceActivationBlockers(
   const blockers = [];
   const accountEmail = documentContext?.accountEmail ?? null;
 
+  if (perfil?.suspendido_cautelar === true) {
+    blockers.push(SUSPENDIDO_CAUTELAR_MSG);
+  }
   if (!hasDniUploaded(perfil)) {
     blockers.push(DNI_REQUIRED_PROVIDER_MSG);
   }
@@ -176,7 +186,9 @@ export function getFirstActivationBlocker(
   if (blockers.length === 0) return null;
   const message = blockers[0];
   let code = "activation_blocked";
-  if (message === MAYOR_DE_EDAD_PENDIENTE_MSG) {
+  if (message === SUSPENDIDO_CAUTELAR_MSG) {
+    code = SUSPENDIDO_CAUTELAR_CODE;
+  } else if (message === MAYOR_DE_EDAD_PENDIENTE_MSG) {
     code = MAYOR_DE_EDAD_PENDIENTE_CODE;
   } else if (message === NINOS_DOCUMENTACION_PENDIENTE_MSG) {
     code = NINOS_DOCUMENTACION_PENDIENTE_CODE;
@@ -241,6 +253,14 @@ export function getServiceVisibilidadEstado(perfil, disponible, options = {}) {
     };
   }
 
+  if (perfil?.suspendido_cautelar === true) {
+    return {
+      label: "Cuenta en revisión de seguridad",
+      subtitle: SUSPENDIDO_CAUTELAR_MSG,
+      color: "#b91c1c",
+    };
+  }
+
   if (perfil?.mayor_de_edad_confirmada !== true) {
     return {
       label: "Mayoría de edad pendiente",
@@ -298,11 +318,15 @@ export function getServiceVisibilidadEstado(perfil, disponible, options = {}) {
 
 /**
  * Disponible efectivo al guardar: no desactiva legacy ya activo; bloquea activaciones nuevas sin requisitos.
- * Sin grandfathering si falta mayoría de edad (todas las verticales) o docs niñera (solo ninos).
+ * Sin grandfathering si suspensión cautelar, falta mayoría de edad, o docs niñera (ninos).
  * @param {{ disponible?: boolean, disponibleOnLoad?: boolean, vertical?: string, details?: object }} service
  */
 export function resolveDisponibleForSave(service, perfil, documentContext) {
   if (!service.disponible) return false;
+
+  if (perfil?.suspendido_cautelar === true) {
+    return false;
+  }
 
   if (perfil?.mayor_de_edad_confirmada !== true) {
     return false;

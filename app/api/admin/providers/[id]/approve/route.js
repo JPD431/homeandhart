@@ -47,7 +47,7 @@ export async function POST(_request, { params }) {
 
   const { data: existing, error: existingError } = await supabaseAdmin
     .from("profiles")
-    .select("id, role, mayor_de_edad_confirmada, cobros_activos, ninos_documentacion_aprobada, nombre")
+    .select("id, role, mayor_de_edad_confirmada, suspendido_cautelar, cobros_activos, ninos_documentacion_aprobada, nombre")
     .eq("id", id)
     .maybeSingle();
 
@@ -57,6 +57,17 @@ export async function POST(_request, { params }) {
 
   if (!existing || existing.role !== "proveedor") {
     return NextResponse.json({ error: "Proveedor no encontrado" }, { status: 404 });
+  }
+
+  if (existing.suspendido_cautelar === true) {
+    return NextResponse.json(
+      {
+        error:
+          "Este proveedor está en suspensión cautelar. Levántala antes de aprobar la cuenta.",
+        code: "suspendido_cautelar",
+      },
+      { status: 400 },
+    );
   }
 
   if (existing.mayor_de_edad_confirmada !== true) {
@@ -74,7 +85,7 @@ export async function POST(_request, { params }) {
     .from("profiles")
     .update({ verificado: true, rechazado: false })
     .eq("id", id)
-    .select("nombre, cobros_activos, mayor_de_edad_confirmada, ninos_documentacion_aprobada")
+    .select("nombre, cobros_activos, mayor_de_edad_confirmada, suspendido_cautelar, ninos_documentacion_aprobada")
     .maybeSingle();
 
   if (profileError) {

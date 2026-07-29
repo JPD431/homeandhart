@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { BRAND } from "@/app/components/brand";
 import { MOTIVOS_REPORTE_PERFIL } from "@/app/lib/report-severity";
-import { supabase } from "@/app/lib/supabase";
 
 // -- CREATE TABLE reports (
 // --   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -59,49 +58,33 @@ export default function ReportarModal({
     setSubmitting(true);
     setError("");
 
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
+    try {
+      const res = await fetch("/api/reports", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          reported_id: reportedId,
+          reported_name: reportedName,
+          booking_id: bookingId || null,
+          tipo,
+          motivo,
+          descripcion: descripcion.trim(),
+          fecha_inicio: fechaInicio || null,
+          fecha_fin: fechaFin || null,
+        }),
+      });
+      const payload = await res.json().catch(() => ({}));
 
-    if (authError || !user) {
+      if (!res.ok) {
+        throw new Error(payload.error || "No se pudo enviar el reporte");
+      }
+
+      setSuccess(true);
+    } catch (err) {
+      setError(err.message || "No se pudo enviar el reporte.");
+    } finally {
       setSubmitting(false);
-      setError("Debes iniciar sesión para enviar un reporte.");
-      return;
     }
-
-    const { error: insertError } = await supabase.from("reports").insert({
-      reporter_id: user.id,
-      reported_id: reportedId,
-      booking_id: bookingId,
-      tipo,
-      motivo,
-      descripcion: descripcion.trim(),
-      estado: "pendiente",
-    });
-
-    if (insertError) {
-      setSubmitting(false);
-      setError(insertError.message);
-      return;
-    }
-
-    await fetch("/api/reports/notify-admin", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        tipo,
-        motivo,
-        descripcion: descripcion.trim(),
-        reported_name: reportedName,
-        booking_id: bookingId || null,
-        fecha_inicio: fechaInicio || null,
-        fecha_fin: fechaFin || null,
-      }),
-    });
-
-    setSubmitting(false);
-    setSuccess(true);
   }
 
   function handleClose() {

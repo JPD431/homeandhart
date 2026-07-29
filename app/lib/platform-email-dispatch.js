@@ -2516,6 +2516,59 @@ export async function dispatchPlatformEmail(payload = {}) {
       return { ok: true, status: 200, data: { success: true } };
     }
 
+    if (tipo === "admin_suspension_cautelar") {
+      const adminEmail = process.env.ADMIN_EMAIL || FROM;
+      const baseUrl = process.env.NEXT_PUBLIC_URL || "https://homeandheart.es";
+      const esc = (v) =>
+        String(v ?? "—")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
+      const proveedorId = data.proveedor_id || "";
+      const adminUrl = `${baseUrl}/admin?tab=reportes`;
+      const proveedorUrl = proveedorId
+        ? `${baseUrl}/proveedor/${proveedorId}`
+        : adminUrl;
+
+      const result = await resend.emails.send({
+        from: FROM,
+        to: adminEmail,
+        subject: `🚨 URGENTE — Suspensión cautelar: ${esc(data.proveedor_nombre || "proveedor")}`,
+        html: emailLayout({
+          title: "Suspensión cautelar automática",
+          bodyHtml: `
+            <h1 style="margin:0 0 16px;font-size:20px;color:#b91c1c;">Suspensión cautelar automática</h1>
+            <p style="margin:0 0 12px;font-size:14px;line-height:1.6;color:#444;">
+              Un reporte <strong>grave</strong> ha pausado automáticamente los servicios del proveedor.
+              Las reservas confirmadas/en curso <strong>no se han cancelado</strong>; están marcadas para revisión.
+            </p>
+            <p style="margin:0 0 6px;font-size:14px;line-height:1.6;"><strong>Proveedor:</strong> ${esc(data.proveedor_nombre)}</p>
+            <p style="margin:0 0 6px;font-size:14px;line-height:1.6;"><strong>ID:</strong> ${esc(proveedorId)}</p>
+            <p style="margin:0 0 6px;font-size:14px;line-height:1.6;"><strong>Motivo:</strong> ${esc(data.motivo)}</p>
+            <p style="margin:0 0 6px;font-size:14px;line-height:1.6;"><strong>Reporte:</strong> ${esc(data.report_id)}</p>
+            <p style="margin:0 0 6px;font-size:14px;line-height:1.6;"><strong>Servicios pausados:</strong> ${esc(data.servicios_pausados)}</p>
+            <p style="margin:0 0 20px;font-size:14px;line-height:1.6;"><strong>Reservas a revisar:</strong> ${esc(data.reservas_marcadas)}</p>
+            <p style="margin:0 0 12px;text-align:center;">
+              <a href="${adminUrl}" style="display:inline-block;background-color:#b91c1c;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:8px;font-size:14px;font-weight:600;">
+                Abrir panel admin →
+              </a>
+            </p>
+            <p style="margin:0;text-align:center;">
+              <a href="${proveedorUrl}" style="display:inline-block;background-color:${BRAND_PRIMARY};color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:8px;font-size:14px;font-weight:600;">
+                Ver perfil público →
+              </a>
+            </p>
+          `,
+        }),
+      });
+
+      if (result.error) {
+        return { ok: false, status: 400, error: result.error.message };
+      }
+
+      return { ok: true, status: 200, data: { success: true } };
+    }
+
     if (tipo === "incidencia") {
       const adminEmail = process.env.ADMIN_EMAIL || FROM;
       const result = await resend.emails.send({
