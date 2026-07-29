@@ -5,6 +5,7 @@ import { BRAND } from "@/app/components/brand";
 import {
   getApplicableDocuments,
   getDocumentStatus,
+  getNinosDocumentacionStatus,
 } from "@/app/lib/provider-documents";
 
 const GREEN = "#085041";
@@ -204,18 +205,31 @@ function DocumentRow({
  * @param {Object} props.profile - Fila profiles (doc_*_url, etc.)
  * @param {Array<{ tipo: string, url: string, vertical?: string | null }>} props.providerDocuments
  * @param {Array<{ vertical?: string, nru?: string }>} props.services
+ * @param {boolean} [props.actionBusy]
+ * @param {(requestableIds: string[], missingLabels: string[]) => void} [props.onSolicitarDocumentosNinos]
+ * @param {() => void | Promise<void>} [props.onNinosDocsUpdated]
  */
 export default function AdminProviderDocuments({
   profile,
   providerDocuments = [],
   services = [],
+  actionBusy = false,
+  onSolicitarDocumentosNinos,
+  onNinosDocsUpdated,
 }) {
   const [loadingDoc, setLoadingDoc] = useState(null);
   const [docError, setDocError] = useState("");
+  const [ninosActionLoading, setNinosActionLoading] = useState(false);
+  const [ninosActionError, setNinosActionError] = useState("");
+  const [ninosActionSuccess, setNinosActionSuccess] = useState("");
 
   const verticales = [
     ...new Set((services || []).map((s) => s.vertical).filter(Boolean)),
   ];
+  const hasNinos = verticales.includes("ninos");
+  const ninosDocsStatus = hasNinos
+    ? getNinosDocumentacionStatus(profile)
+    : null;
   const context = { profile, providerDocuments, services };
   const applicable = getApplicableDocuments(verticales);
 
@@ -261,6 +275,79 @@ export default function AdminProviderDocuments({
       setDocError(err.message || "No se pudo abrir el documento.");
     } finally {
       setLoadingDoc(null);
+    }
+  }
+
+  async function handleAprobarDocumentacionNinos() {
+    if (!profile?.id || !ninosDocsStatus?.allUploaded) return;
+
+    setNinosActionLoading(true);
+    setNinosActionError("");
+    setNinosActionSuccess("");
+
+    try {
+      const res = await fetch(
+        `/api/admin/providers/${profile.id}/aprobar-documentacion-ninos`,
+        { method: "POST" },
+      );
+      const payload = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        const faltantes = Array.isArray(payload.faltantes)
+          ? `: ${payload.faltantes.join(", ")}`
+          : "";
+        throw new Error(
+          (payload.error || "No se pudo aprobar la documentación") + faltantes,
+        );
+      }
+
+      setNinosActionSuccess(
+        payload.already_approved
+          ? "La documentación de niñera ya estaba aprobada."
+          : "Documentación de niñera aprobada. El proveedor ya puede activar sus servicios.",
+      );
+      await onNinosDocsUpdated?.();
+    } catch (err) {
+      setNinosActionError(err.message || "Error al aprobar.");
+    } finally {
+      setNinosActionLoading(false);
+    }
+  }
+
+  async function handleRevocarDocumentacionNinos() {
+    if (!profile?.id) return;
+    if (
+      !window.confirm(
+        "¿Revocar la aprobación de documentación de niñera? Se pausarán sus servicios de niñera activos.",
+      )
+    ) {
+      return;
+    }
+
+    setNinosActionLoading(true);
+    setNinosActionError("");
+    setNinosActionSuccess("");
+
+    try {
+      const res = await fetch(
+        `/api/admin/providers/${profile.id}/revocar-documentacion-ninos`,
+        { method: "POST" },
+      );
+      const payload = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(payload.error || "No se pudo revocar la aprobación");
+      }
+
+      const paused = payload.servicios_ninos_pausados ?? 0;
+      setNinosActionSuccess(
+        `Aprobación revocada. Servicios de niñera pausados: ${paused}.`,
+      );
+      await onNinosDocsUpdated?.();
+    } catch (err) {
+      setNinosActionError(err.message || "Error al revocar.");
+    } finally {
+      setNinosActionLoading(false);
     }
   }
 
@@ -381,6 +468,111 @@ export default function AdminProviderDocuments({
         <p className="mt-2 text-xs text-[#888]">
           Sin documentos opcionales subidos.
         </p>
+      )}
+
+      {hasNinos && ninosDocsStatus && (
+        <div
+          className="mt-5 rounded-xl border px-3 py-3"
+          style={{
+            borderColor: ninosDocsStatus.approved ? "#a7d7c5" : "#fcd34d",
+            backgroundColor: ninosDocsStatus.approved ? "#f0faf6" : "#fffbeb",
+          }}
+        >
+          <p className="text-xs font-semibold uppercase tracking-wide text-[#444]">
+            Documentación de niñera
+          </p>
+          <p className="mt-1 text-sm text-[#444]">
+            Revisa los 3 documentos (DNI, antecedentes penales y delitos
+            sexuales). Si están bien, aprueba; si faltan, solicítalos.
+          </p>
+
+          {ninosDocsStatus.approved ? (
+            <p className="mt-2 text-sm font-medium" style={{ color: GREEN }}>
+              Documentación aprobada
+              {ninosDocsStatus.approvedAt
+                ? ` · ${new Date(ninosDocsStatus.approvedAt).toLocaleDateString("es-ES", {
+                    day: "numeric",
+                    month: "short",
+                    year: "numeric",
+                  })}`
+                : ""}
+            </p>
+          ) : ninosDocsStatus.allUploaded ? (
+            <p className="mt-2 text-sm font-medium" style={{ color: ORANGE }}>
+              Los 3 documentos están subidos — pendientes de aprobación.
+            </p>
+          ) : (
+            <p className="mt-2 text-sm font-medium" style={{ color: RED }}>
+              Faltan: {ninosDocsStatus.missingLabels.join(", ")}
+            </p>
+          )}
+
+          {ninosActionError && (
+            <p className="mt-2 text-xs text-red-600">{ninosActionError}</p>
+          )}
+          {ninosActionSuccess && (
+            <p className="mt-2 text-xs" style={{ color: GREEN }}>
+              {ninosActionSuccess}
+            </p>
+          )}
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            {!ninosDocsStatus.approved && (
+              <>
+                <button
+                  type="button"
+                  disabled={
+                    !ninosDocsStatus.allUploaded ||
+                    ninosActionLoading ||
+                    actionBusy
+                  }
+                  onClick={handleAprobarDocumentacionNinos}
+                  title={
+                    ninosDocsStatus.allUploaded
+                      ? "Aprobar documentación de niñera"
+                      : `Faltan: ${ninosDocsStatus.missingLabels.join(", ")}`
+                  }
+                  className="rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                  style={{ backgroundColor: GREEN }}
+                >
+                  {ninosActionLoading
+                    ? "Guardando…"
+                    : "Aprobar documentación de niñera"}
+                </button>
+                <button
+                  type="button"
+                  disabled={ninosActionLoading || actionBusy}
+                  onClick={() =>
+                    onSolicitarDocumentosNinos?.(
+                      ninosDocsStatus.requestableIds,
+                      ninosDocsStatus.missingLabels,
+                    )
+                  }
+                  className="rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                  style={{ backgroundColor: ORANGE }}
+                >
+                  Solicitar documentos
+                  {!ninosDocsStatus.allUploaded
+                    ? ` (${ninosDocsStatus.missing.length})`
+                    : ""}
+                </button>
+              </>
+            )}
+            {ninosDocsStatus.approved && (
+              <button
+                type="button"
+                disabled={ninosActionLoading || actionBusy}
+                onClick={handleRevocarDocumentacionNinos}
+                className="rounded-lg border px-3 py-1.5 text-xs font-semibold text-red-700 transition-colors hover:bg-red-50 disabled:opacity-50"
+                style={{ borderColor: "#fecaca" }}
+              >
+                {ninosActionLoading
+                  ? "Guardando…"
+                  : "Revocar aprobación de niñera"}
+              </button>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

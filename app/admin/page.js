@@ -881,12 +881,16 @@ function AdminPageInner() {
     );
   }
 
-  function openDocumentRequest(providerId) {
+  function openDocumentRequest(providerId, preselectedIds = [], missingLabels = []) {
     setRejectingId(null);
     setRejectReason("");
     setRequestingDocsId(providerId);
-    setSelectedDocuments([]);
-    setRequestMessage("");
+    setSelectedDocuments(preselectedIds);
+    setRequestMessage(
+      missingLabels.length > 0
+        ? `Para activar tu servicio de niñera necesitamos que subas: ${missingLabels.join(", ")}.`
+        : "",
+    );
     setSuccessMessage("");
   }
 
@@ -2702,6 +2706,15 @@ function AdminPageInner() {
                     profile={provider}
                     providerDocuments={provider.providerDocuments ?? []}
                     services={services}
+                    actionBusy={isBusy}
+                    onNinosDocsUpdated={loadData}
+                    onSolicitarDocumentosNinos={(requestableIds, missingLabels) =>
+                      openDocumentRequest(
+                        provider.id,
+                        requestableIds,
+                        missingLabels,
+                      )
+                    }
                   />
 
                   {provider.motivo_rechazo && activeTab === "rechazados" && (
@@ -2710,7 +2723,7 @@ function AdminPageInner() {
                     </p>
                   )}
 
-                  {activeTab === "pendientes" && (
+                  {(activeTab === "pendientes" || isRequestingDocs) && (
                     <div className="mt-5 border-t pt-5" style={{ borderColor: BRAND.border }}>
                       {isRejecting ? (
                         <div className="flex flex-col gap-3">

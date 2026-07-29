@@ -429,6 +429,50 @@ export function canPublishAlojamiento(context) {
   );
 }
 
+/** Los 3 docs de perfil exigidos para aprobar documentación de niñera. */
+export const NINOS_APROBACION_DOC_IDS = [
+  "dni_nie",
+  "certificado_antecedentes",
+  "certificado_delitos_sexuales",
+];
+
+/** Mapeo a ids del formulario admin "Solicitar documentos". */
+export const NINOS_DOC_REQUESTABLE_IDS = {
+  dni_nie: "dni_nie",
+  certificado_antecedentes: "antecedentes",
+  certificado_delitos_sexuales: "delitos_sexuales",
+};
+
+/**
+ * Estado de la documentación de niñera (3 docs + flag admin).
+ * @param {{ doc_dni_url?: string|null, doc_antecedentes_url?: string|null, doc_antecedentes_sexuales_url?: string|null, ninos_documentacion_aprobada?: boolean, ninos_documentacion_aprobada_at?: string|null } | null} profile
+ * @returns {{
+ *   allUploaded: boolean,
+ *   missing: DocumentDefinition[],
+ *   missingLabels: string[],
+ *   requestableIds: string[],
+ *   approved: boolean,
+ *   approvedAt: string|null,
+ * }}
+ */
+export function getNinosDocumentacionStatus(profile) {
+  const context = { profile: profile || {} };
+  const missing = NINOS_APROBACION_DOC_IDS.map((id) => getDocumentDefinition(id))
+    .filter(Boolean)
+    .filter((def) => !isDocumentUploaded(def, context));
+
+  return {
+    allUploaded: missing.length === 0,
+    missing,
+    missingLabels: missing.map((d) => d.label),
+    requestableIds: missing
+      .map((d) => NINOS_DOC_REQUESTABLE_IDS[d.id])
+      .filter(Boolean),
+    approved: profile?.ninos_documentacion_aprobada === true,
+    approvedAt: profile?.ninos_documentacion_aprobada_at || null,
+  };
+}
+
 /**
  * Agrupa documentos aplicables por scope para la UI.
  * @param {string[]} verticales

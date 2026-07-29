@@ -2275,6 +2275,48 @@ export async function dispatchPlatformEmail(payload = {}) {
       return { ok: true, status: 200, data: { success: true } };
     }
 
+    if (tipo === "ninos_documentacion_aprobada") {
+      const userId = data.user_id || data.proveedor_id;
+      const email =
+        data.email || (userId ? await resolverEmailUsuario(userId) : null);
+      if (!email) {
+        return {
+          ok: false,
+          status: 400,
+          error: "No se encontró el email del destinatario",
+        };
+      }
+      const baseUrl = process.env.NEXT_PUBLIC_URL || "https://homeandheart.es";
+      const nombre = (data.nombre || "proveedor").replace(/</g, "&lt;");
+
+      const result = await resend.emails.send({
+        from: FROM,
+        to: email,
+        subject: "Documentación de niñera aprobada · Home&Heart",
+        html: emailLayout({
+          title: "Documentación de niñera aprobada",
+          bodyHtml: `
+            <h1 style="margin:0 0 16px;font-size:20px;color:${BRAND_PRIMARY};">Documentación aprobada</h1>
+            <p style="margin:0 0 12px;font-size:14px;line-height:1.6;color:#444;">
+              Hola <strong>${nombre}</strong>, tu documentación de niñera ha sido revisada y aprobada por el equipo.
+              Ya puedes activar tus servicios de cuidado de niños desde tu perfil.
+            </p>
+            <p style="margin:0;text-align:center;">
+              <a href="${baseUrl}/editar-perfil" style="display:inline-block;background-color:${BRAND_PRIMARY};color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:8px;font-size:15px;font-weight:600;">
+                Ir a mi perfil →
+              </a>
+            </p>
+          `,
+        }),
+      });
+
+      if (result.error) {
+        return { ok: false, status: 400, error: result.error.message };
+      }
+
+      return { ok: true, status: 200, data: { success: true } };
+    }
+
     if (tipo === "servicio_rechazado") {
       const userId = data.user_id || data.proveedor_id;
       const email =
