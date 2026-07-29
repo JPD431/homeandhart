@@ -6,6 +6,7 @@ import {
   getApplicableDocuments,
   getDocumentStatus,
   getNinosDocumentacionStatus,
+  getMascotasDocumentacionStatus,
 } from "@/app/lib/provider-documents";
 
 const GREEN = "#085041";
@@ -208,6 +209,8 @@ function DocumentRow({
  * @param {boolean} [props.actionBusy]
  * @param {(requestableIds: string[], missingLabels: string[]) => void} [props.onSolicitarDocumentosNinos]
  * @param {() => void | Promise<void>} [props.onNinosDocsUpdated]
+ * @param {(requestableIds: string[], missingLabels: string[]) => void} [props.onSolicitarDocumentosMascotas]
+ * @param {() => void | Promise<void>} [props.onMascotasDocsUpdated]
  */
 export default function AdminProviderDocuments({
   profile,
@@ -216,19 +219,28 @@ export default function AdminProviderDocuments({
   actionBusy = false,
   onSolicitarDocumentosNinos,
   onNinosDocsUpdated,
+  onSolicitarDocumentosMascotas,
+  onMascotasDocsUpdated,
 }) {
   const [loadingDoc, setLoadingDoc] = useState(null);
   const [docError, setDocError] = useState("");
   const [ninosActionLoading, setNinosActionLoading] = useState(false);
   const [ninosActionError, setNinosActionError] = useState("");
   const [ninosActionSuccess, setNinosActionSuccess] = useState("");
+  const [mascotasActionLoading, setMascotasActionLoading] = useState(false);
+  const [mascotasActionError, setMascotasActionError] = useState("");
+  const [mascotasActionSuccess, setMascotasActionSuccess] = useState("");
 
   const verticales = [
     ...new Set((services || []).map((s) => s.vertical).filter(Boolean)),
   ];
   const hasNinos = verticales.includes("ninos");
+  const hasMascotas = verticales.includes("mascotas");
   const ninosDocsStatus = hasNinos
     ? getNinosDocumentacionStatus(profile)
+    : null;
+  const mascotasDocsStatus = hasMascotas
+    ? getMascotasDocumentacionStatus(profile)
     : null;
   const context = { profile, providerDocuments, services };
   const applicable = getApplicableDocuments(verticales);
@@ -348,6 +360,79 @@ export default function AdminProviderDocuments({
       setNinosActionError(err.message || "Error al revocar.");
     } finally {
       setNinosActionLoading(false);
+    }
+  }
+
+  async function handleAprobarDocumentacionMascotas() {
+    if (!profile?.id || !mascotasDocsStatus?.allUploaded) return;
+
+    setMascotasActionLoading(true);
+    setMascotasActionError("");
+    setMascotasActionSuccess("");
+
+    try {
+      const res = await fetch(
+        `/api/admin/providers/${profile.id}/aprobar-documentacion-mascotas`,
+        { method: "POST" },
+      );
+      const payload = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        const faltantes = Array.isArray(payload.faltantes)
+          ? `: ${payload.faltantes.join(", ")}`
+          : "";
+        throw new Error(
+          (payload.error || "No se pudo aprobar la documentación") + faltantes,
+        );
+      }
+
+      setMascotasActionSuccess(
+        payload.already_approved
+          ? "La documentación de mascotas ya estaba aprobada."
+          : "Documentación de mascotas aprobada. El proveedor ya puede activar sus servicios.",
+      );
+      await onMascotasDocsUpdated?.();
+    } catch (err) {
+      setMascotasActionError(err.message || "Error al aprobar.");
+    } finally {
+      setMascotasActionLoading(false);
+    }
+  }
+
+  async function handleRevocarDocumentacionMascotas() {
+    if (!profile?.id) return;
+    if (
+      !window.confirm(
+        "¿Revocar la aprobación de documentación de mascotas? Se pausarán sus servicios de mascotas activos.",
+      )
+    ) {
+      return;
+    }
+
+    setMascotasActionLoading(true);
+    setMascotasActionError("");
+    setMascotasActionSuccess("");
+
+    try {
+      const res = await fetch(
+        `/api/admin/providers/${profile.id}/revocar-documentacion-mascotas`,
+        { method: "POST" },
+      );
+      const payload = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(payload.error || "No se pudo revocar la aprobación");
+      }
+
+      const paused = payload.servicios_mascotas_pausados ?? 0;
+      setMascotasActionSuccess(
+        `Aprobación revocada. Servicios de mascotas pausados: ${paused}.`,
+      );
+      await onMascotasDocsUpdated?.();
+    } catch (err) {
+      setMascotasActionError(err.message || "Error al revocar.");
+    } finally {
+      setMascotasActionLoading(false);
     }
   }
 
@@ -569,6 +654,112 @@ export default function AdminProviderDocuments({
                 {ninosActionLoading
                   ? "Guardando…"
                   : "Revocar aprobación de niñera"}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {hasMascotas && mascotasDocsStatus && (
+        <div
+          className="mt-5 rounded-xl border px-3 py-3"
+          style={{
+            borderColor: mascotasDocsStatus.approved ? "#a7d7c5" : "#fcd34d",
+            backgroundColor: mascotasDocsStatus.approved ? "#f0faf6" : "#fffbeb",
+          }}
+        >
+          <p className="text-xs font-semibold uppercase tracking-wide text-[#444]">
+            Documentación de mascotas
+          </p>
+          <p className="mt-1 text-sm text-[#444]">
+            Revisa DNI y antecedentes penales (no se exige certificado de
+            delitos sexuales). Si están bien, aprueba; si faltan, solicítalos.
+          </p>
+
+          {mascotasDocsStatus.approved ? (
+            <p className="mt-2 text-sm font-medium" style={{ color: GREEN }}>
+              Documentación aprobada
+              {mascotasDocsStatus.approvedAt
+                ? ` · ${new Date(mascotasDocsStatus.approvedAt).toLocaleDateString("es-ES", {
+                    day: "numeric",
+                    month: "short",
+                    year: "numeric",
+                  })}`
+                : ""}
+            </p>
+          ) : mascotasDocsStatus.allUploaded ? (
+            <p className="mt-2 text-sm font-medium" style={{ color: ORANGE }}>
+              DNI y antecedentes subidos — pendientes de aprobación.
+            </p>
+          ) : (
+            <p className="mt-2 text-sm font-medium" style={{ color: RED }}>
+              Faltan: {mascotasDocsStatus.missingLabels.join(", ")}
+            </p>
+          )}
+
+          {mascotasActionError && (
+            <p className="mt-2 text-xs text-red-600">{mascotasActionError}</p>
+          )}
+          {mascotasActionSuccess && (
+            <p className="mt-2 text-xs" style={{ color: GREEN }}>
+              {mascotasActionSuccess}
+            </p>
+          )}
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            {!mascotasDocsStatus.approved && (
+              <>
+                <button
+                  type="button"
+                  disabled={
+                    !mascotasDocsStatus.allUploaded ||
+                    mascotasActionLoading ||
+                    actionBusy
+                  }
+                  onClick={handleAprobarDocumentacionMascotas}
+                  title={
+                    mascotasDocsStatus.allUploaded
+                      ? "Aprobar documentación de mascotas"
+                      : `Faltan: ${mascotasDocsStatus.missingLabels.join(", ")}`
+                  }
+                  className="rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                  style={{ backgroundColor: GREEN }}
+                >
+                  {mascotasActionLoading
+                    ? "Guardando…"
+                    : "Aprobar documentación de mascotas"}
+                </button>
+                <button
+                  type="button"
+                  disabled={mascotasActionLoading || actionBusy}
+                  onClick={() =>
+                    (onSolicitarDocumentosMascotas ||
+                      onSolicitarDocumentosNinos)?.(
+                      mascotasDocsStatus.requestableIds,
+                      mascotasDocsStatus.missingLabels,
+                    )
+                  }
+                  className="rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                  style={{ backgroundColor: ORANGE }}
+                >
+                  Solicitar documentos
+                  {!mascotasDocsStatus.allUploaded
+                    ? ` (${mascotasDocsStatus.missing.length})`
+                    : ""}
+                </button>
+              </>
+            )}
+            {mascotasDocsStatus.approved && (
+              <button
+                type="button"
+                disabled={mascotasActionLoading || actionBusy}
+                onClick={handleRevocarDocumentacionMascotas}
+                className="rounded-lg border px-3 py-1.5 text-xs font-semibold text-red-700 transition-colors hover:bg-red-50 disabled:opacity-50"
+                style={{ borderColor: "#fecaca" }}
+              >
+                {mascotasActionLoading
+                  ? "Guardando…"
+                  : "Revocar aprobación de mascotas"}
               </button>
             )}
           </div>

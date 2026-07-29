@@ -41,6 +41,13 @@ export const NINOS_DOCUMENTACION_PENDIENTE_CODE = "ninos_documentacion_pendiente
 export const NINOS_DOCUMENTACION_PENDIENTE_MSG =
   "Tu documentación de niñera debe ser aprobada por el equipo antes de activar este servicio.";
 
+/** Código estable para API/UI cuando falta aprobación de docs de mascotas. */
+export const MASCOTAS_DOCUMENTACION_PENDIENTE_CODE =
+  "mascotas_documentacion_pendiente";
+
+export const MASCOTAS_DOCUMENTACION_PENDIENTE_MSG =
+  "Tu documentación de mascotas (antecedentes penales) debe ser aprobada por el equipo antes de activar este servicio.";
+
 /** Servicios legacy (revision_estado null) o explícitamente aprobados. */
 export function servicioRevisionAprobada(revisionEstado) {
   return revisionEstado == null || revisionEstado === REVISION_APROBADO;
@@ -48,7 +55,7 @@ export function servicioRevisionAprobada(revisionEstado) {
 
 /**
  * ¿El servicio puede ponerse disponible automáticamente (approve/webhook)?
- * Respeta suspensión cautelar + revisión + mayoría de edad + docs niñera.
+ * Respeta suspensión cautelar + revisión + mayoría de edad + docs niñera/mascotas.
  */
 export function serviceEligibleForAutoDisponible(service, perfil) {
   if (perfil?.suspendido_cautelar === true) return false;
@@ -57,6 +64,12 @@ export function serviceEligibleForAutoDisponible(service, perfil) {
   if (
     service?.vertical === "ninos" &&
     perfil?.ninos_documentacion_aprobada !== true
+  ) {
+    return false;
+  }
+  if (
+    service?.vertical === "mascotas" &&
+    perfil?.mascotas_documentacion_aprobada !== true
   ) {
     return false;
   }
@@ -108,7 +121,7 @@ export function serviceRequiresDireccionForActivation(service) {
 
 /**
  * Bloqueos de activación/publicación (orden de prioridad).
- * Suspensión cautelar → DNI → 18+ → verificado → (ninos: docs) → cobros / teléfono / email / NRU / dirección.
+ * Suspensión cautelar → DNI → 18+ → verificado → (ninos/mascotas: docs) → cobros / teléfono / email / NRU / dirección.
  *
  * @param {object} perfil
  * @param {{ vertical?: string, modalidad?: string, details?: object, direccion_exacta?: string } | null} [service]
@@ -140,6 +153,12 @@ export function getServiceActivationBlockers(
     perfil?.ninos_documentacion_aprobada !== true
   ) {
     blockers.push(NINOS_DOCUMENTACION_PENDIENTE_MSG);
+  }
+  if (
+    service?.vertical === "mascotas" &&
+    perfil?.mascotas_documentacion_aprobada !== true
+  ) {
+    blockers.push(MASCOTAS_DOCUMENTACION_PENDIENTE_MSG);
   }
   if (perfil?.cobros_activos !== true) {
     blockers.push(COBROS_REQUERIDOS_MSG);
@@ -192,6 +211,8 @@ export function getFirstActivationBlocker(
     code = MAYOR_DE_EDAD_PENDIENTE_CODE;
   } else if (message === NINOS_DOCUMENTACION_PENDIENTE_MSG) {
     code = NINOS_DOCUMENTACION_PENDIENTE_CODE;
+  } else if (message === MASCOTAS_DOCUMENTACION_PENDIENTE_MSG) {
+    code = MASCOTAS_DOCUMENTACION_PENDIENTE_CODE;
   }
   return { code, message };
 }
@@ -288,6 +309,17 @@ export function getServiceVisibilidadEstado(perfil, disponible, options = {}) {
     };
   }
 
+  if (
+    service?.vertical === "mascotas" &&
+    perfil?.mascotas_documentacion_aprobada !== true
+  ) {
+    return {
+      label: "Documentación de mascotas pendiente",
+      subtitle: MASCOTAS_DOCUMENTACION_PENDIENTE_MSG,
+      color: "#c47d1a",
+    };
+  }
+
   if (perfil?.cobros_activos !== true) {
     return {
       label: "Falta configurar cobros",
@@ -318,7 +350,7 @@ export function getServiceVisibilidadEstado(perfil, disponible, options = {}) {
 
 /**
  * Disponible efectivo al guardar: no desactiva legacy ya activo; bloquea activaciones nuevas sin requisitos.
- * Sin grandfathering si suspensión cautelar, falta mayoría de edad, o docs niñera (ninos).
+ * Sin grandfathering si suspensión cautelar, falta mayoría de edad, o docs niñera/mascotas.
  * @param {{ disponible?: boolean, disponibleOnLoad?: boolean, vertical?: string, details?: object }} service
  */
 export function resolveDisponibleForSave(service, perfil, documentContext) {
@@ -335,6 +367,13 @@ export function resolveDisponibleForSave(service, perfil, documentContext) {
   if (
     service.vertical === "ninos" &&
     perfil?.ninos_documentacion_aprobada !== true
+  ) {
+    return false;
+  }
+
+  if (
+    service.vertical === "mascotas" &&
+    perfil?.mascotas_documentacion_aprobada !== true
   ) {
     return false;
   }

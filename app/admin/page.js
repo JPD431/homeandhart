@@ -2872,7 +2872,15 @@ function AdminPageInner() {
                     services={services}
                     actionBusy={isBusy}
                     onNinosDocsUpdated={loadData}
+                    onMascotasDocsUpdated={loadData}
                     onSolicitarDocumentosNinos={(requestableIds, missingLabels) =>
+                      openDocumentRequest(
+                        provider.id,
+                        requestableIds,
+                        missingLabels,
+                      )
+                    }
+                    onSolicitarDocumentosMascotas={(requestableIds, missingLabels) =>
                       openDocumentRequest(
                         provider.id,
                         requestableIds,

@@ -360,10 +360,11 @@ export function getMissingAlojamientoNruForPublish(context = {}) {
  * - alojamiento: NRU + otros no-perfil.
  * - ninos: SIEMPRE exige docs de perfil (DNI + antecedentes + sexuales) salvo
  *   ninos_documentacion_aprobada (aprobación admin explícita).
- * - mascotas: si ya verificado, no reexige docs de perfil (legacy).
+ * - mascotas: SIEMPRE exige docs de perfil (DNI + antecedentes) salvo
+ *   mascotas_documentacion_aprobada (aprobación admin explícita).
  * @param {'alojamiento' | 'ninos' | 'mascotas'} vertical
  * @param {DocumentContext} context
- * @param {{ verificado?: boolean, ninos_documentacion_aprobada?: boolean } | null} [perfil]
+ * @param {{ verificado?: boolean, ninos_documentacion_aprobada?: boolean, mascotas_documentacion_aprobada?: boolean } | null} [perfil]
  * @returns {DocumentDefinition[]}
  */
 export function getMissingPublishDocumentsForVertical(
@@ -373,6 +374,7 @@ export function getMissingPublishDocumentsForVertical(
 ) {
   const verificado = perfil?.verificado === true;
   const ninosDocsOk = perfil?.ninos_documentacion_aprobada === true;
+  const mascotasDocsOk = perfil?.mascotas_documentacion_aprobada === true;
 
   if (vertical === "alojamiento") {
     const nruMissing = getMissingAlojamientoNruForPublish(context);
@@ -393,6 +395,11 @@ export function getMissingPublishDocumentsForVertical(
   if (vertical === "ninos") {
     // Aprobación admin = docs revisados; no re-listar faltantes por URL.
     if (ninosDocsOk) return [];
+    return getMissingPublishDocuments([vertical], context);
+  }
+
+  if (vertical === "mascotas") {
+    if (mascotasDocsOk) return [];
     return getMissingPublishDocuments([vertical], context);
   }
 
@@ -470,6 +477,42 @@ export function getNinosDocumentacionStatus(profile) {
       .filter(Boolean),
     approved: profile?.ninos_documentacion_aprobada === true,
     approvedAt: profile?.ninos_documentacion_aprobada_at || null,
+  };
+}
+
+/** Docs de perfil exigidos para aprobar documentación de mascotas (sin delitos sexuales). */
+export const MASCOTAS_APROBACION_DOC_IDS = [
+  "dni_nie",
+  "certificado_antecedentes",
+];
+
+/** Mapeo a ids del formulario admin "Solicitar documentos". */
+export const MASCOTAS_DOC_REQUESTABLE_IDS = {
+  dni_nie: "dni_nie",
+  certificado_antecedentes: "antecedentes",
+};
+
+/**
+ * Estado de la documentación de mascotas (DNI + antecedentes + flag admin).
+ * @param {{ doc_dni_url?: string|null, doc_antecedentes_url?: string|null, mascotas_documentacion_aprobada?: boolean, mascotas_documentacion_aprobada_at?: string|null } | null} profile
+ */
+export function getMascotasDocumentacionStatus(profile) {
+  const context = { profile: profile || {} };
+  const missing = MASCOTAS_APROBACION_DOC_IDS.map((id) =>
+    getDocumentDefinition(id),
+  )
+    .filter(Boolean)
+    .filter((def) => !isDocumentUploaded(def, context));
+
+  return {
+    allUploaded: missing.length === 0,
+    missing,
+    missingLabels: missing.map((d) => d.label),
+    requestableIds: missing
+      .map((d) => MASCOTAS_DOC_REQUESTABLE_IDS[d.id])
+      .filter(Boolean),
+    approved: profile?.mascotas_documentacion_aprobada === true,
+    approvedAt: profile?.mascotas_documentacion_aprobada_at || null,
   };
 }
 
