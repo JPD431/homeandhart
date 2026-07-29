@@ -2,7 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import {
-  getActivacionBloqueoMensaje,
+  getFirstActivationBlocker,
   servicioRevisionAprobada,
 } from "@/app/lib/provider-publicacion";
 import { loadServiceContactAdmin } from "@/app/lib/service-contact";
@@ -85,7 +85,7 @@ export async function PATCH(request, { params }) {
     const { data: perfil, error: profileError } = await supabaseAdmin
       .from("profiles")
       .select(
-        "id, verificado, cobros_activos, doc_dni_url, doc_antecedentes_url, doc_antecedentes_sexuales_url, dni_estado, telefono, email_contacto",
+        "id, verificado, cobros_activos, ninos_documentacion_aprobada, doc_dni_url, doc_antecedentes_url, doc_antecedentes_sexuales_url, dni_estado, telefono, email_contacto",
       )
       .eq("id", user.id)
       .maybeSingle();
@@ -132,14 +132,18 @@ export async function PATCH(request, { params }) {
       direccion_exacta: contact?.direccion_exacta ?? null,
     };
 
-    const bloqueo = getActivacionBloqueoMensaje(
+    const bloqueo = getFirstActivationBlocker(
       perfil,
       serviceForGate,
       documentContext,
     );
     if (bloqueo) {
       return NextResponse.json(
-        { error: bloqueo, code: "activation_blocked", disponible: false },
+        {
+          error: bloqueo.message,
+          code: bloqueo.code,
+          disponible: false,
+        },
         { status: 403 },
       );
     }

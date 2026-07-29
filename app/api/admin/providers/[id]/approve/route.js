@@ -6,7 +6,7 @@ import {
   REVISION_APROBADO,
   REVISION_EN_REVISION,
 } from "@/app/lib/onboarding-persist";
-import { servicioRevisionAprobada } from "@/app/lib/provider-publicacion";
+import { serviceEligibleForAutoDisponible } from "@/app/lib/provider-publicacion";
 import { resolveServicioPendienteNotifications } from "@/app/lib/service-revision-notify";
 import { sendPlatformEmail } from "@/app/lib/send-platform-email";
 
@@ -49,7 +49,7 @@ export async function POST(_request, { params }) {
     .from("profiles")
     .update({ verificado: true, rechazado: false })
     .eq("id", id)
-    .select("nombre, cobros_activos")
+    .select("nombre, cobros_activos, ninos_documentacion_aprobada")
     .maybeSingle();
 
   if (profileError) {
@@ -98,14 +98,14 @@ export async function POST(_request, { params }) {
   if (proveedor?.cobros_activos === true) {
     const { data: services, error: fetchError } = await supabaseAdmin
       .from("services")
-      .select("id, revision_estado")
+      .select("id, revision_estado, vertical")
       .eq("proveedor_id", id);
 
     if (fetchError) {
       console.error("[approve] No se pudieron leer servicios:", fetchError);
     } else {
       const activables = (services ?? []).filter((s) =>
-        servicioRevisionAprobada(s.revision_estado),
+        serviceEligibleForAutoDisponible(s, proveedor),
       );
       const ids = activables.map((s) => s.id);
 

@@ -23,9 +23,30 @@ export const REVISION_PENDIENTE_MSG =
 export const NRU_PDF_REQUERIDO_MSG =
   "Para publicar tu alojamiento, sube el PDF de la resolución del NRU en tus documentos.";
 
+/** Código estable para API/UI cuando falta aprobación de docs de niñera. */
+export const NINOS_DOCUMENTACION_PENDIENTE_CODE = "ninos_documentacion_pendiente";
+
+export const NINOS_DOCUMENTACION_PENDIENTE_MSG =
+  "Tu documentación de niñera debe ser aprobada por el equipo antes de activar este servicio.";
+
 /** Servicios legacy (revision_estado null) o explícitamente aprobados. */
 export function servicioRevisionAprobada(revisionEstado) {
   return revisionEstado == null || revisionEstado === REVISION_APROBADO;
+}
+
+/**
+ * ¿El servicio puede ponerse disponible automáticamente (approve/webhook)?
+ * Respeta revisión + gate de documentación niñera.
+ */
+export function serviceEligibleForAutoDisponible(service, perfil) {
+  if (!servicioRevisionAprobada(service?.revision_estado)) return false;
+  if (
+    service?.vertical === "ninos" &&
+    perfil?.ninos_documentacion_aprobada !== true
+  ) {
+    return false;
+  }
+  return true;
 }
 
 export function proveedorPuedePublicar(perfil) {
@@ -73,7 +94,7 @@ export function serviceRequiresDireccionForActivation(service) {
 
 /**
  * Bloqueos de activación/publicación (orden de prioridad).
- * Incluye DNI, verificado, cobros, teléfono, email_contacto, NRU, dirección.
+ * Incluye DNI, verificado, docs niñera, cobros, teléfono, email_contacto, NRU, dirección.
  *
  * @param {object} perfil
  * @param {{ vertical?: string, modalidad?: string, details?: object, direccion_exacta?: string } | null} [service]
@@ -93,6 +114,12 @@ export function getServiceActivationBlockers(
   }
   if (perfil?.verificado !== true) {
     blockers.push(REVISION_PENDIENTE_MSG);
+  }
+  if (
+    service?.vertical === "ninos" &&
+    perfil?.ninos_documentacion_aprobada !== true
+  ) {
+    blockers.push(NINOS_DOCUMENTACION_PENDIENTE_MSG);
   }
   if (perfil?.cobros_activos !== true) {
     blockers.push(COBROS_REQUERIDOS_MSG);
@@ -120,6 +147,29 @@ export function getServiceActivationBlockers(
   }
 
   return blockers;
+}
+
+/**
+ * Primer blocker con código (para APIs).
+ * @returns {{ code: string, message: string } | null}
+ */
+export function getFirstActivationBlocker(
+  perfil,
+  service = null,
+  documentContext = null,
+) {
+  const blockers = getServiceActivationBlockers(
+    perfil,
+    service,
+    documentContext,
+  );
+  if (blockers.length === 0) return null;
+  const message = blockers[0];
+  const code =
+    message === NINOS_DOCUMENTACION_PENDIENTE_MSG
+      ? NINOS_DOCUMENTACION_PENDIENTE_CODE
+      : "activation_blocked";
+  return { code, message };
 }
 
 /**
@@ -187,6 +237,17 @@ export function getServiceVisibilidadEstado(perfil, disponible, options = {}) {
     };
   }
 
+  if (
+    service?.vertical === "ninos" &&
+    perfil?.ninos_documentacion_aprobada !== true
+  ) {
+    return {
+      label: "Documentación de niñera pendiente",
+      subtitle: NINOS_DOCUMENTACION_PENDIENTE_MSG,
+      color: "#c47d1a",
+    };
+  }
+
   if (perfil?.cobros_activos !== true) {
     return {
       label: "Falta configurar cobros",
@@ -217,11 +278,20 @@ export function getServiceVisibilidadEstado(perfil, disponible, options = {}) {
 
 /**
  * Disponible efectivo al guardar: no desactiva legacy ya activo; bloquea activaciones nuevas sin requisitos.
+ * Excepción ninos: sin ninos_documentacion_aprobada no se mantiene el grandfathering (debe pausarse).
  * @param {{ disponible?: boolean, disponibleOnLoad?: boolean, vertical?: string, details?: object }} service
  */
 export function resolveDisponibleForSave(service, perfil, documentContext) {
   if (!service.disponible) return false;
-  // Grandfathering: ya estaba activo → no forzar pausa por datos nuevos.
+
+  if (
+    service.vertical === "ninos" &&
+    perfil?.ninos_documentacion_aprobada !== true
+  ) {
+    return false;
+  }
+
+  // Grandfathering: ya estaba activo → no forzar pausa por datos nuevos (otras verticales).
   if (service.disponibleOnLoad === true) return true;
   return puedeActivarServicio(service, perfil, documentContext);
 }

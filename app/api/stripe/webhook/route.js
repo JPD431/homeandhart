@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import Stripe from "stripe";
 import { NextResponse } from "next/server";
-import { servicioRevisionAprobada } from "@/app/lib/provider-publicacion";
+import { serviceEligibleForAutoDisponible } from "@/app/lib/provider-publicacion";
 import { alertStripeDescuadre } from "@/app/lib/stripe-descuadre-alert";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
@@ -359,7 +359,7 @@ async function handleAccountUpdated(account) {
 
   const { data: profile, error: findError } = await supabase
     .from("profiles")
-    .select("id, verificado")
+    .select("id, verificado, ninos_documentacion_aprobada")
     .eq("stripe_account_id", account.id)
     .maybeSingle();
 
@@ -389,7 +389,7 @@ async function handleAccountUpdated(account) {
   if (lista && profile.verificado === true) {
     const { data: services, error: servicesFetchError } = await supabase
       .from("services")
-      .select("id, revision_estado")
+      .select("id, revision_estado, vertical")
       .eq("proveedor_id", profile.id);
 
     if (servicesFetchError) {
@@ -401,7 +401,7 @@ async function handleAccountUpdated(account) {
     }
 
     const activables = (services ?? []).filter((s) =>
-      servicioRevisionAprobada(s.revision_estado),
+      serviceEligibleForAutoDisponible(s, profile),
     );
     const ids = activables.map((s) => s.id);
 

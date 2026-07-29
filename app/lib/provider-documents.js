@@ -356,10 +356,14 @@ export function getMissingAlojamientoNruForPublish(context = {}) {
 }
 
 /**
- * Documentos que bloquean publicación para una vertical (excluye perfil si ya verificado).
+ * Documentos que bloquean publicación para una vertical.
+ * - alojamiento: NRU + otros no-perfil.
+ * - ninos: SIEMPRE exige docs de perfil (DNI + antecedentes + sexuales) salvo
+ *   ninos_documentacion_aprobada (aprobación admin explícita).
+ * - mascotas: si ya verificado, no reexige docs de perfil (legacy).
  * @param {'alojamiento' | 'ninos' | 'mascotas'} vertical
  * @param {DocumentContext} context
- * @param {{ verificado?: boolean } | null} [perfil]
+ * @param {{ verificado?: boolean, ninos_documentacion_aprobada?: boolean } | null} [perfil]
  * @returns {DocumentDefinition[]}
  */
 export function getMissingPublishDocumentsForVertical(
@@ -368,6 +372,7 @@ export function getMissingPublishDocumentsForVertical(
   perfil = null,
 ) {
   const verificado = perfil?.verificado === true;
+  const ninosDocsOk = perfil?.ninos_documentacion_aprobada === true;
 
   if (vertical === "alojamiento") {
     const nruMissing = getMissingAlojamientoNruForPublish(context);
@@ -383,6 +388,12 @@ export function getMissingPublishDocumentsForVertical(
       seen.add(def.id);
       return true;
     });
+  }
+
+  if (vertical === "ninos") {
+    // Aprobación admin = docs revisados; no re-listar faltantes por URL.
+    if (ninosDocsOk) return [];
+    return getMissingPublishDocuments([vertical], context);
   }
 
   return getMissingPublishDocuments([vertical], context).filter((def) => {
