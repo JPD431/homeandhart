@@ -23,6 +23,12 @@ export const REVISION_PENDIENTE_MSG =
 export const NRU_PDF_REQUERIDO_MSG =
   "Para publicar tu alojamiento, sube el PDF de la resolución del NRU en tus documentos.";
 
+/** Código estable para API/UI cuando falta confirmación de mayoría de edad. */
+export const MAYOR_DE_EDAD_PENDIENTE_CODE = "mayor_de_edad_pendiente";
+
+export const MAYOR_DE_EDAD_PENDIENTE_MSG =
+  "Debemos confirmar tu mayoría de edad (18+) según tu DNI antes de activar servicios.";
+
 /** Código estable para API/UI cuando falta aprobación de docs de niñera. */
 export const NINOS_DOCUMENTACION_PENDIENTE_CODE = "ninos_documentacion_pendiente";
 
@@ -36,10 +42,11 @@ export function servicioRevisionAprobada(revisionEstado) {
 
 /**
  * ¿El servicio puede ponerse disponible automáticamente (approve/webhook)?
- * Respeta revisión + gate de documentación niñera.
+ * Respeta revisión + mayoría de edad + docs niñera.
  */
 export function serviceEligibleForAutoDisponible(service, perfil) {
   if (!servicioRevisionAprobada(service?.revision_estado)) return false;
+  if (perfil?.mayor_de_edad_confirmada !== true) return false;
   if (
     service?.vertical === "ninos" &&
     perfil?.ninos_documentacion_aprobada !== true
@@ -94,7 +101,7 @@ export function serviceRequiresDireccionForActivation(service) {
 
 /**
  * Bloqueos de activación/publicación (orden de prioridad).
- * Incluye DNI, verificado, docs niñera, cobros, teléfono, email_contacto, NRU, dirección.
+ * DNI subido → 18+ → verificado → (ninos: docs) → cobros / teléfono / email / NRU / dirección.
  *
  * @param {object} perfil
  * @param {{ vertical?: string, modalidad?: string, details?: object, direccion_exacta?: string } | null} [service]
@@ -111,6 +118,9 @@ export function getServiceActivationBlockers(
 
   if (!hasDniUploaded(perfil)) {
     blockers.push(DNI_REQUIRED_PROVIDER_MSG);
+  }
+  if (perfil?.mayor_de_edad_confirmada !== true) {
+    blockers.push(MAYOR_DE_EDAD_PENDIENTE_MSG);
   }
   if (perfil?.verificado !== true) {
     blockers.push(REVISION_PENDIENTE_MSG);
@@ -165,10 +175,12 @@ export function getFirstActivationBlocker(
   );
   if (blockers.length === 0) return null;
   const message = blockers[0];
-  const code =
-    message === NINOS_DOCUMENTACION_PENDIENTE_MSG
-      ? NINOS_DOCUMENTACION_PENDIENTE_CODE
-      : "activation_blocked";
+  let code = "activation_blocked";
+  if (message === MAYOR_DE_EDAD_PENDIENTE_MSG) {
+    code = MAYOR_DE_EDAD_PENDIENTE_CODE;
+  } else if (message === NINOS_DOCUMENTACION_PENDIENTE_MSG) {
+    code = NINOS_DOCUMENTACION_PENDIENTE_CODE;
+  }
   return { code, message };
 }
 
@@ -229,6 +241,14 @@ export function getServiceVisibilidadEstado(perfil, disponible, options = {}) {
     };
   }
 
+  if (perfil?.mayor_de_edad_confirmada !== true) {
+    return {
+      label: "Mayoría de edad pendiente",
+      subtitle: MAYOR_DE_EDAD_PENDIENTE_MSG,
+      color: "#c47d1a",
+    };
+  }
+
   if (perfil?.verificado !== true) {
     return {
       label: "En revisión",
@@ -278,11 +298,15 @@ export function getServiceVisibilidadEstado(perfil, disponible, options = {}) {
 
 /**
  * Disponible efectivo al guardar: no desactiva legacy ya activo; bloquea activaciones nuevas sin requisitos.
- * Excepción ninos: sin ninos_documentacion_aprobada no se mantiene el grandfathering (debe pausarse).
+ * Sin grandfathering si falta mayoría de edad (todas las verticales) o docs niñera (solo ninos).
  * @param {{ disponible?: boolean, disponibleOnLoad?: boolean, vertical?: string, details?: object }} service
  */
 export function resolveDisponibleForSave(service, perfil, documentContext) {
   if (!service.disponible) return false;
+
+  if (perfil?.mayor_de_edad_confirmada !== true) {
+    return false;
+  }
 
   if (
     service.vertical === "ninos" &&

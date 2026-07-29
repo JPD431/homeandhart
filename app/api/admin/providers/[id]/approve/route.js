@@ -49,7 +49,7 @@ export async function POST(_request, { params }) {
     .from("profiles")
     .update({ verificado: true, rechazado: false })
     .eq("id", id)
-    .select("nombre, cobros_activos, ninos_documentacion_aprobada")
+    .select("nombre, cobros_activos, mayor_de_edad_confirmada, ninos_documentacion_aprobada")
     .maybeSingle();
 
   if (profileError) {

@@ -359,7 +359,7 @@ async function handleAccountUpdated(account) {
 
   const { data: profile, error: findError } = await supabase
     .from("profiles")
-    .select("id, verificado, ninos_documentacion_aprobada")
+    .select("id, verificado, mayor_de_edad_confirmada, ninos_documentacion_aprobada")
     .eq("stripe_account_id", account.id)
     .maybeSingle();
 
