@@ -5,6 +5,10 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Navbar from "@/app/components/Navbar";
 import ClienteVerificadoBadge from "@/app/components/ClienteVerificadoBadge";
+import {
+  CONTACT_FILTER_BANNER,
+  CONTACT_FILTER_NOTICE,
+} from "@/app/lib/chat-content-filter";
 import { useModo } from "@/app/lib/ModoContext";
 import { supabase } from "@/app/lib/supabase";
 
@@ -322,19 +326,6 @@ function SolicitudPrecioMessageCard({
   );
 }
 
-function filterProtectedContent(text) {
-  let result = text;
-  result = result.replace(
-    /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g,
-    "[dato protegido]",
-  );
-  result = result.replace(
-    /(\+?\d{1,3}[\s.-]?)?\(?\d{2,4}\)?[\s.-]?\d{2,4}[\s.-]?\d{2,4}[\s.-]?\d{0,4}/g,
-    "[dato protegido]",
-  );
-  return result.trim();
-}
-
 function getOtherParticipant(conversation, userId) {
   if (conversation.participant_a_id === userId) {
     return {
@@ -387,6 +378,8 @@ export default function ChatPage() {
   const [vistaMovil, setVistaMovil] = useState(
     conversationParam ? "chat" : "lista",
   );
+  const [filterActive, setFilterActive] = useState(true);
+  const [contactNotice, setContactNotice] = useState("");
 
   const messagesEndRef = useRef(null);
   const isProvider = modo === "proveedor" && !esClientePuro;
@@ -549,6 +542,34 @@ export default function ChatPage() {
   }, [userId, selectedId, loadMessages]);
 
   useEffect(() => {
+    if (!userId || !selectedId) {
+      setFilterActive(true);
+      setContactNotice("");
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/chat/messages?conversation_id=${encodeURIComponent(selectedId)}`,
+        );
+        if (!res.ok || cancelled) return;
+        const json = await res.json();
+        if (cancelled) return;
+        setFilterActive(json.filter_active !== false);
+        setContactNotice("");
+      } catch {
+        if (!cancelled) setFilterActive(true);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, selectedId]);
+
+  useEffect(() => {
     if (!selectedId) return;
 
     const channel = supabase
@@ -690,57 +711,74 @@ export default function ChatPage() {
     return "/buscar";
   }, [isProvider, providerServices, otherParticipantServices, otherParticipantId]);
 
+  function applySentMessage(data) {
+    if (!data) return;
+    setMessages((prev) => {
+      if (prev.some((m) => m.id === data.id)) return prev;
+      return [...prev, data];
+    });
+    setConversations((prev) =>
+      prev.map((c) =>
+        c.id === selectedId
+          ? {
+              ...c,
+              last_message: {
+                content: data.content,
+                created_at: data.created_at,
+                sender_id: data.sender_id,
+                read: data.read,
+              },
+            }
+          : c,
+      ),
+    );
+  }
+
+  async function postChatMessage(payload) {
+    const response = await fetch("/api/chat/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    let json = null;
+    try {
+      json = await response.json();
+    } catch {
+      json = null;
+    }
+    if (!response.ok) {
+      throw new Error(json?.error || "No se pudo enviar el mensaje");
+    }
+    if (typeof json?.filter_active === "boolean") {
+      setFilterActive(json.filter_active);
+    }
+    if (json?.censored) {
+      setContactNotice(json.notice || CONTACT_FILTER_NOTICE);
+    }
+    return json;
+  }
+
   async function handleSend(e) {
     e.preventDefault();
     if (!userId || !selectedId || !draft.trim() || sending) return;
 
     setSending(true);
     setErrorMessage("");
+    setContactNotice("");
 
-    const filteredContent = filterProtectedContent(draft);
-
-    const { data, error } = await supabase
-      .from("messages")
-      .insert({
+    try {
+      const json = await postChatMessage({
         conversation_id: selectedId,
-        sender_id: userId,
-        content: filteredContent,
-        read: false,
-      })
-      .select("id, conversation_id, sender_id, content, created_at, read")
-      .single();
-
-    setSending(false);
-
-    if (error) {
-      setErrorMessage(error.message);
-      return;
-    }
-
-    if (data) {
-      setMessages((prev) => {
-        if (prev.some((m) => m.id === data.id)) return prev;
-        return [...prev, data];
+        content: draft,
       });
-      setConversations((prev) =>
-        prev.map((c) =>
-          c.id === selectedId
-            ? {
-                ...c,
-                last_message: {
-                  content: data.content,
-                  created_at: data.created_at,
-                  sender_id: data.sender_id,
-                  read: data.read,
-                },
-              }
-            : c,
-        ),
-      );
+      applySentMessage(json.message);
+      setDraft("");
+      maybeNotifyRecipient(selectedId, json.message?.content || "");
+    } catch (err) {
+      setErrorMessage(err?.message || "No se pudo enviar el mensaje");
+    } finally {
+      setSending(false);
     }
-
-    setDraft("");
-    maybeNotifyRecipient(selectedId, filteredContent);
   }
 
   async function handleSendOffer(e) {
@@ -756,64 +794,31 @@ export default function ChatPage() {
 
     setSendingOffer(true);
     setErrorMessage("");
+    setContactNotice("");
 
-    const payload = {
-      tipo: "oferta",
-      service_id: svc.id,
-      service_titulo: svc.titulo?.trim() || "Servicio",
-      precio_especial: precio,
-      precio_original: Number(svc.precio) || 0,
-      valida_hasta: offerValidaHasta,
-      mensaje: offerMensaje.trim(),
-    };
-
-    const content = JSON.stringify(payload);
-
-    const { data, error } = await supabase
-      .from("messages")
-      .insert({
+    try {
+      const json = await postChatMessage({
         conversation_id: selectedId,
-        sender_id: userId,
-        content,
-        read: false,
-      })
-      .select("id, conversation_id, sender_id, content, created_at, read")
-      .single();
-
-    setSendingOffer(false);
-
-    if (error) {
-      setErrorMessage(error.message);
-      return;
-    }
-
-    if (data) {
-      setMessages((prev) => {
-        if (prev.some((m) => m.id === data.id)) return prev;
-        return [...prev, data];
+        oferta: {
+          service_id: svc.id,
+          service_titulo: svc.titulo?.trim() || "Servicio",
+          precio_especial: precio,
+          precio_original: Number(svc.precio) || 0,
+          valida_hasta: offerValidaHasta,
+          mensaje: offerMensaje.trim(),
+        },
       });
-      setConversations((prev) =>
-        prev.map((c) =>
-          c.id === selectedId
-            ? {
-                ...c,
-                last_message: {
-                  content: data.content,
-                  created_at: data.created_at,
-                  sender_id: data.sender_id,
-                  read: data.read,
-                },
-              }
-            : c,
-        ),
-      );
+      applySentMessage(json.message);
+      setShowOfferForm(false);
+      setOfferPrecio("");
+      setOfferValidaHasta("");
+      setOfferMensaje("");
+      maybeNotifyRecipient(selectedId, "🏷️ Oferta especial");
+    } catch (err) {
+      setErrorMessage(err?.message || "No se pudo enviar la oferta");
+    } finally {
+      setSendingOffer(false);
     }
-
-    setShowOfferForm(false);
-    setOfferPrecio("");
-    setOfferValidaHasta("");
-    setOfferMensaje("");
-    maybeNotifyRecipient(selectedId, "🏷️ Oferta especial");
   }
 
   async function handleSendPriceRequest(e) {
@@ -829,62 +834,29 @@ export default function ChatPage() {
 
     setSendingRequest(true);
     setErrorMessage("");
+    setContactNotice("");
 
-    const payload = {
-      tipo: "solicitud_precio",
-      service_id: svc.id,
-      service_titulo: svc.titulo?.trim() || "Servicio",
-      precio_propuesto: precio,
-      precio_original: Number(svc.precio) || 0,
-      mensaje: requestMensaje.trim(),
-    };
-
-    const content = JSON.stringify(payload);
-
-    const { data, error } = await supabase
-      .from("messages")
-      .insert({
+    try {
+      const json = await postChatMessage({
         conversation_id: selectedId,
-        sender_id: userId,
-        content,
-        read: false,
-      })
-      .select("id, conversation_id, sender_id, content, created_at, read")
-      .single();
-
-    setSendingRequest(false);
-
-    if (error) {
-      setErrorMessage(error.message);
-      return;
-    }
-
-    if (data) {
-      setMessages((prev) => {
-        if (prev.some((m) => m.id === data.id)) return prev;
-        return [...prev, data];
+        solicitud_precio: {
+          service_id: svc.id,
+          service_titulo: svc.titulo?.trim() || "Servicio",
+          precio_propuesto: precio,
+          precio_original: Number(svc.precio) || 0,
+          mensaje: requestMensaje.trim(),
+        },
       });
-      setConversations((prev) =>
-        prev.map((c) =>
-          c.id === selectedId
-            ? {
-                ...c,
-                last_message: {
-                  content: data.content,
-                  created_at: data.created_at,
-                  sender_id: data.sender_id,
-                  read: data.read,
-                },
-              }
-            : c,
-        ),
-      );
+      applySentMessage(json.message);
+      setShowRequestForm(false);
+      setRequestPrecio("");
+      setRequestMensaje("");
+      maybeNotifyRecipient(selectedId, "💬 Solicitud de precio");
+    } catch (err) {
+      setErrorMessage(err?.message || "No se pudo enviar la solicitud");
+    } finally {
+      setSendingRequest(false);
     }
-
-    setShowRequestForm(false);
-    setRequestPrecio("");
-    setRequestMensaje("");
-    maybeNotifyRecipient(selectedId, "💬 Solicitud de precio");
   }
 
   function handleAcceptSolicitudAndOffer(solicitud) {
@@ -1218,6 +1190,19 @@ export default function ChatPage() {
                 </div>
               </div>
 
+              {filterActive && (
+                <div
+                  className="border-b px-5 py-2.5 text-[11px] leading-relaxed"
+                  style={{
+                    borderColor: "#f0ede8",
+                    backgroundColor: "#f3f7fb",
+                    color: "#3a4a5a",
+                  }}
+                >
+                  {CONTACT_FILTER_BANNER}
+                </div>
+              )}
+
               {/* Mensajes */}
               <div
                 className="chat-hide-scrollbar flex-1 overflow-y-auto px-5 py-4"
@@ -1517,10 +1502,23 @@ export default function ChatPage() {
                     {sending ? "…" : "Enviar →"}
                   </button>
                 </form>
-                <p className="mt-2 text-[9px] text-[#bbb]">
-                  Teléfonos y emails se ocultan automáticamente hasta confirmar la
-                  reserva.
-                </p>
+                {contactNotice ? (
+                  <p
+                    className="mt-2 text-[11px] leading-relaxed"
+                    style={{ color: AMBER }}
+                    role="status"
+                  >
+                    {contactNotice}
+                  </p>
+                ) : filterActive ? (
+                  <p className="mt-2 text-[9px] text-[#bbb]">
+                    Contacto oculto hasta confirmar la reserva ([oculto]).
+                  </p>
+                ) : (
+                  <p className="mt-2 text-[9px] text-[#bbb]">
+                    Reserva confirmada: podéis coordinaros con normalidad.
+                  </p>
+                )}
               </div>
             </>
           ) : (
