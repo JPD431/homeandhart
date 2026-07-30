@@ -28,7 +28,6 @@ import {
   COBROS_INACTIVE_MSG,
   getProveedorFromService,
 } from "@/app/lib/service-bookable";
-import { rewardReferidorPrimeraReserva } from "@/app/lib/referidos";
 import { assertUserIsDniVerified } from "@/app/lib/dni";
 import { assertUserHasTelefono } from "@/app/lib/profile-telefono";
 import { notifyBookingEvent } from "@/app/lib/notifications";
@@ -1300,12 +1299,6 @@ async function finalizeInsertedBookings({
       { error: disponibilidadError.message },
       { status: 500 },
     );
-  }
-
-  try {
-    await rewardReferidorPrimeraReserva(userId, supabaseAdmin);
-  } catch (err) {
-    console.error("[bookings/complete] rewardReferidorPrimeraReserva:", err);
   }
 
   await sendPostCompleteBookingEmails({

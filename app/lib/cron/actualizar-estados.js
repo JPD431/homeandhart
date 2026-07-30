@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { capturarYTransferirPago } from "@/app/lib/capturar-y-transferir";
 import { createNotification } from "@/app/lib/notifications";
+import { rewardReferidorPrimeraReserva } from "@/app/lib/referidos";
 import { sendPlatformEmail } from "@/app/lib/send-platform-email";
 
 const supabase = createClient(
@@ -61,6 +62,18 @@ export async function runActualizarEstados() {
       .from("bookings")
       .update({ estado: "completada", completada_at: ahora })
       .eq("id", booking.id);
+
+    try {
+      await rewardReferidorPrimeraReserva(booking.cliente_id, supabase, {
+        bookingId: booking.id,
+      });
+    } catch (refErr) {
+      console.error(
+        "[cron/actualizar-estados] Error rewardReferidorPrimeraReserva",
+        booking.id,
+        refErr?.message ?? refErr,
+      );
+    }
 
     try {
       const result = await sendPlatformEmail({
