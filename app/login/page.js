@@ -179,35 +179,26 @@ function AuthShell({ children }) {
             <div
               style={{
                 display: "flex",
-                gap: 28,
+                flexWrap: "wrap",
+                gap: 20,
                 marginTop: 32,
               }}
             >
               {[
-                { num: "340+", label: "Proveedores" },
-                { num: "1.200+", label: "Reservas" },
-                { num: "4.9★", label: "Valoración" },
-              ].map((stat) => (
-                <div key={stat.label}>
+                "Proveedores verificados",
+                "Pago protegido",
+                "Cuidado de confianza",
+              ].map((label) => (
+                <div key={label}>
                   <div
                     style={{
-                      fontSize: 18,
-                      fontWeight: 200,
+                      fontSize: 12,
+                      fontWeight: 500,
                       color: "#fff",
+                      letterSpacing: "0.02em",
                     }}
                   >
-                    {stat.num}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: 8,
-                      color: "rgba(255,255,255,0.35)",
-                      marginTop: 4,
-                      textTransform: "uppercase",
-                      letterSpacing: "0.06em",
-                    }}
-                  >
-                    {stat.label}
+                    {label}
                   </div>
                 </div>
               ))}
@@ -222,29 +213,17 @@ function AuthShell({ children }) {
                 padding: "16px 18px",
               }}
             >
-              <div style={{ color: "#f5c542", fontSize: 12, letterSpacing: 2 }}>
-                ★★★★★
-              </div>
               <p
                 style={{
-                  marginTop: 10,
+                  margin: 0,
                   fontSize: 12,
                   color: "rgba(255,255,255,0.75)",
-                  fontStyle: "italic",
                   lineHeight: 1.6,
                 }}
               >
-                &ldquo;Encontramos una niñera increíble en dos días. La tranquilidad
-                no tiene precio.&rdquo;
-              </p>
-              <p
-                style={{
-                  marginTop: 10,
-                  fontSize: 10,
-                  color: "rgba(255,255,255,0.4)",
-                }}
-              >
-                — Laura M., Madrid
+                Documentación revisada por nuestro equipo, un solo pago protegido
+                y la Garantía Home&amp;Heart si tu proveedor cancela con poca
+                antelación.
               </p>
             </div>
           </div>

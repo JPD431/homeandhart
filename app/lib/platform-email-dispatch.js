@@ -84,7 +84,7 @@ function clienteActivacionHtml() {
     bodyHtml: `
       <h1 style="margin:0;font-size:22px;font-weight:400;color:#1a1a1a;font-family:Georgia,serif;text-align:center;">¿Qué necesitas hoy?</h1>
       <p style="margin:16px 0 0;font-size:14px;color:#444;line-height:1.7;text-align:center;">
-        Miles de familias ya confían en proveedores verificados de Home&amp;Heart.
+        Proveedores con documentación revisada y pago protegido en Home&amp;Heart.
       </p>
       <div style="margin:20px 0 0;">
         <div style="margin:12px 0;padding:18px;background:${BRAND_WARM};border:1px solid ${BRAND_BORDER};border-radius:8px;">

@@ -372,7 +372,6 @@ const BUSCAR_EXTRA = {
     reservarAhora: "Reservar ahora",
     ubicacionAprox: "Ubicación aproximada · zona/barrio",
     fechas: "Fechas",
-    estrellas: "4.9",
   },
   en: {
     miCuenta: "My account",
@@ -380,7 +379,6 @@ const BUSCAR_EXTRA = {
     reservarAhora: "Book now",
     ubicacionAprox: "Approximate location · area/neighbourhood",
     fechas: "Dates",
-    estrellas: "4.9",
   },
 };
 

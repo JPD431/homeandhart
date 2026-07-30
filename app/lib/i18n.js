@@ -38,12 +38,6 @@ export const translations = {
       reservar: "Reservar",
       preguntar: "Preguntar",
     },
-    metricsBar: {
-      proveedores: "Proveedores",
-      reservas: "Reservas",
-      valoracion: "Valoración",
-      satisfaccion: "Satisfacción",
-    },
     problem: {
       label: "El problema",
       titulo: "Organizar un viaje con familia es un caos",
@@ -290,12 +284,6 @@ export const translations = {
       verPerfil: "View profile",
       reservar: "Book",
       preguntar: "Ask",
-    },
-    metricsBar: {
-      proveedores: "Providers",
-      reservas: "Bookings",
-      valoracion: "Rating",
-      satisfaccion: "Satisfaction",
     },
     problem: {
       label: "The problem",
