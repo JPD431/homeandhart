@@ -218,6 +218,12 @@ export default function ResenaPage() {
         .eq("id", booking.service_id)
         .single();
 
+      if (service?.proveedor_id && service.proveedor_id === user.id) {
+        setErrorMessage("No puedes valorar tu propio servicio.");
+        setLoading(false);
+        return;
+      }
+
       const { data: proveedor } = await supabase
         .from("profiles_public")
         .select("nombre, apellido")
@@ -262,34 +268,42 @@ export default function ResenaPage() {
 
     setSubmitting(true);
 
-    const { error } = await supabase.from("reviews").insert({
-      booking_id: bookingId,
-      cliente_id: bookingMeta.clienteId,
-      proveedor_id: bookingMeta.proveedorId,
-      service_id: bookingMeta.serviceId,
-      valoracion,
-      comentario: comentario.trim() || null,
-    });
-
-    setSubmitting(false);
-
-    if (error) {
-      if (error.code === "23505") {
-        setErrorMessage("Ya has valorado este servicio.");
-        setExistingReview({
+    try {
+      const res = await fetch("/api/reviews", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          booking_id: bookingId,
           valoracion,
-          comentario: comentario.trim() || null,
-        });
+          comentario: comentario.trim() || undefined,
+        }),
+      });
+      const payload = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        if (res.status === 409 || payload.code === "already_reviewed") {
+          setErrorMessage(
+            payload.error || "Ya has valorado este servicio.",
+          );
+          setExistingReview({
+            valoracion,
+            comentario: comentario.trim() || null,
+          });
+          return;
+        }
+        setErrorMessage(payload.error || "No se pudo guardar la reseña.");
         return;
       }
-      setErrorMessage(error.message);
-      return;
-    }
 
-    setSuccessMessage("¡Gracias por tu valoración!");
-    setTimeout(() => {
-      router.push("/historial");
-    }, 2000);
+      setSuccessMessage("¡Gracias por tu valoración!");
+      setTimeout(() => {
+        router.push("/historial");
+      }, 2000);
+    } catch (err) {
+      setErrorMessage(err.message || "No se pudo guardar la reseña.");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   if (loading) {
