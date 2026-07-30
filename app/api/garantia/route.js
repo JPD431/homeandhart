@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { getServiceCoverPhoto } from "@/app/lib/service-card-display";
+import { aggregateRatingsByProveedor } from "@/app/lib/reviews";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -19,17 +20,10 @@ async function hasDisponibilidad(serviceId, fechaInicio, fechaFin) {
 }
 
 function getAverageRatings(reviews) {
-  const map = {};
-  for (const review of reviews ?? []) {
-    if (!map[review.proveedor_id]) {
-      map[review.proveedor_id] = { sum: 0, count: 0 };
-    }
-    map[review.proveedor_id].sum += Number(review.valoracion);
-    map[review.proveedor_id].count += 1;
-  }
+  const aggregated = aggregateRatingsByProveedor(reviews);
   const averages = {};
-  for (const [id, { sum, count }] of Object.entries(map)) {
-    averages[id] = count > 0 ? sum / count : 0;
+  for (const [id, rating] of Object.entries(aggregated)) {
+    averages[id] = rating.avg ?? 0;
   }
   return averages;
 }
@@ -98,7 +92,7 @@ export async function POST(request) {
 
     const { data: reviews } = await supabase
       .from("reviews")
-      .select("proveedor_id, valoracion")
+      .select("proveedor_id, valoracion, cliente_id")
       .in("proveedor_id", proveedorIds);
 
     const avgRatings = getAverageRatings(reviews);

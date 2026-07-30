@@ -57,7 +57,7 @@ export async function GET(request) {
   let query = supabaseAdmin
     .from("profiles")
     .select(
-      "id, nombre, apellido, role, doc_dni_url, dni_estado, dni_verificado_at, mayor_de_edad_confirmada, fecha_registro",
+      "id, nombre, apellido, role, doc_dni_url, foto_perfil, dni_estado, dni_verificado_at, mayor_de_edad_confirmada, fecha_registro",
     )
     .order("fecha_registro", { ascending: false })
     .limit(limit);
@@ -98,6 +98,7 @@ export async function GET(request) {
         apellido: p.apellido,
         email,
         doc_dni_url: p.doc_dni_url,
+        foto_perfil: p.foto_perfil || null,
         dni_estado: p.dni_estado ?? "pendiente",
         dni_verificado_at: p.dni_verificado_at,
         mayor_de_edad_confirmada: p.mayor_de_edad_confirmada === true,

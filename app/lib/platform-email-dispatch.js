@@ -2229,6 +2229,49 @@ export async function dispatchPlatformEmail(payload = {}) {
       return { ok: true, status: 200, data: { success: true } };
     }
 
+    if (tipo === "admin_servicios_creacion_masiva") {
+      const adminEmail = process.env.ADMIN_EMAIL || FROM;
+      const baseUrl = process.env.NEXT_PUBLIC_URL || "https://homeandheart.es";
+      const adminUrl = `${baseUrl}/admin?tab=servicios-revision`;
+      const nombre = (data.nombre || "Proveedor").replace(/</g, "&lt;");
+      const count = Number(data.count_24h) || 0;
+      const total = Number(data.total_services) || 0;
+      const proveedorId = data.proveedor_id || "";
+
+      const result = await resend.emails.send({
+        from: FROM,
+        to: adminEmail,
+        subject: `Creación masiva de anuncios — ${data.nombre || "Proveedor"}`,
+        html: emailLayout({
+          title: "Creación masiva de anuncios",
+          bodyHtml: `
+            <h1 style="margin:0 0 16px;font-size:20px;color:${BRAND_PRIMARY};">Alerta: muchos anuncios en poco tiempo</h1>
+            <p style="margin:0 0 12px;font-size:14px;line-height:1.6;color:#444;">
+              <strong>${nombre}</strong> ha creado <strong>${count}</strong> servicios en las últimas 24 horas
+              (total actual: ${total}).
+            </p>
+            <p style="margin:0 0 8px;font-size:14px;line-height:1.6;color:#444;">
+              Proveedor ID: ${String(proveedorId).replace(/</g, "&lt;") || "—"}
+            </p>
+            <p style="margin:0 0 24px;font-size:14px;line-height:1.6;color:#444;">
+              Solo es un aviso: no se ha bloqueado nada. Revisa si es uso legítimo o spam.
+            </p>
+            <p style="margin:0;text-align:center;">
+              <a href="${adminUrl}" style="display:inline-block;background-color:${BRAND_PRIMARY};color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:8px;font-size:15px;font-weight:600;">
+                Ver en admin →
+              </a>
+            </p>
+          `,
+        }),
+      });
+
+      if (result.error) {
+        return { ok: false, status: 400, error: result.error.message };
+      }
+
+      return { ok: true, status: 200, data: { success: true } };
+    }
+
     if (tipo === "servicio_publicado") {
       const userId = data.user_id || data.proveedor_id;
       const email =

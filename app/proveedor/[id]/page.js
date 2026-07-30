@@ -18,6 +18,10 @@ import {
 } from "@/app/lib/ofertas";
 import { normalizeCancelPolicy } from "@/app/lib/cancelacion-politica";
 import { getReferenteInitial } from "@/app/lib/referencias";
+import {
+  computeProveedorRating,
+  formatProveedorRatingAvg,
+} from "@/app/lib/reviews";
 import { getServiceDescription } from "@/app/lib/service-card-display";
 import { supabase } from "@/app/lib/supabase";
 import { VERIFICADO_BADGE_TOOLTIP_ES } from "@/app/lib/verification-copy";
@@ -338,7 +342,7 @@ export default async function ProveedorPage({ params }) {
 
   const { data: allRatings } = await supabase
     .from("reviews")
-    .select("valoracion")
+    .select("valoracion, cliente_id")
     .eq("proveedor_id", id);
 
   const { data: referenciasCompletadas } = await supabase
@@ -359,14 +363,9 @@ export default async function ProveedorPage({ params }) {
   }
 
   const avalesCount = referenciasCompletadas?.length ?? 0;
-  const reviewCount = allRatings?.length ?? 0;
-  const averageRating =
-    reviewCount > 0
-      ? (
-          allRatings.reduce((sum, r) => sum + Number(r.valoracion), 0) /
-          reviewCount
-        ).toFixed(1)
-      : null;
+  const ratingAgg = computeProveedorRating(allRatings);
+  const reviewCount = ratingAgg.count;
+  const averageRating = formatProveedorRatingAvg(ratingAgg);
 
   let reviewsWithNames = [];
   if (reviews?.length) {

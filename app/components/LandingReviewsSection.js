@@ -73,7 +73,7 @@ export default function LandingReviewsSection() {
   useEffect(() => {
     async function loadReviews() {
       const [{ data: allRatings }, { data: recentReviews }] = await Promise.all([
-        supabase.from("reviews").select("valoracion"),
+        supabase.from("reviews").select("valoracion, cliente_id"),
         supabase
           .from("reviews")
           .select(

@@ -2539,16 +2539,16 @@ export default function ReservarPage() {
 
       const { data: ratings } = await supabase
         .from("reviews")
-        .select("valoracion")
+        .select("valoracion, cliente_id")
         .eq("proveedor_id", data.proveedor_id);
 
-      const reviewCount = ratings?.length ?? 0;
-      setProviderReviewCount(reviewCount);
-      if (reviewCount > 0) {
-        const avg =
-          ratings.reduce((sum, r) => sum + Number(r.valoracion), 0) / reviewCount;
-        setProviderAvgRating(avg.toFixed(1));
-      }
+      const { computeProveedorRating, formatProveedorRatingAvg } = await import(
+        "@/app/lib/reviews"
+      );
+      const ratingAgg = computeProveedorRating(ratings);
+      setProviderReviewCount(ratingAgg.count);
+      const avgFmt = formatProveedorRatingAvg(ratingAgg);
+      if (avgFmt) setProviderAvgRating(avgFmt);
 
       const complementaryVerticals =
         COMPLEMENTARY_VERTICALS[data.vertical] ?? [];
@@ -3514,21 +3514,21 @@ export default function ReservarPage() {
         const proveedorIds = [...new Set(services.map((s) => s.proveedor_id))];
         const { data: reviews } = await supabase
           .from("reviews")
-          .select("proveedor_id, valoracion")
+          .select("proveedor_id, valoracion, cliente_id")
           .in("proveedor_id", proveedorIds);
 
+        const {
+          aggregateRatingsByProveedor,
+          formatProveedorRatingAvg,
+        } = await import("@/app/lib/reviews");
+        const aggregated = aggregateRatingsByProveedor(reviews);
         const map = {};
         for (const pid of proveedorIds) {
-          const provReviews = (reviews ?? []).filter((r) => r.proveedor_id === pid);
-          const count = provReviews.length;
-          const avg =
-            count > 0
-              ? (
-                  provReviews.reduce((sum, r) => sum + Number(r.valoracion), 0) /
-                  count
-                ).toFixed(1)
-              : null;
-          map[pid] = { count, avg };
+          const r = aggregated[pid];
+          map[pid] = {
+            count: r?.count || 0,
+            avg: formatProveedorRatingAvg(r),
+          };
         }
         if (!cancelled) setTabReviewsMap(map);
       } else {

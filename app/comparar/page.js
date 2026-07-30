@@ -160,24 +160,17 @@ function CompararContent() {
 
       const proveedorIds = [...new Set(ordered.map((s) => s.proveedor_id).filter(Boolean))];
 
-      const ratingsMap = {};
+      let ratingsMap = {};
       if (proveedorIds.length > 0) {
         const { data: reviews } = await supabase
           .from("reviews")
-          .select("proveedor_id, valoracion")
+          .select("proveedor_id, valoracion, cliente_id")
           .in("proveedor_id", proveedorIds);
 
-        for (const rev of reviews ?? []) {
-          if (!ratingsMap[rev.proveedor_id]) {
-            ratingsMap[rev.proveedor_id] = { sum: 0, count: 0 };
-          }
-          ratingsMap[rev.proveedor_id].sum += Number(rev.valoracion) || 0;
-          ratingsMap[rev.proveedor_id].count += 1;
-        }
-        for (const pid of Object.keys(ratingsMap)) {
-          const { sum, count } = ratingsMap[pid];
-          ratingsMap[pid].avg = count > 0 ? sum / count : 0;
-        }
+        const { aggregateRatingsByProveedor } = await import(
+          "@/app/lib/reviews"
+        );
+        ratingsMap = aggregateRatingsByProveedor(reviews);
       }
 
       const avalesMap = {};
@@ -243,7 +236,9 @@ function CompararContent() {
     const theme = VERTICAL_THEME[service.vertical] ?? VERTICAL_THEME.alojamiento;
     const rating = ratingsByProveedor[service.proveedor_id];
     const avg =
-      rating?.count > 0 ? (rating.sum / rating.count).toFixed(1) : null;
+      rating?.count > 0 && rating.avg != null
+        ? Number(rating.avg).toFixed(1)
+        : null;
     const reviewCount = rating?.count || 0;
     const avales = avalesByProveedor[service.proveedor_id] ?? 0;
     const cancel = getCancelStyle(service.cancellation_policy);
@@ -453,7 +448,9 @@ function CompararContent() {
                 const theme = VERTICAL_THEME[service.vertical] ?? VERTICAL_THEME.alojamiento;
                 const rating = ratingsByProveedor[service.proveedor_id];
                 const avg =
-                  rating?.count > 0 ? (rating.sum / rating.count).toFixed(1) : null;
+                  rating?.count > 0 && rating.avg != null
+                    ? Number(rating.avg).toFixed(1)
+                    : null;
                 const reviewCount = rating?.count || 0;
                 const coverPhoto = getServiceCoverPhoto(service);
 

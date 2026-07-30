@@ -79,7 +79,9 @@ export default function ServiceCard({
     ? ratingsByProveedor?.[service.proveedor_id]
     : undefined;
   const valoracionMedia =
-    rating?.count > 0 ? (rating.sum / rating.count).toFixed(1) : null;
+    rating?.count > 0 && rating.avg != null
+      ? Number(rating.avg).toFixed(1)
+      : null;
   const numReviews = rating?.count || 0;
   const isComparing = service
     ? comparando.some((s) => s.id === service.id)

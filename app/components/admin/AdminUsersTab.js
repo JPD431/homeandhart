@@ -65,6 +65,8 @@ export default function AdminUsersTab({ onSuccess, onError }) {
   const [filtro, setFiltro] = useState("todos");
   const [actionUserId, setActionUserId] = useState(null);
   const [openingUserId, setOpeningUserId] = useState(null);
+  /** @type {[{ user: object, dniUrl: string } | null, Function]} */
+  const [dniPreview, setDniPreview] = useState(null);
   /** @type {[Record<string, boolean>, Function]} */
   const [edadCheckedByUser, setEdadCheckedByUser] = useState({});
 
@@ -121,7 +123,7 @@ export default function AdminUsersTab({ onSuccess, onError }) {
         throw new Error(payload.error || "No se pudo abrir el documento");
       }
 
-      window.open(payload.url, "_blank", "noopener,noreferrer");
+      setDniPreview({ user, dniUrl: payload.url });
     } catch (err) {
       onError?.(err.message || "No se pudo abrir el DNI");
     } finally {
@@ -476,10 +478,95 @@ export default function AdminUsersTab({ onSuccess, onError }) {
       )}
 
       <p className="mt-4 text-xs text-[#888]">
-        Flujo: abre el DNI → comprueba la fecha de nacimiento → marca el checkbox
-        18+ → Verificar DNI. La verificación del DNI es independiente de la
-        aprobación del proveedor (pestañas Pendientes / Verificados).
+        Flujo: abre el DNI → compara con la foto de perfil → comprueba la fecha
+        de nacimiento → marca el checkbox 18+ → Verificar DNI. La verificación
+        del DNI es independiente de la aprobación del proveedor (pestañas
+        Pendientes / Verificados).
       </p>
+
+      {dniPreview && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Revisión DNI y foto de perfil"
+          onClick={() => setDniPreview(null)}
+        >
+          <div
+            className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl bg-white p-5 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-base font-semibold text-[#1a1a1a]">
+                  Revisar identidad — {fullName(dniPreview.user)}
+                </h3>
+                <p className="mt-1 text-xs text-[#666]">
+                  Compara la foto de perfil con el documento. Sin biometría: solo
+                  coherencia visual.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDniPreview(null)}
+                className="rounded-lg border px-3 py-1.5 text-xs font-semibold"
+                style={{ borderColor: BRAND.border, color: "#666" }}
+              >
+                Cerrar
+              </button>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#888]">
+                  Foto de perfil
+                </p>
+                <div
+                  className="flex min-h-[220px] items-center justify-center overflow-hidden rounded-xl border bg-[#f7f5f2]"
+                  style={{ borderColor: BRAND.border }}
+                >
+                  {dniPreview.user.foto_perfil ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={dniPreview.user.foto_perfil}
+                      alt="Foto de perfil"
+                      className="max-h-[420px] w-full object-contain"
+                    />
+                  ) : (
+                    <p className="px-4 text-center text-sm text-[#888]">
+                      Sin foto de perfil
+                    </p>
+                  )}
+                </div>
+              </div>
+              <div>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#888]">
+                  Documento (DNI)
+                </p>
+                <div
+                  className="flex min-h-[220px] items-center justify-center overflow-hidden rounded-xl border bg-[#f7f5f2]"
+                  style={{ borderColor: BRAND.border }}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={dniPreview.dniUrl}
+                    alt="Documento de identidad"
+                    className="max-h-[420px] w-full object-contain"
+                  />
+                </div>
+                <a
+                  href={dniPreview.dniUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-2 inline-block text-xs font-medium no-underline"
+                  style={{ color: BRAND.primary }}
+                >
+                  Abrir DNI en pestaña nueva →
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

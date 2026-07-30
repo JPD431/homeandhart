@@ -30,6 +30,10 @@ import {
   loadServiceContactsByIds,
   syncServiceContact,
 } from "@/app/lib/service-contact";
+import {
+  assertCanCreateService,
+  maybeNotifyServiceCreationBurst,
+} from "@/app/lib/service-limits";
 import { supabase } from "@/app/lib/supabase";
 
 export const REVISION_BORRADOR = "borrador";
@@ -257,12 +261,19 @@ export async function upsertDraftService(
     };
   }
 
+  const canCreate = await assertCanCreateService(supabase, userId);
+  if (!canCreate.ok) {
+    throw new Error(canCreate.error);
+  }
+
   const { data, error } = await supabase
     .from("services")
     .insert(payload)
     .select("id, fotos, foto_url, revision_estado")
     .single();
   if (error) throw error;
+
+  maybeNotifyServiceCreationBurst();
 
   const contactResult = await syncServiceContact(data.id, locationFields);
   if (!contactResult.ok) {

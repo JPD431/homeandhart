@@ -4,6 +4,11 @@ import { createClient } from "@supabase/supabase-js";
 import { getServiceCoverPhoto } from "@/app/lib/service-card-display";
 import { SERIF } from "@/app/components/brand";
 import {
+  aggregateRatingsByProveedor,
+  computeProveedorRating,
+  formatProveedorRatingAvg,
+} from "@/app/lib/reviews";
+import {
   VERIFICACION_ALOJAMIENTO_ES,
   VERIFICACION_MASCOTAS_ES,
   VERIFICACION_NINERAS_ES,
@@ -210,7 +215,9 @@ function ProviderCard({ service, theme, rating }) {
     profile.foto_perfil ||
     profile.avatar_url;
   const valoracionMedia =
-    rating?.count > 0 ? (rating.sum / rating.count).toFixed(1) : null;
+    rating?.count > 0 && rating.avg != null
+      ? Number(rating.avg).toFixed(1)
+      : null;
 
   return (
     <li>
@@ -358,29 +365,16 @@ async function fetchLandingData(ciudadCapital, verticalDB) {
     ...new Set(lista.map((s) => s.proveedor_id).filter(Boolean)),
   ];
 
-  const ratingsByProveedor = {};
+  let ratingsByProveedor = {};
   let avgRating = null;
   if (proveedorIds.length > 0) {
     const { data: reviews } = await supabase
       .from("reviews")
-      .select("proveedor_id, valoracion")
+      .select("proveedor_id, valoracion, cliente_id")
       .in("proveedor_id", proveedorIds);
 
-    if (reviews?.length) {
-      const sum = reviews.reduce(
-        (acc, r) => acc + (Number(r.valoracion) || 0),
-        0,
-      );
-      avgRating = (sum / reviews.length).toFixed(1);
-    }
-
-    for (const rev of reviews ?? []) {
-      if (!ratingsByProveedor[rev.proveedor_id]) {
-        ratingsByProveedor[rev.proveedor_id] = { sum: 0, count: 0 };
-      }
-      ratingsByProveedor[rev.proveedor_id].sum += Number(rev.valoracion) || 0;
-      ratingsByProveedor[rev.proveedor_id].count += 1;
-    }
+    ratingsByProveedor = aggregateRatingsByProveedor(reviews);
+    avgRating = formatProveedorRatingAvg(computeProveedorRating(reviews));
   }
 
   return {

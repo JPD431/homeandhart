@@ -100,6 +100,10 @@ import {
 import ServicePhotoUploadField from "@/app/components/provider/ServicePhotoUploadField";
 import { getServiceDescription } from "@/app/lib/service-card-display";
 import { parseFotosFromDb, parseFotosFromDbStrict, normalizeFotosArray } from "@/app/lib/service-photos";
+import {
+  assertCanCreateService,
+  maybeNotifyServiceCreationBurst,
+} from "@/app/lib/service-limits";
 import { supabase } from "@/app/lib/supabase";
 
 import {
@@ -1941,12 +1945,15 @@ function EditarPerfilContent() {
         });
 
         if (service.isNew) {
+          const canCreate = await assertCanCreateService(supabase, userId);
+          if (!canCreate.ok) throw new Error(canCreate.error);
           const { data: inserted, error } = await supabase
             .from("services")
             .insert(payload)
             .select("*")
             .single();
           if (error) throw error;
+          maybeNotifyServiceCreationBurst();
           revisionMeta.savedRow = inserted;
           const contactResult = await syncServiceContact(
             inserted.id,
@@ -2119,12 +2126,15 @@ function EditarPerfilContent() {
           payload.nru_aprobado_at = null;
           payload.nru_aprobado_por = null;
         }
+        const canCreate = await assertCanCreateService(supabase, userId);
+        if (!canCreate.ok) throw new Error(canCreate.error);
         const { data, error } = await supabase
           .from("services")
           .insert(payload)
           .select("*")
           .single();
         if (error) throw error;
+        maybeNotifyServiceCreationBurst();
         const contactResult = await syncServiceContact(data.id, locationFields);
         if (!contactResult.ok) {
           throw new Error(

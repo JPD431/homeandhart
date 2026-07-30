@@ -73,40 +73,90 @@ export function reviewEligibilityMessage(reason) {
   }
 }
 
-/** Agrega valoraciones de reviews en { sum, count, avg }. */
+/**
+ * Media ponderada 1× por cliente:
+ * 1) media de valoraciones de cada cliente
+ * 2) media del proveedor = media de esas medias
+ *
+ * count = total de reseñas (para mostrar "N reseñas")
+ * clientCount = clientes distintos que reseñaron
+ * avg = media ponderada
+ * sum = suma de medias por cliente (compat: sum/clientCount ≈ avg)
+ */
 export function computeProveedorRating(reviews) {
   const list = reviews ?? [];
   if (list.length === 0) {
-    return { sum: 0, count: 0, avg: null };
+    return { sum: 0, count: 0, clientCount: 0, avg: null };
   }
 
-  let sum = 0;
+  const byCliente = new Map();
   for (const rev of list) {
-    sum += Number(rev.valoracion) || 0;
+    const cid =
+      rev?.cliente_id != null && rev.cliente_id !== ""
+        ? String(rev.cliente_id)
+        : `__anon_${byCliente.size}`;
+    const val = Number(rev.valoracion);
+    if (!Number.isFinite(val)) continue;
+    if (!byCliente.has(cid)) byCliente.set(cid, []);
+    byCliente.get(cid).push(val);
   }
+
+  if (byCliente.size === 0) {
+    return { sum: 0, count: 0, clientCount: 0, avg: null };
+  }
+
+  let sumClientAvgs = 0;
+  for (const vals of byCliente.values()) {
+    const clientAvg = vals.reduce((a, b) => a + b, 0) / vals.length;
+    sumClientAvgs += clientAvg;
+  }
+
+  const clientCount = byCliente.size;
   const count = list.length;
+  const avg = sumClientAvgs / clientCount;
+
   return {
-    sum,
+    sum: sumClientAvgs,
     count,
-    avg: count > 0 ? sum / count : null,
+    clientCount,
+    avg,
   };
 }
 
 /** Media formateada (1 decimal) o null si no hay reseñas. */
 export function formatProveedorRatingAvg(rating) {
   if (!rating?.count || rating.avg == null) return null;
-  return rating.avg.toFixed(1);
+  return Number(rating.avg).toFixed(1);
+}
+
+/**
+ * Agrupa reviews por proveedor_id y calcula rating ponderado por cliente.
+ * @returns {Record<string, ReturnType<typeof computeProveedorRating>>}
+ */
+export function aggregateRatingsByProveedor(reviews) {
+  const byProv = {};
+  for (const rev of reviews ?? []) {
+    const pid = rev?.proveedor_id;
+    if (!pid) continue;
+    if (!byProv[pid]) byProv[pid] = [];
+    byProv[pid].push(rev);
+  }
+  const map = {};
+  for (const [pid, list] of Object.entries(byProv)) {
+    map[pid] = computeProveedorRating(list);
+  }
+  return map;
 }
 
 /** Valoración media + count de un proveedor (reviews por proveedor_id). */
 export async function loadProveedorRating(proveedorId) {
   if (!proveedorId) {
-    return { sum: 0, count: 0, avg: null };
+    return { sum: 0, count: 0, clientCount: 0, avg: null };
   }
 
   const { data } = await supabase
     .from("reviews")
-    .select("valoracion")
+    .select("valoracion, cliente_id")
     .eq("proveedor_id", proveedorId);
 
   return computeProveedorRating(data);
