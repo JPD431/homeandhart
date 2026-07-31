@@ -1032,52 +1032,74 @@ function ReservaRecibidaCard({
         </div>
         <EstadoBadge estado={booking.estado} />
       </div>
-      {isPendiente && (
-        <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-          <button
-            type="button"
-            disabled={responding}
-            onClick={() => onRespond(booking.id, 'aceptar')}
-            style={{
-              minHeight: 40,
-              flex: 1,
-              minWidth: 120,
-              background: GREEN,
-              color: '#fff',
-              border: 'none',
-              borderRadius: 6,
-              fontSize: 12,
-              fontWeight: 600,
-              cursor: responding ? 'not-allowed' : 'pointer',
-              opacity: responding ? 0.6 : 1,
-            }}
-          >
-            {responding ? 'Procesando…' : 'Aceptar'}
-          </button>
-          <button
-            type="button"
-            disabled={responding}
-            onClick={() => onRespond(booking.id, 'rechazar')}
-            style={{
-              minHeight: 40,
-              flex: 1,
-              minWidth: 120,
-              background: '#fff',
-              color: '#dc2626',
-              border: '1px solid #dc2626',
-              borderRadius: 6,
-              fontSize: 12,
-              fontWeight: 600,
-              cursor: responding ? 'not-allowed' : 'pointer',
-              opacity: responding ? 0.6 : 1,
-            }}
-          >
-            {responding ? 'Procesando…' : 'Rechazar'}
-          </button>
-        </div>
-      )}
-      {isConfirmada && (
-        <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+        <a
+          href={`/reserva/${booking.id}`}
+          style={{
+            minHeight: 40,
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flex: isPendiente || isConfirmada ? '0 0 auto' : 1,
+            minWidth: 110,
+            padding: '0 14px',
+            background: '#fff',
+            color: PRIMARY,
+            border: `1px solid ${PRIMARY}`,
+            borderRadius: 6,
+            fontSize: 12,
+            fontWeight: 600,
+            textDecoration: 'none',
+            boxSizing: 'border-box',
+          }}
+        >
+          Ver detalle
+        </a>
+        {isPendiente && (
+          <>
+            <button
+              type="button"
+              disabled={responding}
+              onClick={() => onRespond(booking.id, 'aceptar')}
+              style={{
+                minHeight: 40,
+                flex: 1,
+                minWidth: 100,
+                background: GREEN,
+                color: '#fff',
+                border: 'none',
+                borderRadius: 6,
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: responding ? 'not-allowed' : 'pointer',
+                opacity: responding ? 0.6 : 1,
+              }}
+            >
+              {responding ? 'Procesando…' : 'Aceptar'}
+            </button>
+            <button
+              type="button"
+              disabled={responding}
+              onClick={() => onRespond(booking.id, 'rechazar')}
+              style={{
+                minHeight: 40,
+                flex: 1,
+                minWidth: 100,
+                background: '#fff',
+                color: '#dc2626',
+                border: '1px solid #dc2626',
+                borderRadius: 6,
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: responding ? 'not-allowed' : 'pointer',
+                opacity: responding ? 0.6 : 1,
+              }}
+            >
+              {responding ? 'Procesando…' : 'Rechazar'}
+            </button>
+          </>
+        )}
+        {isConfirmada && (
           <button
             type="button"
             disabled={canceling}
@@ -1098,8 +1120,8 @@ function ReservaRecibidaCard({
           >
             {canceling ? 'Cancelando…' : 'Cancelar reserva'}
           </button>
-        </div>
-      )}
+        )}
+      </div>
       {isIncidencia && (
         <p
           style={{

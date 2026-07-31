@@ -1,13 +1,26 @@
 /** Helpers compartidos para historial y detalle de reserva. */
 
+import { getBookingPrecioBase, roundMoney } from "@/app/lib/ingresos-proveedor";
+import { COMMISSION_RATE } from "@/app/lib/pricing-reserva";
+
 export const BOOKING_STATUS_STYLES = {
   pendiente: { bg: "#fef3c7", color: "#c47d1a", label: "Pendiente" },
   confirmada: { bg: "#e8f0fb", color: "#1d4f91", label: "Confirmada" },
   en_curso: { bg: "#ede9fe", color: "#7c3aed", label: "En curso" },
   completada: { bg: "#e6f4f0", color: "#0e7a5c", label: "Completada" },
   incidencia: { bg: "#fee2e2", color: "#b91c1c", label: "Incidencia" },
+  incidencia_resuelta: {
+    bg: "#f3f4f6",
+    color: "#4b5563",
+    label: "Incidencia resuelta",
+  },
   cancelada: { bg: "#fee2e2", color: "#dc2626", label: "Cancelada" },
   cancelada_garantia: { bg: "#fee2e2", color: "#dc2626", label: "Cancelada" },
+  cancelada_proveedor: {
+    bg: "#fee2e2",
+    color: "#dc2626",
+    label: "Cancelada por el proveedor",
+  },
   rechazada: { bg: "#f3f4f6", color: "#6b7280", label: "Rechazada" },
 };
 
@@ -48,6 +61,80 @@ export function getBookingEstado(booking) {
   const estado = booking?.estado ?? booking?.status;
   if (estado === "cancelada_garantia") return "cancelada";
   return estado;
+}
+
+/** Estados que cuentan como cancelados en filtros de historial. */
+export function isCanceladoEstado(estado) {
+  return (
+    estado === "cancelada" ||
+    estado === "cancelada_proveedor" ||
+    estado === "cancelada_garantia"
+  );
+}
+
+/**
+ * Desglose de precio para el cliente (lo que pagó / debe pagar).
+ * @returns {{
+ *   base: number,
+ *   gestion: number,
+ *   subtotal: number,
+ *   credito: number,
+ *   total: number,
+ *   sinGestion: boolean,
+ *   lines: Array<{ label: string, amount: number, muted?: boolean }>,
+ * }}
+ */
+export function getClientPriceBreakdown(booking) {
+  const base = getBookingPrecioBase(booking);
+  const total = roundMoney(Number(booking?.precio_total) || 0);
+  const credito = roundMoney(Number(booking?.credito_aplicado) || 0);
+  const sinGestion = booking?.cliente_sin_comision === true;
+  const gestion = sinGestion
+    ? 0
+    : roundMoney(Math.max(0, total - base));
+  // Si no hay precio_base y la inferencia no cuadra, mostrar gestión por comisión.
+  const gestionFallback =
+    !sinGestion && gestion <= 0 && total > 0
+      ? roundMoney(base * COMMISSION_RATE)
+      : gestion;
+
+  const lines = [
+    { label: "Precio del servicio", amount: base },
+  ];
+  if (!sinGestion && gestionFallback > 0) {
+    lines.push({ label: "Gastos de gestión", amount: gestionFallback });
+  } else if (sinGestion) {
+    lines.push({ label: "Gastos de gestión", amount: 0, muted: true });
+  }
+  if (credito > 0) {
+    lines.push({ label: "Crédito aplicado", amount: -credito });
+  }
+
+  const aPagar = roundMoney(Math.max(0, total - credito));
+
+  return {
+    base,
+    gestion: gestionFallback,
+    subtotal: total,
+    credito,
+    total: aPagar,
+    sinGestion,
+    lines,
+  };
+}
+
+export function getLugarServicioLabel(lugarServicio, { viewer = "cliente" } = {}) {
+  if (lugarServicio === "casa_proveedor") {
+    return viewer === "proveedor"
+      ? "En tu domicilio / establecimiento"
+      : "En casa del profesional";
+  }
+  if (lugarServicio === "casa_cliente") {
+    return viewer === "proveedor"
+      ? "En domicilio del cliente"
+      : "En tu casa";
+  }
+  return null;
 }
 
 export function formatBookingPrice(precio) {

@@ -15,6 +15,7 @@ import {
   getBookingMonthKey,
   getBookingMonthLabel,
   getCancelRefundBreakdown,
+  isCanceladoEstado,
 } from "@/app/lib/booking-display";
 import DataLoadFailed from "@/app/components/DataLoadFailed";
 import { canLeaveReview } from "@/app/lib/reviews";
@@ -32,6 +33,7 @@ const FILTER_TABS = [
   { id: "confirmada", label: "Confirmadas" },
   { id: "en_curso", label: "En curso" },
   { id: "completada", label: "Completadas" },
+  { id: "incidencia", label: "Incidencias" },
   { id: "cancelada", label: "Canceladas" },
 ];
 
@@ -116,7 +118,12 @@ function BookingCard({ booking, reviewed, onCancel, cancelling }) {
     [proveedor.nombre, proveedor.apellido].filter(Boolean).join(" ") || "Proveedor";
   const zona = service.ciudad || "—";
   const duration = getBookingDurationLabel(booking, vertical);
-  const personas = vertical === "alojamiento" ? "2 pers." : null;
+  const personas =
+    booking.num_huespedes != null
+      ? `${booking.num_huespedes} ${
+          booking.num_huespedes === 1 ? "pers." : "pers."
+        }`
+      : null;
   const metaParts = [getBookingDateRangeLabel(booking), duration, personas].filter(Boolean);
   const extraTags = getExtraTags(service, vertical);
   const refundBreakdown = getCancelRefundBreakdown(booking);
@@ -180,6 +187,8 @@ function BookingCard({ booking, reviewed, onCancel, cancelling }) {
         </div>
 
         <div className="mt-3 flex flex-wrap gap-2">
+          <GrayButton href={`/reserva/${booking.id}`}>Ver detalle</GrayButton>
+
           {estado === "completada" && (
             <>
               <a
@@ -207,28 +216,16 @@ function BookingCard({ booking, reviewed, onCancel, cancelling }) {
                   Deja tu reseña
                 </Link>
               ) : null}
-              <GrayButton href={`/reserva/${booking.id}`}>Ver detalle</GrayButton>
             </>
           )}
 
           {(estado === "confirmada" || estado === "pendiente") && (
-            <>
-              <GrayButton href={`/reserva/${booking.id}`}>Ver detalle</GrayButton>
-              <GrayButton
-                onClick={() => onCancel(booking)}
-                disabled={cancelling === booking.id}
-              >
-                {cancelling === booking.id ? "Cancelando…" : "Cancelar"}
-              </GrayButton>
-            </>
-          )}
-
-          {estado === "en_curso" && (
-            <GrayButton href={`/reserva/${booking.id}`}>Ver detalle</GrayButton>
-          )}
-
-          {estado === "cancelada" && (
-            <GrayButton href={`/reserva/${booking.id}`}>Ver detalle</GrayButton>
+            <GrayButton
+              onClick={() => onCancel(booking)}
+              disabled={cancelling === booking.id}
+            >
+              {cancelling === booking.id ? "Cancelando…" : "Cancelar"}
+            </GrayButton>
           )}
         </div>
       </div>
@@ -347,7 +344,14 @@ export default function HistorialPage() {
     let result = bookings;
 
     if (activeFilter !== "todas") {
-      result = result.filter((b) => getBookingEstado(b) === activeFilter);
+      result = result.filter((b) => {
+        const estado = getBookingEstado(b);
+        if (activeFilter === "cancelada") return isCanceladoEstado(estado);
+        if (activeFilter === "incidencia") {
+          return estado === "incidencia" || estado === "incidencia_resuelta";
+        }
+        return estado === activeFilter;
+      });
     }
 
     const q = searchQuery.trim().toLowerCase();
