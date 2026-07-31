@@ -1655,7 +1655,7 @@ function servicioCompletadoEmailHtml(data) {
         </a>
       </p>
       <p style="margin:24px 0 0;font-size:13px;color:#888;line-height:1.5;text-align:center;">
-        Tienes 24 horas para responder. Si no contestas, el pago se liberará automáticamente.
+        Si confirmas que todo fue bien, liberamos el pago al proveedor. Si no respondes, en unos días se completará y liberará automáticamente.
       </p>`,
   });
 }

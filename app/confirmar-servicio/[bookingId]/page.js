@@ -27,7 +27,7 @@ export default function ConfirmarServicioPage() {
 
   async function confirmarOk() {
     try {
-      const res = await fetch("/api/stripe/capture-payment", {
+      const res = await fetch("/api/bookings/completar-cliente", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ bookingId, token }),
@@ -40,7 +40,7 @@ export default function ConfirmarServicioPage() {
 
       setEstado("confirmado");
     } catch (err) {
-      console.error("Error liberando pago:", err);
+      console.error("Error completando reserva / liberando pago:", err);
       setEstado("no_autorizado");
     }
   }
@@ -125,7 +125,8 @@ export default function ConfirmarServicioPage() {
               ¡Gracias!
             </h1>
             <p style={{ fontSize: 14, color: "#888" }}>
-              Hemos liberado el pago al proveedor. ¿Quieres dejar una reseña?
+              Hemos marcado el servicio como realizado y liberado el pago al
+              proveedor. ¿Quieres dejar una reseña?
             </p>
             <button
               onClick={() => router.push(`/resena/${bookingId}`)}

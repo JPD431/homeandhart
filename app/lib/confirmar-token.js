@@ -2,10 +2,10 @@ import { createHmac, timingSafeEqual } from "crypto";
 
 /**
  * Ventana del enlace de confirmación post-servicio.
- * El email pide respuesta en 24h y el cron auto-libera a las 24h;
- * 48h da margen por retrasos de email / reloj sin dejar tokens eternos.
+ * El cron auto-completa a las 72h del fin; 96h da margen por retrasos
+ * de email / reloj sin dejar tokens eternos.
  */
-export const CONFIRM_TOKEN_MAX_AGE_MS = 48 * 60 * 60 * 1000;
+export const CONFIRM_TOKEN_MAX_AGE_MS = 96 * 60 * 60 * 1000;
 
 function getSecret() {
   return process.env.CONFIRM_TOKEN_SECRET || process.env.CRON_SECRET || "";

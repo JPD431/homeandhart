@@ -265,6 +265,9 @@ function AdminPageInner() {
   const [blogTagInput, setBlogTagInput] = useState("");
   const [cronRunning, setCronRunning] = useState(false);
   const [cronResult, setCronResult] = useState(null);
+  const [forzarBookingId, setForzarBookingId] = useState("");
+  const [forzarNota, setForzarNota] = useState("");
+  const [forzarLoading, setForzarLoading] = useState(false);
   const [blogSaving, setBlogSaving] = useState(false);
   const [blogSeeding, setBlogSeeding] = useState(false);
   const [usuariosSummary, setUsuariosSummary] = useState({ pendientes: 0, sin_dni: 0 });
@@ -1033,6 +1036,63 @@ function AdminPageInner() {
       setErrorMessage("Error de conexión al enviar la solicitud.");
     } finally {
       setRequestSending(null);
+    }
+  }
+
+  async function handleForzarReserva(accion) {
+    const id = forzarBookingId.trim();
+    if (!id) {
+      setErrorMessage("Indica el ID de la reserva.");
+      return;
+    }
+    if (
+      accion === "cancelar" &&
+      !window.confirm(
+        "¿Cancelar esta reserva con reembolso total al cliente? Esta acción no se puede deshacer fácilmente.",
+      )
+    ) {
+      return;
+    }
+    if (
+      accion === "completar" &&
+      !window.confirm(
+        "¿Forzar completar esta reserva y liberar el pago al proveedor?",
+      )
+    ) {
+      return;
+    }
+
+    setForzarLoading(true);
+    setErrorMessage("");
+    setSuccessMessage("");
+    try {
+      const response = await fetch(`/api/admin/bookings/${id}/forzar`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          accion,
+          nota: forzarNota.trim() || undefined,
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setErrorMessage(payload.error || "No se pudo forzar la acción.");
+        return;
+      }
+      setSuccessMessage(
+        accion === "completar"
+          ? payload.already_completed
+            ? "Reserva ya estaba completada (pago idempotente)."
+            : "Reserva completada y pago liberado."
+          : "Reserva cancelada con reembolso.",
+      );
+      setForzarBookingId("");
+      setForzarNota("");
+      await loadData();
+    } catch {
+      setErrorMessage("Error de conexión al forzar la reserva.");
+    } finally {
+      setForzarLoading(false);
     }
   }
 
@@ -2674,6 +2734,64 @@ function AdminPageInner() {
                   )}
                 </div>
               )}
+            </div>
+
+            <div
+              className="mt-6 rounded-2xl border bg-white p-6"
+              style={{ borderColor: BRAND.border }}
+            >
+              <h2
+                className="text-lg font-semibold text-[#1a1a1a]"
+                style={{ fontFamily: SERIF }}
+              >
+                Forzar reserva
+              </h2>
+              <p className="mt-2 text-sm leading-relaxed text-[#666]">
+                Completa una reserva atascada (libera el pago una sola vez) o
+                cancélala con reembolso total al cliente.
+              </p>
+              <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-[#888]">
+                ID de reserva
+              </label>
+              <input
+                type="text"
+                value={forzarBookingId}
+                onChange={(e) => setForzarBookingId(e.target.value)}
+                placeholder="uuid de la reserva"
+                className="mt-1 w-full rounded-xl border px-3 py-2.5 text-sm outline-none"
+                style={{ borderColor: BRAND.border }}
+              />
+              <label className="mt-3 block text-xs font-semibold uppercase tracking-wide text-[#888]">
+                Nota (opcional)
+              </label>
+              <input
+                type="text"
+                value={forzarNota}
+                onChange={(e) => setForzarNota(e.target.value)}
+                placeholder="Motivo interno"
+                className="mt-1 w-full rounded-xl border px-3 py-2.5 text-sm outline-none"
+                style={{ borderColor: BRAND.border }}
+              />
+              <div className="mt-4 flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  disabled={forzarLoading}
+                  onClick={() => handleForzarReserva("completar")}
+                  className="rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                  style={{ backgroundColor: BRAND.primary }}
+                >
+                  {forzarLoading ? "Procesando…" : "Forzar completar + liberar pago"}
+                </button>
+                <button
+                  type="button"
+                  disabled={forzarLoading}
+                  onClick={() => handleForzarReserva("cancelar")}
+                  className="rounded-xl border px-5 py-2.5 text-sm font-semibold transition-opacity hover:opacity-90 disabled:opacity-60"
+                  style={{ borderColor: "#fecaca", color: "#b91c1c", background: "#fff" }}
+                >
+                  Cancelar con reembolso
+                </button>
+              </div>
             </div>
           </div>
         ) : filteredProviders.length === 0 ? (

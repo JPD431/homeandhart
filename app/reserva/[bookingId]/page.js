@@ -76,6 +76,8 @@ export default function ReservaDetallePage() {
   const [booking, setBooking] = useState(null);
   const [reviewed, setReviewed] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [completing, setCompleting] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
@@ -184,6 +186,51 @@ export default function ReservaDetallePage() {
     setCancelling(false);
   }
 
+  async function handleCompletarServicio() {
+    if (!booking) return;
+    if (
+      !window.confirm(
+        "¿Confirmas que el servicio se realizó correctamente? Se marcará como completado y se liberará el pago al proveedor.",
+      )
+    ) {
+      return;
+    }
+
+    setCompleting(true);
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    try {
+      const res = await fetch("/api/bookings/completar-cliente", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bookingId: booking.id }),
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        setErrorMessage(data.error || "No se pudo completar la reserva.");
+        return;
+      }
+
+      setBooking((prev) => ({
+        ...prev,
+        estado: "completada",
+        completada_at: prev.completada_at || new Date().toISOString(),
+        confirmacion_cliente: "ok",
+      }));
+      setSuccessMessage(
+        data.already_paid || data.already_completed
+          ? "La reserva ya estaba completada."
+          : "Servicio confirmado. Hemos liberado el pago al proveedor.",
+      );
+    } catch {
+      setErrorMessage("Error de conexión al completar la reserva.");
+    } finally {
+      setCompleting(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen font-sans" style={{ backgroundColor: BRAND.warm }}>
@@ -274,6 +321,16 @@ export default function ReservaDetallePage() {
           />
 
           <div className="p-6">
+            {successMessage && (
+              <p className="mb-4 rounded-lg bg-green-50 px-4 py-3 text-sm text-green-800">
+                {successMessage}
+              </p>
+            )}
+            {errorMessage && booking && (
+              <p className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+                {errorMessage}
+              </p>
+            )}
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h1
@@ -456,6 +513,16 @@ export default function ReservaDetallePage() {
             )}
 
             <div className="mt-6 flex flex-wrap gap-2 border-t pt-5" style={{ borderColor: BORDER }}>
+              {(estado === "confirmada" || estado === "en_curso") && (
+                <ActionButton
+                  onClick={handleCompletarServicio}
+                  disabled={completing}
+                  primary
+                >
+                  {completing ? "Confirmando…" : "El servicio se realizó"}
+                </ActionButton>
+              )}
+
               {(estado === "pendiente" || estado === "confirmada") && (
                 <ActionButton onClick={handleCancel} disabled={cancelling}>
                   {cancelling ? "Cancelando…" : "Cancelar reserva"}
