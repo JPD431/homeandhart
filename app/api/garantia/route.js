@@ -1,4 +1,5 @@
 import { buscarAlternativasGarantia } from "@/app/lib/garantia";
+import { enforceRateLimit } from "@/app/lib/rate-limit";
 
 /**
  * POST /api/garantia
@@ -6,6 +7,13 @@ import { buscarAlternativasGarantia } from "@/app/lib/garantia";
  */
 export async function POST(request) {
   try {
+    const limited = await enforceRateLimit(request, {
+      limit: 10,
+      window: "1 m",
+      prefix: "garantia",
+    });
+    if (limited) return limited;
+
     let body;
     try {
       body = await request.json();

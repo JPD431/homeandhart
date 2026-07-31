@@ -3,6 +3,7 @@ import { authorizeAuthenticatedClient } from "@/app/lib/stripe-api-auth";
 import { assertUserIsDniVerified } from "@/app/lib/dni";
 import { assertUserHasTelefono } from "@/app/lib/profile-telefono";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
+import { enforceRateLimit } from "@/app/lib/rate-limit";
 
 const supabaseAdmin = createServiceClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -32,6 +33,17 @@ export async function POST(request) {
     const auth = await authorizeAuthenticatedClient(request, { clienteId });
     if (!auth.ok) {
       return Response.json({ error: auth.error }, { status: auth.status });
+    }
+
+    // Crons internos no se rate-limitan; clientes sí (15/min).
+    if (auth.source !== "cron") {
+      const limited = await enforceRateLimit(request, {
+        limit: 15,
+        window: "1 m",
+        prefix: "create-payment-intent",
+        userId: auth.user?.id || clienteId,
+      });
+      if (limited) return limited;
     }
 
     if (!clienteId) {

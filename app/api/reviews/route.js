@@ -5,6 +5,7 @@ import {
   canLeaveReview,
   reviewEligibilityMessage,
 } from "@/app/lib/reviews";
+import { enforceRateLimit } from "@/app/lib/rate-limit";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -28,6 +29,14 @@ export async function POST(request) {
   if (authError || !user) {
     return NextResponse.json({ error: "No autenticado" }, { status: 401 });
   }
+
+  const limited = await enforceRateLimit(request, {
+    limit: 10,
+    window: "1 m",
+    prefix: "reviews",
+    userId: user.id,
+  });
+  if (limited) return limited;
 
   let body;
   try {

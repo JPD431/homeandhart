@@ -42,6 +42,7 @@ import {
   releaseReservaSinComision,
 } from "@/app/lib/sin-comision-claim";
 import { CANCELABLE_PI_STATUSES } from "@/app/lib/stripe-reembolso";
+import { enforceRateLimit } from "@/app/lib/rate-limit";
 
 const MAX_CREDITO_PORCENTAJE = 0.6;
 
@@ -1755,6 +1756,14 @@ export async function POST(request) {
     }
 
     const userId = user.id;
+
+    const limited = await enforceRateLimit(request, {
+      limit: 15,
+      window: "1 m",
+      prefix: "bookings-complete",
+      userId,
+    });
+    if (limited) return limited;
 
     const dniCheck = await assertUserIsDniVerified(supabaseAdmin, userId);
     if (!dniCheck.ok) {

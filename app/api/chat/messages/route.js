@@ -8,6 +8,7 @@ import {
   filterChatContent,
   filterSpecialMensaje,
 } from "@/app/lib/chat-content-filter";
+import { enforceRateLimit } from "@/app/lib/rate-limit";
 
 const supabaseAdmin = createServiceClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -105,6 +106,14 @@ export async function POST(request) {
   if (authError || !user) {
     return NextResponse.json({ error: "No autenticado" }, { status: 401 });
   }
+
+  const limited = await enforceRateLimit(request, {
+    limit: 60,
+    window: "1 m",
+    prefix: "chat-messages",
+    userId: user.id,
+  });
+  if (limited) return limited;
 
   let body;
   try {

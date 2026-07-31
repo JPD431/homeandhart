@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { MOTIVOS_REPORTE_PERFIL } from "@/app/lib/report-severity";
 import { dispatchPlatformEmail } from "@/app/lib/platform-email-dispatch";
+import { enforceRateLimit } from "@/app/lib/rate-limit";
 import { maybeSuspenderPorReporteGrave } from "@/app/lib/suspension-cautelar";
 import { resolverNombreUsuario } from "@/app/lib/email-usuario";
 
@@ -27,6 +28,14 @@ export async function POST(request) {
   if (authError || !user) {
     return NextResponse.json({ error: "No autenticado" }, { status: 401 });
   }
+
+  const limited = await enforceRateLimit(request, {
+    limit: 5,
+    window: "15 m",
+    prefix: "reports",
+    userId: user.id,
+  });
+  if (limited) return limited;
 
   let body;
   try {

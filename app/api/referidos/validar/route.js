@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { enforceRateLimit } from "@/app/lib/rate-limit";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -7,6 +8,13 @@ const supabaseAdmin = createClient(
 );
 
 export async function POST(request) {
+  const limited = await enforceRateLimit(request, {
+    limit: 20,
+    window: "1 m",
+    prefix: "referidos-validar",
+  });
+  if (limited) return limited;
+
   let body;
   try {
     body = await request.json();
