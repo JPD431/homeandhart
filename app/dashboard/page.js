@@ -6,6 +6,8 @@ import Navbar from '@/app/components/Navbar';
 import OnboardingPendienteBanner from '@/app/components/OnboardingPendienteBanner';
 import FamiliaInviteBanner from '@/app/components/FamiliaInviteBanner';
 import ReportarIncidenciaForm from '@/app/components/ReportarIncidenciaForm';
+import BookingStatusBadge from '@/app/components/BookingStatusBadge';
+import { ActionToastHost, useActionToast } from '@/app/components/ActionToast';
 import ClienteVerificadoBadge from '@/app/components/ClienteVerificadoBadge';
 import DataLoadFailed from '@/app/components/DataLoadFailed';
 import { useModo } from '@/app/lib/ModoContext';
@@ -13,7 +15,10 @@ import { getIngresoProveedorFromBooking } from '@/app/lib/ingresos-proveedor';
 import { puedeReportarIncidencia } from '@/app/lib/booking-incidencia';
 import { PROVIDER_CONTACT_BANNER_MSG } from '@/app/lib/profile-telefono';
 import { providerMissingContactBanner } from '@/app/lib/provider-publicacion';
-import { canShowProviderContact } from '@/app/lib/booking-display';
+import {
+  canShowProviderContact,
+  getBookingStatusMeta,
+} from '@/app/lib/booking-display';
 import { supabase } from '@/app/lib/supabase';
 import { friendlyLoadError, withLoadTimeout } from '@/app/lib/with-load-timeout';
 
@@ -475,12 +480,12 @@ function TabCliente({ perfil, reservas, favoritos, viajes, router, BRAND, copiar
             </div>
           )}
           {reservas.slice(0, 5).map(r => (
-            <div key={r.id} style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '0.5px solid #f5f3f0'}}>
-              <div>
+            <div key={r.id} style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '0.5px solid #f5f3f0', gap: 8}}>
+              <div style={{ minWidth: 0 }}>
                 <div style={{fontSize: 12, color: BRAND.dark, fontWeight: 500}}>{r.services?.titulo} · {r.services?.profiles_public?.nombre}</div>
                 <div style={{fontSize: 10, color: '#aaa', marginTop: 1}}>{r.fecha_inicio}{r.fecha_fin ? ` – ${r.fecha_fin}` : ''} · {r.precio_total}€</div>
               </div>
-              <span style={{fontSize: 9, padding: '2px 7px', borderRadius: 8, background: r.estado === 'confirmada' ? '#e8f0fb' : r.estado === 'completada' ? '#e6f4f0' : r.estado === 'en_curso' ? '#f0e8fb' : '#fef3c7', color: r.estado === 'confirmada' ? '#163a6b' : r.estado === 'completada' ? '#085041' : r.estado === 'en_curso' ? '#5b21b6' : '#92400e', whiteSpace: 'nowrap'}}>{r.estado}</span>
+              <BookingStatusBadge status={r.estado} role="cliente" size="sm" />
             </div>
           ))}
           <button onClick={() => router.push('/historial')} style={{ minHeight: 44, fontSize: 11, color: BRAND.blue, background: 'none', border: 'none', cursor: 'pointer', display: 'block', marginLeft: 'auto', marginTop: 8, padding: '8px 4px' }}>Ver historial completo →</button>
@@ -850,18 +855,6 @@ const GREEN = '#0e7a5c';
 const AMBER = '#c47d1a';
 const BORDER = '#e8e4de';
 
-const ESTADO_BADGE = {
-  pendiente: { bg: '#fdf3e3', color: AMBER, label: 'Pendiente' },
-  confirmada: { bg: '#e6f4f0', color: GREEN, label: 'Confirmada' },
-  rechazada: { bg: '#f3f4f6', color: '#6b7280', label: 'Rechazada' },
-  completada: { bg: '#e8f0fb', color: PRIMARY, label: 'Completada' },
-  cancelada: { bg: '#f3f4f6', color: '#6b7280', label: 'Cancelada' },
-  cancelada_proveedor: { bg: '#f3f4f6', color: '#6b7280', label: 'Cancelada por ti' },
-  cancelada_garantia: { bg: '#f3f4f6', color: '#6b7280', label: 'Cancelada' },
-  en_curso: { bg: '#ede9fe', color: '#7c3aed', label: 'En curso' },
-  incidencia: { bg: '#fee2e2', color: '#b91c1c', label: 'Incidencia' },
-};
-
 function formatReservaFechas(booking) {
   if (booking.hora) {
     const fecha = booking.fecha_inicio || '';
@@ -871,25 +864,6 @@ function formatReservaFechas(booking) {
     return `${booking.fecha_inicio} – ${booking.fecha_fin}`;
   }
   return booking.fecha_inicio || '—';
-}
-
-function EstadoBadge({ estado }) {
-  const meta = ESTADO_BADGE[estado] || { bg: '#f3f4f6', color: '#6b7280', label: estado || '—' };
-  return (
-    <span
-      style={{
-        fontSize: 10,
-        fontWeight: 600,
-        padding: '3px 8px',
-        borderRadius: 8,
-        background: meta.bg,
-        color: meta.color,
-        whiteSpace: 'nowrap',
-      }}
-    >
-      {meta.label}
-    </span>
-  );
 }
 
 function formatImporteReservaRecibida(booking, sinComisionProveedor) {
@@ -922,10 +896,11 @@ function ReservaRecibidaCard({
   onIncidenciaReported,
   highlighted = false,
 }) {
+  const statusMeta = getBookingStatusMeta(booking.estado, { role: 'proveedor' });
   const isPendiente = booking.estado === 'pendiente';
   const isConfirmada = booking.estado === 'confirmada';
   const isIncidencia = booking.estado === 'incidencia';
-  const canReport = puedeReportarIncidencia(booking.estado);
+  const canReport = statusMeta.canReportIncidencia || puedeReportarIncidencia(booking.estado);
   const importeReserva = formatImporteReservaRecibida(booking, sinComisionProveedor);
   const showClienteContact = canShowProviderContact(booking.estado) && clienteContacto;
 
@@ -1030,8 +1005,18 @@ function ReservaRecibidaCard({
             </div>
           )}
         </div>
-        <EstadoBadge estado={booking.estado} />
+        <BookingStatusBadge status={booking.estado} role="proveedor" size="sm" />
       </div>
+      <p
+        style={{
+          margin: '8px 0 0',
+          fontSize: 11,
+          color: '#666',
+          lineHeight: 1.45,
+        }}
+      >
+        {statusMeta.description}
+      </p>
       <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
         <a
           href={`/reserva/${booking.id}`}
@@ -1136,7 +1121,7 @@ function ReservaRecibidaCard({
             lineHeight: 1.5,
           }}
         >
-          Incidencia reportada. Nuestro equipo está revisando el caso.
+          {statusMeta.description}
         </p>
       )}
       {canReport && (
@@ -1153,6 +1138,7 @@ function ReservaRecibidaCard({
 }
 
 function ReservasRecibidas({ perfil, BRAND, highlightBookingId, router }) {
+  const { toast, showSuccess, showError, dismiss } = useActionToast();
   const [bookings, setBookings] = useState([]);
   const [serviceMap, setServiceMap] = useState({});
   const [clientNames, setClientNames] = useState({});
@@ -1161,6 +1147,7 @@ function ReservasRecibidas({ perfil, BRAND, highlightBookingId, router }) {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [actionError, setActionError] = useState('');
+  const [actionSuccess, setActionSuccess] = useState('');
   const [stripeWarning, setStripeWarning] = useState('');
   const [respondingId, setRespondingId] = useState(null);
   const [cancelingId, setCancelingId] = useState(null);
@@ -1286,6 +1273,7 @@ function ReservasRecibidas({ perfil, BRAND, highlightBookingId, router }) {
 
     setRespondingId(bookingId);
     setActionError('');
+    setActionSuccess('');
     setStripeWarning('');
 
     try {
@@ -1297,13 +1285,22 @@ function ReservasRecibidas({ perfil, BRAND, highlightBookingId, router }) {
       const data = await res.json();
 
       if (!res.ok || !data.success) {
-        setActionError(data.error || 'No se pudo procesar la reserva.');
+        const msg = data.error || 'No se pudo procesar la reserva.';
+        setActionError(msg);
+        showError(msg);
         return;
       }
 
       setBookings((prev) =>
         prev.map((b) => (b.id === bookingId ? { ...b, estado: data.estado } : b)),
       );
+
+      const okMsg =
+        action === 'aceptar'
+          ? 'Reserva aceptada correctamente.'
+          : 'Reserva rechazada. Se ha liberado el pago del cliente.';
+      setActionSuccess(okMsg);
+      showSuccess(okMsg);
 
       if (action === 'aceptar' && data.estado) {
         try {
@@ -1322,7 +1319,9 @@ function ReservasRecibidas({ perfil, BRAND, highlightBookingId, router }) {
         }
       }
     } catch (err) {
-      setActionError(err.message || 'Error de conexión.');
+      const msg = err.message || 'Error de conexión.';
+      setActionError(msg);
+      showError(msg);
     } finally {
       setRespondingId(null);
     }
@@ -1332,6 +1331,10 @@ function ReservasRecibidas({ perfil, BRAND, highlightBookingId, router }) {
     setBookings((prev) =>
       prev.map((b) => (b.id === bookingId ? { ...b, estado: 'incidencia' } : b)),
     );
+    const msg =
+      'Incidencia enviada. Nuestro equipo la revisará y te contactará.';
+    setActionSuccess(msg);
+    showSuccess(msg);
   }
 
   async function handleCancelProvider(bookingId) {
@@ -1345,6 +1348,7 @@ function ReservasRecibidas({ perfil, BRAND, highlightBookingId, router }) {
 
     setCancelingId(bookingId);
     setActionError('');
+    setActionSuccess('');
     setStripeWarning('');
 
     try {
@@ -1356,7 +1360,9 @@ function ReservasRecibidas({ perfil, BRAND, highlightBookingId, router }) {
       const data = await res.json();
 
       if (!res.ok || !data.success) {
-        setActionError(data.error || 'No se pudo cancelar la reserva.');
+        const msg = data.error || 'No se pudo cancelar la reserva.';
+        setActionError(msg);
+        showError(msg);
         return;
       }
 
@@ -1366,6 +1372,9 @@ function ReservasRecibidas({ perfil, BRAND, highlightBookingId, router }) {
         ),
       );
 
+      setActionSuccess('Reserva cancelada correctamente.');
+      showSuccess('Reserva cancelada correctamente.');
+
       if (data.stripe_ok === false) {
         setStripeWarning(
           data.stripe_error
@@ -1374,7 +1383,9 @@ function ReservasRecibidas({ perfil, BRAND, highlightBookingId, router }) {
         );
       }
     } catch (err) {
-      setActionError(err.message || 'Error de conexión.');
+      const msg = err.message || 'Error de conexión.';
+      setActionError(msg);
+      showError(msg);
     } finally {
       setCancelingId(null);
     }
@@ -1477,6 +1488,21 @@ function ReservasRecibidas({ perfil, BRAND, highlightBookingId, router }) {
             </p>
           )}
 
+          {!loading && !loadError && actionSuccess && (
+            <p
+              style={{
+                fontSize: 12,
+                color: '#065f46',
+                background: '#ecfdf5',
+                padding: '10px 12px',
+                borderRadius: 6,
+                marginBottom: 12,
+              }}
+            >
+              {actionSuccess}
+            </p>
+          )}
+
           {!loading && !loadError && stripeWarning && (
             <p
               style={{
@@ -1569,6 +1595,7 @@ function ReservasRecibidas({ perfil, BRAND, highlightBookingId, router }) {
           )}
         </div>
       </div>
+      <ActionToastHost toast={toast} onDismiss={dismiss} />
     </div>
   );
 }

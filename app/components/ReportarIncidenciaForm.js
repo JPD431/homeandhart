@@ -10,7 +10,7 @@ const inputClass =
 export default function ReportarIncidenciaForm({
   bookingId,
   onSuccess,
-  buttonLabel = "Reportar un problema",
+  buttonLabel = "Reportar incidencia",
   compact = false,
 }) {
   const [open, setOpen] = useState(false);
@@ -83,9 +83,10 @@ export default function ReportarIncidenciaForm({
       className="rounded-lg border p-4"
       style={{ borderColor: BRAND.border, backgroundColor: "#f7f5f2" }}
     >
-      <p className="text-sm font-semibold text-[#1a1a1a]">Reportar un problema</p>
+      <p className="text-sm font-semibold text-[#1a1a1a]">Reportar incidencia</p>
       <p className="mt-1 text-xs text-[#666]">
-        Cuéntanos qué ha ocurrido. El pago quedará retenido hasta resolver la incidencia.
+        Cuéntanos qué ha ocurrido con el servicio. El pago quedará retenido hasta
+        resolver la incidencia y nuestro equipo lo revisará.
       </p>
 
       <div className="mt-3">

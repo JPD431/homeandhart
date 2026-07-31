@@ -8,19 +8,18 @@ import ReportarIncidenciaForm from "@/app/components/ReportarIncidenciaForm";
 import ClienteVerificadoBadge from "@/app/components/ClienteVerificadoBadge";
 import { BRAND, SERIF } from "@/app/components/brand";
 import {
-  BOOKING_STATUS_STYLES,
   BOOKING_VERTICAL_META,
   canShowProviderContact,
   formatBookingPrice,
   getBookingDateRangeLabel,
   getBookingDurationLabel,
   getBookingEstado,
+  getBookingStatusMeta,
   getCancelRefundBreakdown,
   getClientPriceBreakdown,
   getLugarServicioLabel,
 } from "@/app/lib/booking-display";
 import { getIngresoProveedorFromBooking } from "@/app/lib/ingresos-proveedor";
-import { puedeReportarIncidencia } from "@/app/lib/booking-incidencia";
 import { buildLoginUrl } from "@/app/lib/auth-redirect";
 import { canLeaveReview } from "@/app/lib/reviews";
 import {
@@ -30,6 +29,8 @@ import {
 import { shouldShowProviderDireccion } from "@/app/lib/lugar-servicio";
 import { MODALIDAD_COBRO_OPTIONS } from "@/app/lib/modalidad-cobro";
 import { supabase } from "@/app/lib/supabase";
+import BookingStatusBadge from "@/app/components/BookingStatusBadge";
+import { friendlyLoadError, withLoadTimeout } from "@/app/lib/with-load-timeout";
 
 function modalidadLabelOf(modalidad) {
   if (!modalidad) return null;
@@ -38,24 +39,10 @@ function modalidadLabelOf(modalidad) {
     String(modalidad).replace(/_/g, " ")
   );
 }
-import { friendlyLoadError, withLoadTimeout } from "@/app/lib/with-load-timeout";
 
 const PRIMARY = "#1d4f91";
 const BORDER = "#e8e4de";
 const GREEN = "#0e7a5c";
-
-function StatusBadge({ status }) {
-  const key = status ?? "pendiente";
-  const style = BOOKING_STATUS_STYLES[key] ?? BOOKING_STATUS_STYLES.pendiente;
-  return (
-    <span
-      className="inline-flex rounded-full px-3 py-1 text-xs font-semibold"
-      style={{ backgroundColor: style.bg, color: style.color }}
-    >
-      {style.label}
-    </span>
-  );
-}
 
 function ActionButton({ children, href, onClick, disabled, primary = false }) {
   const className =
@@ -271,9 +258,9 @@ export default function ReservaDetallePage() {
         reembolso_cliente_credito:
           reembolso.credito != null ? reembolso.credito : null,
       }));
-      setSuccessMessage("Reserva cancelada.");
+      setSuccessMessage("Reserva cancelada correctamente.");
     } else {
-      setErrorMessage(data.error || "No se pudo cancelar la reserva.");
+      setErrorMessage(data.error || "No se pudo cancelar la reserva. Inténtalo de nuevo.");
     }
     setCancelling(false);
   }
@@ -300,9 +287,9 @@ export default function ReservaDetallePage() {
         ...prev,
         estado: data.estado || "cancelada_proveedor",
       }));
-      setSuccessMessage("Reserva cancelada.");
+      setSuccessMessage("Reserva cancelada correctamente.");
     } else {
-      setErrorMessage(data.error || "No se pudo cancelar la reserva.");
+      setErrorMessage(data.error || "No se pudo cancelar la reserva. Inténtalo de nuevo.");
     }
     setCancelling(false);
   }
@@ -323,10 +310,14 @@ export default function ReservaDetallePage() {
         estado: data.estado || (accion === "aceptar" ? "confirmada" : "rechazada"),
       }));
       setSuccessMessage(
-        accion === "aceptar" ? "Reserva aceptada." : "Reserva rechazada.",
+        accion === "aceptar"
+          ? "Reserva aceptada correctamente."
+          : "Reserva rechazada. Se ha liberado el pago del cliente.",
       );
     } else {
-      setErrorMessage(data.error || "No se pudo procesar la respuesta.");
+      setErrorMessage(
+        data.error || "No se pudo procesar la respuesta. Inténtalo de nuevo.",
+      );
     }
     setResponding(false);
   }
@@ -442,6 +433,9 @@ export default function ReservaDetallePage() {
   }
 
   const estado = getBookingEstado(booking);
+  const statusMeta = getBookingStatusMeta(booking.estado || estado, {
+    role: viewerRole || "cliente",
+  });
   const service = booking.services ?? {};
   const proveedor = service.profiles_public ?? {};
   const vertical = service.vertical ?? "alojamiento";
@@ -570,8 +564,14 @@ export default function ReservaDetallePage() {
                   )}
                 </p>
               </div>
-              <StatusBadge status={estado} />
+              <BookingStatusBadge
+                status={booking.estado || estado}
+                role={viewerRole || "cliente"}
+              />
             </div>
+            <p className="mt-3 text-[12px] leading-relaxed text-[#666]">
+              {statusMeta.description}
+            </p>
 
             <Section title="Fechas y servicio">
               <p className="text-sm text-[#1a1a1a]">
@@ -739,8 +739,11 @@ export default function ReservaDetallePage() {
                           <span>
                             {sibService?.titulo || "Servicio"}
                             <span className="ml-2 text-[11px] text-[#888]">
-                              {BOOKING_STATUS_STYLES[getBookingEstado(sib)]
-                                ?.label || getBookingEstado(sib)}
+                              {
+                                getBookingStatusMeta(sib.estado, {
+                                  role: viewerRole || "cliente",
+                                }).label
+                              }
                             </span>
                           </span>
                           <span className="font-medium" style={{ color: PRIMARY }}>
@@ -811,6 +814,8 @@ export default function ReservaDetallePage() {
                       color: PRIMARY,
                       backgroundColor: "#fff",
                     }}
+                    onError={(msg) => setErrorMessage(msg)}
+                    onSuccess={(msg) => setSuccessMessage(msg)}
                   >
                     Enviar mensaje
                   </ProveedorPreguntarButton>
@@ -863,6 +868,8 @@ export default function ReservaDetallePage() {
                       color: PRIMARY,
                       backgroundColor: "#fff",
                     }}
+                    onError={(msg) => setErrorMessage(msg)}
+                    onSuccess={(msg) => setSuccessMessage(msg)}
                   >
                     Enviar mensaje
                   </ProveedorPreguntarButton>
@@ -874,24 +881,28 @@ export default function ReservaDetallePage() {
               <section
                 className="mt-5 rounded-lg border px-4 py-3 text-sm"
                 style={{
-                  borderColor: "#fecaca",
-                  backgroundColor: "#fef2f2",
-                  color: "#b91c1c",
+                  borderColor:
+                    estado === "incidencia" ? "#fecaca" : "#e5e7eb",
+                  backgroundColor:
+                    estado === "incidencia" ? "#fef2f2" : "#f9fafb",
+                  color: estado === "incidencia" ? "#b91c1c" : "#4b5563",
                 }}
               >
-                {estado === "incidencia"
-                  ? "Hay un reporte de incidencia en curso. Nuestro equipo lo está revisando."
-                  : "Esta incidencia ya fue resuelta por el equipo."}
+                {statusMeta.description}
               </section>
             )}
 
-            {puedeReportarIncidencia(estado) && (
+            {statusMeta.canReportIncidencia && (
               <section className="mt-5">
                 <ReportarIncidenciaForm
                   bookingId={booking.id}
-                  onSuccess={() =>
-                    setBooking((prev) => ({ ...prev, estado: "incidencia" }))
-                  }
+                  onSuccess={() => {
+                    setBooking((prev) => ({ ...prev, estado: "incidencia" }));
+                    setSuccessMessage(
+                      "Incidencia enviada correctamente. Nuestro equipo la revisará.",
+                    );
+                    setErrorMessage("");
+                  }}
                 />
               </section>
             )}

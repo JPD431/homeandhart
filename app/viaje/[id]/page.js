@@ -15,30 +15,8 @@ import {
   getBookingEstado,
   userCanAccessViaje,
 } from "@/app/lib/viajes";
+import BookingStatusBadge from "@/app/components/BookingStatusBadge";
 import { supabase } from "@/app/lib/supabase";
-
-const STATUS_STYLES = {
-  pendiente: { bg: "#fef3c7", color: "#92400e", label: "Pendiente" },
-  confirmada: { bg: BRAND.light, color: BRAND.primary, label: "Confirmada" },
-  en_curso: { bg: "#e0e7ff", color: "#3730a3", label: "En curso" },
-  completada: { bg: "#dcfce7", color: "#166534", label: "Completada" },
-  incidencia: { bg: "#fee2e2", color: "#b91c1c", label: "Incidencia" },
-  cancelada: { bg: "#f3f4f6", color: "#6b7280", label: "Cancelada" },
-  cancelada_garantia: { bg: "#f3f4f6", color: "#6b7280", label: "Cancelada" },
-};
-
-function StatusBadge({ status }) {
-  const key = status ?? "pendiente";
-  const style = STATUS_STYLES[key] ?? STATUS_STYLES.pendiente;
-  return (
-    <span
-      className="inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold"
-      style={{ backgroundColor: style.bg, color: style.color }}
-    >
-      {style.label}
-    </span>
-  );
-}
 
 export default function ViajePage() {
   const router = useRouter();
@@ -362,7 +340,11 @@ export default function ViajePage() {
                               <p className="font-semibold text-[#1a1a1a]">
                                 {service.titulo || theme.label}
                               </p>
-                              <StatusBadge status={estado} />
+                              <BookingStatusBadge
+                                status={estado}
+                                role="cliente"
+                                size="sm"
+                              />
                             </div>
                             <p className="mt-0.5 text-sm text-[#666]">
                               {proveedorNombre}

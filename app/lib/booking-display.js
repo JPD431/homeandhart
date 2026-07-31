@@ -1,28 +1,219 @@
-/** Helpers compartidos para historial y detalle de reserva. */
+/** Helpers compartidos para historial, detalle y dashboard de reserva. */
 
 import { getBookingPrecioBase, roundMoney } from "@/app/lib/ingresos-proveedor";
 import { COMMISSION_RATE } from "@/app/lib/pricing-reserva";
+import { puedeReportarIncidencia } from "@/app/lib/booking-incidencia";
 
-export const BOOKING_STATUS_STYLES = {
-  pendiente: { bg: "#fef3c7", color: "#c47d1a", label: "Pendiente" },
-  confirmada: { bg: "#e8f0fb", color: "#1d4f91", label: "Confirmada" },
-  en_curso: { bg: "#ede9fe", color: "#7c3aed", label: "En curso" },
-  completada: { bg: "#e6f4f0", color: "#0e7a5c", label: "Completada" },
-  incidencia: { bg: "#fee2e2", color: "#b91c1c", label: "Incidencia" },
-  incidencia_resuelta: {
-    bg: "#f3f4f6",
-    color: "#4b5563",
-    label: "Incidencia resuelta",
+/**
+ * Catálogo central de estados: etiqueta humana, color y significado.
+ * `actions*` = ids de acciones posibles (la UI decide botones concretos).
+ */
+const BOOKING_STATUS_CATALOG = {
+  pendiente: {
+    label: "Pendiente de confirmación",
+    bg: "#fef3c7",
+    color: "#92400e",
+    descriptionCliente:
+      "El proveedor aún no ha respondido. Puedes esperar o cancelar la reserva.",
+    descriptionProveedor:
+      "Tienes una solicitud nueva. Acéptala o recházala para que el cliente sepa qué hacer.",
+    actionsCliente: ["ver_detalle", "cancelar", "mensaje"],
+    actionsProveedor: ["ver_detalle", "aceptar", "rechazar", "mensaje"],
   },
-  cancelada: { bg: "#fee2e2", color: "#dc2626", label: "Cancelada" },
-  cancelada_garantia: { bg: "#fee2e2", color: "#dc2626", label: "Cancelada" },
-  cancelada_proveedor: {
+  confirmada: {
+    label: "Confirmada",
+    bg: "#e8f0fb",
+    color: "#1d4f91",
+    descriptionCliente:
+      "Tu reserva está confirmada. Cuando termine el servicio, podrás confirmarlo o reportar un problema.",
+    descriptionProveedor:
+      "Reserva aceptada. Coordina con el cliente; si no puedes cumplirla, cancélala cuanto antes.",
+    actionsCliente: [
+      "ver_detalle",
+      "cancelar",
+      "completar",
+      "reportar_incidencia",
+      "mensaje",
+      "contacto",
+    ],
+    actionsProveedor: [
+      "ver_detalle",
+      "cancelar",
+      "reportar_incidencia",
+      "mensaje",
+      "contacto",
+    ],
+  },
+  en_curso: {
+    label: "Servicio en curso",
+    bg: "#fef3c7",
+    color: "#92400e",
+    descriptionCliente:
+      "El servicio está en curso. Cuando termine, podrás confirmarlo o se completará automáticamente.",
+    descriptionProveedor:
+      "El servicio está en curso. Al finalizar, el cliente puede confirmarlo o se completará solo.",
+    actionsCliente: [
+      "ver_detalle",
+      "completar",
+      "reportar_incidencia",
+      "mensaje",
+      "contacto",
+    ],
+    actionsProveedor: [
+      "ver_detalle",
+      "reportar_incidencia",
+      "mensaje",
+      "contacto",
+    ],
+  },
+  completada: {
+    label: "Completada",
+    bg: "#e6f4f0",
+    color: "#0e7a5c",
+    descriptionCliente:
+      "Servicio finalizado. Puedes descargar la factura, dejar una reseña o reportar un problema si algo falló.",
+    descriptionProveedor:
+      "Servicio completado. El pago se libera según el flujo de la plataforma.",
+    actionsCliente: [
+      "ver_detalle",
+      "factura",
+      "reseña",
+      "reportar_incidencia",
+      "mensaje",
+      "contacto",
+    ],
+    actionsProveedor: [
+      "ver_detalle",
+      "reportar_incidencia",
+      "mensaje",
+      "contacto",
+    ],
+  },
+  cancelada: {
+    label: "Cancelada",
     bg: "#fee2e2",
     color: "#dc2626",
-    label: "Cancelada por el proveedor",
+    descriptionCliente:
+      "Esta reserva fue cancelada. Si aplica, verás el reembolso o crédito en el detalle.",
+    descriptionProveedor:
+      "Esta reserva fue cancelada. Las fechas quedan liberadas.",
+    actionsCliente: ["ver_detalle", "buscar"],
+    actionsProveedor: ["ver_detalle"],
   },
-  rechazada: { bg: "#f3f4f6", color: "#6b7280", label: "Rechazada" },
+  cancelada_garantia: {
+    label: "Cancelada (garantía)",
+    bg: "#fee2e2",
+    color: "#dc2626",
+    descriptionCliente:
+      "Cancelada bajo la garantía Home&Heart. Revisa el detalle por el reembolso o crédito.",
+    descriptionProveedor:
+      "Cancelada bajo la garantía Home&Heart. Las fechas quedan liberadas.",
+    actionsCliente: ["ver_detalle", "buscar"],
+    actionsProveedor: ["ver_detalle"],
+  },
+  cancelada_proveedor: {
+    label: "Cancelada por el proveedor",
+    bg: "#fee2e2",
+    color: "#dc2626",
+    descriptionCliente:
+      "El proveedor canceló la reserva. Busca otra opción o contacta con soporte si lo necesitas.",
+    descriptionProveedor:
+      "Cancelaste esta reserva. El cliente recibe el reembolso según la política.",
+    labelProveedor: "Cancelada por ti",
+    actionsCliente: ["ver_detalle", "buscar"],
+    actionsProveedor: ["ver_detalle"],
+  },
+  incidencia: {
+    label: "Incidencia",
+    bg: "#fee2e2",
+    color: "#b91c1c",
+    descriptionCliente:
+      "Hay un problema reportado. Nuestro equipo lo está revisando; te contactaremos pronto.",
+    descriptionProveedor:
+      "Hay una incidencia abierta. El pago queda retenido hasta que el equipo la resuelva.",
+    actionsCliente: ["ver_detalle", "mensaje"],
+    actionsProveedor: ["ver_detalle", "mensaje"],
+  },
+  incidencia_resuelta: {
+    label: "Incidencia resuelta",
+    bg: "#f3f4f6",
+    color: "#4b5563",
+    descriptionCliente:
+      "La incidencia ya fue resuelta por el equipo. Revisa el detalle si necesitas más información.",
+    descriptionProveedor:
+      "La incidencia ya fue resuelta. Revisa el detalle para el resultado del caso.",
+    actionsCliente: ["ver_detalle"],
+    actionsProveedor: ["ver_detalle"],
+  },
+  rechazada: {
+    label: "Rechazada",
+    bg: "#f3f4f6",
+    color: "#6b7280",
+    descriptionCliente:
+      "El proveedor no pudo aceptar esta reserva. Puedes buscar alternativas.",
+    descriptionProveedor: "Rechazaste esta solicitud. El pago del cliente se liberó.",
+    actionsCliente: ["ver_detalle", "buscar"],
+    actionsProveedor: ["ver_detalle"],
+  },
 };
+
+/** @deprecated Prefer getBookingStatusMeta — mantenido por compatibilidad. */
+export const BOOKING_STATUS_STYLES = Object.fromEntries(
+  Object.entries(BOOKING_STATUS_CATALOG).map(([key, meta]) => [
+    key,
+    { bg: meta.bg, color: meta.color, label: meta.label },
+  ]),
+);
+
+/**
+ * Meta de estado para UI: label + color + descripción + acciones.
+ * @param {string | { estado?: string, status?: string } | null | undefined} estadoOrBooking
+ * @param {{ role?: 'cliente' | 'proveedor' }} [options]
+ */
+export function getBookingStatusMeta(estadoOrBooking, { role = "cliente" } = {}) {
+  const raw =
+    typeof estadoOrBooking === "object" && estadoOrBooking != null
+      ? (estadoOrBooking.estado ?? estadoOrBooking.status)
+      : estadoOrBooking;
+  const key = raw || "pendiente";
+  const entry = BOOKING_STATUS_CATALOG[key] || {
+    label: key.replace(/_/g, " "),
+    bg: "#f3f4f6",
+    color: "#6b7280",
+    descriptionCliente: "Estado de la reserva.",
+    descriptionProveedor: "Estado de la reserva.",
+    actionsCliente: ["ver_detalle"],
+    actionsProveedor: ["ver_detalle"],
+  };
+
+  const isProveedor = role === "proveedor";
+  const label =
+    isProveedor && entry.labelProveedor ? entry.labelProveedor : entry.label;
+  const description = isProveedor
+    ? entry.descriptionProveedor
+    : entry.descriptionCliente;
+  let actions = [
+    ...(isProveedor ? entry.actionsProveedor : entry.actionsCliente),
+  ];
+
+  // Solo ofrecer reportar si el estado lo permite (fuente de verdad server-side).
+  if (
+    actions.includes("reportar_incidencia") &&
+    !puedeReportarIncidencia(key)
+  ) {
+    actions = actions.filter((a) => a !== "reportar_incidencia");
+  }
+
+  return {
+    key,
+    label,
+    bg: entry.bg,
+    color: entry.color,
+    description,
+    actions,
+    canReportIncidencia: actions.includes("reportar_incidencia"),
+  };
+}
 
 export const BOOKING_VERTICAL_META = {
   alojamiento: {

@@ -1542,7 +1542,7 @@ export default function ChatPage() {
                       backgroundColor: BLUE,
                     }}
                   >
-                    {sending ? "…" : "Enviar →"}
+                    {sending ? "Enviando…" : "Enviar →"}
                   </button>
                 </form>
                 {contactNotice ? (

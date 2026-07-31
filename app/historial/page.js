@@ -6,7 +6,6 @@ import { useEffect, useMemo, useState } from "react";
 import Navbar from "@/app/components/Navbar";
 import { BRAND, SERIF } from "@/app/components/brand";
 import {
-  BOOKING_STATUS_STYLES,
   BOOKING_VERTICAL_META,
   formatBookingPrice,
   getBookingDateRangeLabel,
@@ -14,10 +13,14 @@ import {
   getBookingEstado,
   getBookingMonthKey,
   getBookingMonthLabel,
+  getBookingStatusMeta,
   getCancelRefundBreakdown,
   isCanceladoEstado,
 } from "@/app/lib/booking-display";
+import { ActionToastHost, useActionToast } from "@/app/components/ActionToast";
+import BookingStatusBadge from "@/app/components/BookingStatusBadge";
 import DataLoadFailed from "@/app/components/DataLoadFailed";
+import ReportarIncidenciaForm from "@/app/components/ReportarIncidenciaForm";
 import { canLeaveReview } from "@/app/lib/reviews";
 import { buildLoginUrl } from "@/app/lib/auth-redirect";
 import { supabase } from "@/app/lib/supabase";
@@ -48,19 +51,6 @@ function getExtraTags(service, vertical) {
     tags.push(idiomas.some((l) => /native/i.test(l)) ? "English native" : "English fluent");
   }
   return tags;
-}
-
-function StatusTag({ status }) {
-  const key = status ?? "pendiente";
-  const style = BOOKING_STATUS_STYLES[key] ?? BOOKING_STATUS_STYLES.pendiente;
-  return (
-    <span
-      className="inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold"
-      style={{ backgroundColor: style.bg, color: style.color }}
-    >
-      {style.label}
-    </span>
-  );
 }
 
 function ExtraTag({ label }) {
@@ -108,8 +98,17 @@ function GrayButton({ children, onClick, href, disabled }) {
   );
 }
 
-function BookingCard({ booking, reviewed, onCancel, cancelling }) {
+function BookingCard({
+  booking,
+  reviewed,
+  onCancel,
+  cancelling,
+  onIncidenciaReported,
+}) {
   const estado = getBookingEstado(booking);
+  const statusMeta = getBookingStatusMeta(booking.estado || estado, {
+    role: "cliente",
+  });
   const service = booking.services ?? {};
   const proveedor = service.profiles_public ?? {};
   const vertical = service.vertical ?? "alojamiento";
@@ -180,11 +179,18 @@ function BookingCard({ booking, reviewed, onCancel, cancelling }) {
         </p>
 
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
-          <StatusTag status={estado} />
+          <BookingStatusBadge
+            status={booking.estado || estado}
+            role="cliente"
+            size="sm"
+          />
           {extraTags.map((tag) => (
             <ExtraTag key={tag} label={tag} />
           ))}
         </div>
+        <p className="mt-1.5 text-[10px] leading-relaxed text-[#888]">
+          {statusMeta.description}
+        </p>
 
         <div className="mt-3 flex flex-wrap gap-2">
           <GrayButton href={`/reserva/${booking.id}`}>Ver detalle</GrayButton>
@@ -227,6 +233,14 @@ function BookingCard({ booking, reviewed, onCancel, cancelling }) {
               {cancelling === booking.id ? "Cancelando…" : "Cancelar"}
             </GrayButton>
           )}
+
+          {statusMeta.canReportIncidencia && (
+            <ReportarIncidenciaForm
+              bookingId={booking.id}
+              compact
+              onSuccess={() => onIncidenciaReported?.(booking.id)}
+            />
+          )}
         </div>
       </div>
     </article>
@@ -235,6 +249,7 @@ function BookingCard({ booking, reviewed, onCancel, cancelling }) {
 
 export default function HistorialPage() {
   const router = useRouter();
+  const { toast, showSuccess, showError, dismiss } = useActionToast();
   const [loading, setLoading] = useState(true);
   const [bookings, setBookings] = useState([]);
   const [reviewedIds, setReviewedIds] = useState(new Set());
@@ -418,11 +433,25 @@ export default function HistorialPage() {
           (prev) => Math.round((prev + creditoDevuelto) * 100) / 100,
         );
       }
+      showSuccess("Reserva cancelada correctamente.");
     } else {
-      setErrorMessage(data.error || "No se pudo cancelar la reserva.");
+      const msg = data.error || "No se pudo cancelar la reserva.";
+      setErrorMessage(msg);
+      showError(msg);
     }
 
     setCancellingId(null);
+  }
+
+  function handleIncidenciaReported(bookingId) {
+    setBookings((prev) =>
+      prev.map((b) =>
+        b.id === bookingId ? { ...b, estado: "incidencia" } : b,
+      ),
+    );
+    showSuccess(
+      "Incidencia enviada. Nuestro equipo la revisará y te contactará.",
+    );
   }
 
   if (loading) {
@@ -572,6 +601,7 @@ export default function HistorialPage() {
                         reviewed={reviewedIds.has(booking.id)}
                         onCancel={handleCancel}
                         cancelling={cancellingId}
+                        onIncidenciaReported={handleIncidenciaReported}
                       />
                     </li>
                   ))}
@@ -581,6 +611,7 @@ export default function HistorialPage() {
           </div>
         )}
       </main>
+      <ActionToastHost toast={toast} onDismiss={dismiss} />
     </div>
   );
 }
