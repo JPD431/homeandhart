@@ -1,6 +1,5 @@
 import Link from "next/link";
 import Navbar from "@/app/components/Navbar";
-import { supabase } from "@/app/lib/supabase";
 import { SERIF } from "@/app/components/brand";
 import {
   BLOG_CATEGORIAS,
@@ -9,10 +8,13 @@ import {
   estimateReadingTime,
   formatBlogDate,
 } from "@/app/lib/blog-seed";
+import { getPublicSupabase } from "@/app/lib/supabase-public";
 
 const PAGE_SIZE = 9;
 const BORDER = "#e8e4de";
 const WARM = "#f7f5f2";
+
+export const revalidate = 3600;
 
 function getImageUrl(categoria, slug, width = 800, height = 400) {
   const seed = slug.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
@@ -93,6 +95,8 @@ export default async function BlogPage({ searchParams }) {
   let totalGrid = 0;
 
   try {
+    const supabase = getPublicSupabase();
+
     let featuredQuery = supabase
       .from("blog_posts")
       .select("*")
@@ -143,6 +147,8 @@ export default async function BlogPage({ searchParams }) {
     posts = gridData ?? [];
   } catch {
     posts = [];
+    featured = null;
+    totalGrid = 0;
   }
 
   const totalPages = Math.max(1, Math.ceil(totalGrid / PAGE_SIZE));

@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { marked } from "marked";
-import { supabase } from "@/app/lib/supabase";
 import Navbar from "@/app/components/Navbar";
 import { SERIF } from "@/app/components/brand";
 import {
@@ -12,10 +11,18 @@ import {
   estimateReadingTime,
   formatBlogDate,
 } from "@/app/lib/blog-seed";
+import { getPublicSupabase } from "@/app/lib/supabase-public";
 
 const BORDER = "#e8e4de";
 const WARM = "#f7f5f2";
 const PRIMARY = "#1d4f91";
+
+export const revalidate = 3600;
+export const dynamicParams = true;
+
+export async function generateStaticParams() {
+  return [];
+}
 
 marked.setOptions({ gfm: true, breaks: true });
 
@@ -33,12 +40,13 @@ function getPostImageUrl(post, width = 900, height = 400) {
 
 export async function generateMetadata({ params }) {
   const { slug } = await params;
+  const supabase = getPublicSupabase();
   const { data: post } = await supabase
     .from("blog_posts")
     .select("titulo, subtitulo, imagen_url, categoria")
     .eq("slug", slug)
     .eq("publicado", true)
-    .single();
+    .maybeSingle();
 
   if (!post) return { title: "Artículo no encontrado · Home&Heart" };
 
@@ -63,13 +71,14 @@ function renderMarkdown(content) {
 
 export default async function BlogArticlePage({ params }) {
   const { slug } = await params;
+  const supabase = getPublicSupabase();
 
   const { data: post } = await supabase
     .from("blog_posts")
     .select("*")
     .eq("slug", slug)
     .eq("publicado", true)
-    .single();
+    .maybeSingle();
 
   if (!post) notFound();
 

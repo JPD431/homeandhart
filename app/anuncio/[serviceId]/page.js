@@ -26,6 +26,14 @@ import {
 } from "@/app/lib/service-card-display";
 import { createClient } from "@/lib/supabase/server";
 
+/** ISR para anuncios públicos; preview usa searchParams (dinámico). */
+export const revalidate = 3600;
+export const dynamicParams = true;
+
+export async function generateStaticParams() {
+  return [];
+}
+
 const CANCEL_LABELS = {
   flexible: "Cancelación flexible",
   moderada: "Cancelación moderada",

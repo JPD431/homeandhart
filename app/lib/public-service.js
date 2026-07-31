@@ -1,5 +1,4 @@
 import { createClient as createServiceClient } from "@supabase/supabase-js";
-import { supabase } from "@/app/lib/supabase";
 import { isAdminUserId } from "@/lib/auth/admin";
 import { attachModalidadesToService } from "@/app/lib/service-modalidades-server";
 import {
@@ -11,6 +10,7 @@ import {
   loadServiceContactAdmin,
   mergeResolvedContactIntoService,
 } from "@/app/lib/service-contact";
+import { getPublicSupabase } from "@/app/lib/supabase-public";
 
 function getSupabaseAdmin() {
   if (
@@ -34,6 +34,7 @@ function getSupabaseAdmin() {
 export async function loadPublicServiceById(serviceId) {
   if (!serviceId) return null;
 
+  const supabase = getPublicSupabase();
   const { data, error } = await supabase
     .from("services")
     .select(SERVICE_PUBLIC_SELECT)
@@ -169,10 +170,12 @@ export async function loadAnuncioService(
 export async function loadServiceBloqueos(serviceId) {
   if (!serviceId) return [];
 
+  const supabase = getPublicSupabase();
   const { data } = await supabase
     .from("disponibilidad")
     .select("fecha_inicio, fecha_fin, service_id")
-    .eq("service_id", serviceId);
+    .eq("service_id", serviceId)
+    .limit(500);
 
   return data ?? [];
 }

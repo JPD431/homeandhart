@@ -23,8 +23,16 @@ import {
   formatProveedorRatingAvg,
 } from "@/app/lib/reviews";
 import { getServiceDescription } from "@/app/lib/service-card-display";
-import { supabase } from "@/app/lib/supabase";
+import { getPublicSupabase } from "@/app/lib/supabase-public";
 import { VERIFICADO_BADGE_TOOLTIP_ES } from "@/app/lib/verification-copy";
+
+/** ISR: no pre-renderizar todos los proveedores en build. */
+export const revalidate = 3600;
+export const dynamicParams = true;
+
+export async function generateStaticParams() {
+  return [];
+}
 
 const VERTICAL_THEME = {
   alojamiento: {
@@ -198,12 +206,13 @@ function getServiceTags(service) {
 
 export async function generateMetadata({ params }) {
   const { id } = await params;
+  const supabase = getPublicSupabase();
 
   const { data: perfil } = await supabase
     .from("profiles_public")
     .select("nombre, apellido, descripcion, ciudad, verificado")
     .eq("id", id)
-    .single();
+    .maybeSingle();
 
   if (!perfil || perfil.verificado !== true) {
     return {
@@ -216,7 +225,9 @@ export async function generateMetadata({ params }) {
     .from("services")
     .select("vertical, precio")
     .eq("proveedor_id", id)
-    .eq("disponible", true);
+    .eq("disponible", true)
+    .or("revision_estado.is.null,revision_estado.eq.aprobado")
+    .limit(50);
 
   const verticales = servicios
     ?.map((s) =>
@@ -248,22 +259,29 @@ export async function generateMetadata({ params }) {
 
 export default async function ProveedorPage({ params }) {
   const { id } = await params;
+  const supabase = getPublicSupabase();
 
   const { data: profile, error: profileError } = await supabase
     .from("profiles_public")
     .select(PROFILES_PUBLIC_SELECT)
     .eq("id", id)
-    .single();
+    .maybeSingle();
 
   if (profileError || !profile || profile.verificado !== true) {
     notFound();
   }
 
   // Perfil público: sin dirección exacta, teléfono ni coordenadas precisas.
-  const { data: servicesRaw } = await supabase
-    .from("services")
-    .select(
-      `
+  const [
+    { data: servicesRaw },
+    { data: reviews },
+    { data: allRatings },
+    { data: referenciasCompletadas },
+  ] = await Promise.all([
+    supabase
+      .from("services")
+      .select(
+        `
       id,
       titulo,
       vertical,
@@ -306,22 +324,62 @@ export default async function ProveedorPage({ params }) {
       anos_experiencia,
       revision_estado
     `,
-    )
-    .eq("proveedor_id", id)
-    .eq("disponible", true);
+      )
+      .eq("proveedor_id", id)
+      .eq("disponible", true)
+      .or("revision_estado.is.null,revision_estado.eq.aprobado")
+      .limit(50),
+    supabase
+      .from("reviews")
+      .select("id, valoracion, comentario, created_at, cliente_id")
+      .eq("proveedor_id", id)
+      .order("created_at", { ascending: false })
+      .limit(5),
+    supabase
+      .from("reviews")
+      .select("valoracion, cliente_id")
+      .eq("proveedor_id", id)
+      .limit(1000),
+    supabase
+      .from("referencias_public")
+      .select(
+        "nombre_referente, relacion, conoce_desde, recomendaria, comentario",
+      )
+      .eq("proveedor_id", id)
+      .order("nombre_referente", { ascending: true })
+      .limit(50),
+  ]);
 
   const services = servicesRaw ?? [];
   const serviceIds = services.map((s) => s.id);
 
-  let bloqueosCalendario = [];
-  if (serviceIds.length > 0) {
-    const { data: bloqueos } = await supabase
-      .from("disponibilidad")
-      .select("fecha_inicio, fecha_fin, service_id")
-      .in("service_id", serviceIds);
+  const [bloqueosResult, reservasResult, clientesResult] = await Promise.all([
+    serviceIds.length > 0
+      ? supabase
+          .from("disponibilidad")
+          .select("fecha_inicio, fecha_fin, service_id")
+          .in("service_id", serviceIds)
+          .limit(500)
+      : Promise.resolve({ data: [] }),
+    serviceIds.length > 0
+      ? supabase
+          .from("bookings")
+          .select("id", { count: "exact", head: true })
+          .in("service_id", serviceIds)
+      : Promise.resolve({ count: 0 }),
+    reviews?.length
+      ? supabase
+          .from("profiles_public")
+          .select("id, nombre")
+          .in(
+            "id",
+            [...new Set(reviews.map((r) => r.cliente_id).filter(Boolean))],
+          )
+      : Promise.resolve({ data: [] }),
+  ]);
 
-    bloqueosCalendario = bloqueos ?? [];
-  }
+  const bloqueosCalendario = bloqueosResult.data ?? [];
+  const reservasCount = reservasResult.count ?? 0;
 
   const servicesParaCalendario = (services ?? []).map((service) => {
     const vertical = VERTICAL_THEME[service.vertical] ?? VERTICAL_THEME.alojamiento;
@@ -333,57 +391,19 @@ export default async function ProveedorPage({ params }) {
     };
   });
 
-  const { data: reviews } = await supabase
-    .from("reviews")
-    .select("id, valoracion, comentario, created_at, cliente_id")
-    .eq("proveedor_id", id)
-    .order("created_at", { ascending: false })
-    .limit(5);
-
-  const { data: allRatings } = await supabase
-    .from("reviews")
-    .select("valoracion, cliente_id")
-    .eq("proveedor_id", id);
-
-  const { data: referenciasCompletadas } = await supabase
-    .from("referencias_public")
-    .select(
-      "nombre_referente, relacion, conoce_desde, recomendaria, comentario",
-    )
-    .eq("proveedor_id", id)
-    .order("nombre_referente", { ascending: true });
-
-  let reservasCount = 0;
-  if (serviceIds.length > 0) {
-    const { count } = await supabase
-      .from("bookings")
-      .select("id", { count: "exact", head: true })
-      .in("service_id", serviceIds);
-    reservasCount = count ?? 0;
-  }
-
   const avalesCount = referenciasCompletadas?.length ?? 0;
   const ratingAgg = computeProveedorRating(allRatings);
   const reviewCount = ratingAgg.count;
   const averageRating = formatProveedorRatingAvg(ratingAgg);
 
-  let reviewsWithNames = [];
-  if (reviews?.length) {
-    const clienteIds = reviews.map((r) => r.cliente_id);
-    const { data: clientes } = await supabase
-      .from("profiles_public")
-      .select("id, nombre")
-      .in("id", clienteIds);
+  const namesMap = Object.fromEntries(
+    (clientesResult.data ?? []).map((c) => [c.id, c.nombre]),
+  );
 
-    const namesMap = Object.fromEntries(
-      (clientes ?? []).map((c) => [c.id, c.nombre]),
-    );
-
-    reviewsWithNames = reviews.map((review) => ({
-      ...review,
-      cliente_nombre: namesMap[review.cliente_id] || "Cliente",
-    }));
-  }
+  const reviewsWithNames = (reviews ?? []).map((review) => ({
+    ...review,
+    cliente_nombre: namesMap[review.cliente_id] || "Cliente",
+  }));
 
   const fullName = [profile.nombre, profile.apellido].filter(Boolean).join(" ");
   const zone = profile.location_zone || profile.ciudad || "España";

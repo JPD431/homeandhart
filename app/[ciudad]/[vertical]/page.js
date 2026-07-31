@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { createClient } from "@supabase/supabase-js";
 import { getServiceCoverPhoto } from "@/app/lib/service-card-display";
 import { SERIF } from "@/app/components/brand";
 import {
@@ -8,6 +7,7 @@ import {
   computeProveedorRating,
   formatProveedorRatingAvg,
 } from "@/app/lib/reviews";
+import { getPublicSupabase } from "@/app/lib/supabase-public";
 import {
   VERIFICACION_ALOJAMIENTO_ES,
   VERIFICACION_MASCOTAS_ES,
@@ -21,18 +21,6 @@ const WARM = "#f7f5f2";
 
 const CIUDADES = ["madrid", "barcelona", "valencia", "sevilla", "bilbao"];
 const VERTICALES = ["nineras", "alojamiento", "mascotas"];
-
-/** Cliente anon sin cookies — lecturas públicas en RSC/ISR (no browser client). */
-function getPublicSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) {
-    throw new Error("Faltan NEXT_PUBLIC_SUPABASE_URL o NEXT_PUBLIC_SUPABASE_ANON_KEY");
-  }
-  return createClient(url, key, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
 
 const VERTICAL_DB = {
   nineras: "ninos",

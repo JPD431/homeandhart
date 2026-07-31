@@ -1,4 +1,4 @@
-import { supabase } from "@/app/lib/supabase";
+import { getPublicSupabase } from "@/app/lib/supabase-public";
 
 export default async function sitemap() {
   const baseUrl = "https://homeandheart.es";
@@ -65,18 +65,34 @@ export default async function sitemap() {
     })),
   );
 
-  const { data: proveedores } = await supabase
-    .from("profiles_public")
-    .select("id, fecha_registro")
-    .eq("role", "proveedor")
-    .eq("verificado", true);
+  let proveedorPages = [];
+  try {
+    const supabase = getPublicSupabase();
+    const { data: proveedores, error } = await supabase
+      .from("profiles_public")
+      .select("id, fecha_registro")
+      .eq("role", "proveedor")
+      .eq("verificado", true)
+      .limit(2000);
 
-  const proveedorPages = (proveedores || []).map((p) => ({
-    url: `${baseUrl}/proveedor/${p.id}`,
-    lastModified: new Date(p.fecha_registro),
-    changeFrequency: "weekly",
-    priority: 0.8,
-  }));
+    if (error) {
+      console.error("[sitemap] Error cargando proveedores:", error.message);
+    } else {
+      proveedorPages = (proveedores || []).map((p) => ({
+        url: `${baseUrl}/proveedor/${p.id}`,
+        lastModified: p.fecha_registro
+          ? new Date(p.fecha_registro)
+          : new Date(),
+        changeFrequency: "weekly",
+        priority: 0.8,
+      }));
+    }
+  } catch (err) {
+    console.error(
+      "[sitemap] Fallo cliente público; sitemap mínimo:",
+      err?.message || err,
+    );
+  }
 
   return [...staticPages, ...landingPages, ...proveedorPages];
 }

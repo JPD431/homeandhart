@@ -1,4 +1,4 @@
-import { supabase } from "@/app/lib/supabase";
+import { getPublicSupabase } from "@/app/lib/supabase-public";
 
 /** Plazo para dejar reseña tras completar el servicio (independiente del token de pago 24h). */
 export const REVIEW_WINDOW_DAYS = 14;
@@ -154,10 +154,12 @@ export async function loadProveedorRating(proveedorId) {
     return { sum: 0, count: 0, clientCount: 0, avg: null };
   }
 
+  const supabase = getPublicSupabase();
   const { data } = await supabase
     .from("reviews")
     .select("valoracion, cliente_id")
-    .eq("proveedor_id", proveedorId);
+    .eq("proveedor_id", proveedorId)
+    .limit(1000);
 
   return computeProveedorRating(data);
 }
