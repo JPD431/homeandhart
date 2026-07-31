@@ -416,6 +416,22 @@ async function handleAccountUpdated(account) {
           "[stripe/webhook] Error activando servicios tras cobros:",
           activateError.message,
         );
+      } else {
+        try {
+          const { notifyProveedorAnunciosActivos } = await import(
+            "@/app/lib/anuncio-activo-notify"
+          );
+          await notifyProveedorAnunciosActivos({
+            userId: profile.id,
+            serviceIds: ids,
+            count: ids.length,
+          });
+        } catch (notifyErr) {
+          console.error(
+            "[stripe/webhook] Error notificando anuncios activos:",
+            notifyErr?.message || notifyErr,
+          );
+        }
       }
     }
   }

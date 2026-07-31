@@ -102,11 +102,17 @@ export default function AdminServiciosRevisionTab({
       }
       setRejectingId(null);
       setRejectReason("");
-      onSuccessRef.current?.(
-        accion === "aprobar"
-          ? "Servicio aprobado y publicado ✓"
-          : "Servicio rechazado. El proveedor ha sido avisado.",
-      );
+      if (accion === "aprobar") {
+        onSuccessRef.current?.(
+          payload.disponible === true
+            ? "Anuncio aprobado y activo / reservable ✓"
+            : "Anuncio aprobado. Se activará automáticamente cuando el proveedor configure sus cobros.",
+        );
+      } else {
+        onSuccessRef.current?.(
+          "Servicio rechazado. El proveedor ha sido avisado.",
+        );
+      }
       await load();
     } catch (err) {
       onErrorRef.current?.(err.message || `Error al ${accion}`);
@@ -203,6 +209,15 @@ export default function AdminServiciosRevisionTab({
                   ) : (
                     <span className="ml-2 text-xs font-medium text-[#c47d1a]">
                       · Perfil pendiente
+                    </span>
+                  )}
+                  {svc.cobros_activos ? (
+                    <span className="ml-2 text-xs font-medium text-[#0e7a5c]">
+                      · Cobros activos
+                    </span>
+                  ) : (
+                    <span className="ml-2 text-xs font-medium text-[#163a6b]">
+                      · Sin cobros activos (tras aprobar no será reservable aún)
                     </span>
                   )}
                 </p>

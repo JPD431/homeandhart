@@ -190,7 +190,7 @@ export async function notifyProveedorServicioRevision({
   const { data: row, error: fetchError } = await service
     .from("services")
     .select(
-      "id, titulo, proveedor_id, revision_estado, profiles!proveedor_id(nombre, apellido)",
+      "id, titulo, proveedor_id, revision_estado, disponible, profiles!proveedor_id(nombre, apellido, cobros_activos)",
     )
     .eq("id", serviceId)
     .maybeSingle();
@@ -211,17 +211,25 @@ export async function notifyProveedorServicioRevision({
   const motivoTrim = typeof motivo === "string" ? motivo.trim() : "";
   const tipo =
     accion === "aprobar" ? SERVICIO_APROBADO_TIPO : SERVICIO_RECHAZADO_TIPO;
+  const activoYa = row.disponible === true;
   const titulo =
     accion === "aprobar"
-      ? "Tu servicio ya está publicado"
+      ? activoYa
+        ? "¡Tu anuncio ya está activo!"
+        : "¡Tu anuncio está aprobado!"
       : "Tu servicio necesita cambios";
   const mensaje =
     accion === "aprobar"
-      ? `«${tituloSvc}» ya está publicado y visible para las familias.`
+      ? activoYa
+        ? `«${tituloSvc}» ya está activo. Ya puedes recibir reservas.`
+        : `«${tituloSvc}» está aprobado. Solo te falta configurar tus cobros para empezar a recibir reservas.`
       : motivoTrim
         ? `«${tituloSvc}» necesita cambios: ${motivoTrim}`
         : `«${tituloSvc}» necesita cambios antes de publicarse. Edítalo y guárdalo de nuevo.`;
-  const href = "/editar-perfil";
+  const href =
+    accion === "aprobar" && !activoYa
+      ? "/dashboard?tab=proveedor"
+      : "/editar-perfil";
 
   let notified = false;
   const result = await createNotification(null, {
@@ -263,6 +271,8 @@ export async function notifyProveedorServicioRevision({
       titulo: tituloSvc,
       service_id: serviceId,
       motivo: motivoTrim || undefined,
+      disponible: activoYa,
+      pendiente_cobros: accion === "aprobar" && !activoYa,
     });
     if (!result.ok) {
       console.error(LOG_PREFIX, "Email proveedor falló:", result.error || result.status);

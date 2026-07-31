@@ -156,6 +156,7 @@ export async function POST(request) {
       ok: true,
       revision_estado: REVISION_APROBADO,
       disponible: cobrosActivos,
+      cobros_activos: cobrosActivos,
     });
   }
 

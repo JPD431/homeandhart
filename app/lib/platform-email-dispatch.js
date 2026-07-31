@@ -2289,22 +2289,88 @@ export async function dispatchPlatformEmail(payload = {}) {
       const anuncioUrl = data.service_id
         ? `${baseUrl}/anuncio/${data.service_id}`
         : `${baseUrl}/editar-perfil`;
+      const pendienteCobros = data.pendiente_cobros === true;
 
       const result = await resend.emails.send({
         from: FROM,
         to: email,
-        subject: "Tu servicio ya está publicado · Home&Heart",
+        subject: pendienteCobros
+          ? "¡Tu anuncio está aprobado! · Home&Heart"
+          : "¡Tu anuncio ya está activo! · Home&Heart",
         html: emailLayout({
-          title: "Tu servicio ya está publicado",
-          bodyHtml: `
-            <h1 style="margin:0 0 16px;font-size:20px;color:${BRAND_PRIMARY};">Tu servicio ya está publicado</h1>
+          title: pendienteCobros
+            ? "Tu anuncio está aprobado"
+            : "Tu anuncio ya está activo",
+          bodyHtml: pendienteCobros
+            ? `
+            <h1 style="margin:0 0 16px;font-size:20px;color:${BRAND_PRIMARY};">¡Tu anuncio está aprobado!</h1>
             <p style="margin:0 0 12px;font-size:14px;line-height:1.6;color:#444;">
               Hola <strong>${nombre}</strong>, hemos aprobado <strong>«${titulo}»</strong>.
-              Ya es visible para las familias en la búsqueda.
+              Solo te falta configurar tus cobros para empezar a recibir reservas.
+            </p>
+            <p style="margin:0;text-align:center;">
+              <a href="${baseUrl}/dashboard?tab=proveedor" style="display:inline-block;background-color:${BRAND_PRIMARY};color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:8px;font-size:15px;font-weight:600;">
+                Configurar cobros →
+              </a>
+            </p>
+          `
+            : `
+            <h1 style="margin:0 0 16px;font-size:20px;color:${BRAND_PRIMARY};">¡Tu anuncio ya está activo!</h1>
+            <p style="margin:0 0 12px;font-size:14px;line-height:1.6;color:#444;">
+              Hola <strong>${nombre}</strong>, <strong>«${titulo}»</strong> ya está activo.
+              Ya puedes recibir reservas.
             </p>
             <p style="margin:0;text-align:center;">
               <a href="${anuncioUrl}" style="display:inline-block;background-color:${BRAND_PRIMARY};color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:8px;font-size:15px;font-weight:600;">
                 Ver mi anuncio →
+              </a>
+            </p>
+          `,
+        }),
+      });
+
+      if (result.error) {
+        return { ok: false, status: 400, error: result.error.message };
+      }
+
+      return { ok: true, status: 200, data: { success: true } };
+    }
+
+    if (tipo === "anuncios_activos_cobros") {
+      const userId = data.user_id || data.proveedor_id;
+      const email =
+        data.email || (userId ? await resolverEmailUsuario(userId) : null);
+      if (!email) {
+        return {
+          ok: false,
+          status: 400,
+          error: "No se encontró el email del destinatario",
+        };
+      }
+      const baseUrl = process.env.NEXT_PUBLIC_URL || "https://homeandheart.es";
+      const nombre = (data.nombre || "proveedor").replace(/</g, "&lt;");
+      const count = Number(data.count) || 1;
+
+      const result = await resend.emails.send({
+        from: FROM,
+        to: email,
+        subject: "¡Tu anuncio ya está activo! · Home&Heart",
+        html: emailLayout({
+          title: "Tu anuncio ya está activo",
+          bodyHtml: `
+            <h1 style="margin:0 0 16px;font-size:20px;color:${BRAND_PRIMARY};">¡Tu anuncio ya está activo!</h1>
+            <p style="margin:0 0 12px;font-size:14px;line-height:1.6;color:#444;">
+              Hola <strong>${nombre}</strong>, tus cobros ya están configurados
+              ${
+                count > 1
+                  ? `y tus ${count} anuncios elegibles ya están activos.`
+                  : "y tu anuncio ya está activo."
+              }
+              Ya puedes recibir reservas.
+            </p>
+            <p style="margin:0;text-align:center;">
+              <a href="${baseUrl}/editar-perfil?tab=servicios" style="display:inline-block;background-color:${BRAND_PRIMARY};color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:8px;font-size:15px;font-weight:600;">
+                Ver mis servicios →
               </a>
             </p>
           `,

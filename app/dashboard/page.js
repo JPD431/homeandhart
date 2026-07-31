@@ -255,8 +255,17 @@ function DashboardContent() {
           }}
         >
           <p style={{ margin: 0, fontSize: 13, color: '#085041', lineHeight: 1.5 }}>
-            <strong style={{ color: BRAND.green }}>¡Listo!</strong> Tus cobros están configurados.
-            Ya puedes recibir pagos de tus reservas.
+            {perfil?.cobros_activos === true ? (
+              <>
+                <strong style={{ color: BRAND.green }}>¡Tu anuncio ya está activo!</strong>{' '}
+                Ya puedes recibir reservas.
+              </>
+            ) : (
+              <>
+                <strong style={{ color: BRAND.green }}>¡Listo!</strong> Estamos activando tus
+                cobros. En unos segundos tu anuncio pasará a activo si ya estaba aprobado.
+              </>
+            )}
           </p>
           <button
             type="button"
@@ -637,6 +646,8 @@ function TabProveedor({ perfil, userEmail, router, BRAND, highlightBookingId }) 
         perfil={perfil}
         accountEmail={userEmail}
         BRAND={BRAND}
+        onConfigureCobros={handleConfigureCobros}
+        configureCobrosLoading={connectLoading}
       />
       {deudaPendiente > 0 && (
         <div
@@ -705,18 +716,43 @@ function TabProveedor({ perfil, userEmail, router, BRAND, highlightBookingId }) 
               marginBottom: 16,
               padding: '16px',
               borderRadius: 10,
-              border: `1px solid ${BRAND.blue}`,
-              background: '#e8f0fb',
+              border: `1px solid ${
+                perfil?.verificado === true ? BRAND.green : BRAND.blue
+              }`,
+              background: perfil?.verificado === true ? '#e6f4f0' : '#e8f0fb',
               textAlign: 'left',
             }}
           >
-            <p style={{ fontSize: 13, fontWeight: 600, color: '#2a3a4a', margin: 0 }}>
-              {cobrosIncompletos ? 'Cobros pendientes de completar' : 'Cobros pendientes'}
+            <p
+              style={{
+                fontSize: 13,
+                fontWeight: 700,
+                color: perfil?.verificado === true ? '#085041' : '#2a3a4a',
+                margin: 0,
+              }}
+            >
+              {perfil?.verificado === true
+                ? '¡Tu anuncio está aprobado! ✓'
+                : cobrosIncompletos
+                  ? 'Cobros pendientes de completar'
+                  : 'Cobros pendientes'}
             </p>
-            <p style={{ fontSize: 12, color: '#444', marginTop: 8, marginBottom: 12, lineHeight: 1.5 }}>
-              {cobrosIncompletos
-                ? 'Has empezado a conectar Stripe, pero los cobros aún no están activos. Complétalo para poder recibir reservas y pagos.'
-                : 'Sin cobros activos no puedes recibir reservas ni pagos. Configura Stripe para activarlos.'}
+            <p
+              style={{
+                fontSize: 12,
+                color: perfil?.verificado === true ? '#085041' : '#444',
+                marginTop: 8,
+                marginBottom: 12,
+                lineHeight: 1.5,
+              }}
+            >
+              {perfil?.verificado === true
+                ? cobrosIncompletos
+                  ? 'Solo te falta completar tus cobros para empezar a recibir reservas. Es el último paso.'
+                  : 'Solo te falta configurar tus cobros para empezar a recibir reservas. Es el último paso: estás a un clic de estar activo.'
+                : cobrosIncompletos
+                  ? 'Has empezado a conectar Stripe, pero los cobros aún no están activos. Complétalo para poder recibir reservas y pagos.'
+                  : 'Sin cobros activos no puedes recibir reservas ni pagos. Configura Stripe para activarlos.'}
             </p>
             <button
               type="button"
@@ -729,8 +765,8 @@ function TabProveedor({ perfil, userEmail, router, BRAND, highlightBookingId }) 
                 border: 'none',
                 padding: '10px 20px',
                 borderRadius: 4,
-                fontSize: 12,
-                fontWeight: 600,
+                fontSize: 13,
+                fontWeight: 700,
                 cursor: connectLoading ? 'not-allowed' : 'pointer',
                 opacity: connectLoading ? 0.7 : 1,
               }}

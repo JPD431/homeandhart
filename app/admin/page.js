@@ -204,6 +204,46 @@ function getRevisionEstadoBadge(revisionEstado) {
   }
 }
 
+/** Distingue revisión OK vs anuncio reservable (cobros + gates). */
+function getServicePublishingBadge(svc, providerCobrosActivos) {
+  const revisionOk =
+    svc?.revision_estado == null || svc?.revision_estado === REVISION_APROBADO;
+  if (!revisionOk) return null;
+  if (svc?.disponible === true) {
+    return {
+      label: "Activo / reservable",
+      bg: "#e6f4f0",
+      color: "#085041",
+    };
+  }
+  if (providerCobrosActivos !== true) {
+    return {
+      label: "Aprobado · esperando que el proveedor configure cobros",
+      bg: "#e8f0fb",
+      color: "#163a6b",
+    };
+  }
+  return {
+    label: "Aprobado · aún no reservable",
+    bg: "#fdf4e7",
+    color: "#92400e",
+  };
+}
+
+function getCobrosEstadoBadge(provider) {
+  if (provider?.cobros_activos === true) {
+    return { label: "Cobros: activos ✓", bg: "#e6f4f0", color: "#085041" };
+  }
+  if (provider?.stripe_account_id) {
+    return {
+      label: "Cobros: en configuración",
+      bg: "#fdf4e7",
+      color: "#92400e",
+    };
+  }
+  return { label: "Cobros: pendientes", bg: "#fdf4e7", color: "#92400e" };
+}
+
 function fullName(profile) {
   return [profile.nombre, profile.apellido].filter(Boolean).join(" ") || "Sin nombre";
 }
@@ -539,6 +579,7 @@ function AdminPageInner() {
   async function handleApprove(providerId) {
     setActionLoading(providerId);
     setErrorMessage("");
+    setSuccessMessage("");
 
     const response = await fetch(`/api/admin/providers/${providerId}/approve`, {
       method: "POST",
@@ -550,6 +591,20 @@ function AdminPageInner() {
     if (!response.ok) {
       setErrorMessage(`Error al aprobar: ${result.error || "Error desconocido"}`);
       return;
+    }
+
+    if (result.cobros_activos === true && result.servicios_activados === true) {
+      setSuccessMessage(
+        "Proveedor aprobado. Sus anuncios elegibles ya están activos / reservables.",
+      );
+    } else if (result.cobros_activos !== true) {
+      setSuccessMessage(
+        "Anuncio aprobado. Se activará automáticamente cuando el proveedor configure sus cobros.",
+      );
+    } else {
+      setSuccessMessage(
+        "Proveedor aprobado. Los anuncios se activarán cuando cumplan el resto de requisitos (docs/NRU).",
+      );
     }
 
     setRejectingId(null);
@@ -2910,17 +2965,20 @@ function AdminPageInner() {
                         {fullName(provider)}
                       </h2>
                       <div className="mt-1.5 flex flex-wrap gap-1.5">
-                        <span
-                          className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
-                          style={{
-                            backgroundColor: provider.cobros_activos
-                              ? "#e6f4f0"
-                              : "#fdf4e7",
-                            color: provider.cobros_activos ? "#085041" : "#92400e",
-                          }}
-                        >
-                          Cobros: {provider.cobros_activos ? "activos ✓" : "pendientes"}
-                        </span>
+                        {(() => {
+                          const cobrosBadge = getCobrosEstadoBadge(provider);
+                          return (
+                            <span
+                              className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                              style={{
+                                backgroundColor: cobrosBadge.bg,
+                                color: cobrosBadge.color,
+                              }}
+                            >
+                              {cobrosBadge.label}
+                            </span>
+                          );
+                        })()}
                         <span
                           className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
                           style={{
@@ -3093,6 +3151,10 @@ function AdminPageInner() {
                           const revisionBadge = getRevisionEstadoBadge(
                             svc.revision_estado,
                           );
+                          const publishingBadge = getServicePublishingBadge(
+                            svc,
+                            provider.cobros_activos === true,
+                          );
                           const isAloj = svc.vertical === "alojamiento";
                           const nruText = (svc.nru || "").trim();
                           const nruEstado = svc.nru_estado || "pendiente";
@@ -3128,9 +3190,15 @@ function AdminPageInner() {
                                 >
                                   {revisionBadge.label}
                                 </span>
-                                {svc.disponible && (
-                                  <span className="text-[10px] font-medium text-[#0e7a5c]">
-                                    · Activo
+                                {publishingBadge && (
+                                  <span
+                                    className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                                    style={{
+                                      backgroundColor: publishingBadge.bg,
+                                      color: publishingBadge.color,
+                                    }}
+                                  >
+                                    {publishingBadge.label}
                                   </span>
                                 )}
                               </div>

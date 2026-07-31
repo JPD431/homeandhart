@@ -13,6 +13,8 @@ export default function ProviderFirstStepsChecklist({
   perfil,
   accountEmail = null,
   BRAND,
+  onConfigureCobros = null,
+  configureCobrosLoading = false,
 }) {
   const [services, setServices] = useState([]);
 
@@ -22,7 +24,7 @@ export default function ProviderFirstStepsChecklist({
       if (!perfil?.id) return;
       const { data, error } = await supabase
         .from("services")
-        .select("id, vertical, nru, nru_estado, revision_estado")
+        .select("id, vertical, nru, nru_estado, revision_estado, disponible")
         .eq("proveedor_id", perfil.id);
       if (!cancelled && !error) {
         setServices(data || []);
@@ -52,6 +54,9 @@ export default function ProviderFirstStepsChecklist({
   const showNinos = !tieneServicio || verticals.has("ninos");
   const showMascotas = !tieneServicio || verticals.has("mascotas");
   const showAlojamiento = !tieneServicio || verticals.has("alojamiento");
+  const tieneAnuncioAprobado = services.some(
+    (s) => s.revision_estado == null || s.revision_estado === "aprobado",
+  );
 
   const ninosDocsOk = perfil?.ninos_documentacion_aprobada === true;
   const mascotasDocsOk = perfil?.mascotas_documentacion_aprobada === true;
@@ -90,7 +95,9 @@ export default function ProviderFirstStepsChecklist({
       ? "Completar configuración de cobros"
       : "Configurar cobros",
     hint: !cobrosOk
-      ? "Sin cobros activos no puedes recibir reservas ni pagos."
+      ? verificado && tieneAnuncioAprobado
+        ? "Último paso: con los cobros activos tu anuncio empieza a recibir reservas."
+        : "Sin cobros activos no puedes recibir reservas ni pagos."
       : null,
     urgent: verificado && identidadOk && !cobrosOk,
   });
@@ -213,7 +220,8 @@ export default function ProviderFirstStepsChecklist({
     identidadOk &&
     verificado &&
     contactoOk &&
-    tieneServicio;
+    tieneServicio &&
+    tieneAnuncioAprobado;
 
   const allCoreDone =
     identidadOk &&
@@ -282,36 +290,64 @@ export default function ProviderFirstStepsChecklist({
         <div
           style={{
             marginTop: 12,
-            padding: "12px 14px",
+            padding: "14px 16px",
             borderRadius: 8,
-            background: "#e8f0fb",
-            border: `1px solid ${BRAND.blue}`,
+            background: "#e6f4f0",
+            border: `1px solid ${BRAND.green}`,
           }}
         >
-          <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: "#163a6b" }}>
-            Solo te falta configurar los cobros
+          <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "#085041" }}>
+            ¡Tu anuncio está aprobado! ✓
           </p>
-          <p style={{ margin: "6px 0 0", fontSize: 11, color: "#444", lineHeight: 1.45 }}>
-            Sin cobros activos con Stripe no puedes recibir reservas ni pagos.
-            Tarda unos minutos.
+          <p style={{ margin: "6px 0 0", fontSize: 12, color: "#085041", lineHeight: 1.5 }}>
+            Solo te falta configurar tus cobros para empezar a recibir reservas.
+            Es el último paso: estás a un clic de estar activo.
           </p>
-          <Link
-            href="/dashboard?tab=proveedor"
-            style={{
-              display: "inline-block",
-              marginTop: 10,
-              minHeight: 36,
-              padding: "8px 14px",
-              borderRadius: 6,
-              background: BRAND.blue,
-              color: "#fff",
-              fontSize: 12,
-              fontWeight: 600,
-              textDecoration: "none",
-            }}
-          >
-            Configurar cobros →
-          </Link>
+          {typeof onConfigureCobros === "function" ? (
+            <button
+              type="button"
+              onClick={onConfigureCobros}
+              disabled={configureCobrosLoading}
+              style={{
+                display: "inline-block",
+                marginTop: 12,
+                minHeight: 40,
+                padding: "10px 18px",
+                borderRadius: 6,
+                border: "none",
+                background: BRAND.blue,
+                color: "#fff",
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: configureCobrosLoading ? "not-allowed" : "pointer",
+                opacity: configureCobrosLoading ? 0.7 : 1,
+              }}
+            >
+              {configureCobrosLoading
+                ? "Conectando…"
+                : tieneStripeAccount && !cobrosOk
+                  ? "Completar cobros →"
+                  : "Configurar cobros →"}
+            </button>
+          ) : (
+            <Link
+              href="/dashboard?tab=proveedor"
+              style={{
+                display: "inline-block",
+                marginTop: 12,
+                minHeight: 40,
+                padding: "10px 18px",
+                borderRadius: 6,
+                background: BRAND.blue,
+                color: "#fff",
+                fontSize: 13,
+                fontWeight: 700,
+                textDecoration: "none",
+              }}
+            >
+              Configurar cobros →
+            </Link>
+          )}
         </div>
       )}
 
