@@ -32,9 +32,15 @@ export default function LegalPageLayout({
               >
                 {section.title}
               </h2>
-              <p className="mt-3 text-base leading-relaxed text-[#5c5c5c]">
-                {section.body}
-              </p>
+              {typeof section.body === "string" ? (
+                <p className="mt-3 text-base leading-relaxed text-[#5c5c5c]">
+                  {section.body}
+                </p>
+              ) : (
+                <div className="mt-3 text-base leading-relaxed text-[#5c5c5c]">
+                  {section.body}
+                </div>
+              )}
             </section>
           ))}
         </div>
