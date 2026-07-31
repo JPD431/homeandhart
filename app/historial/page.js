@@ -20,6 +20,7 @@ import {
 import { ActionToastHost, useActionToast } from "@/app/components/ActionToast";
 import BookingStatusBadge from "@/app/components/BookingStatusBadge";
 import DataLoadFailed from "@/app/components/DataLoadFailed";
+import EmptyState from "@/app/components/EmptyState";
 import ReportarIncidenciaForm from "@/app/components/ReportarIncidenciaForm";
 import { canLeaveReview } from "@/app/lib/reviews";
 import { buildLoginUrl } from "@/app/lib/auth-redirect";
@@ -484,7 +485,7 @@ export default function HistorialPage() {
     >
       <Navbar />
 
-      <header className="border-b bg-white px-6 py-6" style={{ borderColor: BORDER }}>
+      <header className="border-b bg-white px-4 py-5 sm:px-6 sm:py-6" style={{ borderColor: BORDER }}>
         <div className="mx-auto" style={{ maxWidth: 900 }}>
           <h1
             className="text-[22px] text-[#1a1a1a]"
@@ -560,7 +561,7 @@ export default function HistorialPage() {
         </div>
       </div>
 
-      <main className="mx-auto" style={{ padding: "20px 28px", maxWidth: 900 }}>
+      <main className="mx-auto px-4 py-5 sm:px-7" style={{ maxWidth: 900 }}>
         {errorMessage && (
           <p className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
             {errorMessage}
@@ -568,14 +569,26 @@ export default function HistorialPage() {
         )}
 
         {filteredBookings.length === 0 ? (
-          <p
-            className="rounded-xl border bg-white px-6 py-12 text-center text-sm text-[#666]"
+          <div
+            className="rounded-xl border bg-white"
             style={{ borderColor: BORDER }}
           >
-            {bookings.length === 0
-              ? "No tienes reservas todavía."
-              : "No hay reservas en esta categoría."}
-          </p>
+            {bookings.length === 0 ? (
+              <EmptyState
+                title="Aún no tienes reservas"
+                description="Explora servicios cerca de ti y reserva alojamiento, niñera o cuidado de mascotas."
+                actionLabel="Buscar servicios"
+                actionHref="/buscar"
+              />
+            ) : (
+              <EmptyState
+                title="No hay reservas en esta categoría"
+                description="Prueba otro filtro o vuelve a ver todas tus reservas."
+                actionLabel="Ver todas"
+                onAction={() => setActiveFilter("todas")}
+              />
+            )}
+          </div>
         ) : (
           <div className="flex flex-col gap-8">
             <p className="text-[11px] leading-relaxed text-[#888]">

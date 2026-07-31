@@ -1023,7 +1023,7 @@ function BuscarContent() {
       <header
         ref={filtersRef}
         className="shrink-0 border-b"
-        style={{ backgroundColor: "#f7f5f2", borderColor: "#e8e4de", padding: "12px 20px" }}
+        style={{ backgroundColor: "#f7f5f2", borderColor: "#e8e4de", padding: "12px 16px" }}
       >
         <form
           onSubmit={handleBuscarSubmit}
@@ -1123,8 +1123,8 @@ function BuscarContent() {
 
             {calendarOpen && (
               <div
-                className="absolute left-0 z-50 mt-1 rounded-lg border bg-white p-4 shadow-xl"
-                style={{ borderColor: "#e8e4de", minWidth: 320 }}
+                className="absolute left-0 right-0 z-50 mt-1 max-w-[min(360px,calc(100vw-24px))] rounded-lg border bg-white p-3 shadow-xl sm:right-auto sm:p-4"
+                style={{ borderColor: "#e8e4de", minWidth: "min(320px, calc(100vw - 24px))" }}
               >
                 <CalendarioRangoFechas
                   fechaInicio={fechaDesdeInput}
@@ -1500,22 +1500,21 @@ function BuscarContent() {
         </div>
       )}
 
-      {/* Split layout */}
+      {/* Split layout: móvil = lista a altura natural; md+ = lista + mapa */}
       <div
-        className="mx-auto grid w-full max-w-[1600px] min-h-0 grid-cols-1 overflow-hidden md:grid-cols-2"
+        className="mx-auto grid w-full max-w-[1600px] min-h-0 flex-1 grid-cols-1 overflow-hidden md:h-[var(--hh-split-h)] md:min-h-[600px] md:grid-cols-2"
         style={{
-          flex: 1,
           overflow: "hidden",
-          minHeight: 600,
-          height: splitHeight,
+          ["--hh-split-h"]: splitHeight,
         }}
       >
         {/* Lista */}
         <div
-          className="h-full min-h-0 overflow-y-auto border-r [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
-          style={{ borderColor: "#e8e4de" }}
+          className="min-h-0 overflow-y-auto border-r [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden md:h-full md:max-h-none"
+          style={{
+            borderColor: "#e8e4de",
+          }}
         >
-
           {loading && (
             <div className="flex flex-col">
               {[1, 2, 3].map((n) => (
@@ -1525,9 +1524,26 @@ function BuscarContent() {
           )}
 
           {!loading && !error && results.length === 0 && (
-            <p className="px-5 py-10 text-center text-[12px] leading-relaxed text-[#888]">
-              {t.buscar.sinResultados}
-            </p>
+            <div className="px-5 py-10">
+              <p className="text-center text-[13px] font-semibold text-[#2a3a4a]">
+                {t.buscar.sinResultados}
+              </p>
+              <p className="mt-2 text-center text-[12px] leading-relaxed text-[#888]">
+                {lang === "en"
+                  ? "Clear filters or try another city to see more results."
+                  : "Quita filtros o prueba otra ciudad para ver más resultados."}
+              </p>
+              <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleClearAll}
+                  className="min-h-[44px] rounded-md px-4 py-2 text-[12px] font-semibold text-white"
+                  style={{ backgroundColor: PRIMARY }}
+                >
+                  {t.buscar.limpiarFiltros}
+                </button>
+              </div>
+            </div>
           )}
 
           {!loading && results.length > 0 && (
@@ -1558,11 +1574,8 @@ function BuscarContent() {
           )}
         </div>
 
-        {/* Mapa estático */}
-        <div
-          className="relative min-h-0 overflow-hidden"
-          style={{ height: "100%", position: "relative" }}
-        >
+        {/* Mapa: oculto en móvil para evitar doble scroll / altura forzada */}
+        <div className="relative hidden min-h-0 overflow-hidden md:block md:h-full">
           {/* Siempre mostrar el mapa */}
           <RealMap
             results={results}
@@ -1589,12 +1602,14 @@ function BuscarContent() {
             right: 0,
             background: "#fff",
             borderTop: "1.5px solid #1d4f91",
-            padding: "12px 24px",
+            padding: "10px 12px",
+            paddingBottom: "max(10px, env(safe-area-inset-bottom))",
             display: "flex",
             alignItems: "center",
-            gap: 12,
+            gap: 8,
             zIndex: 100,
             boxShadow: "0 -4px 20px rgba(0,0,0,.1)",
+            flexWrap: "wrap",
           }}
         >
           <span
@@ -1607,12 +1622,23 @@ function BuscarContent() {
           >
             Comparar
           </span>
-          <div style={{ display: "flex", gap: 8, flex: 1 }}>
+          <div
+            style={{
+              display: "flex",
+              gap: 6,
+              flex: 1,
+              minWidth: 0,
+              overflowX: "auto",
+              WebkitOverflowScrolling: "touch",
+            }}
+          >
             {[0, 1, 2].map((i) => (
               <div
                 key={i}
                 style={{
-                  width: 140,
+                  flex: "1 1 96px",
+                  minWidth: 96,
+                  maxWidth: 160,
                   height: 44,
                   borderRadius: 8,
                   border: comparando[i]
@@ -1691,12 +1717,14 @@ function BuscarContent() {
               background: comparando.length >= 2 ? "#1d4f91" : "#bbb",
               color: "#fff",
               border: "none",
-              padding: "10px 20px",
+              minHeight: 44,
+              padding: "10px 16px",
               borderRadius: 6,
               fontSize: 12,
               cursor: comparando.length >= 2 ? "pointer" : "default",
               fontWeight: 500,
               whiteSpace: "nowrap",
+              flexShrink: 0,
             }}
           >
             Comparar {comparando.length} →

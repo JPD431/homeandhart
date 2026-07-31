@@ -14,18 +14,25 @@ export default function InstallPWA() {
       return;
     }
 
+    if (localStorage.getItem("pwa_dismissed") === "true") {
+      return;
+    }
+
     const ios = /iphone|ipad|ipod/.test(navigator.userAgent.toLowerCase());
     setIsIOS(ios);
 
-    window.addEventListener("beforeinstallprompt", (e) => {
+    const onPrompt = (e) => {
       e.preventDefault();
       setDeferredPrompt(e);
       setShowBanner(true);
-    });
+    };
+    window.addEventListener("beforeinstallprompt", onPrompt);
 
     if (ios) {
       setShowBanner(true);
     }
+
+    return () => window.removeEventListener("beforeinstallprompt", onPrompt);
   }, []);
 
   const handleInstall = async () => {
@@ -55,6 +62,7 @@ export default function InstallPWA() {
         borderTop: "0.5px solid #e8e4de",
         boxShadow: "0 -8px 32px rgba(0,0,0,.12)",
         padding: "16px",
+        paddingBottom: "max(16px, env(safe-area-inset-bottom))",
         zIndex: 9999,
         borderRadius: "16px 16px 0 0",
       }}
@@ -89,10 +97,19 @@ export default function InstallPWA() {
 
       {isIOS ? (
         <div>
-          <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+          <div
+            style={{
+              display: "flex",
+              gap: 6,
+              marginBottom: 14,
+              overflowX: "auto",
+              WebkitOverflowScrolling: "touch",
+            }}
+          >
             <div
               style={{
-                flex: 1,
+                flex: "1 1 90px",
+                minWidth: 90,
                 background: "#f7f5f2",
                 borderRadius: 8,
                 padding: 10,
@@ -107,12 +124,10 @@ export default function InstallPWA() {
                 Toca <strong>⋯</strong> o el botón compartir de Safari
               </div>
             </div>
-            <div style={{ display: "flex", alignItems: "center", color: "#bbb", fontSize: 16 }}>
-              →
-            </div>
             <div
               style={{
-                flex: 1,
+                flex: "1 1 90px",
+                minWidth: 90,
                 background: "#f7f5f2",
                 borderRadius: 8,
                 padding: 10,
@@ -127,12 +142,10 @@ export default function InstallPWA() {
                 &quot;Añadir a pantalla de inicio&quot;
               </div>
             </div>
-            <div style={{ display: "flex", alignItems: "center", color: "#bbb", fontSize: 16 }}>
-              →
-            </div>
             <div
               style={{
-                flex: 1,
+                flex: "1 1 90px",
+                minWidth: 90,
                 background: "#e8f0fb",
                 borderRadius: 8,
                 padding: 10,

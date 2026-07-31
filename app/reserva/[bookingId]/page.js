@@ -511,7 +511,7 @@ export default function ReservaDetallePage() {
         </Link>
       </nav>
 
-      <main className="mx-auto px-6 py-8" style={{ maxWidth: 640 }}>
+      <main className="mx-auto px-4 py-6 sm:px-6 sm:py-8" style={{ maxWidth: 640 }}>
         <div
           className="overflow-hidden rounded-xl border bg-white"
           style={{ borderColor: BORDER }}

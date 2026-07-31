@@ -33,7 +33,9 @@ export const translations = {
     buscar: {
       titulo: "Encuentra tu proveedor de confianza",
       resultados: "resultados encontrados",
-      sinResultados: "No encontramos proveedores en esta zona todavía.",
+      sinResultados:
+        "No encontramos servicios con estos filtros. Prueba a ampliar la búsqueda o cambiar de zona.",
+      limpiarFiltros: "Limpiar filtros",
       verPerfil: "Ver perfil",
       reservar: "Reservar",
       preguntar: "Preguntar",
@@ -280,7 +282,9 @@ export const translations = {
     buscar: {
       titulo: "Find your trusted provider",
       resultados: "results found",
-      sinResultados: "No providers found in this area yet.",
+      sinResultados:
+        "No services match these filters. Try widening your search or changing the area.",
+      limpiarFiltros: "Clear filters",
       verPerfil: "View profile",
       reservar: "Book",
       preguntar: "Ask",

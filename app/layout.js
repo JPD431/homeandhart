@@ -14,6 +14,13 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#1d4f91",
+};
+
 export const metadata = {
   metadataBase: new URL("https://homeandheart.es"),
   title: {
@@ -67,7 +74,6 @@ export const metadata = {
     },
   },
   manifest: "/manifest.json",
-  themeColor: "#1d4f91",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",

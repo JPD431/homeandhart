@@ -4233,10 +4233,10 @@ export default function ReservarPage() {
       style={{ backgroundColor: "#f7f5f2", color: "#1a1a1a" }}
     >
       <header
-        className="border-b bg-white px-6 py-4"
+        className="border-b bg-white px-4 py-3 sm:px-6 sm:py-4"
         style={{ borderColor: "#e8e4de" }}
       >
-        <div className="mx-auto flex max-w-[1100px] items-center justify-between">
+        <div className="mx-auto flex max-w-[1100px] items-center justify-between gap-3">
           <Link
             href={`/proveedor/${service.proveedor_id}`}
             className="inline-flex min-h-[44px] items-center text-[12px] no-underline transition-opacity hover:opacity-80"
@@ -4258,7 +4258,7 @@ export default function ReservarPage() {
         precioListo={precioListo}
       />
 
-      <main className="mx-auto max-w-[1100px] p-6">
+      <main className="mx-auto max-w-[1100px] p-4 sm:p-6">
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_380px]">
           {/* Columna izquierda */}
           <div className="flex flex-col gap-5">

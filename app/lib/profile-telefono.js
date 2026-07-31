@@ -24,7 +24,7 @@ export const TELEFONO_BANNER_CLIENT_MSG =
   "Completa tu teléfono para poder reservar y que el proveedor pueda contactarte.";
 
 export const PROVIDER_CONTACT_BANNER_MSG =
-  "Completa tu teléfono para poder activar servicios.";
+  "Completa tu teléfono y email de contacto para poder activar servicios.";
 
 export const TELEFONO_INVALID_MSG =
   "Introduce un teléfono válido (mínimo 9 dígitos).";

@@ -8,6 +8,8 @@ import FamiliaInviteBanner from '@/app/components/FamiliaInviteBanner';
 import ReportarIncidenciaForm from '@/app/components/ReportarIncidenciaForm';
 import BookingStatusBadge from '@/app/components/BookingStatusBadge';
 import { ActionToastHost, useActionToast } from '@/app/components/ActionToast';
+import EmptyState from '@/app/components/EmptyState';
+import ProviderFirstStepsChecklist from '@/app/components/ProviderFirstStepsChecklist';
 import ClienteVerificadoBadge from '@/app/components/ClienteVerificadoBadge';
 import DataLoadFailed from '@/app/components/DataLoadFailed';
 import { useModo } from '@/app/lib/ModoContext';
@@ -404,6 +406,7 @@ function DashboardContent() {
         {enModoProveedor ? (
           <TabProveedor
             perfil={perfil}
+            userEmail={user?.email}
             router={router}
             BRAND={BRAND}
             highlightBookingId={bookingHighlight}
@@ -524,7 +527,15 @@ function TabCliente({ perfil, reservas, favoritos, viajes, router, BRAND, copiar
           <span style={{fontSize: 9, padding: '2px 7px', borderRadius: 8, background: '#fdf3e3', color: '#92400e'}}>{favoritos.length}</span>
         </div>
         <div style={{padding: '13px 16px'}}>
-          {favoritos.length === 0 && <p style={{fontSize: 12, color: '#bbb', textAlign: 'center', padding: '12px 0'}}>Guarda tus proveedores favoritos</p>}
+          {favoritos.length === 0 && (
+            <EmptyState
+              compact
+              title="Sin favoritos todavía"
+              description="Guarda proveedores que te gusten para encontrarlos rápido."
+              actionLabel="Explorar servicios"
+              actionHref="/buscar"
+            />
+          )}
           {favoritos.slice(0, 3).map(f => (
             <div key={f.id} style={{display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '0.5px solid #f5f3f0', cursor: 'pointer'}} onClick={() => router.push(`/proveedor/${f.proveedor_id}`)}>
               <div style={{width: 32, height: 32, borderRadius: '50%', background: BRAND.blue, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 500, color: '#fff', flexShrink: 0}}>{(f.profiles_public?.nombre || 'P')[0]}</div>
@@ -587,68 +598,7 @@ function TabCliente({ perfil, reservas, favoritos, viajes, router, BRAND, copiar
   );
 }
 
-function ProviderStatusBanner({ perfil, BRAND }) {
-  if (perfil?.role !== "proveedor") return null;
-
-  const verificado = perfil?.verificado === true;
-  const cobrosActivos = perfil?.cobros_activos === true;
-
-  let message;
-  let borderColor;
-  let background;
-  let textColor;
-
-  if (!verificado) {
-    message =
-      "Tus servicios están en revisión. Te avisaremos en menos de 24h.";
-    borderColor = BRAND.amber;
-    background = "#fdf4e7";
-    textColor = "#5c4a32";
-  } else if (!cobrosActivos) {
-    message =
-      "¡Aprobado! Configura tus cobros para activar tus servicios.";
-    borderColor = BRAND.blue;
-    background = "#e8f0fb";
-    textColor = "#2a3a4a";
-  } else {
-    message = "Todo listo. Activa tus servicios cuando quieras.";
-    borderColor = BRAND.green;
-    background = "#e6f4f0";
-    textColor = "#085041";
-  }
-
-  return (
-    <div
-      style={{
-        marginTop: 16,
-        padding: "14px 16px",
-        borderRadius: 10,
-        border: `1px solid ${borderColor}`,
-        background,
-      }}
-    >
-      <p style={{ fontSize: 13, fontWeight: 600, color: textColor, margin: 0 }}>
-        {message}
-      </p>
-      {verificado && cobrosActivos && (
-        <Link
-          href="/editar-perfil?tab=servicios"
-          style={{
-            display: "inline-block",
-            marginTop: 8,
-            fontSize: 12,
-            fontWeight: 600,
-            color: BRAND.blue,
-          }}
-        >
-          Ir a activar servicios →
-        </Link>
-      )}
-    </div>
-  );
-}
-
-function TabProveedor({ perfil, router, BRAND, highlightBookingId }) {
+function TabProveedor({ perfil, userEmail, router, BRAND, highlightBookingId }) {
   const deudaPendiente = Number(perfil?.deuda_pendiente) || 0;
   const saldoPendienteTransferir =
     Math.round((Number(perfil?.saldo_pendiente_transferir) || 0) * 100) / 100;
@@ -679,8 +629,12 @@ function TabProveedor({ perfil, router, BRAND, highlightBookingId }) {
   }
 
   return (
-    <div style={{ maxWidth: 720, margin: '0 auto' }}>
-      <ProviderStatusBanner perfil={perfil} BRAND={BRAND} />
+    <div style={{ maxWidth: 720, margin: '0 auto', padding: '0 4px' }}>
+      <ProviderFirstStepsChecklist
+        perfil={perfil}
+        accountEmail={userEmail}
+        BRAND={BRAND}
+      />
       {deudaPendiente > 0 && (
         <div
           style={{
@@ -1519,9 +1473,21 @@ function ReservasRecibidas({ perfil, BRAND, highlightBookingId, router }) {
           )}
 
           {!loading && !loadError && bookings.length === 0 && (
-            <p style={{ fontSize: 12, color: '#bbb', textAlign: 'center', padding: '24px 0' }}>
-              Aún no has recibido reservas
-            </p>
+            <EmptyState
+              compact
+              title="Aún no has recibido reservas"
+              description={
+                perfil?.verificado && perfil?.cobros_activos
+                  ? "Cuando actives tus anuncios y alguien reserve, aparecerán aquí."
+                  : "Completa los primeros pasos de arriba (documentos, aprobación y cobros) y publica tu servicio."
+              }
+              actionLabel={
+                perfil?.verificado && perfil?.cobros_activos
+                  ? "Ir a mis servicios"
+                  : "Completar mi alta"
+              }
+              actionHref="/editar-perfil?tab=servicios"
+            />
           )}
 
           {!loading && !loadError && pendientes.length > 0 && (

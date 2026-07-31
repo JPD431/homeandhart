@@ -1064,11 +1064,30 @@ export default function ChatPage() {
           </div>
 
           {filteredConversations.length === 0 ? (
-            <p className="px-4 py-8 text-xs text-[#bbb]">
-              {conversations.length === 0
-                ? "Aún no tienes conversaciones."
-                : "No hay resultados."}
-            </p>
+            <div className="px-4 py-6">
+              {conversations.length === 0 ? (
+                <div className="text-center">
+                  <p className="text-sm font-semibold text-[#2a3a4a]">
+                    Aún no tienes conversaciones
+                  </p>
+                  <p className="mt-1 text-xs leading-relaxed text-[#888]">
+                    Cuando preguntes a un proveedor desde su anuncio, el chat
+                    aparecerá aquí.
+                  </p>
+                  <a
+                    href="/buscar"
+                    className="mt-4 inline-flex min-h-[44px] items-center justify-center rounded-md px-4 py-2 text-xs font-semibold text-white no-underline"
+                    style={{ backgroundColor: BLUE }}
+                  >
+                    Explorar servicios
+                  </a>
+                </div>
+              ) : (
+                <p className="py-4 text-center text-xs text-[#888]">
+                  No hay resultados para esta búsqueda. Prueba otro nombre.
+                </p>
+              )}
+            </div>
           ) : (
             <ul
               className="chat-hide-scrollbar flex-1 overflow-y-auto"
