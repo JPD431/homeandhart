@@ -67,6 +67,9 @@ import {
 } from "@/app/lib/descuentosDuracion";
 import { RELACION_OPTIONS } from "@/app/lib/referencias";
 import { buildEditarPerfilTabHref } from "@/app/lib/editar-perfil-routes";
+import ListingWeakBanner from "@/app/components/ListingWeakBanner";
+import { useWeakAlojamientoListings } from "@/app/components/ProviderListingChecklist";
+import { listingEditHref } from "@/app/lib/listing-completeness";
 import {
   TIPO_ALOJAMIENTO_EDIT_OPTIONS,
   getModalidadServicioFormCopy,
@@ -462,10 +465,10 @@ function OfertaEspecialFields({ serviceId, details, onChange }) {
   }
 
   return (
-    <div className="mt-6 border-t pt-6" style={{ borderColor: BRAND.border }}>
+    <div>
       <div className="flex items-center justify-between gap-4">
         <p className="text-sm font-semibold text-[#1a1a1a]">
-          ¿Tienes una oferta especial?
+          Oferta especial con descuento
         </p>
         <button
           type="button"
@@ -654,6 +657,24 @@ function DescuentosDuracionFields({ serviceId, details, onChange }) {
   );
 }
 
+function EditSectionCard({ id, title, subtitle, children }) {
+  return (
+    <div
+      id={id}
+      className="sm:col-span-2 scroll-mt-24 rounded-xl border p-4"
+      style={{ borderColor: BRAND.border, backgroundColor: BRAND.warm }}
+    >
+      <p className="text-sm font-semibold text-[#1a1a1a]">{title}</p>
+      {subtitle ? (
+        <p className="mt-1 mb-3 text-xs leading-relaxed text-[#666]">{subtitle}</p>
+      ) : (
+        <div className="mb-3" />
+      )}
+      {children}
+    </div>
+  );
+}
+
 function ServiceEditForm({ vertical, details: rawDetails, onChange, userId, serviceId, onUploadError }) {
   const details = useMemo(
     () => mergeServiceDetails(rawDetails, vertical),
@@ -681,7 +702,7 @@ function ServiceEditForm({ vertical, details: rawDetails, onChange, userId, serv
         color={getVerticalColor(vertical)}
       />
       <div className="grid gap-4 sm:grid-cols-2">
-      <div className="sm:col-span-2">
+      <div id="listing-section-basicos" className="sm:col-span-2 scroll-mt-24">
         <label className="mb-1.5 block text-xs font-medium text-[#444]">
           {SERVICE_LABELS.titulo}
         </label>
@@ -707,16 +728,18 @@ function ServiceEditForm({ vertical, details: rawDetails, onChange, userId, serv
           style={{ borderColor: BRAND.border }}
         />
       </div>
-      <ServicePhotoUploadField
-        vertical={vertical}
-        userId={userId}
-        serviceId={serviceId}
-        details={details}
-        onChange={onChange}
-        onUploadError={onUploadError}
-        label={serviceFotosLabel(vertical, "edit")}
-        multiple
-      />
+      <div id="listing-section-fotos" className="sm:col-span-2 scroll-mt-24">
+        <ServicePhotoUploadField
+          vertical={vertical}
+          userId={userId}
+          serviceId={serviceId}
+          details={details}
+          onChange={onChange}
+          onUploadError={onUploadError}
+          label={serviceFotosLabel(vertical, "edit")}
+          multiple
+        />
+      </div>
       {(vertical === "ninos" || vertical === "mascotas") && (
         <div>
           <label className="mb-1.5 block text-xs font-medium text-[#444]">Años de experiencia</label>
@@ -767,17 +790,19 @@ function ServiceEditForm({ vertical, details: rawDetails, onChange, userId, serv
         </div>
       )}
 
-      <div className="sm:col-span-2">
-        <p className="mb-1 text-sm font-semibold text-[#1a1a1a]">
-          {vertical === "ninos"
-            ? "Calendario: disponibilidad"
-            : "Calendario: precios y disponibilidad"}
-        </p>
-        <p className="mb-3 text-xs text-[#666]">
-          {vertical === "ninos"
-            ? "Bloquea los días en los que no puedes cuidar."
-            : "Define precios especiales por fecha y bloquea días no disponibles."}
-        </p>
+      <EditSectionCard
+        id="listing-section-calendario"
+        title={
+          vertical === "ninos"
+            ? "Calendario: bloquear disponibilidad"
+            : "Calendario: bloquear fechas y precios por temporada"
+        }
+        subtitle={
+          vertical === "ninos"
+            ? "Marca los días en los que no puedes cuidar. Así no recibirás reservas esos días."
+            : "Aquí puedes (1) bloquear días no disponibles y (2) poner un precio distinto en fechas concretas (temporada alta, puentes, etc.). Si no configuras nada, se usa tu precio base todas las noches."
+        }
+      >
         <CalendarioTarifas
           serviceId={serviceId}
           precioBase={Number(details.precio) || 0}
@@ -790,7 +815,7 @@ function ServiceEditForm({ vertical, details: rawDetails, onChange, userId, serv
           }
           soloBloqueo={vertical === "ninos"}
         />
-      </div>
+      </EditSectionCard>
 
       {vertical === "alojamiento" ? (
         <div className="sm:col-span-2">
@@ -855,7 +880,9 @@ function ServiceEditForm({ vertical, details: rawDetails, onChange, userId, serv
           })()}
         </div>
       )}
-      <DireccionContactoFields d={details} upd={update} vertical={vertical} />
+      <div id="listing-section-direccion" className="sm:col-span-2 scroll-mt-24">
+        <DireccionContactoFields d={details} upd={update} vertical={vertical} />
+      </div>
       {vertical === "alojamiento" && (
         <>
           <div className="sm:col-span-2">
@@ -959,26 +986,32 @@ function ServiceEditForm({ vertical, details: rawDetails, onChange, userId, serv
         onChange={onChange}
         sectionSubtitle={SERVICE_LABELS.operativo.subtitle}
       />
-      <div className="sm:col-span-2">
+      <EditSectionCard
+        id="listing-section-promos"
+        title="Promociones y descuentos (opcional)"
+        subtitle="Oferta especial con % de descuento y/o descuentos automáticos por estancia larga. No es obligatorio para publicar."
+      >
         <OfertaEspecialFields
           serviceId={vertical}
           details={details}
           onChange={onChange}
         />
-      </div>
-      <div className="sm:col-span-2">
         <DescuentosDuracionFields
           serviceId={vertical}
           details={details}
           onChange={onChange}
         />
-      </div>
-      <div className="sm:col-span-2">
+      </EditSectionCard>
+      <EditSectionCard
+        id="listing-section-emergencia"
+        title="Proveedor de emergencia (opcional)"
+        subtitle="Si lo activas, puedes aparecer como alternativa cuando otro proveedor cancele a última hora. Cobras un +5% sobre tu precio."
+      >
         <ProveedorEmergenciaToggle
           checked={details.proveedor_emergencia === true}
           onChange={(value) => update("proveedor_emergencia", value)}
         />
-      </div>
+      </EditSectionCard>
       </div>
     </>
   );
@@ -1088,6 +1121,7 @@ function EditarPerfilContent() {
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab");
   const serviceIdParam = searchParams.get("serviceId");
+  const sectionParam = searchParams.get("section");
   const profilePhotoRef = useRef(null);
   const documentInputRef = useRef(null);
 
@@ -1297,6 +1331,33 @@ function EditarPerfilContent() {
     setAddingService(false);
   }, [loading, services, tabParam, serviceIdParam]);
 
+  // Deep-link: ?section=calendario|promos|emergencia|fotos|direccion
+  useEffect(() => {
+    if (loading || !sectionParam || !editingId) return;
+    const idMap = {
+      calendario: "listing-section-calendario",
+      promos: "listing-section-promos",
+      emergencia: "listing-section-emergencia",
+      fotos: "listing-section-fotos",
+      direccion: "listing-section-direccion",
+      basicos: "listing-section-basicos",
+      documentos: null,
+    };
+    const elId = idMap[sectionParam];
+    if (!elId) return;
+    const t = window.setTimeout(() => {
+      document.getElementById(elId)?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 120);
+    return () => window.clearTimeout(t);
+  }, [loading, sectionParam, editingId]);
+
+  const weakListings = useWeakAlojamientoListings(
+    !loading && perfil?.role === "proveedor" ? userId : null,
+  );
+
   function handleTabChange(tabId) {
     if (tabId !== "documentos") {
       setDocumentosReminderVertical(null);
@@ -1498,6 +1559,13 @@ function EditarPerfilContent() {
             </button>
           ) : null}
         </div>
+        {weakListings.length > 0 ? (
+          <ListingWeakBanner
+            compact
+            titles={weakListings.map((w) => w.titulo)}
+            href={weakListings[0]?.href || listingEditHref(weakListings[0]?.id)}
+          />
+        ) : null}
         {perfil?.role === "proveedor" && !puedePublicarServicios && (
           <div
             className="mb-4 rounded-lg border px-3 py-2.5 text-xs leading-relaxed"

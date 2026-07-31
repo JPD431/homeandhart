@@ -104,8 +104,9 @@ export const RESUMEN_LABELS = {
 };
 
 export const CONFIRMACION_LABELS = {
-  title: "¡Listo! Estamos revisando tu perfil",
-  subtitle: "Te avisaremos por email en menos de 24h.",
+  title: "¡Buen comienzo! Tu alta está enviada",
+  subtitle:
+    "Para publicar tu anuncio y recibir reservas, aún te faltan algunos pasos:",
 };
 
 export const WIZARD_STEP_LABELS = {

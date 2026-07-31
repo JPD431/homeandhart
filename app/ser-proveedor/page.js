@@ -82,6 +82,10 @@ import {
   servicePrecioLabel,
 } from "@/app/lib/provider-form-labels";
 import {
+  buildPostOnboardingPendingSteps,
+  getWizardQualityGaps,
+} from "@/app/lib/listing-completeness";
+import {
   GREEN,
   ORANGE,
   PRIMARY,
@@ -396,6 +400,8 @@ export default function SerProveedorPage() {
   const [loading, setLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [postOnboardingPending, setPostOnboardingPending] = useState([]);
+  const [accountEmail, setAccountEmail] = useState(null);
 
   const visibleSteps = useMemo(
     () => buildVisibleSteps(verticalesSeleccionados),
@@ -929,6 +935,7 @@ export default function SerProveedorPage() {
 
       const uid = user.id;
       setUserId(uid);
+      setAccountEmail(user.email || null);
 
       await saveProfileStep(
         uid,
@@ -993,6 +1000,51 @@ export default function SerProveedorPage() {
           verticales: verticalesSeleccionados,
         }),
       });
+
+      const { data: profileAfter } = await supabase
+        .from("profiles")
+        .select(
+          "id, role, telefono, email_contacto, cobros_activos, doc_dni_url, dni_estado, verificado",
+        )
+        .eq("id", uid)
+        .maybeSingle();
+
+      const listingServices = verticalesSeleccionados.map((v) => {
+        const d = serviceDetails[v] || {};
+        return {
+          id: finalDraftIds[v],
+          vertical: v,
+          titulo: d.titulo,
+          nru: d.nru,
+          nru_estado: "pendiente",
+          details: d,
+          direccion_exacta: d.direccion_exacta,
+          fotos: d.fotos,
+          foto_url: d.foto_url,
+        };
+      });
+
+      setPostOnboardingPending(
+        buildPostOnboardingPendingSteps({
+          perfil: {
+            ...profileAfter,
+            doc_dni_url:
+              profileAfter?.doc_dni_url || savedDocUrls.doc_dni_url,
+            dni_estado: profileAfter?.dni_estado,
+          },
+          accountEmail: user.email || null,
+          services: listingServices,
+          documentContext: {
+            profile: {
+              doc_dni_url:
+                profileAfter?.doc_dni_url || savedDocUrls.doc_dni_url,
+            },
+            providerDocuments,
+            services: listingServices,
+            sessionFiles: documentFiles,
+          },
+        }),
+      );
 
       setCurrentStepKey(STEP_KEY.CONFIRMACION);
     } catch (err) {
@@ -1651,6 +1703,10 @@ export default function SerProveedorPage() {
               .uploaded,
           })),
       ];
+      const qualityGaps = getWizardQualityGaps({
+        verticales: verticalesSeleccionados,
+        serviceDetails,
+      });
 
       return (
         <div>
@@ -1660,6 +1716,24 @@ export default function SerProveedorPage() {
           <p className="mt-1 text-sm text-[#666]">
             {RESUMEN_LABELS.subtitle}
           </p>
+          {qualityGaps.length > 0 ? (
+            <div
+              className="mt-4 rounded-xl border px-4 py-3 text-sm leading-relaxed"
+              style={{
+                borderColor: "#93c5fd",
+                backgroundColor: "#eff6ff",
+                color: "#1e3a5f",
+              }}
+              role="status"
+            >
+              <p className="font-semibold">Puedes enviar a revisión</p>
+              <p className="mt-1 text-[13px]">
+                Te recomendamos añadir antes:{" "}
+                <strong>{qualityGaps.join(", ")}</strong>. Podrás completarlos
+                después desde tu dashboard; no alargamos el alta.
+              </p>
+            </div>
+          ) : null}
           <div
             className="mt-6 rounded-2xl border bg-white p-5"
             style={{ borderColor: BRAND.border }}
@@ -1753,12 +1827,45 @@ export default function SerProveedorPage() {
     }
 
     if (currentStepKey === STEP_KEY.CONFIRMACION) {
+      const pending =
+        postOnboardingPending.length > 0
+          ? postOnboardingPending
+          : buildPostOnboardingPendingSteps({
+              perfil: {
+                telefono: null,
+                cobros_activos: false,
+                doc_dni_url: savedDocUrls.doc_dni_url,
+                dni_estado: savedDocUrls.doc_dni_url ? "pendiente" : null,
+              },
+              accountEmail,
+              services: verticalesSeleccionados.map((v) => ({
+                id: draftServiceIds[v],
+                vertical: v,
+                titulo: serviceDetails[v]?.titulo,
+                nru: serviceDetails[v]?.nru,
+                nru_estado: "pendiente",
+                details: serviceDetails[v],
+                direccion_exacta: serviceDetails[v]?.direccion_exacta,
+                fotos: serviceDetails[v]?.fotos,
+              })),
+              documentContext: {
+                profile: { doc_dni_url: savedDocUrls.doc_dni_url },
+                providerDocuments,
+                services: verticalesSeleccionados.map((v) => ({
+                  vertical: v,
+                  nru: serviceDetails[v]?.nru,
+                  details: serviceDetails[v],
+                })),
+                sessionFiles: documentFiles,
+              },
+            });
+
       return (
-        <div style={{ textAlign: "center", padding: "60px 24px" }}>
-          <div style={{ fontSize: 48, marginBottom: 16 }}>🎉</div>
+        <div style={{ textAlign: "center", padding: "40px 20px 60px" }}>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>✨</div>
           <h2
             style={{
-              fontSize: 24,
+              fontSize: 22,
               fontWeight: 300,
               color: "#2a3a4a",
               fontFamily: "Georgia,serif",
@@ -1770,20 +1877,97 @@ export default function SerProveedorPage() {
           <p
             style={{
               fontSize: 14,
-              color: "#888",
-              marginBottom: 24,
+              color: "#666",
+              marginBottom: 16,
               lineHeight: 1.7,
+              maxWidth: 420,
+              marginLeft: "auto",
+              marginRight: "auto",
             }}
           >
             {CONFIRMACION_LABELS.subtitle}
           </p>
+          <ul
+            style={{
+              listStyle: "none",
+              margin: "0 auto 20px",
+              padding: 0,
+              maxWidth: 420,
+              textAlign: "left",
+            }}
+          >
+            {pending.map((step) => (
+              <li
+                key={step.id}
+                style={{
+                  display: "flex",
+                  gap: 10,
+                  alignItems: "flex-start",
+                  padding: "10px 12px",
+                  marginBottom: 8,
+                  borderRadius: 8,
+                  border: "1px solid #e8e4de",
+                  background: step.actor === "equipo" ? "#f7f5f2" : "#fff",
+                }}
+              >
+                <span
+                  aria-hidden
+                  style={{
+                    width: 8,
+                    height: 8,
+                    marginTop: 5,
+                    borderRadius: "50%",
+                    flexShrink: 0,
+                    background:
+                      step.actor === "equipo" ? "#c47d1a" : PRIMARY,
+                  }}
+                />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: 13,
+                      color: "#2a3a4a",
+                      lineHeight: 1.45,
+                    }}
+                  >
+                    {step.label}
+                  </p>
+                  {step.actor === "equipo" ? (
+                    <p
+                      style={{
+                        margin: "3px 0 0",
+                        fontSize: 11,
+                        color: "#888",
+                      }}
+                    >
+                      Lo completa el equipo · te avisamos por email
+                    </p>
+                  ) : (
+                    <a
+                      href={step.href}
+                      style={{
+                        display: "inline-block",
+                        marginTop: 4,
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: PRIMARY,
+                      }}
+                    >
+                      Ir a completar →
+                    </a>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
           <div
             style={{
               background: "#e6f4f0",
               borderRadius: 8,
-              padding: "16px 24px",
+              padding: "14px 20px",
               display: "inline-block",
-              marginBottom: 24,
+              marginBottom: 20,
             }}
           >
             <div style={{ fontSize: 12, color: "#0e7a5c", fontWeight: 500 }}>
@@ -1793,23 +1977,49 @@ export default function SerProveedorPage() {
               Tus primeras 3 reservas son sin comisión
             </div>
           </div>
-          <br />
-          <button
-            type="button"
-            onClick={() => router.push("/dashboard")}
+          <div
             style={{
-              background: "#1d4f91",
-              color: "#fff",
-              border: "none",
-              padding: "11px 28px",
-              borderRadius: 6,
-              fontSize: 13,
-              cursor: "pointer",
-              fontWeight: 500,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 10,
             }}
           >
-            Ir a mi dashboard →
-          </button>
+            <button
+              type="button"
+              onClick={() => router.push("/dashboard?tab=proveedor")}
+              style={{
+                background: "#1d4f91",
+                color: "#fff",
+                border: "none",
+                padding: "12px 28px",
+                borderRadius: 6,
+                fontSize: 13,
+                cursor: "pointer",
+                fontWeight: 600,
+                minWidth: 220,
+              }}
+            >
+              Completar lo que falta →
+            </button>
+            <button
+              type="button"
+              onClick={() => router.push("/dashboard")}
+              style={{
+                background: "transparent",
+                color: "#666",
+                border: "1px solid #ccc",
+                padding: "10px 22px",
+                borderRadius: 6,
+                fontSize: 12,
+                cursor: "pointer",
+                fontWeight: 500,
+                minWidth: 220,
+              }}
+            >
+              Ir a mi dashboard
+            </button>
+          </div>
         </div>
       );
     }

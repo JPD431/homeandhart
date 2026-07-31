@@ -12,6 +12,7 @@ import {
   parseDateStr,
   toDateStr,
 } from "@/app/components/calendario-shared";
+import { markCalendarReviewed } from "@/app/lib/listing-completeness";
 
 const PRIMARY = "#1d4f91";
 const GREEN = "#0e7a5c";
@@ -212,6 +213,10 @@ export default function CalendarioTarifas({
   const baseLabel = Number(precioBase) || 0;
   const unidadLabel = unidad || "noche";
   const effectiveModo = soloBloqueo ? "bloqueo" : modo;
+
+  useEffect(() => {
+    if (serviceId) markCalendarReviewed(serviceId);
+  }, [serviceId]);
 
   const loadMonth = useCallback(async () => {
     if (!serviceId) {

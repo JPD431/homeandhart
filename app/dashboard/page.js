@@ -11,6 +11,10 @@ import BookingStatusBadge from '@/app/components/BookingStatusBadge';
 import { ActionToastHost, useActionToast } from '@/app/components/ActionToast';
 import EmptyState from '@/app/components/EmptyState';
 import ProviderFirstStepsChecklist from '@/app/components/ProviderFirstStepsChecklist';
+import ProviderListingChecklist, {
+  useWeakAlojamientoListings,
+} from '@/app/components/ProviderListingChecklist';
+import ListingWeakBanner from '@/app/components/ListingWeakBanner';
 import ClienteVerificadoBadge from '@/app/components/ClienteVerificadoBadge';
 import DataLoadFailed from '@/app/components/DataLoadFailed';
 import { useModo } from '@/app/lib/ModoContext';
@@ -623,6 +627,7 @@ function TabProveedor({ perfil, userEmail, router, BRAND, highlightBookingId }) 
   const cobrosIncompletos = tieneCuentaCobros && !cobrosActivos;
   const [connectLoading, setConnectLoading] = useState(false);
   const [connectError, setConnectError] = useState('');
+  const weakListings = useWeakAlojamientoListings(perfil?.id);
 
   async function handleConfigureCobros() {
     setConnectLoading(true);
@@ -648,6 +653,12 @@ function TabProveedor({ perfil, userEmail, router, BRAND, highlightBookingId }) 
 
   return (
     <div style={{ maxWidth: 720, margin: '0 auto', padding: '0 4px' }}>
+      {weakListings.length > 0 ? (
+        <ListingWeakBanner
+          titles={weakListings.map((w) => w.titulo)}
+          href={weakListings[0].href}
+        />
+      ) : null}
       <ProviderFirstStepsChecklist
         perfil={perfil}
         accountEmail={userEmail}
@@ -655,6 +666,7 @@ function TabProveedor({ perfil, userEmail, router, BRAND, highlightBookingId }) 
         onConfigureCobros={handleConfigureCobros}
         configureCobrosLoading={connectLoading}
       />
+      <ProviderListingChecklist perfil={perfil} BRAND={BRAND} />
       <div style={{ marginTop: 8, marginBottom: 4 }}>
         <AyudaLink
           highlighted={perfil?.verificado === true && !cobrosActivos}

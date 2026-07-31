@@ -242,7 +242,19 @@ export default function ProviderFirstStepsChecklist({
           background: "#e6f4f0",
         }}
       >
-        <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#085041" }}>
+        <p
+          style={{
+            margin: 0,
+            fontSize: 11,
+            fontWeight: 700,
+            letterSpacing: "0.04em",
+            textTransform: "uppercase",
+            color: "#085041",
+          }}
+        >
+          Tu cuenta
+        </p>
+        <p style={{ margin: "4px 0 0", fontSize: 13, fontWeight: 600, color: "#085041" }}>
           Todo listo para recibir reservas
         </p>
         <p style={{ margin: "6px 0 0", fontSize: 12, color: "#085041", lineHeight: 1.5 }}>
@@ -282,7 +294,19 @@ export default function ProviderFirstStepsChecklist({
         background: "#fdf4e7",
       }}
     >
-      <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#5c4a32" }}>
+      <p
+        style={{
+          margin: 0,
+          fontSize: 11,
+          fontWeight: 700,
+          letterSpacing: "0.04em",
+          textTransform: "uppercase",
+          color: "#5c4a32",
+        }}
+      >
+        Tu cuenta
+      </p>
+      <p style={{ margin: "4px 0 0", fontSize: 13, fontWeight: 600, color: "#5c4a32" }}>
         Para empezar a recibir reservas
       </p>
       <p style={{ margin: "4px 0 0", fontSize: 11, color: "#8a7355" }}>
