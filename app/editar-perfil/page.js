@@ -2268,7 +2268,11 @@ function EditarPerfilContent() {
 
   const handleEliminarCuenta = async () => {
     const confirmacion = confirm(
-      "¿Estás segura de que quieres eliminar tu cuenta? Esta acción es irreversible y se eliminarán todos tus datos, reservas y mensajes.",
+      "¿Eliminar tu cuenta de forma irreversible?\n\n" +
+        "• Se borrarán tus documentos (DNI, antecedentes) y se anonimizarán tus datos.\n" +
+        "• Las reservas pasadas se conservan sin datos personales (obligación contable).\n" +
+        "• No podrás eliminar la cuenta si tienes reservas activas.\n\n" +
+        "Esta acción no se puede deshacer.",
     );
 
     if (!confirmacion) return;
@@ -2276,6 +2280,8 @@ function EditarPerfilContent() {
     try {
       const res = await fetch("/api/auth/delete-account", {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirm: true }),
       });
 
       const data = await res.json().catch(() => ({}));
@@ -2283,12 +2289,18 @@ function EditarPerfilContent() {
       if (res.ok && data.success) {
         await supabase.auth.signOut();
         router.push("/");
-      } else {
-        alert(
-          "Error al eliminar la cuenta: " +
-            (data.error || "Inténtalo de nuevo"),
-        );
+        return;
       }
+
+      if (res.status === 409 || data.code === "active_bookings") {
+        alert(data.error || "Tienes reservas activas. Resuélvelas antes de eliminar la cuenta.");
+        return;
+      }
+
+      alert(
+        "Error al eliminar la cuenta: " +
+          (data.error || "Inténtalo de nuevo"),
+      );
     } catch {
       alert("Error al eliminar la cuenta");
     }
