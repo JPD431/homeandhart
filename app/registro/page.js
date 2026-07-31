@@ -11,6 +11,11 @@ import {
   resolveAuthRedirect,
 } from "@/app/lib/auth-redirect";
 import { supabase } from "@/app/lib/supabase";
+import {
+  LEGAL_DOC_PATHS,
+  PRIVACY_VERSION,
+  TERMS_VERSION,
+} from "@/app/lib/legal-versions";
 
 const PRIMARY = "#1d4f91";
 const DARK = "#163a6b";
@@ -256,6 +261,7 @@ function RegistroForm() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [aceptaTerminos, setAceptaTerminos] = useState(false);
+  const [aceptaPrivacidad, setAceptaPrivacidad] = useState(false);
   const [mensajeVerificacion, setMensajeVerificacion] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
   const [resendMessage, setResendMessage] = useState("");
@@ -292,6 +298,13 @@ function RegistroForm() {
       return;
     }
 
+    if (!aceptaTerminos || !aceptaPrivacidad) {
+      setError(
+        "Debes aceptar los términos de uso y la política de privacidad para crear la cuenta.",
+      );
+      return;
+    }
+
     const codigoTrim = codigoInvitacion.trim();
     if (codigoTrim) {
       const response = await fetch("/api/referidos/validar", {
@@ -315,7 +328,9 @@ function RegistroForm() {
 
     console.log("Datos registro:", { nombre, apellido, role, email });
 
-    const emailRedirectTo = `${window.location.origin}/api/auth/callback`;
+    // Con plantilla token_hash el enlace va en Supabase; emailRedirectTo
+    // sigue útil si la plantilla usa {{ .ConfirmationURL }} (fallback).
+    const emailRedirectTo = `${(process.env.NEXT_PUBLIC_URL || window.location.origin).replace(/\/$/, "")}/api/auth/callback`;
 
     const { data, error: signUpError } = await supabase.auth.signUp({
       email,
@@ -327,6 +342,10 @@ function RegistroForm() {
           apellido,
           role,
           codigo_referido: codigoTrim || null,
+          acepto_terminos: true,
+          acepto_privacidad: true,
+          terminos_version: TERMS_VERSION,
+          privacidad_version: PRIVACY_VERSION,
         },
       },
     });
@@ -335,6 +354,23 @@ function RegistroForm() {
       setLoading(false);
       setError(signUpError.message);
       return;
+    }
+
+    // Si hay sesión (email confirmado / auto-confirm), refuerza el registro en BD
+    if (data.session) {
+      try {
+        await fetch("/api/auth/accept-legal", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            acepto_terminos: true,
+            acepto_privacidad: true,
+            source: "registro",
+          }),
+        });
+      } catch {
+        /* el trigger / ConsentGate cubren el fallo */
+      }
     }
 
     setLoading(false);
@@ -361,7 +397,7 @@ function RegistroForm() {
     setResendMessage("");
     setError("");
 
-    const emailRedirectTo = `${window.location.origin}/api/auth/callback`;
+    const emailRedirectTo = `${(process.env.NEXT_PUBLIC_URL || window.location.origin).replace(/\/$/, "")}/api/auth/callback`;
 
     const { error: resendError } = await supabase.auth.resend({
       type: "signup",
@@ -680,7 +716,7 @@ function RegistroForm() {
 
         <label
           htmlFor="terminos"
-          className="mb-5 flex min-h-[44px] cursor-pointer items-start gap-3"
+          className="mb-3 flex min-h-[44px] cursor-pointer items-start gap-3"
         >
           <input
             type="checkbox"
@@ -688,17 +724,43 @@ function RegistroForm() {
             checked={aceptaTerminos}
             onChange={(e) => setAceptaTerminos(e.target.checked)}
             className="mt-1 h-5 w-5 shrink-0 cursor-pointer"
+            required
           />
           <span style={{ fontSize: 11, color: "#666", lineHeight: 1.6 }}>
             He leído y acepto los{" "}
-            <Link href="/legal/terminos" target="_blank" style={{ color: PRIMARY }}>
+            <Link
+              href={LEGAL_DOC_PATHS.terminos}
+              target="_blank"
+              style={{ color: PRIMARY }}
+            >
               Términos de uso
             </Link>{" "}
-            y la{" "}
-            <Link href="/legal/privacidad" target="_blank" style={{ color: PRIMARY }}>
+            de Home&Heart (v. {TERMS_VERSION})
+          </span>
+        </label>
+
+        <label
+          htmlFor="privacidad"
+          className="mb-5 flex min-h-[44px] cursor-pointer items-start gap-3"
+        >
+          <input
+            type="checkbox"
+            id="privacidad"
+            checked={aceptaPrivacidad}
+            onChange={(e) => setAceptaPrivacidad(e.target.checked)}
+            className="mt-1 h-5 w-5 shrink-0 cursor-pointer"
+            required
+          />
+          <span style={{ fontSize: 11, color: "#666", lineHeight: 1.6 }}>
+            He leído y acepto la{" "}
+            <Link
+              href={LEGAL_DOC_PATHS.privacidad}
+              target="_blank"
+              style={{ color: PRIMARY }}
+            >
               Política de privacidad
             </Link>{" "}
-            de Home&Heart
+            de Home&Heart (v. {PRIVACY_VERSION})
           </span>
         </label>
 
@@ -719,18 +781,24 @@ function RegistroForm() {
 
         <button
           type="submit"
-          disabled={loading || !aceptaTerminos}
+          disabled={loading || !aceptaTerminos || !aceptaPrivacidad}
           className="min-h-[44px]"
           style={{
             width: "100%",
-            background: loading || !aceptaTerminos ? "#9ca3af" : PRIMARY,
+            background:
+              loading || !aceptaTerminos || !aceptaPrivacidad
+                ? "#9ca3af"
+                : PRIMARY,
             color: "#fff",
             border: "none",
             borderRadius: 6,
             padding: "12px 16px",
             fontSize: 13,
             fontWeight: 500,
-            cursor: loading || !aceptaTerminos ? "not-allowed" : "pointer",
+            cursor:
+              loading || !aceptaTerminos || !aceptaPrivacidad
+                ? "not-allowed"
+                : "pointer",
           }}
         >
           {loading ? "Creando cuenta…" : "Crear cuenta gratis →"}

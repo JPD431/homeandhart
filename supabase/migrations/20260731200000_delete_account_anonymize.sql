@@ -97,7 +97,11 @@ BEGIN
     dni_estado = 'pendiente',
     dni_verificado_at = NULL,
     dni_verificado_por = NULL,
-    mayor_de_edad_confirmada = false
+    mayor_de_edad_confirmada = false,
+    acepto_terminos_at = NULL,
+    terminos_version = NULL,
+    acepto_privacidad_at = NULL,
+    privacidad_version = NULL
   WHERE id = p_user_id;
 
   RETURN jsonb_build_object('ok', true, 'user_id', p_user_id);

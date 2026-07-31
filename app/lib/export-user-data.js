@@ -37,6 +37,7 @@ export async function buildUserDataExport(admin, user) {
 
   const [
     profileRes,
+    consentsRes,
     servicesRes,
     bookingsClienteRes,
     favoritosRes,
@@ -55,6 +56,14 @@ export async function buildUserDataExport(admin, user) {
     providerDocsRes,
   ] = await Promise.all([
     admin.from("profiles").select("*").eq("id", userId).maybeSingle(),
+    admin
+      .from("user_consents")
+      .select(
+        "id, document_type, document_version, accepted_at, source, created_at",
+      )
+      .eq("user_id", userId)
+      .order("accepted_at", { ascending: false })
+      .limit(200),
     admin
       .from("services")
       .select(
@@ -165,10 +174,12 @@ export async function buildUserDataExport(admin, user) {
     "familia_miembros",
     "referencias",
     "favoritos",
+    "user_consents",
   ]);
 
   for (const res of [
     { r: profileRes, t: "profiles" },
+    { r: consentsRes, t: "user_consents" },
     { r: servicesRes, t: "services" },
     { r: bookingsClienteRes, t: "bookings" },
     { r: favoritosRes, t: "favoritos" },
@@ -404,6 +415,15 @@ export async function buildUserDataExport(admin, user) {
       ]),
     },
     perfil: profile,
+    consentimiento_legal: {
+      vigente: {
+        acepto_terminos_at: profile?.acepto_terminos_at ?? null,
+        terminos_version: profile?.terminos_version ?? null,
+        acepto_privacidad_at: profile?.acepto_privacidad_at ?? null,
+        privacidad_version: profile?.privacidad_version ?? null,
+      },
+      historico: consentsRes.error ? [] : consentsRes.data || [],
+    },
     cuenta_auth: {
       email: user.email ?? null,
       created_at: user.created_at ?? null,

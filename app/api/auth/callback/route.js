@@ -167,26 +167,73 @@ async function runPostVerificationSideEffects(user) {
   }
 }
 
+const OTP_TYPES = new Set([
+  "signup",
+  "invite",
+  "magiclink",
+  "recovery",
+  "email_change",
+  "email",
+]);
+
+/** Origen canónico (evita www vs apex en redirects). */
+function getAppOrigin(request) {
+  const configured = (process.env.NEXT_PUBLIC_URL || "").replace(/\/$/, "");
+  if (configured) return configured;
+  return new URL(request.url).origin;
+}
+
+function normalizeOtpType(raw) {
+  const type = String(raw || "signup").toLowerCase();
+  return OTP_TYPES.has(type) ? type : "signup";
+}
+
+function successPathForType(type) {
+  if (type === "recovery") return "/nueva-contrasena";
+  if (type === "email_change") return "/editar-perfil";
+  if (type === "magiclink") return "/buscar";
+  // signup | invite | email
+  return "/verificado";
+}
+
+function errorRedirectForType(origin, type) {
+  if (type === "recovery") {
+    return `${origin}/recuperar-contrasena?error=enlace`;
+  }
+  if (type === "email_change") {
+    return `${origin}/editar-perfil?error=verificacion`;
+  }
+  return `${origin}/registro?error=verificacion`;
+}
+
+function shouldRunSignupSideEffects(type) {
+  return type === "signup" || type === "email" || type === "invite";
+}
+
 export async function GET(request) {
-  const { searchParams, origin } = new URL(request.url);
+  const { searchParams } = new URL(request.url);
+  const origin = getAppOrigin(request);
   const code = searchParams.get("code");
   const tokenHash = searchParams.get("token_hash");
+  const otpType = normalizeOtpType(searchParams.get("type"));
 
-  const verificadoUrl = new URL("/verificado", request.url);
-  let response = NextResponse.redirect(verificadoUrl);
+  const successUrl = new URL(successPathForType(otpType), `${origin}/`);
+  let response = NextResponse.redirect(successUrl);
   const supabase = createAuthRouteClient(request, response);
 
   let user = null;
   let authError = null;
 
   if (code) {
+    // Flujo PKCE (legacy / OAuth / plantillas con ConfirmationURL + code)
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
     authError = error;
     user = data?.user ?? null;
   } else if (tokenHash) {
+    // Flujo token_hash (recomendado para emails: no depende del code_verifier)
     const { data, error } = await supabase.auth.verifyOtp({
       token_hash: tokenHash,
-      type: "signup",
+      type: otpType,
     });
     authError = error;
     user = data?.user ?? null;
@@ -195,11 +242,19 @@ export async function GET(request) {
   }
 
   if (authError) {
-    console.error("[auth/callback] Error verificando email:", authError.message);
-    return NextResponse.redirect(`${origin}/registro?error=verificacion`);
+    console.error(
+      "[auth/callback] Error verificando email:",
+      authError.message,
+      { otpType, hasCode: Boolean(code), hasTokenHash: Boolean(tokenHash) },
+    );
+    return NextResponse.redirect(errorRedirectForType(origin, otpType));
   }
 
-  await runPostVerificationSideEffects(user);
+  // verifyOtp / exchangeCodeForSession ya persisten la sesión en cookies
+  // vía createAuthRouteClient → response.cookies
+  if (shouldRunSignupSideEffects(otpType)) {
+    await runPostVerificationSideEffects(user);
+  }
 
   return response;
 }

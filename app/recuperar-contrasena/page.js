@@ -28,9 +28,14 @@ export default function RecuperarContrasenaPage() {
     setSuccess(false);
     setLoading(true);
 
+    // ConfirmationURL (plantilla por defecto) aterriza aquí con ?code= / hash.
+    // Si pasas la plantilla a token_hash, el enlace debe ir a
+    // /api/auth/callback?token_hash=...&type=recovery (ver docs internas).
+    const redirectTo = `${(process.env.NEXT_PUBLIC_URL || window.location.origin).replace(/\/$/, "")}/nueva-contrasena`;
+
     const { error: resetError } = await supabase.auth.resetPasswordForEmail(
       email,
-      { redirectTo: `${window.location.origin}/nueva-contrasena` },
+      { redirectTo },
     );
 
     setLoading(false);

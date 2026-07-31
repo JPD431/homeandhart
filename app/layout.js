@@ -2,6 +2,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import AppProviders from "@/app/components/AppProviders";
 import CookieBanner from "@/app/components/CookieBanner";
 import InstallPWA from "@/app/components/InstallPWA";
+import LegalConsentGate from "@/app/components/LegalConsentGate";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -104,6 +105,7 @@ export default function RootLayout({ children }) {
       <body className="min-h-full flex flex-col">
         <AppProviders>
           {children}
+          <LegalConsentGate />
           <CookieBanner />
           <InstallPWA />
         </AppProviders>
