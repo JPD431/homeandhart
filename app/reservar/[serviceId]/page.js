@@ -70,6 +70,10 @@ import {
   normalizeCancelPolicy,
 } from "@/app/lib/cancelacion-politica";
 import { supabase } from "@/app/lib/supabase";
+import {
+  cancelOrphanPaymentIntent,
+  friendlyStripePaymentError,
+} from "@/app/lib/stripe-payment-errors";
 import { cargarTarifasPorFecha } from "@/app/lib/tarifas";
 import {
   getServiceBookabilityIssue,
@@ -1132,7 +1136,10 @@ async function createServicePaymentIntent({
   });
   const data = await res.json();
   if (!res.ok || data.error) {
-    throw new Error(data.error || "No se pudo crear la retención de pago.");
+    throw Object.assign(
+      new Error(data.error || "No se pudo crear la retención de pago."),
+      data,
+    );
   }
   return data;
 }
@@ -1502,6 +1509,7 @@ function SavedCardCheckout({
       return;
     }
 
+    let createdPiId = null;
     try {
       const intentRes = await fetch("/api/stripe/create-payment-intent", {
         method: "POST",
@@ -1521,8 +1529,13 @@ function SavedCardCheckout({
       const intentData = await intentRes.json();
 
       if (!intentRes.ok || intentData.error) {
-        throw new Error(intentData.error || "No se pudo procesar el pago.");
+        throw Object.assign(
+          new Error(intentData.error || "No se pudo procesar el pago."),
+          intentData,
+        );
       }
+
+      createdPiId = intentData.paymentIntentId || null;
 
       const stripe = await stripePromise;
       if (!stripe) {
@@ -1535,14 +1548,26 @@ function SavedCardCheckout({
         });
 
       if (confirmError) {
-        throw new Error(confirmError.message);
+        await cancelOrphanPaymentIntent(
+          createdPiId || intentData.paymentIntentId,
+        );
+        createdPiId = null;
+        throw confirmError;
       }
 
-      await onPaymentSuccess(
-        paymentIntent?.id || intentData.paymentIntentId,
-      );
+      const confirmedId = paymentIntent?.id || intentData.paymentIntentId;
+      try {
+        await onPaymentSuccess(confirmedId);
+      } catch (completeErr) {
+        await cancelOrphanPaymentIntent(confirmedId);
+        createdPiId = null;
+        throw completeErr;
+      }
     } catch (err) {
-      setError(err.message || "Error al procesar el pago.");
+      if (createdPiId) {
+        await cancelOrphanPaymentIntent(createdPiId);
+      }
+      setError(friendlyStripePaymentError(err));
     } finally {
       setPaying(false);
     }
@@ -1560,9 +1585,12 @@ function SavedCardCheckout({
         </p>
       </div>
       {error && (
-        <p className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
-        </p>
+        <div className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+          <p>{error}</p>
+          <p className="mt-1 text-[12px] text-red-600/90">
+            Tus fechas y datos se mantienen. Puedes reintentar el pago.
+          </p>
+        </div>
       )}
       <button
         type="button"
@@ -1571,7 +1599,11 @@ function SavedCardCheckout({
         className="mt-4 min-h-[44px] w-full py-3 text-[13px] font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
         style={{ backgroundColor: "#1d4f91", borderRadius: 6 }}
       >
-        {paying ? "Procesando pago…" : `Pagar ${precioTotal.toFixed(2)}€ →`}
+        {paying
+          ? "Procesando pago…"
+          : error
+            ? `Reintentar pago · ${precioTotal.toFixed(2)}€ →`
+            : `Pagar ${precioTotal.toFixed(2)}€ →`}
       </button>
       <button
         type="button"
@@ -1594,6 +1626,7 @@ function CheckoutForm({
   userEmail,
   clienteNombre,
   onPaymentSuccess,
+  onNeedNewPaymentIntent,
   vertical,
   fechaInicio,
   hora,
@@ -1608,14 +1641,6 @@ function CheckoutForm({
 
   async function handleSubmit(e) {
     e.preventDefault();
-    console.log(
-      "handleSubmit - vertical:",
-      vertical,
-      "fechaInicio:",
-      fechaInicio,
-      "hora:",
-      hora,
-    );
 
     if (service?.vertical === "ninos") {
       if (!hora || hora.trim() === "") {
@@ -1673,30 +1698,19 @@ function CheckoutForm({
     }
 
     if (!stripe || !elements) return;
-
-    setPaying(true);
-    setErrorMessage("");
-
-    const intentRes = await fetch("/api/stripe/create-payment-intent", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        amount: precioTotal,
-        metadata: {
-          service_id: String(metadata.service_id),
-          cliente_id: String(metadata.cliente_id),
-          grupo_reserva: String(metadata.grupo_reserva),
-        },
-      }),
-    });
-    const intentData = await intentRes.json();
-
-    if (!intentRes.ok || intentData.error) {
-      setPaying(false);
-      setErrorMessage(intentData.error || "No se pudo iniciar el pago.");
+    if (!paymentIntentId) {
+      const msg =
+        "El pago aún no está listo. Espera un momento o recarga la página.";
+      setError(msg);
+      setErrorMessage(msg);
       return;
     }
 
+    setPaying(true);
+    setError("");
+    setErrorMessage("");
+
+    // Reutiliza el PI ya montado en Elements (no crear otro al reintentar).
     const { error: confirmError, paymentIntent } = await stripe.confirmPayment({
       elements,
       confirmParams: {
@@ -1706,8 +1720,18 @@ function CheckoutForm({
     });
 
     if (confirmError) {
+      const msg = friendlyStripePaymentError(confirmError);
+      setError(msg);
+      setErrorMessage(msg);
       setPaying(false);
-      setErrorMessage(confirmError.message);
+      // Tras ciertos fallos el PI queda inutilizable → pedir uno nuevo.
+      const unrecoverable =
+        confirmError.code === "payment_intent_unexpected_state" ||
+        confirmError.type === "invalid_request_error";
+      if (unrecoverable) {
+        await cancelOrphanPaymentIntent(paymentIntentId);
+        onNeedNewPaymentIntent?.();
+      }
       return;
     }
 
@@ -1753,7 +1777,20 @@ function CheckoutForm({
           .eq("id", userId);
       }
     } catch (err) {
-      setErrorMessage(err.message || "Error al guardar la reserva.");
+      // Pago retenido pero reserva no creada → cancelar hold y regenerar PI.
+      await cancelOrphanPaymentIntent(confirmedId);
+      const detail =
+        typeof err?.message === "string" &&
+        err.message &&
+        !/payment_intent|client_secret|stripe\.com/i.test(err.message)
+          ? err.message
+          : null;
+      const msg = detail
+        ? `No se pudo guardar la reserva (${detail}). Hemos liberado la retención: puedes reintentar el pago; tus datos se mantienen.`
+        : "El pago se retuvo pero no se pudo guardar la reserva. Hemos liberado la retención: reintenta el pago; tus datos se mantienen.";
+      setError(msg);
+      setErrorMessage(msg);
+      onNeedNewPaymentIntent?.();
     } finally {
       setPaying(false);
     }
@@ -1763,9 +1800,13 @@ function CheckoutForm({
     <form onSubmit={handleSubmit} className="mt-6">
       <PaymentElement />
       {error && (
-        <p className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
-        </p>
+        <div className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+          <p>{error}</p>
+          <p className="mt-1 text-[12px] text-red-600/90">
+            Tus fechas, servicio y datos se mantienen. Puedes reintentar sin
+            empezar de cero.
+          </p>
+        </div>
       )}
       <button
         type="submit"
@@ -1773,7 +1814,11 @@ function CheckoutForm({
         className="mt-4 min-h-[44px] w-full py-3 text-[13px] font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
         style={{ backgroundColor: "#1d4f91", borderRadius: 6 }}
       >
-        {paying ? "Procesando pago…" : `Pagar ${precioTotal.toFixed(2)}€ →`}
+        {paying
+          ? "Procesando pago…"
+          : error
+            ? `Reintentar pago · ${precioTotal.toFixed(2)}€ →`
+            : `Pagar ${precioTotal.toFixed(2)}€ →`}
       </button>
     </form>
   );
@@ -1865,7 +1910,7 @@ function BundleSavedCardCheckout({
             });
 
           if (confirmError) {
-            throw new Error(confirmError.message);
+            throw confirmError;
           }
 
           confirmedIds.push(paymentIntent?.id || item.paymentIntentId);
@@ -1884,10 +1929,7 @@ function BundleSavedCardCheckout({
         throw confirmErr;
       }
     } catch (err) {
-      setError(
-        err.message ||
-          "No se pudieron confirmar todas las retenciones. No se ha creado la reserva.",
-      );
+      setError(friendlyStripePaymentError(err));
     } finally {
       setPaying(false);
     }
@@ -1914,9 +1956,12 @@ function BundleSavedCardCheckout({
         </p>
       </div>
       {error && (
-        <p className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
-        </p>
+        <div className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+          <p>{error}</p>
+          <p className="mt-1 text-[12px] text-red-600/90">
+            Tus servicios y fechas se mantienen. Puedes reintentar el pago.
+          </p>
+        </div>
       )}
       <button
         type="button"
@@ -1925,7 +1970,11 @@ function BundleSavedCardCheckout({
         className="mt-4 min-h-[44px] w-full py-3 text-[13px] font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
         style={{ backgroundColor: "#1d4f91", borderRadius: 6 }}
       >
-        {paying ? "Procesando pago…" : `Pagar ${totalAPagar.toFixed(2)}€ →`}
+        {paying
+          ? "Procesando pago…"
+          : error
+            ? `Reintentar pago · ${totalAPagar.toFixed(2)}€ →`
+            : `Pagar ${totalAPagar.toFixed(2)}€ →`}
       </button>
       <button
         type="button"
@@ -2055,7 +2104,7 @@ function BundleNewCardCheckoutForm({
         });
 
         if (confirmError) {
-          throw new Error(confirmError.message);
+          throw confirmError;
         }
 
         confirmedIds.push(paymentIntent?.id || first.paymentIntentId);
@@ -2077,7 +2126,7 @@ function BundleNewCardCheckoutForm({
             });
 
           if (cardError) {
-            throw new Error(cardError.message);
+            throw cardError;
           }
 
           confirmedIds.push(pi?.id || item.paymentIntentId);
@@ -2098,14 +2147,9 @@ function BundleNewCardCheckoutForm({
         throw confirmErr;
       }
     } catch (err) {
-      setErrorMessage(
-        err.message ||
-          "No se pudieron confirmar todas las retenciones. No se ha creado la reserva.",
-      );
-      setError(
-        err.message ||
-          "No se pudieron confirmar todas las retenciones. No se ha creado la reserva.",
-      );
+      const msg = friendlyStripePaymentError(err);
+      setErrorMessage(msg);
+      setError(msg);
     } finally {
       setPaying(false);
     }
@@ -2124,9 +2168,12 @@ function BundleNewCardCheckoutForm({
       </p>
       <PaymentElement />
       {error && (
-        <p className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
-        </p>
+        <div className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+          <p>{error}</p>
+          <p className="mt-1 text-[12px] text-red-600/90">
+            Tus servicios y fechas se mantienen. Puedes reintentar el pago.
+          </p>
+        </div>
       )}
       <button
         type="submit"
@@ -2134,7 +2181,11 @@ function BundleNewCardCheckoutForm({
         className="mt-4 min-h-[44px] w-full py-3 text-[13px] font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
         style={{ backgroundColor: "#1d4f91", borderRadius: 6 }}
       >
-        {paying ? "Procesando pago…" : `Pagar ${totalAPagar.toFixed(2)}€ →`}
+        {paying
+          ? "Procesando pago…"
+          : error
+            ? `Reintentar pago · ${totalAPagar.toFixed(2)}€ →`
+            : `Pagar ${totalAPagar.toFixed(2)}€ →`}
       </button>
     </form>
   );
@@ -2201,6 +2252,10 @@ export default function ReservarPage() {
   const [unavailableMessage, setUnavailableMessage] = useState("");
   const [clientSecret, setClientSecret] = useState(null);
   const [paymentIntentId, setPaymentIntentId] = useState(null);
+  /** Fuerza recrear el PI de Elements tras fallo irrecuperable. */
+  const [paymentRetryKey, setPaymentRetryKey] = useState(0);
+  const paymentFinalizedRef = useRef(false);
+  const activePaymentIntentIdRef = useRef(null);
   const [grupoReserva, setGrupoReserva] = useState(null);
   const [paymentIntentLoading, setPaymentIntentLoading] = useState(false);
   const [stripeCustomerId, setStripeCustomerId] = useState(null);
@@ -3563,24 +3618,31 @@ export default function ReservarPage() {
   }, [userId, serviceId, grupoReserva]);
 
   useEffect(() => {
-    if (totalAPagar <= 0 || !userId || !serviceId) {
+    const releasePreparedIntent = () => {
+      const id = activePaymentIntentIdRef.current;
+      if (id && !paymentFinalizedRef.current) {
+        cancelOrphanPaymentIntent(id);
+      }
+      activePaymentIntentIdRef.current = null;
       setClientSecret(null);
       setPaymentIntentId(null);
+    };
+
+    if (totalAPagar <= 0 || !userId || !serviceId) {
+      releasePreparedIntent();
       setGrupoReserva(null);
       return;
     }
 
     if (clienteNoVerificado) {
-      setClientSecret(null);
-      setPaymentIntentId(null);
+      releasePreparedIntent();
       setGrupoReserva(null);
       setPaymentIntentLoading(false);
       return;
     }
 
     if (clienteSinTelefono) {
-      setClientSecret(null);
-      setPaymentIntentId(null);
+      releasePreparedIntent();
       setGrupoReserva(null);
       setPaymentIntentLoading(false);
       return;
@@ -3589,16 +3651,14 @@ export default function ReservarPage() {
     const dateError = validateBookingDates(vertical, fechaInicio, hora);
     if (dateError) {
       setErrorMessage(dateError);
-      setClientSecret(null);
-      setPaymentIntentId(null);
+      releasePreparedIntent();
       setGrupoReserva(null);
       setPaymentIntentLoading(false);
       return;
     }
 
     if (calendarioError || disponibilidadChecking) {
-      setClientSecret(null);
-      setPaymentIntentId(null);
+      releasePreparedIntent();
       setGrupoReserva(null);
       setPaymentIntentLoading(false);
       return;
@@ -3608,23 +3668,28 @@ export default function ReservarPage() {
     setGrupoReserva(grupo);
 
     if (selectedServices.length > 1) {
-      setClientSecret(null);
-      setPaymentIntentId(null);
+      releasePreparedIntent();
       setPaymentIntentLoading(false);
       return;
     }
 
     if (savedPaymentMethods.length > 0 && !useNewCard) {
-      setClientSecret(null);
-      setPaymentIntentId(null);
+      releasePreparedIntent();
       setPaymentIntentLoading(false);
       return;
     }
 
     let cancelled = false;
+    let createdIdForEffect = null;
     setPaymentIntentLoading(true);
     setClientSecret(null);
     setPaymentIntentId(null);
+
+    const previousPiId = activePaymentIntentIdRef.current;
+    activePaymentIntentIdRef.current = null;
+    if (previousPiId && !paymentFinalizedRef.current) {
+      cancelOrphanPaymentIntent(previousPiId);
+    }
 
     async function createIntent() {
       try {
@@ -3642,13 +3707,24 @@ export default function ReservarPage() {
           }),
         });
         const data = await res.json();
-        if (cancelled) return;
+        if (cancelled) {
+          if (data.paymentIntentId) {
+            await cancelOrphanPaymentIntent(data.paymentIntentId);
+          }
+          return;
+        }
         if (!res.ok || data.error) {
           setClientSecret(null);
           setPaymentIntentId(null);
-          setErrorMessage(data.error || "No se pudo preparar el pago.");
+          setErrorMessage(
+            friendlyStripePaymentError(
+              data.error || "No se pudo preparar el pago.",
+            ),
+          );
           return;
         }
+        createdIdForEffect = data.paymentIntentId;
+        activePaymentIntentIdRef.current = data.paymentIntentId;
         setClientSecret(data.clientSecret);
         setPaymentIntentId(data.paymentIntentId);
       } finally {
@@ -3659,6 +3735,14 @@ export default function ReservarPage() {
     createIntent();
     return () => {
       cancelled = true;
+      if (
+        createdIdForEffect &&
+        !paymentFinalizedRef.current &&
+        activePaymentIntentIdRef.current === createdIdForEffect
+      ) {
+        cancelOrphanPaymentIntent(createdIdForEffect);
+        activePaymentIntentIdRef.current = null;
+      }
     };
   }, [
     totalAPagar,
@@ -3675,7 +3759,20 @@ export default function ReservarPage() {
     calendarioError,
     disponibilidadChecking,
     selectedServices.length,
+    paymentRetryKey,
   ]);
+
+  // Si el usuario abandona el checkout, cancela el PI preparado (sin reserva).
+  useEffect(() => {
+    return () => {
+      if (
+        !paymentFinalizedRef.current &&
+        activePaymentIntentIdRef.current
+      ) {
+        cancelOrphanPaymentIntent(activePaymentIntentIdRef.current);
+      }
+    };
+  }, []);
 
   const completeBooking = useCallback(
     async (confirmedPaymentIntentId) => {
@@ -3747,6 +3844,8 @@ export default function ReservarPage() {
         throw new Error(data.error || "No se pudo completar la reserva.");
       }
 
+      paymentFinalizedRef.current = true;
+      activePaymentIntentIdRef.current = null;
       clearBundleStateFromSession();
       cartHydratedRef.current = false;
       bundleRestoredRef.current = false;
@@ -3843,6 +3942,8 @@ export default function ReservarPage() {
         throw new Error(data.error || "No se pudo completar la reserva.");
       }
 
+      paymentFinalizedRef.current = true;
+      activePaymentIntentIdRef.current = null;
       clearBundleStateFromSession();
       cartHydratedRef.current = false;
       bundleRestoredRef.current = false;
@@ -5402,6 +5503,9 @@ export default function ReservarPage() {
                           .filter(Boolean)
                           .join(" ")}
                         onPaymentSuccess={completeBooking}
+                        onNeedNewPaymentIntent={() => {
+                          setPaymentRetryKey((k) => k + 1);
+                        }}
                         vertical={vertical}
                         fechaInicio={fechaInicio}
                         hora={hora}
