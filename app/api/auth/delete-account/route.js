@@ -3,6 +3,9 @@ import { createClient } from "@/lib/supabase/server";
 import { countActiveBookingsBlockingDelete } from "@/app/lib/delete-account-active-bookings";
 import { deleteUserSensitiveStorage } from "@/app/lib/delete-account-storage";
 
+/** ~100 años — sintaxis documentada en @supabase/auth-js Admin API. */
+const BAN_DURATION = "876000h";
+
 function getAdmin() {
   if (
     !process.env.NEXT_PUBLIC_SUPABASE_URL ||
@@ -17,9 +20,14 @@ function getAdmin() {
   );
 }
 
+function anonymizedAuthEmail(userId) {
+  return `deleted-${userId}@deleted.invalid`;
+}
+
 /**
  * Borrado RGPD de la cuenta del usuario autenticado.
- * Orden: verificar bloqueo → storage → anonimizar BD (RPC) → deleteUser auth.
+ * Orden: verificar bloqueo → storage → anonimizar BD (RPC) → ban + scrub auth
+ * (SIN deleteUser: profiles_id_fkey es ON DELETE CASCADE y destruiría el historial).
  * Body: { confirm: true }
  */
 export async function POST(request) {
@@ -112,7 +120,7 @@ export async function POST(request) {
       );
     } catch (storageErr) {
       console.error(
-        "[delete-account] STORAGE ABORT (no se borra auth ni BD):",
+        "[delete-account] STORAGE ABORT (no se toca auth ni BD):",
         storageErr?.message || storageErr,
       );
       return Response.json(
@@ -158,31 +166,87 @@ export async function POST(request) {
       );
     }
 
-    // ——— 4) AUTH al final ———
-    const { error: deleteAuthError } =
-      await supabaseAdmin.auth.admin.deleteUser(user.id);
+    // ——— 4) AUTH: ban + scrub email (SIN deleteUser) ———
+    // deleteUser dispararía profiles ON DELETE CASCADE y destruiría el historial.
+    const scrubEmail = anonymizedAuthEmail(user.id);
 
-    if (deleteAuthError) {
+    const { error: banError } = await supabaseAdmin.auth.admin.updateUserById(
+      user.id,
+      { ban_duration: BAN_DURATION },
+    );
+
+    if (banError) {
       console.error(
-        "[delete-account] auth.deleteUser FAIL (BD ya anonimizada):",
-        deleteAuthError.message,
+        "[delete-account] auth.ban FAIL (BD ya anonimizada):",
+        banError.message,
+        banError,
       );
       return Response.json(
         {
           error:
-            "Tus datos personales se han anonimizado, pero no se pudo cerrar el acceso de autenticación. Contacta con soporte.",
-          code: "auth_delete_failed",
+            "Tus datos personales se han anonimizado, pero no se pudo deshabilitar el acceso de autenticación. Contacta con soporte.",
+          code: "auth_ban_failed",
           anonymized: true,
+          detail: banError.message,
           rpc: rpcData ?? null,
         },
         { status: 500 },
       );
     }
 
+    // Scrub email / phone / metadata — no bloquea el éxito si falla
+    const { error: scrubError } = await supabaseAdmin.auth.admin.updateUserById(
+      user.id,
+      {
+        email: scrubEmail,
+        phone: "",
+        user_metadata: {
+          nombre: "Usuario eliminado",
+          apellido: "",
+          deleted: true,
+          deleted_at: new Date().toISOString(),
+        },
+      },
+    );
+    if (scrubError) {
+      console.error(
+        "[delete-account] auth.scrub FAIL (ban OK, no bloqueante):",
+        scrubError.message,
+      );
+    }
+
+    // Invalidar sesiones activas (JWT actual → logout global en Auth)
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const jwt = session?.access_token;
+      if (jwt) {
+        const { error: signOutError } = await supabaseAdmin.auth.admin.signOut(
+          jwt,
+          "global",
+        );
+        if (signOutError) {
+          console.error(
+            "[delete-account] auth.admin.signOut FAIL (no bloqueante):",
+            signOutError.message,
+          );
+        }
+      }
+    } catch (signOutErr) {
+      console.error(
+        "[delete-account] auth.admin.signOut excepción (no bloqueante):",
+        signOutErr?.message || signOutErr,
+      );
+    }
+
     return Response.json({
       success: true,
       anonymized: true,
-      auth_deleted: true,
+      auth_banned: true,
+      auth_email_scrubbed: !scrubError,
+      message:
+        "Tu cuenta ha sido eliminada. Tus datos personales se han borrado y ya no podrás acceder.",
     });
   } catch (error) {
     console.error("[delete-account] unexpected:", error?.message || error);

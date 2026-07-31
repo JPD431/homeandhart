@@ -1,5 +1,6 @@
 -- RGPD: anonimización transaccional de cuenta (derecho al olvido).
--- NO borra auth.users (eso lo hace el endpoint JS al final).
+-- NO borra auth.users (profiles_id_fkey es ON DELETE CASCADE; borrar auth
+-- destruiría el perfil/historial). El endpoint JS BANEA + scrub del email.
 -- NO borra Storage (eso lo hace el endpoint JS ANTES de llamar a esta función).
 -- Ejecutar en Supabase SQL editor / migraciones antes de usar el endpoint nuevo.
 
@@ -68,7 +69,7 @@ BEGIN
   WHERE cliente_id = p_user_id;
 
   -- Perfil fantasma (NO borrar la fila: FKs de bookings/reviews/etc.)
-  -- Nota: el email de login vive en auth.users (se borra en el endpoint).
+  -- Nota: el email de login vive en auth.users (ban + scrub en el endpoint).
   -- No hay columna profiles.email ni profiles.direccion en el esquema actual.
   UPDATE public.profiles
   SET

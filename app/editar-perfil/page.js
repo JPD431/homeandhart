@@ -2317,13 +2317,36 @@ function EditarPerfilContent() {
       const data = await res.json().catch(() => ({}));
 
       if (res.ok && data.success) {
-        await supabase.auth.signOut();
-        router.push("/");
+        alert(
+          data.message ||
+            "Tu cuenta ha sido eliminada. Tus datos personales se han borrado y ya no podrás acceder.",
+        );
+        try {
+          await supabase.auth.signOut({ scope: "global" });
+        } catch {
+          await supabase.auth.signOut();
+        }
+        router.replace("/login");
         return;
       }
 
       if (res.status === 409 || data.code === "active_bookings") {
         alert(data.error || "Tienes reservas activas. Resuélvelas antes de eliminar la cuenta.");
+        return;
+      }
+
+      if (data.code === "auth_ban_failed" && data.anonymized) {
+        alert(
+          (data.error ||
+            "Tus datos se anonimizaron, pero no se pudo cerrar el acceso.") +
+            " Contacta con soporte.",
+        );
+        try {
+          await supabase.auth.signOut({ scope: "global" });
+        } catch {
+          /* ignore */
+        }
+        router.replace("/login");
         return;
       }
 
