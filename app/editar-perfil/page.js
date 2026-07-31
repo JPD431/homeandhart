@@ -1132,6 +1132,7 @@ function EditarPerfilContent() {
   const [uploadingDoc, setUploadingDoc] = useState(null);
   const [providerDocuments, setProviderDocuments] = useState([]);
   const [documentosReminderVertical, setDocumentosReminderVertical] = useState(null);
+  const [exportingData, setExportingData] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -2266,6 +2267,35 @@ function EditarPerfilContent() {
     }
   }
 
+  const handleDescargarMisDatos = async () => {
+    setExportingData(true);
+    setErrorMessage("");
+    try {
+      const res = await fetch("/api/auth/export-data", { method: "GET" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "No se pudo exportar tus datos");
+      }
+      const blob = await res.blob();
+      const disposition = res.headers.get("Content-Disposition") || "";
+      const match = disposition.match(/filename="([^"]+)"/);
+      const filename = match?.[1] || "mis-datos-homeandheart.json";
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      setSuccessMessage("Descarga de tus datos lista.");
+    } catch (err) {
+      setErrorMessage(err?.message || "Error al descargar tus datos");
+    } finally {
+      setExportingData(false);
+    }
+  };
+
   const handleEliminarCuenta = async () => {
     const confirmacion = confirm(
       "¿Eliminar tu cuenta de forma irreversible?\n\n" +
@@ -2675,6 +2705,21 @@ function EditarPerfilContent() {
               <label className="mb-1.5 block text-xs font-medium text-[#444]">Nueva contraseña</label>
               <input type="password" value={nuevaPassword} onChange={(e) => { markDirty(); setNuevaPassword(e.target.value); }} placeholder="Mínimo 6 caracteres" className={inputClass} style={{ borderColor: BRAND.border }} />
             </div>
+          </Card>
+          <Card title="Tus datos (RGPD)">
+            <p className="mb-3 text-xs leading-relaxed text-[#666]">
+              Descarga un archivo JSON con tus datos personales en Home&amp;Heart
+              (perfil, reservas, mensajes enviados, reseñas, servicios, crédito, etc.).
+            </p>
+            <button
+              type="button"
+              onClick={handleDescargarMisDatos}
+              disabled={exportingData}
+              className="min-h-[44px] rounded-lg px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+              style={{ backgroundColor: PRIMARY }}
+            >
+              {exportingData ? "Preparando descarga…" : "Descargar mis datos"}
+            </button>
           </Card>
           <Card title="Zona de peligro">
             <button
