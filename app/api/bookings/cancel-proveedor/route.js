@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getBookingPrecioBase } from "@/app/lib/ingresos-proveedor";
 import { notifyBookingEvent } from "@/app/lib/notifications";
 import { registrarCancelacion } from "@/app/lib/cancelaciones";
+import { buscarAlternativasGarantia } from "@/app/lib/garantia";
 import { sendPlatformEmail } from "@/app/lib/send-platform-email";
 import {
   aplicarReembolsoStripeBooking,
@@ -190,8 +191,6 @@ async function aplicarPenalizacionProveedor(proveedorId, booking) {
 }
 
 async function activarGarantiaCliente(booking, service) {
-  const baseUrl = process.env.NEXT_PUBLIC_URL || "https://homeandheart.es";
-
   const { data: authData, error: authError } =
     await supabaseAdmin.auth.admin.getUserById(booking.cliente_id);
 
@@ -217,24 +216,20 @@ async function activarGarantiaCliente(booking, service) {
       .join(" ")
       .trim() || "Cliente";
 
-  const garantiaRes = await fetch(`${baseUrl}/api/garantia`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      service_id: booking.service_id,
-      fecha_inicio: booking.fecha_inicio,
-      fecha_fin: booking.fecha_fin || booking.fecha_inicio,
-      vertical: service.vertical,
-      ciudad: service.ciudad,
-    }),
+  // In-process (sin self-fetch HTTP a /api/garantia).
+  const garantiaResult = await buscarAlternativasGarantia({
+    service_id: booking.service_id,
+    fecha_inicio: booking.fecha_inicio,
+    fecha_fin: booking.fecha_fin || booking.fecha_inicio,
+    vertical: service.vertical,
+    ciudad: service.ciudad,
   });
 
-  const garantiaData = await garantiaRes.json();
-  if (!garantiaRes.ok) {
-    throw new Error(garantiaData.error || "Error al buscar alternativas");
+  if (!garantiaResult.ok) {
+    throw new Error(garantiaResult.error || "Error al buscar alternativas");
   }
 
-  const alternativas = garantiaData.alternativas ?? [];
+  const alternativas = garantiaResult.alternativas ?? [];
 
   if (clienteEmail) {
     const result = await sendPlatformEmail({
