@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getAdminUser } from "@/lib/auth/requireAdmin";
 import { hasDniUploaded } from "@/app/lib/dni";
 import { resolveDniPendienteNotifications } from "@/app/lib/dni-admin-notify";
+import { notifyProveedorDniDecision } from "@/app/lib/dni-proveedor-notify";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -17,6 +18,7 @@ const ESTADOS_VALIDOS = new Set(["verificado", "rechazado"]);
  *   userId: string,
  *   estado: 'verificado' | 'rechazado',
  *   confirmar_mayor_de_edad?: boolean  // obligatorio true si estado === 'verificado'
+ *   motivo?: string  // opcional, se incluye en el aviso al usuario si rechazas
  * }
  */
 export async function POST(request) {
@@ -35,6 +37,8 @@ export async function POST(request) {
   const userId = typeof body?.userId === "string" ? body.userId.trim() : "";
   const estado = typeof body?.estado === "string" ? body.estado.trim() : "";
   const confirmarMayorDeEdad = body?.confirmar_mayor_de_edad === true;
+  const motivo =
+    typeof body?.motivo === "string" ? body.motivo.trim().slice(0, 500) : "";
 
   if (!userId) {
     return NextResponse.json({ error: "Falta userId" }, { status: 400 });
@@ -114,6 +118,16 @@ export async function POST(request) {
     await resolveDniPendienteNotifications(userId);
   } catch (err) {
     console.error("[dni-estado] resolve notificaciones:", err?.message || err);
+  }
+
+  try {
+    await notifyProveedorDniDecision({
+      userId,
+      estado,
+      motivo: estado === "rechazado" ? motivo : "",
+    });
+  } catch (err) {
+    console.error("[dni-estado] notify proveedor:", err?.message || err);
   }
 
   return NextResponse.json({ ok: true, profile: updated });

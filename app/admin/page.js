@@ -274,6 +274,8 @@ function AdminPageInner() {
   const [serviciosRevisionPendientes, setServiciosRevisionPendientes] = useState(0);
   const [suspensionesCount, setSuspensionesCount] = useState(0);
   const [cancelacionesActivas, setCancelacionesActivas] = useState(0);
+  /** Checkbox 18+ por proveedor (ficha) antes de Verificar DNI */
+  const [edadCheckedByProvider, setEdadCheckedByProvider] = useState({});
 
   const loadData = useCallback(async () => {
     setErrorMessage("");
@@ -611,6 +613,72 @@ function AdminPageInner() {
       window.open(payload.url, "_blank", "noopener,noreferrer");
     } catch (err) {
       setErrorMessage(err.message || "No se pudo abrir el DNI");
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  async function handleProviderDniEstado(provider, estado) {
+    if (!provider?.id) return;
+    if (!provider.doc_dni_url) {
+      setErrorMessage("Este proveedor no tiene DNI subido.");
+      return;
+    }
+
+    if (estado === "verificado" && !edadCheckedByProvider[provider.id]) {
+      setErrorMessage(
+        "Marca el checkbox «He verificado que es mayor de edad (18+) según el DNI» antes de verificar.",
+      );
+      return;
+    }
+
+    let motivo = "";
+    if (estado === "rechazado") {
+      const raw = window.prompt(
+        "Motivo del rechazo (opcional, se enviará al proveedor):",
+        "",
+      );
+      if (raw === null) return;
+      motivo = raw;
+    }
+
+    setActionLoading(provider.id);
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    try {
+      const body = { userId: provider.id, estado };
+      if (estado === "verificado") {
+        body.confirmar_mayor_de_edad = true;
+      }
+      if (estado === "rechazado" && motivo.trim()) {
+        body.motivo = motivo.trim();
+      }
+
+      const res = await fetch("/api/admin/usuarios/dni-estado", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const payload = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(payload.error || "No se pudo actualizar el estado del DNI");
+      }
+
+      setSuccessMessage(
+        estado === "verificado"
+          ? "DNI verificado y mayoría de edad (18+) confirmada. El proveedor ha sido avisado."
+          : "DNI marcado como rechazado. El proveedor ha sido avisado.",
+      );
+      setEdadCheckedByProvider((prev) => {
+        const next = { ...prev };
+        delete next[provider.id];
+        return next;
+      });
+      await loadData();
+    } catch (err) {
+      setErrorMessage(err.message || "Error al actualizar el DNI");
     } finally {
       setActionLoading(null);
     }
@@ -2815,10 +2883,12 @@ function AdminPageInner() {
               const hasAlojamiento = services.some((s) => s.vertical === "alojamiento");
               const mayorDeEdadOk = provider.mayor_de_edad_confirmada === true;
               const dniVerificado = provider.dni_estado === "verificado";
+              const dniRechazado = provider.dni_estado === "rechazado";
+              const hasDni = Boolean(provider.doc_dni_url);
+              const needsDniVerify = hasDni && !dniVerificado;
               const needsLegacyAgeConfirm =
-                Boolean(provider.doc_dni_url) &&
-                dniVerificado &&
-                !mayorDeEdadOk;
+                hasDni && dniVerificado && !mayorDeEdadOk;
+              const edadChecked = !!edadCheckedByProvider[provider.id];
               const docSummary = getMissingMandatoryDocumentsSummary(
                 provider,
                 provider.providerDocuments ?? [],
@@ -2895,19 +2965,43 @@ function AdminPageInner() {
                           </span>
                         )}
                       </div>
-                      {needsLegacyAgeConfirm && (
+                      {hasDni && (
                         <div
                           className="mt-3 rounded-xl border px-3 py-2.5 text-sm"
                           style={{
-                            borderColor: "#fcd34d",
-                            backgroundColor: "#fffbeb",
-                            color: "#92400e",
+                            borderColor: dniVerificado && mayorDeEdadOk ? "#a7f3d0" : "#fcd34d",
+                            backgroundColor: dniVerificado && mayorDeEdadOk ? "#ecfdf5" : "#fffbeb",
+                            color: dniVerificado && mayorDeEdadOk ? "#065f46" : "#92400e",
                           }}
                         >
-                          <p>
-                            DNI ya verificado, pero falta confirmar mayoría de edad.
-                            Abre el DNI, comprueba la fecha de nacimiento y confirma.
+                          <p className="font-semibold">
+                            Identidad:{" "}
+                            {dniVerificado
+                              ? mayorDeEdadOk
+                                ? "DNI verificado · 18+ confirmada"
+                                : "DNI verificado · falta 18+"
+                              : dniRechazado
+                                ? "DNI rechazado"
+                                : "DNI pendiente de verificar"}
                           </p>
+                          {(needsDniVerify || needsLegacyAgeConfirm) && (
+                            <label className="mt-2 flex cursor-pointer items-start gap-2 text-[11px] leading-snug">
+                              <input
+                                type="checkbox"
+                                checked={edadChecked}
+                                onChange={() =>
+                                  setEdadCheckedByProvider((prev) => ({
+                                    ...prev,
+                                    [provider.id]: !prev[provider.id],
+                                  }))
+                                }
+                                className="mt-0.5 accent-[#085041]"
+                              />
+                              <span>
+                                He verificado que es mayor de edad (18+) según el DNI
+                              </span>
+                            </label>
+                          )}
                           <div className="mt-2 flex flex-wrap gap-2">
                             <button
                               type="button"
@@ -2918,17 +3012,50 @@ function AdminPageInner() {
                             >
                               {isOpeningDni ? "Abriendo…" : "Ver DNI"}
                             </button>
-                            <button
-                              type="button"
-                              disabled={isBusy || isOpeningDni}
-                              onClick={() =>
-                                handleConfirmarMayorDeEdadProveedor(provider)
-                              }
-                              className="rounded-lg px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
-                              style={{ backgroundColor: "#085041" }}
-                            >
-                              {isBusy ? "Guardando…" : "Confirmar 18+ según el DNI"}
-                            </button>
+                            {needsDniVerify && (
+                              <button
+                                type="button"
+                                disabled={isBusy || isOpeningDni || !edadChecked}
+                                title={
+                                  edadChecked
+                                    ? "Verificar DNI y confirmar 18+"
+                                    : "Marca el checkbox de mayoría de edad primero"
+                                }
+                                onClick={() =>
+                                  handleProviderDniEstado(provider, "verificado")
+                                }
+                                className="rounded-lg px-3 py-1.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                                style={{ backgroundColor: "#085041" }}
+                              >
+                                {isBusy ? "…" : "Verificar DNI"}
+                              </button>
+                            )}
+                            {needsLegacyAgeConfirm && (
+                              <button
+                                type="button"
+                                disabled={isBusy || isOpeningDni || !edadChecked}
+                                onClick={() =>
+                                  handleConfirmarMayorDeEdadProveedor(provider)
+                                }
+                                className="rounded-lg px-3 py-1.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                                style={{ backgroundColor: "#085041" }}
+                              >
+                                {isBusy ? "…" : "Confirmar 18+"}
+                              </button>
+                            )}
+                            {!dniRechazado && (
+                              <button
+                                type="button"
+                                disabled={isBusy || isOpeningDni}
+                                onClick={() =>
+                                  handleProviderDniEstado(provider, "rechazado")
+                                }
+                                className="rounded-lg border px-3 py-1.5 text-xs font-semibold disabled:opacity-60"
+                                style={{ borderColor: "#b91c1c", color: "#b91c1c" }}
+                              >
+                                Rechazar DNI
+                              </button>
+                            )}
                           </div>
                         </div>
                       )}

@@ -2360,6 +2360,71 @@ export async function dispatchPlatformEmail(payload = {}) {
       return { ok: true, status: 200, data: { success: true } };
     }
 
+    if (tipo === "dni_verificado" || tipo === "dni_rechazado") {
+      const userId = data.user_id || data.proveedor_id;
+      const email =
+        data.email || (userId ? await resolverEmailUsuario(userId) : null);
+      if (!email) {
+        return {
+          ok: false,
+          status: 400,
+          error: "No se encontró el email del destinatario",
+        };
+      }
+      const baseUrl = process.env.NEXT_PUBLIC_URL || "https://homeandheart.es";
+      const nombre = (data.nombre || "proveedor").replace(/</g, "&lt;");
+      const ok = tipo === "dni_verificado";
+      const motivo = (data.motivo || "").replace(/</g, "&lt;").trim();
+
+      const result = await resend.emails.send({
+        from: FROM,
+        to: email,
+        subject: ok
+          ? "Tu identidad ha sido verificada · Home&Heart"
+          : "Necesitamos que vuelvas a subir tu documento · Home&Heart",
+        html: emailLayout({
+          title: ok ? "Identidad verificada" : "Documento no verificado",
+          bodyHtml: ok
+            ? `
+            <h1 style="margin:0 0 16px;font-size:20px;color:${BRAND_PRIMARY};">Tu identidad ha sido verificada</h1>
+            <p style="margin:0 0 12px;font-size:14px;line-height:1.6;color:#444;">
+              Hola <strong>${nombre}</strong>, hemos verificado tu documento de identidad
+              y tu mayoría de edad. Ya puedes continuar con los siguientes pasos de tu cuenta
+              (cobros, contacto y publicación de servicios).
+            </p>
+            <p style="margin:0;text-align:center;">
+              <a href="${baseUrl}/dashboard?tab=proveedor" style="display:inline-block;background-color:${BRAND_PRIMARY};color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:8px;font-size:15px;font-weight:600;">
+                Ir a mi panel →
+              </a>
+            </p>
+          `
+            : `
+            <h1 style="margin:0 0 16px;font-size:20px;color:${BRAND_PRIMARY};">Necesitamos que vuelvas a subir tu documento</h1>
+            <p style="margin:0 0 12px;font-size:14px;line-height:1.6;color:#444;">
+              Hola <strong>${nombre}</strong>, no hemos podido verificar tu documento de identidad.
+              Súbelo de nuevo (DNI, NIE o pasaporte legible) para que el equipo pueda revisarlo.
+            </p>
+            ${
+              motivo
+                ? `<p style="margin:0 0 12px;font-size:14px;line-height:1.6;color:#444;"><strong>Motivo:</strong> ${motivo}</p>`
+                : ""
+            }
+            <p style="margin:0;text-align:center;">
+              <a href="${baseUrl}/subir-dni" style="display:inline-block;background-color:${BRAND_PRIMARY};color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:8px;font-size:15px;font-weight:600;">
+                Subir documento →
+              </a>
+            </p>
+          `,
+        }),
+      });
+
+      if (result.error) {
+        return { ok: false, status: 400, error: result.error.message };
+      }
+
+      return { ok: true, status: 200, data: { success: true } };
+    }
+
     if (tipo === "nru_verificado" || tipo === "nru_rechazado") {
       const userId = data.user_id || data.proveedor_id;
       const email =

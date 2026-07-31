@@ -603,6 +603,9 @@ function TabProveedor({ perfil, userEmail, router, BRAND, highlightBookingId }) 
   const saldoPendienteTransferir =
     Math.round((Number(perfil?.saldo_pendiente_transferir) || 0) * 100) / 100;
   const tieneCuentaCobros = Boolean(perfil?.stripe_account_id);
+  const cobrosActivos = perfil?.cobros_activos === true;
+  /** Cuenta Connect empezada pero aún no lista para cobrar */
+  const cobrosIncompletos = tieneCuentaCobros && !cobrosActivos;
   const [connectLoading, setConnectLoading] = useState(false);
   const [connectError, setConnectError] = useState('');
 
@@ -696,7 +699,7 @@ function TabProveedor({ perfil, userEmail, router, BRAND, highlightBookingId }) 
           <div style={{ fontSize: 10, color: '#666', marginTop: 4 }}>Recibirás el 100% del pago en estas reservas</div>
         </div>
 
-        {!tieneCuentaCobros ? (
+        {!cobrosActivos ? (
           <div
             style={{
               marginBottom: 16,
@@ -708,10 +711,12 @@ function TabProveedor({ perfil, userEmail, router, BRAND, highlightBookingId }) 
             }}
           >
             <p style={{ fontSize: 13, fontWeight: 600, color: '#2a3a4a', margin: 0 }}>
-              Cobros
+              {cobrosIncompletos ? 'Cobros pendientes de completar' : 'Cobros pendientes'}
             </p>
             <p style={{ fontSize: 12, color: '#444', marginTop: 8, marginBottom: 12, lineHeight: 1.5 }}>
-              Configura tus cobros para poder recibir pagos de tus reservas.
+              {cobrosIncompletos
+                ? 'Has empezado a conectar Stripe, pero los cobros aún no están activos. Complétalo para poder recibir reservas y pagos.'
+                : 'Sin cobros activos no puedes recibir reservas ni pagos. Configura Stripe para activarlos.'}
             </p>
             <button
               type="button"
@@ -730,7 +735,11 @@ function TabProveedor({ perfil, userEmail, router, BRAND, highlightBookingId }) 
                 opacity: connectLoading ? 0.7 : 1,
               }}
             >
-              {connectLoading ? 'Conectando…' : 'Configurar cobros'}
+              {connectLoading
+                ? 'Conectando…'
+                : cobrosIncompletos
+                  ? 'Completar cobros'
+                  : 'Configurar cobros'}
             </button>
           </div>
         ) : (
@@ -748,8 +757,8 @@ function TabProveedor({ perfil, userEmail, router, BRAND, highlightBookingId }) 
               flexWrap: 'wrap',
             }}
           >
-            <p style={{ fontSize: 12, color: '#666', margin: 0 }}>
-              Cobros configurados
+            <p style={{ fontSize: 12, color: '#085041', margin: 0, fontWeight: 500 }}>
+              Cobros activos ✓
             </p>
             <button
               type="button"

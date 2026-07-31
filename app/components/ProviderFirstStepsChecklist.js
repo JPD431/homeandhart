@@ -4,32 +4,31 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { hasDniUploaded } from "@/app/lib/dni";
 import { hasEmailContacto, hasTelefono } from "@/app/lib/profile-telefono";
-import { getServiceActivationBlockers } from "@/app/lib/provider-publicacion";
 import { supabase } from "@/app/lib/supabase";
 
 /**
- * Checklist de primeros pasos para proveedor (documentación → aprobación → cobros → anuncio).
+ * Checklist de activación: distingue acciones del proveedor vs revisión del equipo.
  */
 export default function ProviderFirstStepsChecklist({
   perfil,
   accountEmail = null,
   BRAND,
 }) {
-  const [serviceCount, setServiceCount] = useState(null);
+  const [services, setServices] = useState([]);
 
   useEffect(() => {
     let cancelled = false;
-    async function loadCount() {
+    async function loadServices() {
       if (!perfil?.id) return;
-      const { count, error } = await supabase
+      const { data, error } = await supabase
         .from("services")
-        .select("id", { count: "exact", head: true })
+        .select("id, vertical, nru, nru_estado, revision_estado")
         .eq("proveedor_id", perfil.id);
       if (!cancelled && !error) {
-        setServiceCount(count ?? 0);
+        setServices(data || []);
       }
     }
-    loadCount();
+    loadServices();
     return () => {
       cancelled = true;
     };
@@ -37,76 +36,193 @@ export default function ProviderFirstStepsChecklist({
 
   if (perfil?.role !== "proveedor") return null;
 
-  const dniOk = hasDniUploaded(perfil);
+  const dniSubido = hasDniUploaded(perfil);
+  const dniVerificado = perfil?.dni_estado === "verificado";
+  const dniRechazado = perfil?.dni_estado === "rechazado";
   const edadOk = perfil?.mayor_de_edad_confirmada === true;
+  const identidadOk = dniVerificado && edadOk;
   const verificado = perfil?.verificado === true;
   const cobrosOk = perfil?.cobros_activos === true;
+  const tieneStripeAccount = Boolean(perfil?.stripe_account_id);
   const contactoOk =
     hasTelefono(perfil) && hasEmailContacto(perfil, accountEmail);
-  const tieneServicio = (serviceCount ?? 0) > 0;
+  const tieneServicio = services.length > 0;
 
-  const steps = [
-    {
-      id: "dni",
-      label: "Sube tu DNI, NIE o pasaporte",
-      done: dniOk,
-      href: "/subir-dni",
-      cta: "Subir documento",
-    },
-    {
-      id: "edad",
-      label: "Confirma que eres mayor de edad",
-      done: edadOk,
-      href: "/editar-perfil?tab=perfil",
-      cta: "Ir al perfil",
-    },
-    {
-      id: "aprobacion",
-      label: "Espera la aprobación del equipo",
-      done: verificado,
-      hint: dniOk && edadOk && !verificado
-        ? "Tu cuenta está en revisión (suele ser en menos de 24h)."
-        : !dniOk
-          ? "Primero sube tu documento de identidad."
-          : null,
-    },
-    {
-      id: "cobros",
-      label: "Configura tus cobros para recibir pagos",
-      done: cobrosOk,
-      href: "/dashboard?tab=proveedor",
-      cta: "Configurar cobros",
-      hint: verificado && !cobrosOk
-        ? "Usa el botón «Configurar cobros» de este panel."
-        : null,
-    },
-    {
-      id: "contacto",
-      label: "Completa teléfono y email de contacto",
-      done: contactoOk,
-      href: "/editar-perfil?tab=perfil",
-      cta: "Completar datos",
-    },
-    {
-      id: "servicio",
-      label: "Publica tu primer servicio",
-      done: tieneServicio,
-      href: "/editar-perfil?tab=servicios",
-      cta: "Crear anuncio",
-      hint:
-        tieneServicio === false && serviceCount === 0
-          ? "Sin anuncio no puedes recibir reservas."
-          : null,
-    },
-  ];
+  const verticals = new Set(services.map((s) => s.vertical).filter(Boolean));
+  const showNinos = !tieneServicio || verticals.has("ninos");
+  const showMascotas = !tieneServicio || verticals.has("mascotas");
+  const showAlojamiento = !tieneServicio || verticals.has("alojamiento");
 
-  const doneCount = steps.filter((s) => s.done).length;
-  const allDone = doneCount === steps.length;
-  const blockers = getServiceActivationBlockers(perfil, null, {
-    accountEmail,
+  const ninosDocsOk = perfil?.ninos_documentacion_aprobada === true;
+  const mascotasDocsOk = perfil?.mascotas_documentacion_aprobada === true;
+  const alojamientoServices = services.filter((s) => s.vertical === "alojamiento");
+  const nruOk =
+    alojamientoServices.length > 0 &&
+    alojamientoServices.every((s) => s.nru_estado === "verificado");
+  const nruPendiente =
+    alojamientoServices.length > 0 &&
+    alojamientoServices.some((s) => s.nru_estado !== "verificado");
+
+  /** @type {Array<{ id: string, actor: 'proveedor'|'equipo', label: string, done: boolean, href?: string, cta?: string, hint?: string|null, urgent?: boolean }>} */
+  const steps = [];
+
+  // —— Acciones del proveedor ——
+  steps.push({
+    id: "dni-subir",
+    actor: "proveedor",
+    label: "Sube tu DNI, NIE o pasaporte",
+    done: dniSubido && !dniRechazado,
+    href: "/subir-dni",
+    cta: dniRechazado ? "Volver a subir documento" : "Subir documento",
+    hint: dniRechazado
+      ? "Tu documento fue rechazado. Súbelo de nuevo para que el equipo lo revise."
+      : null,
+    urgent: dniRechazado,
   });
 
-  if (allDone && blockers.length === 0) {
+  steps.push({
+    id: "cobros",
+    actor: "proveedor",
+    label: "Configura tus cobros (Stripe) para recibir pagos",
+    done: cobrosOk,
+    href: "/dashboard?tab=proveedor",
+    cta: tieneStripeAccount && !cobrosOk
+      ? "Completar configuración de cobros"
+      : "Configurar cobros",
+    hint: !cobrosOk
+      ? "Sin cobros activos no puedes recibir reservas ni pagos."
+      : null,
+    urgent: verificado && identidadOk && !cobrosOk,
+  });
+
+  steps.push({
+    id: "contacto",
+    actor: "proveedor",
+    label: "Añade teléfono y email de contacto",
+    done: contactoOk,
+    href: "/editar-perfil?tab=perfil",
+    cta: "Completar datos",
+  });
+
+  steps.push({
+    id: "servicio",
+    actor: "proveedor",
+    label: "Publica tu primer servicio",
+    done: tieneServicio,
+    href: "/editar-perfil?tab=servicios",
+    cta: "Crear anuncio",
+    hint: !tieneServicio
+      ? "Sin anuncio no puedes recibir reservas."
+      : null,
+  });
+
+  // —— Revisión del equipo ——
+  if (dniSubido && !identidadOk && !dniRechazado) {
+    steps.push({
+      id: "dni-revision",
+      actor: "equipo",
+      label: "Estamos verificando tu DNI y tu mayoría de edad",
+      done: false,
+      hint: "El equipo revisa tu documento (suele ser en menos de 24h). No tienes que hacer nada más por ahora.",
+    });
+  } else if (identidadOk) {
+    steps.push({
+      id: "dni-revision",
+      actor: "equipo",
+      label: "Identidad y mayoría de edad verificadas",
+      done: true,
+    });
+  }
+
+  if (dniSubido && !verificado) {
+    steps.push({
+      id: "cuenta-revision",
+      actor: "equipo",
+      label: "Estamos revisando tu cuenta de proveedor",
+      done: false,
+      hint: identidadOk
+        ? "Cuando te aprueben, te avisaremos por email."
+        : "Primero debe verificarse tu documento de identidad.",
+    });
+  } else if (verificado) {
+    steps.push({
+      id: "cuenta-revision",
+      actor: "equipo",
+      label: "Cuenta de proveedor aprobada",
+      done: true,
+    });
+  }
+
+  if (showNinos) {
+    steps.push({
+      id: "docs-ninos",
+      actor: "equipo",
+      label: tieneServicio && !verticals.has("ninos")
+        ? "Documentación de niñera (si ofreces cuidado de niños)"
+        : "Estamos revisando tu documentación de niñera",
+      done: ninosDocsOk,
+      hint: ninosDocsOk
+        ? null
+        : !tieneServicio || verticals.has("ninos")
+          ? "Sube antecedentes (y el documento sexual si aplica) en tu perfil; el equipo los aprueba antes de activar anuncios de niños."
+          : "Si más adelante ofreces cuidado de niños, el equipo deberá aprobar esa documentación.",
+    });
+  }
+
+  if (showMascotas) {
+    steps.push({
+      id: "docs-mascotas",
+      actor: "equipo",
+      label: tieneServicio && !verticals.has("mascotas")
+        ? "Documentación de mascotas (si ofreces ese servicio)"
+        : "Estamos revisando tu documentación de mascotas",
+      done: mascotasDocsOk,
+      hint: mascotasDocsOk
+        ? null
+        : !tieneServicio || verticals.has("mascotas")
+          ? "Sube los documentos requeridos en tu perfil; el equipo los aprueba antes de activar anuncios de mascotas."
+          : "Si más adelante ofreces cuidado de mascotas, el equipo deberá aprobar esa documentación.",
+    });
+  }
+
+  if (showAlojamiento) {
+    steps.push({
+      id: "nru",
+      actor: "equipo",
+      label: nruOk
+        ? "NRU de alojamiento verificado"
+        : nruPendiente
+          ? "Estamos verificando tu NRU (alojamiento)"
+          : "NRU de alojamiento (si ofreces alojamiento)",
+      done: nruOk,
+      hint: nruOk
+        ? null
+        : nruPendiente
+          ? "El equipo verifica el número de registro turístico de tus anuncios de alojamiento."
+          : "Al publicar alojamiento, declara el NRU; el equipo lo verificará antes de activar el anuncio.",
+    });
+  }
+
+  const proveedorSteps = steps.filter((s) => s.actor === "proveedor");
+  const equipoSteps = steps.filter((s) => s.actor === "equipo");
+  const doneProveedor = proveedorSteps.filter((s) => s.done).length;
+  const doneEquipo = equipoSteps.filter((s) => s.done).length;
+
+  const onlyCobrosLeft =
+    cobrosOk === false &&
+    identidadOk &&
+    verificado &&
+    contactoOk &&
+    tieneServicio;
+
+  const allCoreDone =
+    identidadOk &&
+    verificado &&
+    cobrosOk &&
+    contactoOk &&
+    tieneServicio;
+
+  if (allCoreDone) {
     return (
       <div
         style={{
@@ -122,6 +238,11 @@ export default function ProviderFirstStepsChecklist({
         </p>
         <p style={{ margin: "6px 0 0", fontSize: 12, color: "#085041", lineHeight: 1.5 }}>
           Activa tus anuncios si aún están en borrador y mantén tu calendario al día.
+          {(!ninosDocsOk && verticals.has("ninos")) ||
+          (!mascotasDocsOk && verticals.has("mascotas")) ||
+          nruPendiente
+            ? " Algunos anuncios concretos pueden seguir pendientes de documentación o NRU."
+            : ""}
         </p>
         <Link
           href="/editar-perfil?tab=servicios"
@@ -139,8 +260,6 @@ export default function ProviderFirstStepsChecklist({
     );
   }
 
-  const nextOpen = steps.find((s) => !s.done);
-
   return (
     <div
       style={{
@@ -155,106 +274,156 @@ export default function ProviderFirstStepsChecklist({
         Para empezar a recibir reservas
       </p>
       <p style={{ margin: "4px 0 0", fontSize: 11, color: "#8a7355" }}>
-        {doneCount} de {steps.length} pasos completados
-        {nextOpen ? ` · Siguiente: ${nextOpen.label}` : ""}
+        Tú: {doneProveedor}/{proveedorSteps.length} · Equipo: {doneEquipo}/
+        {equipoSteps.length}
       </p>
 
-      <ol style={{ margin: "12px 0 0", padding: 0, listStyle: "none" }}>
-        {steps.map((step, index) => (
-          <li
-            key={step.id}
-            style={{
-              display: "flex",
-              alignItems: "flex-start",
-              gap: 10,
-              padding: "8px 0",
-              borderTop: index === 0 ? "none" : "0.5px solid rgba(196,125,26,0.25)",
-            }}
-          >
-            <span
-              aria-hidden
-              style={{
-                width: 22,
-                height: 22,
-                borderRadius: "50%",
-                flexShrink: 0,
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: 11,
-                fontWeight: 700,
-                background: step.done ? BRAND.green : "#fff",
-                color: step.done ? "#fff" : "#c47d1a",
-                border: step.done ? "none" : "1.5px solid #c47d1a",
-              }}
-            >
-              {step.done ? "✓" : index + 1}
-            </span>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: 12,
-                  fontWeight: 500,
-                  color: step.done ? "#085041" : "#2a3a4a",
-                  textDecoration: step.done ? "line-through" : "none",
-                  opacity: step.done ? 0.75 : 1,
-                }}
-              >
-                {step.label}
-              </p>
-              {!step.done && step.hint && (
-                <p style={{ margin: "3px 0 0", fontSize: 11, color: "#8a7355", lineHeight: 1.4 }}>
-                  {step.hint}
-                </p>
-              )}
-              {!step.done && step.href && step.cta && (
-                <Link
-                  href={step.href}
-                  style={{
-                    display: "inline-block",
-                    marginTop: 4,
-                    fontSize: 11,
-                    fontWeight: 600,
-                    color: BRAND.blue,
-                  }}
-                >
-                  {step.cta} →
-                </Link>
-              )}
-            </div>
-          </li>
-        ))}
-      </ol>
-
-      {blockers.length > 0 && (
+      {onlyCobrosLeft && (
         <div
           style={{
             marginTop: 12,
-            padding: "10px 12px",
+            padding: "12px 14px",
             borderRadius: 8,
-            background: "#fff",
-            border: "0.5px solid #e8e4de",
+            background: "#e8f0fb",
+            border: `1px solid ${BRAND.blue}`,
           }}
         >
-          <p style={{ margin: 0, fontSize: 11, fontWeight: 600, color: "#b91c1c" }}>
-            Por qué tus servicios aún no están visibles
+          <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: "#163a6b" }}>
+            Solo te falta configurar los cobros
           </p>
-          <ul
+          <p style={{ margin: "6px 0 0", fontSize: 11, color: "#444", lineHeight: 1.45 }}>
+            Sin cobros activos con Stripe no puedes recibir reservas ni pagos.
+            Tarda unos minutos.
+          </p>
+          <Link
+            href="/dashboard?tab=proveedor"
             style={{
-              margin: "6px 0 0",
-              paddingLeft: 18,
-              fontSize: 11,
-              color: "#666",
-              lineHeight: 1.5,
+              display: "inline-block",
+              marginTop: 10,
+              minHeight: 36,
+              padding: "8px 14px",
+              borderRadius: 6,
+              background: BRAND.blue,
+              color: "#fff",
+              fontSize: 12,
+              fontWeight: 600,
+              textDecoration: "none",
             }}
           >
-            {blockers.slice(0, 4).map((msg) => (
-              <li key={msg}>{msg}</li>
-            ))}
-          </ul>
+            Configurar cobros →
+          </Link>
         </div>
       )}
+
+      <SectionTitle color="#5c4a32">Lo que debes hacer tú</SectionTitle>
+      <StepList steps={proveedorSteps} BRAND={BRAND} showCta />
+
+      <SectionTitle color="#5c4a32">En revisión por el equipo</SectionTitle>
+      <p style={{ margin: "0 0 4px", fontSize: 11, color: "#8a7355", lineHeight: 1.4 }}>
+        Estos pasos los completa Home&amp;Heart. Te avisamos por email y en la
+        app cuando cambien.
+      </p>
+      <StepList steps={equipoSteps} BRAND={BRAND} showCta={false} />
     </div>
+  );
+}
+
+function SectionTitle({ children, color }) {
+  return (
+    <p
+      style={{
+        margin: "14px 0 0",
+        fontSize: 11,
+        fontWeight: 700,
+        letterSpacing: "0.04em",
+        textTransform: "uppercase",
+        color,
+      }}
+    >
+      {children}
+    </p>
+  );
+}
+
+function StepList({ steps, BRAND, showCta }) {
+  if (steps.length === 0) return null;
+  return (
+    <ol style={{ margin: "8px 0 0", padding: 0, listStyle: "none" }}>
+      {steps.map((step, index) => (
+        <li
+          key={step.id}
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 10,
+            padding: "8px 0",
+            borderTop:
+              index === 0 ? "none" : "0.5px solid rgba(196,125,26,0.25)",
+          }}
+        >
+          <span
+            aria-hidden
+            style={{
+              width: 22,
+              height: 22,
+              borderRadius: "50%",
+              flexShrink: 0,
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 11,
+              fontWeight: 700,
+              background: step.done ? BRAND.green : "#fff",
+              color: step.done ? "#fff" : step.urgent ? "#b91c1c" : "#c47d1a",
+              border: step.done
+                ? "none"
+                : `1.5px solid ${step.urgent ? "#b91c1c" : "#c47d1a"}`,
+            }}
+          >
+            {step.done ? "✓" : index + 1}
+          </span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <p
+              style={{
+                margin: 0,
+                fontSize: 12,
+                fontWeight: 500,
+                color: step.done ? "#085041" : "#2a3a4a",
+                textDecoration: step.done ? "line-through" : "none",
+                opacity: step.done ? 0.75 : 1,
+              }}
+            >
+              {step.label}
+            </p>
+            {!step.done && step.hint && (
+              <p
+                style={{
+                  margin: "3px 0 0",
+                  fontSize: 11,
+                  color: "#8a7355",
+                  lineHeight: 1.4,
+                }}
+              >
+                {step.hint}
+              </p>
+            )}
+            {showCta && !step.done && step.href && step.cta && (
+              <Link
+                href={step.href}
+                style={{
+                  display: "inline-block",
+                  marginTop: 4,
+                  fontSize: 11,
+                  fontWeight: 600,
+                  color: BRAND.blue,
+                }}
+              >
+                {step.cta} →
+              </Link>
+            )}
+          </div>
+        </li>
+      ))}
+    </ol>
   );
 }

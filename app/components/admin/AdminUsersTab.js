@@ -143,6 +143,16 @@ export default function AdminUsersTab({ onSuccess, onError }) {
       return;
     }
 
+    let motivo = "";
+    if (estado === "rechazado") {
+      const raw = window.prompt(
+        "Motivo del rechazo (opcional, se enviará al usuario):",
+        "",
+      );
+      if (raw === null) return;
+      motivo = raw;
+    }
+
     setActionUserId(userId);
     onError?.("");
 
@@ -150,6 +160,9 @@ export default function AdminUsersTab({ onSuccess, onError }) {
       const body = { userId, estado };
       if (estado === "verificado") {
         body.confirmar_mayor_de_edad = true;
+      }
+      if (estado === "rechazado" && motivo.trim()) {
+        body.motivo = motivo.trim();
       }
 
       const res = await fetch("/api/admin/usuarios/dni-estado", {
