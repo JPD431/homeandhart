@@ -21,6 +21,7 @@ import { ActionToastHost, useActionToast } from "@/app/components/ActionToast";
 import BookingStatusBadge from "@/app/components/BookingStatusBadge";
 import DataLoadFailed from "@/app/components/DataLoadFailed";
 import EmptyState from "@/app/components/EmptyState";
+import AyudaLink from "@/app/components/AyudaLink";
 import ReportarIncidenciaForm from "@/app/components/ReportarIncidenciaForm";
 import { canLeaveReview } from "@/app/lib/reviews";
 import { buildLoginUrl } from "@/app/lib/auth-redirect";
@@ -236,12 +237,21 @@ function BookingCard({
           )}
 
           {statusMeta.canReportIncidencia && (
-            <ReportarIncidenciaForm
-              bookingId={booking.id}
-              compact
-              onSuccess={() => onIncidenciaReported?.(booking.id)}
-            />
+            <div className="w-full">
+              <p className="mb-1.5 text-[11px] font-semibold text-[#666]">
+                Problema con esta reserva
+              </p>
+              <ReportarIncidenciaForm
+                bookingId={booking.id}
+                compact
+                onSuccess={() => onIncidenciaReported?.(booking.id)}
+              />
+            </div>
           )}
+          <AyudaLink
+            label="Ayuda general"
+            style={{ marginTop: 4, fontSize: 11 }}
+          />
         </div>
       </div>
     </article>

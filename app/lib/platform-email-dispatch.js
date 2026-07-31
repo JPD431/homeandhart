@@ -2904,6 +2904,51 @@ export async function dispatchPlatformEmail(payload = {}) {
       return { ok: true, status: 200, data: { success: true } };
     }
 
+    if (tipo === "soporte_contacto") {
+      // Email dirigido a soporte@ — no es secuencia al usuario.
+      const soporteTo = "soporte@homeandheart.es";
+      const nombre = (data.nombre || "Usuario").replace(/</g, "&lt;");
+      const rol = (data.rol || "usuario").replace(/</g, "&lt;");
+      const emailUser = (data.email || "").replace(/</g, "&lt;");
+      const userId = (data.user_id || "").replace(/</g, "&lt;");
+      const asunto = (data.asunto || "Consulta").replace(/</g, "&lt;");
+      const mensaje = (data.mensaje || "").replace(/</g, "&lt;");
+      const pageUrl = (data.page_url || "").replace(/</g, "&lt;");
+      const replyTo =
+        typeof data.reply_to === "string" && data.reply_to.includes("@")
+          ? data.reply_to
+          : data.email && String(data.email).includes("@")
+            ? data.email
+            : undefined;
+
+      const result = await resend.emails.send({
+        from: FROM,
+        to: soporteTo,
+        ...(replyTo ? { replyTo } : {}),
+        subject: `[Ayuda] ${asunto} · ${rol}`,
+        html: emailLayout({
+          title: "Consulta de soporte",
+          bodyHtml: `
+            <h1 style="margin:0 0 16px;font-size:20px;color:${BRAND_PRIMARY};">Nueva consulta de ayuda</h1>
+            <p style="margin:0 0 8px;font-size:14px;line-height:1.6;"><strong>Asunto:</strong> ${asunto}</p>
+            <p style="margin:0 0 8px;font-size:14px;line-height:1.6;"><strong>Nombre:</strong> ${nombre}</p>
+            <p style="margin:0 0 8px;font-size:14px;line-height:1.6;"><strong>Rol:</strong> ${rol}</p>
+            <p style="margin:0 0 8px;font-size:14px;line-height:1.6;"><strong>Email:</strong> ${emailUser || "—"}</p>
+            <p style="margin:0 0 8px;font-size:14px;line-height:1.6;"><strong>User ID:</strong> ${userId || "—"}</p>
+            <p style="margin:0 0 8px;font-size:14px;line-height:1.6;"><strong>URL:</strong> ${pageUrl || "—"}</p>
+            <p style="margin:16px 0 0;font-size:14px;line-height:1.6;"><strong>Mensaje:</strong></p>
+            <p style="margin:8px 0 0;font-size:14px;line-height:1.6;color:#444;white-space:pre-wrap;">${mensaje}</p>
+          `,
+        }),
+      });
+
+      if (result.error) {
+        return { ok: false, status: 400, error: result.error.message };
+      }
+
+      return { ok: true, status: 200, data: { success: true } };
+    }
+
     if (MARKETING_HTML_BUILDERS[tipo]) {
       const result = await sendMarketingSequenceEmail({ tipo, ...data });
 

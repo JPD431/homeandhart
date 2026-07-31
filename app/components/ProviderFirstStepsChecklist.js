@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import AyudaLink from "@/app/components/AyudaLink";
 import { hasDniUploaded } from "@/app/lib/dni";
 import { hasEmailContacto, hasTelefono } from "@/app/lib/profile-telefono";
 import { supabase } from "@/app/lib/supabase";
@@ -264,6 +265,9 @@ export default function ProviderFirstStepsChecklist({
         >
           Ver mis servicios →
         </Link>
+        <div>
+          <AyudaLink label="¿Necesitas ayuda?" />
+        </div>
       </div>
     );
   }
@@ -360,6 +364,22 @@ export default function ProviderFirstStepsChecklist({
         app cuando cambien.
       </p>
       <StepList steps={equipoSteps} BRAND={BRAND} showCta={false} />
+
+      <div style={{ marginTop: 14 }}>
+        <AyudaLink
+          highlighted={onlyCobrosLeft || (!allCoreDone && verificado)}
+          href={
+            onlyCobrosLeft
+              ? "/ayuda?asunto=No%20puedo%20activar%20mi%20anuncio&destacado=1"
+              : "/ayuda"
+          }
+          label={
+            onlyCobrosLeft
+              ? "¿Atascado? Contactar con soporte"
+              : "¿Necesitas ayuda?"
+          }
+        />
+      </div>
     </div>
   );
 }

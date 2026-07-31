@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Navbar from '@/app/components/Navbar';
 import OnboardingPendienteBanner from '@/app/components/OnboardingPendienteBanner';
 import FamiliaInviteBanner from '@/app/components/FamiliaInviteBanner';
+import AyudaLink from '@/app/components/AyudaLink';
 import ReportarIncidenciaForm from '@/app/components/ReportarIncidenciaForm';
 import BookingStatusBadge from '@/app/components/BookingStatusBadge';
 import { ActionToastHost, useActionToast } from '@/app/components/ActionToast';
@@ -459,6 +460,7 @@ function TabCliente({ perfil, reservas, favoritos, viajes, router, BRAND, copiar
   const creditoDisponible = Number(perfil?.credito_disponible) || 0;
 
   return (
+    <div>
     <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
       {/* RESERVAS */}
       <div className="sm:col-span-2" style={{background: '#fff', borderRadius: 10, border: `0.5px solid ${BRAND.border}`, overflow: 'hidden'}}>
@@ -604,6 +606,10 @@ function TabCliente({ perfil, reservas, favoritos, viajes, router, BRAND, copiar
         </div>
       </div>
     </div>
+    <div style={{ marginTop: 14, textAlign: 'center' }}>
+      <AyudaLink label="¿Necesitas ayuda? Contactar con soporte" />
+    </div>
+    </div>
   );
 }
 
@@ -649,6 +655,21 @@ function TabProveedor({ perfil, userEmail, router, BRAND, highlightBookingId }) 
         onConfigureCobros={handleConfigureCobros}
         configureCobrosLoading={connectLoading}
       />
+      <div style={{ marginTop: 8, marginBottom: 4 }}>
+        <AyudaLink
+          highlighted={perfil?.verificado === true && !cobrosActivos}
+          href={
+            perfil?.verificado === true && !cobrosActivos
+              ? '/ayuda?asunto=No%20puedo%20activar%20mi%20anuncio&destacado=1'
+              : '/ayuda'
+          }
+          label={
+            perfil?.verificado === true && !cobrosActivos
+              ? '¿Atascado? Contactar con soporte'
+              : '¿Necesitas ayuda?'
+          }
+        />
+      </div>
       {deudaPendiente > 0 && (
         <div
           style={{
@@ -1125,6 +1146,9 @@ function ReservaRecibidaCard({
       )}
       {canReport && (
         <div style={{ marginTop: 12 }}>
+          <p style={{ margin: '0 0 6px', fontSize: 11, fontWeight: 600, color: '#666' }}>
+            Problema con esta reserva
+          </p>
           <ReportarIncidenciaForm
             bookingId={booking.id}
             compact
@@ -1132,6 +1156,9 @@ function ReservaRecibidaCard({
           />
         </div>
       )}
+      <div style={{ marginTop: 10 }}>
+        <AyudaLink label="Ayuda general (cuenta, cobros…)" />
+      </div>
     </div>
   );
 }

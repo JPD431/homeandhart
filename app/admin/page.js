@@ -3,9 +3,8 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import Navbar from "@/app/components/Navbar";
-import AdminProviderDocuments, {
-  getMissingMandatoryDocumentsSummary,
-} from "@/app/components/admin/AdminProviderDocuments";
+import AdminProviderDocuments from "@/app/components/admin/AdminProviderDocuments";
+import ProviderStatusSummary from "@/app/components/admin/ProviderStatusSummary";
 import AdminUsersTab from "@/app/components/admin/AdminUsersTab";
 import AdminCancelacionesTab from "@/app/components/admin/AdminCancelacionesTab";
 import AdminServiciosRevisionTab from "@/app/components/admin/AdminServiciosRevisionTab";
@@ -228,20 +227,6 @@ function getServicePublishingBadge(svc, providerCobrosActivos) {
     bg: "#fdf4e7",
     color: "#92400e",
   };
-}
-
-function getCobrosEstadoBadge(provider) {
-  if (provider?.cobros_activos === true) {
-    return { label: "Cobros: activos ✓", bg: "#e6f4f0", color: "#085041" };
-  }
-  if (provider?.stripe_account_id) {
-    return {
-      label: "Cobros: en configuración",
-      bg: "#fdf4e7",
-      color: "#92400e",
-    };
-  }
-  return { label: "Cobros: pendientes", bg: "#fdf4e7", color: "#92400e" };
 }
 
 function fullName(profile) {
@@ -2944,11 +2929,6 @@ function AdminPageInner() {
               const needsLegacyAgeConfirm =
                 hasDni && dniVerificado && !mayorDeEdadOk;
               const edadChecked = !!edadCheckedByProvider[provider.id];
-              const docSummary = getMissingMandatoryDocumentsSummary(
-                provider,
-                provider.providerDocuments ?? [],
-                services,
-              );
               const availableDocuments = REQUESTABLE_DOCUMENTS.filter(
                 (doc) => !doc.alojamientoOnly || hasAlojamiento,
               );
@@ -2960,169 +2940,28 @@ function AdminPageInner() {
                   style={{ borderColor: BRAND.border }}
                 >
                   <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div>
+                    <div className="min-w-0 flex-1">
                       <h2 className="text-lg font-semibold text-[#1a1a1a]">
                         {fullName(provider)}
                       </h2>
-                      <div className="mt-1.5 flex flex-wrap gap-1.5">
-                        {(() => {
-                          const cobrosBadge = getCobrosEstadoBadge(provider);
-                          return (
-                            <span
-                              className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
-                              style={{
-                                backgroundColor: cobrosBadge.bg,
-                                color: cobrosBadge.color,
-                              }}
-                            >
-                              {cobrosBadge.label}
-                            </span>
-                          );
-                        })()}
+                      {provider.suspendido_cautelar === true && (
                         <span
-                          className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
-                          style={{
-                            backgroundColor: provider.verificado ? "#e8f0fb" : "#fdf4e7",
-                            color: provider.verificado ? "#163a6b" : "#92400e",
-                          }}
+                          className="mt-1 inline-block rounded-full px-2.5 py-1 text-xs font-semibold"
+                          style={{ backgroundColor: "#fef2f2", color: "#b91c1c", border: "2px solid #ef4444" }}
                         >
-                          {provider.verificado ? "Verificado ✓" : "Pendiente de verificar"}
+                          Suspensión cautelar
                         </span>
-                        <span
-                          className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
-                          style={{
-                            backgroundColor: mayorDeEdadOk ? "#e6f4f0" : "#fdf4e7",
-                            color: mayorDeEdadOk ? "#085041" : "#92400e",
-                          }}
-                        >
-                          {mayorDeEdadOk ? "18+ confirmada" : "18+ pendiente"}
-                        </span>
-                        {provider.suspendido_cautelar === true && (
-                          <span
-                            className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
-                            style={{ backgroundColor: "#fef2f2", color: "#b91c1c" }}
-                          >
-                            Suspensión cautelar
-                          </span>
-                        )}
-                        {docSummary.missingCount > 0 && (
-                          <span
-                            className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
-                            style={{
-                              backgroundColor:
-                                provider.verificado && provider.rechazado !== true
-                                  ? "#fdf4e7"
-                                  : "#fef2f2",
-                              color:
-                                provider.verificado && provider.rechazado !== true
-                                  ? "#92400e"
-                                  : "#b91c1c",
-                            }}
-                          >
-                            Docs incompletos ({docSummary.missingCount})
-                          </span>
-                        )}
-                      </div>
-                      {hasDni && (
-                        <div
-                          className="mt-3 rounded-xl border px-3 py-2.5 text-sm"
-                          style={{
-                            borderColor: dniVerificado && mayorDeEdadOk ? "#a7f3d0" : "#fcd34d",
-                            backgroundColor: dniVerificado && mayorDeEdadOk ? "#ecfdf5" : "#fffbeb",
-                            color: dniVerificado && mayorDeEdadOk ? "#065f46" : "#92400e",
-                          }}
-                        >
-                          <p className="font-semibold">
-                            Identidad:{" "}
-                            {dniVerificado
-                              ? mayorDeEdadOk
-                                ? "DNI verificado · 18+ confirmada"
-                                : "DNI verificado · falta 18+"
-                              : dniRechazado
-                                ? "DNI rechazado"
-                                : "DNI pendiente de verificar"}
-                          </p>
-                          {(needsDniVerify || needsLegacyAgeConfirm) && (
-                            <label className="mt-2 flex cursor-pointer items-start gap-2 text-[11px] leading-snug">
-                              <input
-                                type="checkbox"
-                                checked={edadChecked}
-                                onChange={() =>
-                                  setEdadCheckedByProvider((prev) => ({
-                                    ...prev,
-                                    [provider.id]: !prev[provider.id],
-                                  }))
-                                }
-                                className="mt-0.5 accent-[#085041]"
-                              />
-                              <span>
-                                He verificado que es mayor de edad (18+) según el DNI
-                              </span>
-                            </label>
-                          )}
-                          <div className="mt-2 flex flex-wrap gap-2">
-                            <button
-                              type="button"
-                              disabled={isBusy || isOpeningDni}
-                              onClick={() => handleOpenProviderDni(provider)}
-                              className="rounded-lg border px-3 py-1.5 text-xs font-semibold disabled:opacity-60"
-                              style={{ borderColor: BRAND.primary, color: BRAND.primary }}
-                            >
-                              {isOpeningDni ? "Abriendo…" : "Ver DNI"}
-                            </button>
-                            {needsDniVerify && (
-                              <button
-                                type="button"
-                                disabled={isBusy || isOpeningDni || !edadChecked}
-                                title={
-                                  edadChecked
-                                    ? "Verificar DNI y confirmar 18+"
-                                    : "Marca el checkbox de mayoría de edad primero"
-                                }
-                                onClick={() =>
-                                  handleProviderDniEstado(provider, "verificado")
-                                }
-                                className="rounded-lg px-3 py-1.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-                                style={{ backgroundColor: "#085041" }}
-                              >
-                                {isBusy ? "…" : "Verificar DNI"}
-                              </button>
-                            )}
-                            {needsLegacyAgeConfirm && (
-                              <button
-                                type="button"
-                                disabled={isBusy || isOpeningDni || !edadChecked}
-                                onClick={() =>
-                                  handleConfirmarMayorDeEdadProveedor(provider)
-                                }
-                                className="rounded-lg px-3 py-1.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-                                style={{ backgroundColor: "#085041" }}
-                              >
-                                {isBusy ? "…" : "Confirmar 18+"}
-                              </button>
-                            )}
-                            {!dniRechazado && (
-                              <button
-                                type="button"
-                                disabled={isBusy || isOpeningDni}
-                                onClick={() =>
-                                  handleProviderDniEstado(provider, "rechazado")
-                                }
-                                className="rounded-lg border px-3 py-1.5 text-xs font-semibold disabled:opacity-60"
-                                style={{ borderColor: "#b91c1c", color: "#b91c1c" }}
-                              >
-                                Rechazar DNI
-                              </button>
-                            )}
-                          </div>
-                        </div>
                       )}
+                      <ProviderStatusSummary
+                        provider={provider}
+                        services={services}
+                      />
                       {provider.email_contacto && (
-                        <p className="mt-0.5 text-sm text-[#666]">
+                        <p className="mt-2 text-sm text-[#666]">
                           {provider.email_contacto}
                         </p>
                       )}
-                      <p className="mt-1 text-sm text-[#888]">
+                      <p className="mt-0.5 text-sm text-[#888]">
                         {provider.ciudad || "Ciudad no indicada"}
                       </p>
                     </div>
@@ -3131,20 +2970,154 @@ function AdminPageInner() {
                     </p>
                   </div>
 
+                  {/* Bloque Identidad */}
+                  <div
+                    className="mt-5 rounded-xl border px-4 py-4"
+                    style={{
+                      borderColor:
+                        dniRechazado
+                          ? "#ef4444"
+                          : needsDniVerify || needsLegacyAgeConfirm || !hasDni
+                            ? "#f59e0b"
+                            : "#a7f3d0",
+                      borderWidth: dniRechazado || needsDniVerify ? 2 : 1,
+                      backgroundColor: dniRechazado
+                        ? "#fef2f2"
+                        : needsDniVerify || needsLegacyAgeConfirm || !hasDni
+                          ? "#fffbeb"
+                          : "#ecfdf5",
+                    }}
+                  >
+                    <p className="text-xs font-semibold uppercase tracking-wide text-[#666]">
+                      Identidad
+                    </p>
+                    <p
+                      className="mt-1 text-sm font-semibold"
+                      style={{
+                        color: dniRechazado
+                          ? "#b91c1c"
+                          : dniVerificado && mayorDeEdadOk
+                            ? "#065f46"
+                            : "#92400e",
+                      }}
+                    >
+                      {!hasDni
+                        ? "Sin DNI subido"
+                        : dniVerificado
+                          ? mayorDeEdadOk
+                            ? "DNI verificado · 18+ confirmada"
+                            : "DNI verificado · falta 18+"
+                          : dniRechazado
+                            ? "DNI rechazado"
+                            : "DNI pendiente de verificar"}
+                    </p>
+                    {(needsDniVerify || needsLegacyAgeConfirm) && (
+                      <label className="mt-3 flex cursor-pointer items-start gap-2 text-sm leading-snug text-[#444]">
+                        <input
+                          type="checkbox"
+                          checked={edadChecked}
+                          onChange={() =>
+                            setEdadCheckedByProvider((prev) => ({
+                              ...prev,
+                              [provider.id]: !prev[provider.id],
+                            }))
+                          }
+                          className="mt-0.5 accent-[#085041]"
+                        />
+                        <span>
+                          He verificado que es mayor de edad (18+) según el DNI
+                        </span>
+                      </label>
+                    )}
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={isBusy || isOpeningDni || !hasDni}
+                        onClick={() => handleOpenProviderDni(provider)}
+                        className="min-h-10 rounded-xl border px-4 py-2 text-sm font-semibold disabled:opacity-50"
+                        style={{ borderColor: BRAND.primary, color: BRAND.primary }}
+                      >
+                        {isOpeningDni ? "Abriendo…" : "Ver DNI"}
+                      </button>
+                      {needsDniVerify && (
+                        <button
+                          type="button"
+                          disabled={isBusy || isOpeningDni || !edadChecked}
+                          title={
+                            edadChecked
+                              ? "Verificar DNI y confirmar 18+"
+                              : "Marca el checkbox de mayoría de edad primero"
+                          }
+                          onClick={() =>
+                            handleProviderDniEstado(provider, "verificado")
+                          }
+                          className="min-h-10 rounded-xl px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                          style={{ backgroundColor: "#085041" }}
+                        >
+                          {isBusy ? "Guardando…" : "Verificar DNI"}
+                        </button>
+                      )}
+                      {needsLegacyAgeConfirm && (
+                        <button
+                          type="button"
+                          disabled={isBusy || isOpeningDni || !edadChecked}
+                          onClick={() =>
+                            handleConfirmarMayorDeEdadProveedor(provider)
+                          }
+                          className="min-h-10 rounded-xl px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                          style={{ backgroundColor: "#085041" }}
+                        >
+                          {isBusy ? "Guardando…" : "Confirmar 18+"}
+                        </button>
+                      )}
+                      {hasDni && !dniRechazado && (
+                        <button
+                          type="button"
+                          disabled={isBusy || isOpeningDni}
+                          onClick={() =>
+                            handleProviderDniEstado(provider, "rechazado")
+                          }
+                          className="min-h-10 rounded-xl border px-4 py-2 text-sm font-semibold disabled:opacity-60"
+                          style={{ borderColor: "#b91c1c", color: "#b91c1c" }}
+                        >
+                          Rechazar DNI
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
                   {provider.descripcion && (
                     <p className="mt-4 text-sm leading-relaxed text-[#444]">
                       {provider.descripcion}
                     </p>
                   )}
 
-                  <div className="mt-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-[#888]">
-                      Servicios
+                  {/* Bloque Anuncios / NRU */}
+                  <div className="mt-5 rounded-xl border px-4 py-4" style={{ borderColor: BRAND.border }}>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-[#666]">
+                      Anuncios / NRU
                     </p>
+                    {hasAlojamiento &&
+                      services.some(
+                        (s) =>
+                          s.vertical === "alojamiento" &&
+                          s.nru_estado === "rechazado",
+                      ) && (
+                        <div
+                          className="mt-2 rounded-lg px-3 py-2 text-sm font-semibold"
+                          style={{
+                            backgroundColor: "#fef2f2",
+                            border: "2px solid #ef4444",
+                            color: "#b91c1c",
+                          }}
+                        >
+                          ⚠ Hay NRU rechazado en uno o más anuncios de alojamiento
+                        </div>
+                      )}
                     {services.length === 0 ? (
-                      <p className="mt-1 text-sm text-[#888]">Sin servicios publicados</p>
+                      <p className="mt-2 text-sm text-[#888]">Sin servicios publicados</p>
                     ) : (
-                      <ul className="mt-2 flex flex-col gap-1.5">
+                      <ul className="mt-3 flex flex-col gap-2">
                         {services.map((svc) => {
                           const verticalConfig =
                             VERTICALS[svc.vertical] ?? VERTICALS.alojamiento;
@@ -3159,11 +3132,16 @@ function AdminPageInner() {
                           const nruText = (svc.nru || "").trim();
                           const nruEstado = svc.nru_estado || "pendiente";
                           const nruBusy = nruActionLoading === svc.id;
+                          const nruRejected = nruEstado === "rechazado";
                           return (
                             <li
                               key={svc.id}
-                              className="flex flex-col gap-1.5 rounded-lg border px-2.5 py-2 text-sm"
-                              style={{ borderColor: BRAND.border }}
+                              className="flex flex-col gap-2 rounded-lg border px-3 py-3 text-sm"
+                              style={{
+                                borderColor: nruRejected ? "#ef4444" : BRAND.border,
+                                borderWidth: nruRejected ? 2 : 1,
+                                backgroundColor: nruRejected ? "#fef2f2" : "#fff",
+                              }}
                             >
                               <div className="flex flex-wrap items-center gap-2">
                                 <span
@@ -3182,7 +3160,7 @@ function AdminPageInner() {
                                   {formatPrice(svc.precio, svc.vertical)}
                                 </span>
                                 <span
-                                  className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                                  className="rounded-full px-2 py-0.5 text-[11px] font-semibold"
                                   style={{
                                     backgroundColor: revisionBadge.bg,
                                     color: revisionBadge.color,
@@ -3192,7 +3170,7 @@ function AdminPageInner() {
                                 </span>
                                 {publishingBadge && (
                                   <span
-                                    className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                                    className="rounded-full px-2 py-0.5 text-[11px] font-semibold"
                                     style={{
                                       backgroundColor: publishingBadge.bg,
                                       color: publishingBadge.color,
@@ -3203,28 +3181,31 @@ function AdminPageInner() {
                                 )}
                               </div>
                               {isAloj && (
-                                <div className="flex flex-wrap items-center gap-2 text-xs">
-                                  <span className="text-[#666]">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="text-sm text-[#666]">
                                     NRU:{" "}
                                     <strong className="font-mono text-[#1a1a1a]">
                                       {nruText || "— sin declarar —"}
                                     </strong>
                                   </span>
                                   <span
-                                    className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                                    className="rounded-full px-2.5 py-1 text-xs font-semibold"
                                     style={{
                                       backgroundColor:
                                         nruEstado === "verificado"
                                           ? "#e6f4f0"
-                                          : nruEstado === "rechazado"
+                                          : nruRejected
                                             ? "#fee2e2"
                                             : "#fef3c7",
                                       color:
                                         nruEstado === "verificado"
                                           ? "#0e7a5c"
-                                          : nruEstado === "rechazado"
+                                          : nruRejected
                                             ? "#b91c1c"
                                             : "#c47d1a",
+                                      border: nruRejected
+                                        ? "2px solid #ef4444"
+                                        : undefined,
                                     }}
                                   >
                                     {nruEstado}
@@ -3241,7 +3222,7 @@ function AdminPageInner() {
                                           ? "Verificar NRU"
                                           : "Falta NRU declarado"
                                       }
-                                      className="rounded-lg px-2 py-1 text-[11px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                                      className="min-h-10 rounded-xl px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
                                       style={{ backgroundColor: "#0e7a5c" }}
                                     >
                                       {nruBusy ? "…" : "Verificar NRU"}
@@ -3254,7 +3235,7 @@ function AdminPageInner() {
                                       onClick={() =>
                                         handleNruEstado(svc.id, "rechazado")
                                       }
-                                      className="rounded-lg border px-2 py-1 text-[11px] font-semibold text-red-700 disabled:opacity-50"
+                                      className="min-h-10 rounded-xl border px-4 py-2 text-sm font-semibold text-red-700 disabled:opacity-50"
                                       style={{ borderColor: "#fecaca" }}
                                     >
                                       Rechazar NRU
@@ -3312,8 +3293,17 @@ function AdminPageInner() {
                     </p>
                   )}
 
-                  {(activeTab === "pendientes" || isRequestingDocs) && (
-                    <div className="mt-5 border-t pt-5" style={{ borderColor: BRAND.border }}>
+                  {(activeTab === "pendientes" ||
+                    activeTab === "verificados" ||
+                    activeTab === "rechazados" ||
+                    isRequestingDocs) && (
+                    <div
+                      className="mt-5 rounded-xl border px-4 py-4"
+                      style={{ borderColor: BRAND.border, backgroundColor: "#fafafa" }}
+                    >
+                      <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#666]">
+                        Decisión de cuenta
+                      </p>
                       {isRejecting ? (
                         <div className="flex flex-col gap-3">
                           <label className="text-xs font-medium text-[#444]">
@@ -3418,36 +3408,40 @@ function AdminPageInner() {
                         </div>
                       ) : (
                         <div className="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            disabled={isBusy || !mayorDeEdadOk}
-                            title={
-                              mayorDeEdadOk
-                                ? "Aprobar proveedor"
-                                : "Confirma la mayoría de edad (18+) revisando el DNI antes de aprobar"
-                            }
-                            onClick={() => handleApprove(provider.id)}
-                            className="rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            {isBusy ? "Guardando…" : "Aprobar ✓"}
-                          </button>
-                          <button
-                            type="button"
-                            disabled={isBusy}
-                            onClick={() => {
-                              setRejectingId(provider.id);
-                              setRejectReason("");
-                              setRequestingDocsId(null);
-                            }}
-                            className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
-                          >
-                            Rechazar ✗
-                          </button>
+                          {!provider.verificado && (
+                            <button
+                              type="button"
+                              disabled={isBusy || !mayorDeEdadOk}
+                              title={
+                                mayorDeEdadOk
+                                  ? "Aprobar proveedor"
+                                  : "Confirma la mayoría de edad (18+) revisando el DNI antes de aprobar"
+                              }
+                              onClick={() => handleApprove(provider.id)}
+                              className="min-h-10 rounded-xl bg-green-600 px-5 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {isBusy ? "Guardando…" : "Aprobar ✓"}
+                            </button>
+                          )}
+                          {provider.rechazado !== true && (
+                            <button
+                              type="button"
+                              disabled={isBusy}
+                              onClick={() => {
+                                setRejectingId(provider.id);
+                                setRejectReason("");
+                                setRequestingDocsId(null);
+                              }}
+                              className="min-h-10 rounded-xl bg-red-600 px-5 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                            >
+                              Rechazar ✗
+                            </button>
+                          )}
                           <button
                             type="button"
                             disabled={isBusy}
                             onClick={() => openDocumentRequest(provider.id)}
-                            className="rounded-xl px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                            className="min-h-10 rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
                             style={{ backgroundColor: AMBER }}
                           >
                             Solicitar documentos 📎
