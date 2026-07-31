@@ -2904,6 +2904,53 @@ export async function dispatchPlatformEmail(payload = {}) {
       return { ok: true, status: 200, data: { success: true } };
     }
 
+    if (tipo === "cuenta_inactiva_aviso") {
+      const userId = data.user_id;
+      const email =
+        data.email || (userId ? await resolverEmailUsuario(userId) : null);
+      if (!email) {
+        return {
+          ok: false,
+          status: 400,
+          error: "No se encontró el email del destinatario",
+        };
+      }
+      const baseUrl = process.env.NEXT_PUBLIC_URL || "https://homeandheart.es";
+      const nombre = (data.nombre || "usuario").replace(/</g, "&lt;");
+      const days = Number(data.days) || null;
+
+      const result = await resend.emails.send({
+        from: FROM,
+        to: email,
+        subject: "Tu cuenta Home&Heart lleva tiempo inactiva",
+        html: emailLayout({
+          title: "Cuenta inactiva",
+          bodyHtml: `
+            <h1 style="margin:0 0 16px;font-size:20px;color:${BRAND_PRIMARY};">Tu cuenta lleva tiempo inactiva</h1>
+            <p style="margin:0 0 12px;font-size:14px;line-height:1.6;color:#444;">
+              Hola <strong>${nombre}</strong>, no has iniciado sesión en Home&amp;Heart
+              ${days ? `desde hace al menos ${days} días` : "desde hace tiempo"}.
+            </p>
+            <p style="margin:0 0 12px;font-size:14px;line-height:1.6;color:#444;">
+              Si no vuelves a entrar, podremos anonimizar tu cuenta y desactivar el acceso
+              (conservaremos solo lo necesario por obligaciones legales, sin tus datos personales).
+            </p>
+            <p style="margin:0;text-align:center;">
+              <a href="${baseUrl}/login" style="display:inline-block;background-color:${BRAND_PRIMARY};color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:8px;font-size:15px;font-weight:600;">
+                Entrar en mi cuenta →
+              </a>
+            </p>
+          `,
+        }),
+      });
+
+      if (result.error) {
+        return { ok: false, status: 400, error: result.error.message };
+      }
+
+      return { ok: true, status: 200, data: { success: true } };
+    }
+
     if (tipo === "soporte_contacto") {
       // Email dirigido a soporte@ — no es secuencia al usuario.
       const soporteTo = "soporte@homeandheart.es";
