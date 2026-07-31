@@ -61,6 +61,7 @@ export default function AdminUsersTab({ onSuccess, onError }) {
   const [usuarios, setUsuarios] = useState([]);
   const [meta, setMeta] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [search, setSearch] = useState("");
   const [filtro, setFiltro] = useState("todos");
   const [actionUserId, setActionUserId] = useState(null);
@@ -72,6 +73,7 @@ export default function AdminUsersTab({ onSuccess, onError }) {
 
   const loadUsuarios = useCallback(async () => {
     setLoading(true);
+    setLoadError("");
     try {
       const params = new URLSearchParams({ filtro });
       if (search.trim()) params.set("q", search.trim());
@@ -86,7 +88,9 @@ export default function AdminUsersTab({ onSuccess, onError }) {
       setUsuarios(payload.usuarios ?? []);
       setMeta(payload.meta ?? null);
     } catch (err) {
-      onError?.(err.message || "Error al cargar usuarios");
+      const msg = err.message || "No se pudieron cargar los datos. Reintentar";
+      setLoadError(msg);
+      onError?.(msg);
       setUsuarios([]);
       setMeta(null);
     } finally {
@@ -274,6 +278,18 @@ export default function AdminUsersTab({ onSuccess, onError }) {
 
       {loading ? (
         <p className="mt-8 text-center text-sm text-[#888]">Cargando usuarios…</p>
+      ) : loadError ? (
+        <div className="mt-8 text-center">
+          <p className="text-sm text-[#b91c1c]">{loadError}</p>
+          <button
+            type="button"
+            onClick={() => loadUsuarios()}
+            className="mt-3 min-h-[40px] rounded-lg px-4 text-sm font-semibold text-white"
+            style={{ backgroundColor: BRAND.primary }}
+          >
+            Reintentar
+          </button>
+        </div>
       ) : usuarios.length === 0 ? (
         <p
           className="mt-8 rounded-2xl border bg-white px-6 py-10 text-center text-sm text-[#666]"

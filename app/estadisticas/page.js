@@ -4,9 +4,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import Navbar from "@/app/components/Navbar";
+import DataLoadFailed from "@/app/components/DataLoadFailed";
 import { BRAND, SERIF } from "@/app/components/brand";
 import { getIngresoProveedorFromBooking } from "@/app/lib/ingresos-proveedor";
 import { supabase } from "@/app/lib/supabase";
+import { friendlyLoadError, withLoadTimeout } from "@/app/lib/with-load-timeout";
 
 const PRIMARY = "#1d4f91";
 const BORDER = "#e8e4de";
@@ -197,6 +199,8 @@ function Stars({ value, size = 14 }) {
 export default function EstadisticasPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
   const [period, setPeriod] = useState("30d");
   const [bookings, setBookings] = useState([]);
   const [services, setServices] = useState([]);
@@ -204,63 +208,88 @@ export default function EstadisticasPage() {
   const [sinComisionProveedor, setSinComisionProveedor] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
+    let navigatedAway = false;
+
     async function loadStats() {
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
+      setLoading(true);
+      setLoadError("");
+      try {
+        await withLoadTimeout((async () => {
+          const {
+            data: { user },
+            error: userError,
+          } = await supabase.auth.getUser();
 
-      if (userError || !user) {
-        router.replace("/login");
-        return;
+          if (userError || !user) {
+            navigatedAway = true;
+            router.replace("/login");
+            return;
+          }
+
+          const { data: profile, error: profileError } = await supabase
+            .from("profiles")
+            .select("role, reservas_sin_comision_proveedor")
+            .eq("id", user.id)
+            .single();
+          if (profileError) throw profileError;
+
+          if (profile?.role !== "proveedor") {
+            navigatedAway = true;
+            router.replace("/dashboard?tab=cliente");
+            return;
+          }
+          if (cancelled) return;
+
+          setSinComisionProveedor(getReservasSinComisionProveedor(profile) > 0);
+
+          const { data: servicesData, error: servicesError } = await supabase
+            .from("services")
+            .select("id, titulo, vertical")
+            .eq("proveedor_id", user.id);
+          if (servicesError) throw servicesError;
+          if (cancelled) return;
+
+          const providerServices = servicesData ?? [];
+          setServices(providerServices);
+
+          const serviceIds = providerServices.map((s) => s.id);
+          if (serviceIds.length > 0) {
+            const { data: bookingsData, error: bookingsError } = await supabase
+              .from("bookings")
+              .select(
+                "id, service_id, precio_total, precio_base, cliente_sin_comision, proveedor_sin_comision, estado, created_at, pago_liberado_at, importe_transferido",
+              )
+              .in("service_id", serviceIds);
+            if (bookingsError) throw bookingsError;
+            if (cancelled) return;
+            setBookings(bookingsData ?? []);
+          } else {
+            setBookings([]);
+          }
+
+          const { data: reviewsData, error: reviewsError } = await supabase
+            .from("reviews")
+            .select("valoracion, service_id, created_at")
+            .eq("proveedor_id", user.id);
+          if (reviewsError) throw reviewsError;
+          if (cancelled) return;
+          setReviews(reviewsData ?? []);
+        })());
+      } catch (err) {
+        if (!cancelled && !navigatedAway) {
+          setLoadError(friendlyLoadError(err));
+        }
+      } finally {
+        if (!cancelled && !navigatedAway) setLoading(false);
       }
-
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("role, reservas_sin_comision_proveedor")
-        .eq("id", user.id)
-        .single();
-
-      if (profile?.role !== "proveedor") {
-        router.replace("/dashboard?tab=cliente");
-        return;
-      }
-
-      setSinComisionProveedor(getReservasSinComisionProveedor(profile) > 0);
-
-      const { data: servicesData } = await supabase
-        .from("services")
-        .select("id, titulo, vertical")
-        .eq("proveedor_id", user.id);
-
-      const providerServices = servicesData ?? [];
-      setServices(providerServices);
-
-      const serviceIds = providerServices.map((s) => s.id);
-      if (serviceIds.length > 0) {
-        const { data: bookingsData } = await supabase
-          .from("bookings")
-          .select(
-            "id, service_id, precio_total, precio_base, cliente_sin_comision, proveedor_sin_comision, estado, created_at, pago_liberado_at, importe_transferido",
-          )
-          .in("service_id", serviceIds);
-
-        setBookings(bookingsData ?? []);
-      } else {
-        setBookings([]);
-      }
-
-      const { data: reviewsData } = await supabase
-        .from("reviews")
-        .select("valoracion, service_id, created_at")
-        .eq("proveedor_id", user.id);
-
-      setReviews(reviewsData ?? []);
-      setLoading(false);
     }
 
     loadStats();
-  }, [router]);
+    return () => {
+      cancelled = true;
+    };
+  }, [router, reloadKey]);
 
   const periodBookings = useMemo(
     () => filterByPeriod(bookings, period),
@@ -452,6 +481,18 @@ export default function EstadisticasPage() {
         <main className="px-6 py-16 text-center text-sm text-[#666]">
           Cargando estadísticas…
         </main>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="min-h-screen font-sans" style={{ backgroundColor: BRAND.warm }}>
+        <Navbar />
+        <DataLoadFailed
+          message={loadError}
+          onRetry={() => setReloadKey((k) => k + 1)}
+        />
       </div>
     );
   }

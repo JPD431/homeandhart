@@ -11,6 +11,8 @@ const supabase = createClient(
 );
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+/** Días extra de catch-up si el cron se retrasa (alreadySent evita duplicados). */
+const CATCH_UP_DAYS = 7;
 
 function windowIso(hoursAgoStart, hoursAgoEnd) {
   const now = Date.now();
@@ -18,6 +20,15 @@ function windowIso(hoursAgoStart, hoursAgoEnd) {
     from: new Date(now - hoursAgoStart * 60 * 60 * 1000).toISOString(),
     to: new Date(now - hoursAgoEnd * 60 * 60 * 1000).toISOString(),
   };
+}
+
+/**
+ * Elegible tras `minHoursAgo`, con ventana de catch-up (no emails eternos).
+ * Condición real de envío = cumple ventana + !alreadySent.
+ */
+function eligibilityWindow(minHoursAgo, catchUpDays = CATCH_UP_DAYS) {
+  const maxHoursAgo = minHoursAgo + catchUpDays * 24;
+  return windowIso(maxHoursAgo, minHoursAgo);
 }
 
 async function alreadySent(userId, tipo, bookingId = null) {
@@ -171,13 +182,14 @@ export async function runEmailSequences() {
     errors: [],
   };
 
-  const w24h = windowIso(48, 24);
+  // Antes: solo 24–48h. Ahora: ≥24h y ≤8d (catch-up 7d); alreadySent evita dupes.
+  const wActivacion = eligibilityWindow(24);
   const { data: activacionUsers } = await supabase
     .from("profiles")
     .select("id, nombre, fecha_registro")
     .neq("role", "proveedor")
-    .gte("fecha_registro", w24h.from)
-    .lte("fecha_registro", w24h.to);
+    .gte("fecha_registro", wActivacion.from)
+    .lte("fecha_registro", wActivacion.to);
 
   for (const user of activacionUsers || []) {
     if (await alreadySent(user.id, "cliente_activacion")) continue;
@@ -206,13 +218,14 @@ export async function runEmailSequences() {
     }
   }
 
-  const w3d = windowIso(24 * 4, 24 * 3);
+  // Antes: solo 72–96h. Ahora: ≥3d y ≤10d.
+  const wPrimeraReserva = eligibilityWindow(24 * 3);
   const { data: primeraReservaUsers } = await supabase
     .from("profiles")
     .select("id, nombre, fecha_registro")
     .neq("role", "proveedor")
-    .gte("fecha_registro", w3d.from)
-    .lte("fecha_registro", w3d.to);
+    .gte("fecha_registro", wPrimeraReserva.from)
+    .lte("fecha_registro", wPrimeraReserva.to);
 
   for (const user of primeraReservaUsers || []) {
     if (await alreadySent(user.id, "cliente_primera_reserva")) continue;
@@ -291,13 +304,14 @@ export async function runEmailSequences() {
     }
   }
 
-  const w7d = windowIso(24 * 8, 24 * 7);
+  // Antes: solo día 7–8 tras verificado. Ahora: ≥7d y ≤14d.
+  const wSinActividad = eligibilityWindow(24 * 7);
   const { data: verificadosLogs } = await supabase
     .from("email_logs")
     .select("user_id, enviado_at")
     .eq("tipo", "proveedor_verificado")
-    .gte("enviado_at", w7d.from)
-    .lte("enviado_at", w7d.to);
+    .gte("enviado_at", wSinActividad.from)
+    .lte("enviado_at", wSinActividad.to);
 
   for (const log of verificadosLogs || []) {
     const { data: proveedor } = await supabase
@@ -333,15 +347,16 @@ export async function runEmailSequences() {
     }
   }
 
-  const wOnboarding24h = windowIso(48, 24);
+  // Antes: solo 24–48h. Ahora: ≥24h y ≤8d.
+  const wOnboarding1 = eligibilityWindow(24);
   const { data: onboardingPendienteUsers } = await supabase
     .from("profiles")
     .select("id, nombre, onboarding_started_at")
     .eq("role", "proveedor")
     .is("onboarding_completed_at", null)
     .not("onboarding_started_at", "is", null)
-    .gte("onboarding_started_at", wOnboarding24h.from)
-    .lte("onboarding_started_at", wOnboarding24h.to);
+    .gte("onboarding_started_at", wOnboarding1.from)
+    .lte("onboarding_started_at", wOnboarding1.to);
 
   for (const user of onboardingPendienteUsers || []) {
     if (await alreadySent(user.id, "proveedor_onboarding_pendiente_1")) continue;
@@ -372,12 +387,14 @@ export async function runEmailSequences() {
     }
   }
 
-  const hace4d = new Date(Date.now() - 4 * DAY_MS).toISOString();
+  // ≥4d tras email 1, catch-up 14d (tope: no reenganches eternos).
+  const wOnboarding2 = eligibilityWindow(24 * 4, 14);
   const { data: onboardingEmail1Logs } = await supabase
     .from("email_logs")
     .select("user_id, enviado_at")
     .eq("tipo", "proveedor_onboarding_pendiente_1")
-    .lte("enviado_at", hace4d);
+    .gte("enviado_at", wOnboarding2.from)
+    .lte("enviado_at", wOnboarding2.to);
 
   for (const log of onboardingEmail1Logs || []) {
     if (await alreadySent(log.user_id, "proveedor_onboarding_pendiente_2")) {
@@ -418,8 +435,9 @@ export async function runEmailSequences() {
     }
   }
 
-  // Recordatorio reseña ~3 días tras completarse (uno por reserva, plazo 14 días).
-  const wResena3d = windowIso(24 * 4, 24 * 3);
+  // Antes: solo 72–96h. Ahora: ≥3d y ≤14d (plazo reseña); alreadySent + canLeaveReview.
+  // Tope 14d: no mandar recordatorios de reservas muy viejas (~30d).
+  const wResena = windowIso(24 * 14, 24 * 3);
   const { data: bookingsSinResena } = await supabase
     .from("bookings")
     .select(
@@ -427,8 +445,8 @@ export async function runEmailSequences() {
     )
     .eq("estado", "completada")
     .not("completada_at", "is", null)
-    .gte("completada_at", wResena3d.from)
-    .lte("completada_at", wResena3d.to);
+    .gte("completada_at", wResena.from)
+    .lte("completada_at", wResena.to);
 
   for (const booking of bookingsSinResena || []) {
     try {

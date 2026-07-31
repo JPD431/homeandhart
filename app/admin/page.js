@@ -1377,9 +1377,17 @@ function AdminPageInner() {
         </div>
 
         {errorMessage && (
-          <p className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
-            {errorMessage}
-          </p>
+          <div className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+            <p>{errorMessage}</p>
+            <button
+              type="button"
+              onClick={() => loadData()}
+              className="mt-3 min-h-[40px] rounded-lg px-4 text-sm font-semibold text-white"
+              style={{ backgroundColor: BRAND.primary }}
+            >
+              Reintentar
+            </button>
+          </div>
         )}
 
         {successMessage && (

@@ -21,6 +21,7 @@ import {
 } from "@/app/lib/service-card-display";
 import { stripPrivateServiceFields } from "@/app/lib/location-privacy";
 import { supabase } from "@/app/lib/supabase";
+import { friendlyLoadError, withLoadTimeout } from "@/app/lib/with-load-timeout";
 
 const RealMap = dynamic(() => import("./MapComponent"), {
   ssr: false,
@@ -425,6 +426,7 @@ function BuscarContent() {
   const [bookingsByService, setBookingsByService] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
   const [hoveredIndex, setHoveredIndex] = useState(null);
   const [selectedIndex, setSelectedIndex] = useState(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
@@ -574,6 +576,8 @@ function BuscarContent() {
       setHoveredIndex(null);
       setSelectedIndex(null);
 
+      try {
+        await withLoadTimeout((async () => {
       const f = appliedFilters;
 
       // Público: sin direccion_exacta, telefono_contacto ni coords exactas.
@@ -779,8 +783,17 @@ function BuscarContent() {
           })),
         );
       }
-
-      if (!cancelled) setLoading(false);
+        })());
+      } catch (err) {
+        if (!cancelled) {
+          setError(friendlyLoadError(err));
+          setRawResults([]);
+          setRatingsByProveedor({});
+          setBookingsByService({});
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     }
 
     fetchResults();
@@ -793,6 +806,7 @@ function BuscarContent() {
     fechaBusquedaInicioParam,
     fechaBusquedaFinParam,
     appliedFilters,
+    reloadKey,
   ]);
 
   const results = useMemo(() => {
@@ -1473,9 +1487,17 @@ function BuscarContent() {
       </header>
 
       {error && (
-        <p className="mx-5 mt-3 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
-        </p>
+        <div className="mx-5 mt-3 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+          <p>{error}</p>
+          <button
+            type="button"
+            onClick={() => setReloadKey((k) => k + 1)}
+            className="mt-3 min-h-[40px] rounded-lg px-4 text-sm font-semibold text-white"
+            style={{ backgroundColor: PRIMARY }}
+          >
+            Reintentar
+          </button>
+        </div>
       )}
 
       {/* Split layout */}

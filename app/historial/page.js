@@ -16,9 +16,11 @@ import {
   getBookingMonthLabel,
   getCancelRefundBreakdown,
 } from "@/app/lib/booking-display";
+import DataLoadFailed from "@/app/components/DataLoadFailed";
 import { canLeaveReview } from "@/app/lib/reviews";
 import { buildLoginUrl } from "@/app/lib/auth-redirect";
 import { supabase } from "@/app/lib/supabase";
+import { friendlyLoadError, withLoadTimeout } from "@/app/lib/with-load-timeout";
 
 const PRIMARY = "#1d4f91";
 const GREEN = "#0e7a5c";
@@ -243,63 +245,91 @@ export default function HistorialPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [cancellingId, setCancellingId] = useState(null);
   const [errorMessage, setErrorMessage] = useState("");
+  const [loadError, setLoadError] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
   const [creditoDisponible, setCreditoDisponible] = useState(0);
 
   useEffect(() => {
+    let cancelled = false;
+    let navigatedAway = false;
+
     async function loadHistorial() {
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
+      setLoading(true);
+      setLoadError("");
+      try {
+        await withLoadTimeout((async () => {
+          const {
+            data: { user },
+            error: userError,
+          } = await supabase.auth.getUser();
 
-      if (userError || !user) {
-        router.replace(buildLoginUrl("/historial"));
-        return;
+          if (userError || !user) {
+            navigatedAway = true;
+            router.replace(buildLoginUrl("/historial"));
+            return;
+          }
+
+          const { data: profile, error: profileError } = await supabase
+            .from("profiles")
+            .select("credito_disponible")
+            .eq("id", user.id)
+            .maybeSingle();
+          if (profileError) throw profileError;
+          if (cancelled) return;
+
+          setCreditoDisponible(Number(profile?.credito_disponible) || 0);
+
+          const { data: bookingsData, error: bookingsError } = await supabase
+            .from("bookings")
+            .select(
+              `
+              *,
+              services:service_id (
+                titulo,
+                vertical,
+                precio,
+                ciudad,
+                proveedor_id,
+                profiles_public:proveedor_id (nombre, apellido, idiomas)
+              )
+            `,
+            )
+            .eq("cliente_id", user.id)
+            .order("created_at", { ascending: false });
+
+          if (bookingsError) throw bookingsError;
+          if (cancelled) return;
+
+          const rows = bookingsData ?? [];
+          setBookings(rows);
+
+          if (rows.length > 0) {
+            const { data: reviews, error: reviewsError } = await supabase
+              .from("reviews")
+              .select("booking_id")
+              .in("booking_id", rows.map((b) => b.id));
+            if (reviewsError) throw reviewsError;
+            if (cancelled) return;
+            setReviewedIds(new Set((reviews ?? []).map((r) => r.booking_id)));
+          } else {
+            setReviewedIds(new Set());
+          }
+        })());
+      } catch (err) {
+        if (!cancelled && !navigatedAway) {
+          setLoadError(friendlyLoadError(err));
+          setBookings([]);
+        }
+      } finally {
+        if (!cancelled && !navigatedAway) setLoading(false);
       }
-
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("credito_disponible")
-        .eq("id", user.id)
-        .maybeSingle();
-
-      setCreditoDisponible(Number(profile?.credito_disponible) || 0);
-
-      const { data: bookingsData } = await supabase
-        .from("bookings")
-        .select(
-          `
-          *,
-          services:service_id (
-            titulo,
-            vertical,
-            precio,
-            ciudad,
-            proveedor_id,
-            profiles_public:proveedor_id (nombre, apellido, idiomas)
-          )
-        `,
-        )
-        .eq("cliente_id", user.id)
-        .order("created_at", { ascending: false });
-
-      const rows = bookingsData ?? [];
-      setBookings(rows);
-
-      if (rows.length > 0) {
-        const { data: reviews } = await supabase
-          .from("reviews")
-          .select("booking_id")
-          .in("booking_id", rows.map((b) => b.id));
-
-        setReviewedIds(new Set((reviews ?? []).map((r) => r.booking_id)));
-      }
-
-      setLoading(false);
     }
 
     loadHistorial();
-  }, [router]);
+    return () => {
+      cancelled = true;
+    };
+  }, [router, reloadKey]);
 
   const stats = useMemo(() => {
     const total = bookings.length;
@@ -402,6 +432,18 @@ export default function HistorialPage() {
     );
   }
 
+  if (loadError) {
+    return (
+      <div className="min-h-screen font-sans" style={{ backgroundColor: BRAND.warm }}>
+        <Navbar />
+        <DataLoadFailed
+          message={loadError}
+          onRetry={() => setReloadKey((k) => k + 1)}
+        />
+      </div>
+    );
+  }
+
   return (
     <div
       className="min-h-screen font-sans"
@@ -497,7 +539,9 @@ export default function HistorialPage() {
             className="rounded-xl border bg-white px-6 py-12 text-center text-sm text-[#666]"
             style={{ borderColor: BORDER }}
           >
-            No hay reservas en esta categoría.
+            {bookings.length === 0
+              ? "No tienes reservas todavía."
+              : "No hay reservas en esta categoría."}
           </p>
         ) : (
           <div className="flex flex-col gap-8">

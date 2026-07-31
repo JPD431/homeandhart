@@ -104,7 +104,9 @@ import {
   assertCanCreateService,
   maybeNotifyServiceCreationBurst,
 } from "@/app/lib/service-limits";
+import DataLoadFailed from "@/app/components/DataLoadFailed";
 import { supabase } from "@/app/lib/supabase";
+import { friendlyLoadError, withLoadTimeout } from "@/app/lib/with-load-timeout";
 
 import {
   loadProviderDocuments,
@@ -1090,6 +1092,8 @@ function EditarPerfilContent() {
   const documentInputRef = useRef(null);
 
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
   const [activeTab, setActiveTab] = useState("perfil");
   const [dirty, setDirty] = useState(false);
   const [userId, setUserId] = useState(null);
@@ -1130,109 +1134,125 @@ function EditarPerfilContent() {
   const [documentosReminderVertical, setDocumentosReminderVertical] = useState(null);
 
   useEffect(() => {
+    let cancelled = false;
+    let navigatedAway = false;
+
     async function load() {
-      const {
-        data: { user },
-        error: authError,
-      } = await supabase.auth.getUser();
+      setLoading(true);
+      setLoadError("");
+      try {
+        await withLoadTimeout((async () => {
+          const {
+            data: { user },
+            error: authError,
+          } = await supabase.auth.getUser();
 
-      if (authError || !user) {
-        router.replace("/login");
-        return;
-      }
+          if (authError || !user) {
+            navigatedAway = true;
+            router.replace("/login");
+            return;
+          }
+          if (cancelled) return;
 
-      setUserId(user.id);
-      setUserEmail(user.email || "");
+          setUserId(user.id);
+          setUserEmail(user.email || "");
 
-      const { data: perfilData, error: profileError } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", user.id)
-        .single();
+          const { data: perfilData, error: profileError } = await supabase
+            .from("profiles")
+            .select("*")
+            .eq("id", user.id)
+            .single();
 
-      if (profileError) {
-        setErrorMessage(profileError.message);
-        setLoading(false);
-        return;
-      }
+          if (profileError) throw profileError;
+          if (cancelled) return;
 
-      if (perfilData) {
-        setNombre(perfilData.nombre || "");
-        setApellido(perfilData.apellido || "");
-        setCiudad(perfilData.ciudad || "");
-        setTelefono(perfilData.telefono || "");
-        setEmailContacto(
-          resolveEmailContactoDraft(perfilData, user.email),
-        );
-        const desc = perfilData.descripcion || "";
-        const personalidadMatch = desc.match(/Personalidad:\s*(.+?)(?:\n\n|$)/s);
-        const motivacionParts = desc.split(/\n\nPersonalidad:/);
-        setDescripcion(motivacionParts[0] || desc);
-        setPersonalidad(personalidadMatch?.[1]?.trim() || "");
-        setIdiomas(Array.isArray(perfilData.idiomas) ? perfilData.idiomas : []);
-        setAnosExperiencia(
-          perfilData.anos_experiencia != null
-            ? String(perfilData.anos_experiencia)
-            : "",
-        );
-        setPerfil(perfilData);
-        setFotoPerfil(perfilData.foto_perfil || perfilData.avatar_url || null);
-        setFotoPreview(perfilData.foto_perfil || perfilData.avatar_url || null);
-      }
+          if (perfilData) {
+            setNombre(perfilData.nombre || "");
+            setApellido(perfilData.apellido || "");
+            setCiudad(perfilData.ciudad || "");
+            setTelefono(perfilData.telefono || "");
+            setEmailContacto(
+              resolveEmailContactoDraft(perfilData, user.email),
+            );
+            const desc = perfilData.descripcion || "";
+            const personalidadMatch = desc.match(/Personalidad:\s*(.+?)(?:\n\n|$)/s);
+            const motivacionParts = desc.split(/\n\nPersonalidad:/);
+            setDescripcion(motivacionParts[0] || desc);
+            setPersonalidad(personalidadMatch?.[1]?.trim() || "");
+            setIdiomas(Array.isArray(perfilData.idiomas) ? perfilData.idiomas : []);
+            setAnosExperiencia(
+              perfilData.anos_experiencia != null
+                ? String(perfilData.anos_experiencia)
+                : "",
+            );
+            setPerfil(perfilData);
+            setFotoPerfil(perfilData.foto_perfil || perfilData.avatar_url || null);
+            setFotoPreview(perfilData.foto_perfil || perfilData.avatar_url || null);
+          }
 
-      const { data: serviceRows, error: servicesError } = await supabase
-        .from("services")
-        .select("*")
-        .eq("proveedor_id", user.id)
-        .order("created_at", { ascending: true });
+          const { data: serviceRows, error: servicesError } = await supabase
+            .from("services")
+            .select("*")
+            .eq("proveedor_id", user.id)
+            .order("created_at", { ascending: true });
 
-      if (servicesError) {
-        setErrorMessage(servicesError.message);
-      } else {
-        const rows = serviceRows ?? [];
-        const contactById = await loadServiceContactsByIds(rows.map((r) => r.id));
-        const modalidadesById = await loadModalidadesForServices(rows);
-        setServices(
-          rows.map((row) => {
-            const contact = contactById.get(row.id) ?? null;
-            const resolved = applyContactToDetails({}, contact);
-            const rowWithContact = {
-              ...row,
-              direccion_exacta: resolved.direccion_exacta,
-              telefono_contacto: resolved.telefono_contacto,
-              location_lat: resolved.location_lat,
-              location_lng: resolved.location_lng,
-            };
-            const mapped = mapServiceFromDb(rowWithContact);
-            const cobro = modalidadesById.get(row.id);
-            if (cobro) {
-              mapped.details = { ...mapped.details, ...cobro };
+          if (servicesError) throw servicesError;
+          if (cancelled) return;
+
+          const rows = serviceRows ?? [];
+          const contactById = await loadServiceContactsByIds(rows.map((r) => r.id));
+          const modalidadesById = await loadModalidadesForServices(rows);
+          if (cancelled) return;
+          setServices(
+            rows.map((row) => {
+              const contact = contactById.get(row.id) ?? null;
+              const resolved = applyContactToDetails({}, contact);
+              const rowWithContact = {
+                ...row,
+                direccion_exacta: resolved.direccion_exacta,
+                telefono_contacto: resolved.telefono_contacto,
+                location_lat: resolved.location_lat,
+                location_lng: resolved.location_lng,
+              };
+              const mapped = mapServiceFromDb(rowWithContact);
+              const cobro = modalidadesById.get(row.id);
+              if (cobro) {
+                mapped.details = { ...mapped.details, ...cobro };
+              }
+              return mapped;
+            }),
+          );
+
+          if (perfilData?.role === "proveedor") {
+            const refsRes = await fetch("/api/referencias/mis");
+            const refsData = await refsRes.json().catch(() => ({}));
+            if (cancelled) return;
+            if (refsRes.ok) {
+              setReferencias(refsData.referencias ?? []);
             }
-            return mapped;
-          }),
-        );
-      }
 
-      if (perfilData?.role === "proveedor") {
-        const refsRes = await fetch("/api/referencias/mis");
-        const refsData = await refsRes.json().catch(() => ({}));
-        if (refsRes.ok) {
-          setReferencias(refsData.referencias ?? []);
+            try {
+              const docs = await loadProviderDocuments(user.id);
+              if (!cancelled) setProviderDocuments(docs);
+            } catch (docsErr) {
+              console.error("[editar-perfil] Error cargando documentos:", docsErr);
+            }
+          }
+        })());
+      } catch (err) {
+        if (!cancelled && !navigatedAway) {
+          setLoadError(friendlyLoadError(err));
         }
-
-        try {
-          const docs = await loadProviderDocuments(user.id);
-          setProviderDocuments(docs);
-        } catch (docsErr) {
-          console.error("[editar-perfil] Error cargando documentos:", docsErr);
-        }
+      } finally {
+        if (!cancelled && !navigatedAway) setLoading(false);
       }
-
-      setLoading(false);
     }
 
     load();
-  }, [router]);
+    return () => {
+      cancelled = true;
+    };
+  }, [router, reloadKey]);
 
   useEffect(() => {
     if (loading) return;
@@ -2278,6 +2298,17 @@ function EditarPerfilContent() {
     return (
       <div className="min-h-screen font-sans" style={{ backgroundColor: BRAND.warm }}>
         <main className="px-6 py-16 text-center text-sm text-[#666]">Cargando perfil…</main>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="min-h-screen font-sans" style={{ backgroundColor: BRAND.warm }}>
+        <DataLoadFailed
+          message={loadError}
+          onRetry={() => setReloadKey((k) => k + 1)}
+        />
       </div>
     );
   }

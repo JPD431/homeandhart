@@ -5,12 +5,14 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Navbar from "@/app/components/Navbar";
 import ClienteVerificadoBadge from "@/app/components/ClienteVerificadoBadge";
+import DataLoadFailed from "@/app/components/DataLoadFailed";
 import {
   CONTACT_FILTER_BANNER,
   CONTACT_FILTER_NOTICE,
 } from "@/app/lib/chat-content-filter";
 import { useModo } from "@/app/lib/ModoContext";
 import { supabase } from "@/app/lib/supabase";
+import { friendlyLoadError, withLoadTimeout } from "@/app/lib/with-load-timeout";
 
 const BLUE = "#1d4f91";
 const AMBER = "#c47d1a";
@@ -352,6 +354,8 @@ export default function ChatPage() {
   const { modo, esClientePuro } = useModo();
 
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
   const [userId, setUserId] = useState(null);
   const [conversations, setConversations] = useState([]);
   const [selectedId, setSelectedId] = useState(conversationParam);
@@ -463,22 +467,28 @@ export default function ChatPage() {
   const loadMessages = useCallback(
     async (conversationId, uid) => {
       setMessagesLoading(true);
+      try {
+        await withLoadTimeout((async () => {
+          const { data, error } = await supabase
+            .from("messages")
+            .select("id, conversation_id, sender_id, content, created_at, read")
+            .eq("conversation_id", conversationId)
+            .order("created_at", { ascending: true });
 
-      const { data, error } = await supabase
-        .from("messages")
-        .select("id, conversation_id, sender_id, content, created_at, read")
-        .eq("conversation_id", conversationId)
-        .order("created_at", { ascending: true });
-
-      if (error) {
-        setErrorMessage(error.message);
+          if (error) {
+            setErrorMessage(friendlyLoadError(error));
+            setMessages([]);
+            return;
+          }
+          setMessages(data ?? []);
+          await markConversationRead(conversationId, uid);
+        })());
+      } catch (err) {
+        setErrorMessage(friendlyLoadError(err));
         setMessages([]);
-      } else {
-        setMessages(data ?? []);
-        await markConversationRead(conversationId, uid);
+      } finally {
+        setMessagesLoading(false);
       }
-
-      setMessagesLoading(false);
     },
     [markConversationRead],
   );
@@ -503,28 +513,48 @@ export default function ChatPage() {
   }, [userId]);
 
   useEffect(() => {
+    let cancelled = false;
+    let navigatedAway = false;
+
     async function init() {
-      const {
-        data: { user },
-        error,
-      } = await supabase.auth.getUser();
+      setLoading(true);
+      setLoadError("");
+      try {
+        await withLoadTimeout((async () => {
+          const {
+            data: { user },
+            error,
+          } = await supabase.auth.getUser();
 
-      if (error || !user) {
-        router.replace("/login");
-        return;
+          if (error || !user) {
+            navigatedAway = true;
+            router.replace("/login");
+            return;
+          }
+
+          if (cancelled) return;
+          setUserId(user.id);
+          const list = await loadConversations(user.id);
+          if (cancelled) return;
+          setConversations(list);
+
+          const initialId = conversationParam || list[0]?.id || null;
+          setSelectedId(initialId);
+        })());
+      } catch (err) {
+        if (!cancelled && !navigatedAway) {
+          setLoadError(friendlyLoadError(err));
+        }
+      } finally {
+        if (!cancelled && !navigatedAway) setLoading(false);
       }
-
-      setUserId(user.id);
-      const list = await loadConversations(user.id);
-      setConversations(list);
-      setLoading(false);
-
-      const initialId = conversationParam || list[0]?.id || null;
-      setSelectedId(initialId);
     }
 
     init();
-  }, [router, conversationParam, loadConversations]);
+    return () => {
+      cancelled = true;
+    };
+  }, [router, conversationParam, loadConversations, reloadKey]);
 
   useEffect(() => {
     if (conversationParam) {
@@ -949,6 +979,19 @@ export default function ChatPage() {
         >
           Cargando mensajes…
         </main>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="min-h-screen bg-white font-sans">
+        <Navbar />
+        <DataLoadFailed
+          message={loadError}
+          onRetry={() => setReloadKey((k) => k + 1)}
+          style={{ height: "calc(100vh - 57px)" }}
+        />
       </div>
     );
   }

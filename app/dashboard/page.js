@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, Suspense, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Navbar from '@/app/components/Navbar';
@@ -7,6 +7,7 @@ import OnboardingPendienteBanner from '@/app/components/OnboardingPendienteBanne
 import FamiliaInviteBanner from '@/app/components/FamiliaInviteBanner';
 import ReportarIncidenciaForm from '@/app/components/ReportarIncidenciaForm';
 import ClienteVerificadoBadge from '@/app/components/ClienteVerificadoBadge';
+import DataLoadFailed from '@/app/components/DataLoadFailed';
 import { useModo } from '@/app/lib/ModoContext';
 import { getIngresoProveedorFromBooking } from '@/app/lib/ingresos-proveedor';
 import { puedeReportarIncidencia } from '@/app/lib/booking-incidencia';
@@ -14,6 +15,7 @@ import { PROVIDER_CONTACT_BANNER_MSG } from '@/app/lib/profile-telefono';
 import { providerMissingContactBanner } from '@/app/lib/provider-publicacion';
 import { canShowProviderContact } from '@/app/lib/booking-display';
 import { supabase } from '@/app/lib/supabase';
+import { friendlyLoadError, withLoadTimeout } from '@/app/lib/with-load-timeout';
 
 const BRAND = {
   blue: '#1d4f91',
@@ -45,51 +47,83 @@ function DashboardContent() {
   const [favoritos, setFavoritos] = useState([]);
   const [viajes, setViajes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
   const [clientSubTab, setClientSubTab] = useState('cliente');
   const [stripeBannerDismissed, setStripeBannerDismissed] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
+    let navigatedAway = false;
+
     async function load() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { router.replace('/login'); return; }
-      setUser(user);
-      const { data: p } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-      setPerfil(p);
-      if (p && !p.codigo_referido) {
-        const codigo = 'HH-' + (p.nombre || 'USER').substring(0, 4).toUpperCase() + Math.floor(1000 + Math.random() * 9000);
-        await supabase.from('profiles').update({ codigo_referido: codigo }).eq('id', user.id);
-        p.codigo_referido = codigo;
-      }
-      const { data: r } = await supabase.from('bookings').select('*, services(titulo, vertical, proveedor_id, profiles_public!proveedor_id(nombre, apellido))').eq('cliente_id', user.id).order('created_at', { ascending: false }).limit(10);
-      setReservas(r || []);
-      const { data: f } = await supabase.from('favoritos').select('*, profiles_public!proveedor_id(id, nombre, apellido)').eq('cliente_id', user.id);
-      setFavoritos(f || []);
-      const { data: viajesData } = await supabase
-        .from('viajes')
-        .select(`
-          id,
-          nombre,
-          fecha_inicio,
-          fecha_fin,
-          ciudad,
-          viaje_reservas (
-            bookings:booking_id (
+      setLoading(true);
+      setLoadError('');
+      try {
+        await withLoadTimeout((async () => {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) {
+            navigatedAway = true;
+            router.replace('/login');
+            return;
+          }
+          if (cancelled) return;
+          setUser(user);
+          const { data: p, error: profileError } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+          if (profileError) throw profileError;
+          if (cancelled) return;
+          setPerfil(p);
+          if (p && !p.codigo_referido) {
+            const codigo = 'HH-' + (p.nombre || 'USER').substring(0, 4).toUpperCase() + Math.floor(1000 + Math.random() * 9000);
+            await supabase.from('profiles').update({ codigo_referido: codigo }).eq('id', user.id);
+            p.codigo_referido = codigo;
+          }
+          const { data: r, error: bookingsError } = await supabase.from('bookings').select('*, services(titulo, vertical, proveedor_id, profiles_public!proveedor_id(nombre, apellido))').eq('cliente_id', user.id).order('created_at', { ascending: false }).limit(10);
+          if (bookingsError) throw bookingsError;
+          if (cancelled) return;
+          setReservas(r || []);
+          const { data: f, error: favError } = await supabase.from('favoritos').select('*, profiles_public!proveedor_id(id, nombre, apellido)').eq('cliente_id', user.id);
+          if (favError) throw favError;
+          if (cancelled) return;
+          setFavoritos(f || []);
+          const { data: viajesData, error: viajesError } = await supabase
+            .from('viajes')
+            .select(`
               id,
-              services:service_id (
-                titulo,
-                vertical
+              nombre,
+              fecha_inicio,
+              fecha_fin,
+              ciudad,
+              viaje_reservas (
+                bookings:booking_id (
+                  id,
+                  services:service_id (
+                    titulo,
+                    vertical
+                  )
+                )
               )
-            )
-          )
-        `)
-        .eq('creador_id', user.id)
-        .order('fecha_inicio', { ascending: false })
-        .limit(3);
-      setViajes(viajesData ?? []);
-      setLoading(false);
+            `)
+            .eq('creador_id', user.id)
+            .order('fecha_inicio', { ascending: false })
+            .limit(3);
+          if (viajesError) throw viajesError;
+          if (cancelled) return;
+          setViajes(viajesData ?? []);
+        })());
+      } catch (err) {
+        if (!cancelled && !navigatedAway) {
+          setLoadError(friendlyLoadError(err));
+        }
+      } finally {
+        if (!cancelled && !navigatedAway) setLoading(false);
+      }
     }
     load();
-  }, [router]);
+    return () => {
+      cancelled = true;
+    };
+  }, [router, reloadKey]);
 
   useEffect(() => {
     if (isAdmin) {
@@ -174,6 +208,18 @@ function DashboardContent() {
   };
 
   if (loading) return <div style={{background: BRAND.warm, minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center'}}><p style={{color: '#aaa'}}>Cargando...</p></div>;
+
+  if (loadError) {
+    return (
+      <div style={{ background: BRAND.warm, minHeight: '100vh' }}>
+        <Navbar />
+        <DataLoadFailed
+          message={loadError}
+          onRetry={() => setReloadKey((k) => k + 1)}
+        />
+      </div>
+    );
+  }
 
   const nombreMostrar = perfil?.nombre || user?.email?.split('@')[0] || 'usuario';
   const enModoProveedor = modo === 'proveedor' && puedeAlternarModo;
@@ -1118,87 +1164,83 @@ function ReservasRecibidas({ perfil, BRAND, highlightBookingId, router }) {
     }
   }
 
-  useEffect(() => {
-    if (!perfil?.id) {
-      return;
-    }
+  const [reloadKey, setReloadKey] = useState(0);
 
-    async function loadReservasRecibidas() {
-      setLoading(true);
-      setLoadError('');
+  const loadReservasRecibidas = useCallback(async () => {
+    if (!perfil?.id) return;
+    setLoading(true);
+    setLoadError('');
+    try {
+      await withLoadTimeout((async () => {
+        const { data: services, error: servicesError } = await supabase
+          .from('services')
+          .select('id, titulo')
+          .eq('proveedor_id', perfil.id);
 
-      const { data: services, error: servicesError } = await supabase
-        .from('services')
-        .select('id, titulo')
-        .eq('proveedor_id', perfil.id);
+        if (servicesError) throw servicesError;
 
-      if (servicesError) {
-        setLoadError(servicesError.message);
-        setLoading(false);
-        return;
-      }
+        const servicesList = services ?? [];
+        const map = Object.fromEntries(servicesList.map((s) => [s.id, s.titulo || 'Servicio']));
+        setServiceMap(map);
 
-      const servicesList = services ?? [];
-      const map = Object.fromEntries(servicesList.map((s) => [s.id, s.titulo || 'Servicio']));
-      setServiceMap(map);
+        const serviceIds = servicesList.map((s) => s.id);
 
-      const serviceIds = servicesList.map((s) => s.id);
-
-      if (serviceIds.length === 0) {
-        setBookings([]);
-        setClientNames({});
-        setClientVerified({});
-        setClienteContactos({});
-        setLoading(false);
-        return;
-      }
-
-      const { data: bookingsData, error: bookingsError } = await supabase
-        .from('bookings')
-        .select('id, cliente_id, service_id, fecha_inicio, fecha_fin, hora, precio_total, precio_base, cliente_sin_comision, proveedor_sin_comision, estado, mensaje, created_at, pago_liberado_at, importe_transferido, lugar_servicio, direccion_cliente_a_definir')
-        .in('service_id', serviceIds)
-        .order('created_at', { ascending: false });
-
-      if (bookingsError) {
-        setLoadError(bookingsError.message);
-        setLoading(false);
-        return;
-      }
-
-      const rows = bookingsData ?? [];
-      setBookings(rows);
-      await loadClienteContactos(rows);
-
-      const clienteIds = [...new Set(rows.map((b) => b.cliente_id).filter(Boolean))];
-      if (clienteIds.length > 0) {
-        const { data: profiles, error: profilesError } = await supabase
-          .from('profiles_public')
-          .select('id, nombre, apellido, dni_verificado')
-          .in('id', clienteIds);
-
-        if (profilesError) {
-          console.error('[ReservasRecibidas] Error perfiles cliente:', profilesError.message);
+        if (serviceIds.length === 0) {
+          setBookings([]);
+          setClientNames({});
+          setClientVerified({});
+          setClienteContactos({});
+          return;
         }
 
-        const names = {};
-        const verified = {};
-        for (const p of profiles ?? []) {
-          const full = [p.nombre, p.apellido].filter(Boolean).join(' ').trim();
-          names[p.id] = full || 'Cliente';
-          verified[p.id] = p.dni_verificado === true;
-        }
-        setClientNames(names);
-        setClientVerified(verified);
-      } else {
-        setClientNames({});
-        setClientVerified({});
-      }
+        const { data: bookingsData, error: bookingsError } = await supabase
+          .from('bookings')
+          .select('id, cliente_id, service_id, fecha_inicio, fecha_fin, hora, precio_total, precio_base, cliente_sin_comision, proveedor_sin_comision, estado, mensaje, created_at, pago_liberado_at, importe_transferido, lugar_servicio, direccion_cliente_a_definir')
+          .in('service_id', serviceIds)
+          .order('created_at', { ascending: false });
 
+        if (bookingsError) throw bookingsError;
+
+        const rows = bookingsData ?? [];
+        setBookings(rows);
+        await loadClienteContactos(rows);
+
+        const clienteIds = [...new Set(rows.map((b) => b.cliente_id).filter(Boolean))];
+        if (clienteIds.length > 0) {
+          const { data: profiles, error: profilesError } = await supabase
+            .from('profiles_public')
+            .select('id, nombre, apellido, dni_verificado')
+            .in('id', clienteIds);
+
+          if (profilesError) {
+            console.error('[ReservasRecibidas] Error perfiles cliente:', profilesError.message);
+          }
+
+          const names = {};
+          const verified = {};
+          for (const p of profiles ?? []) {
+            const full = [p.nombre, p.apellido].filter(Boolean).join(' ').trim();
+            names[p.id] = full || 'Cliente';
+            verified[p.id] = p.dni_verificado === true;
+          }
+          setClientNames(names);
+          setClientVerified(verified);
+        } else {
+          setClientNames({});
+          setClientVerified({});
+        }
+      })());
+    } catch (err) {
+      setLoadError(friendlyLoadError(err));
+      setBookings([]);
+    } finally {
       setLoading(false);
     }
-
-    loadReservasRecibidas();
   }, [perfil?.id]);
+
+  useEffect(() => {
+    loadReservasRecibidas();
+  }, [loadReservasRecibidas, reloadKey]);
 
   useEffect(() => {
     if (!highlightBookingId || loading) return;
@@ -1366,17 +1408,36 @@ function ReservasRecibidas({ perfil, BRAND, highlightBookingId, router }) {
           )}
 
           {!loading && loadError && (
-            <p
-              style={{
-                fontSize: 12,
-                color: '#b91c1c',
-                background: '#fee2e2',
-                padding: '10px 12px',
-                borderRadius: 6,
-              }}
-            >
-              {loadError}
-            </p>
+            <div style={{ textAlign: 'center', padding: '12px 0' }}>
+              <p
+                style={{
+                  fontSize: 12,
+                  color: '#b91c1c',
+                  background: '#fee2e2',
+                  padding: '10px 12px',
+                  borderRadius: 6,
+                  marginBottom: 10,
+                }}
+              >
+                {loadError}
+              </p>
+              <button
+                type="button"
+                onClick={() => setReloadKey((k) => k + 1)}
+                style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: '#fff',
+                  background: BRAND.blue,
+                  border: 'none',
+                  borderRadius: 8,
+                  padding: '10px 16px',
+                  cursor: 'pointer',
+                }}
+              >
+                Reintentar
+              </button>
+            </div>
           )}
 
           {!loading && !loadError && actionError && (
