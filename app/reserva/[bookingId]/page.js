@@ -137,7 +137,7 @@ export default function ReservaDetallePage() {
                   ciudad,
                   proveedor_id,
                   modalidad,
-                  profiles_public:proveedor_id (nombre, apellido, dni_verificado)
+                  profiles_public:proveedor_id (nombre, apellido)
                 )
               `,
               )
