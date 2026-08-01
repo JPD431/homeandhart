@@ -116,142 +116,160 @@ export async function generateMetadata({ params, searchParams }) {
 }
 
 export default async function AnuncioPage({ params, searchParams }) {
-  const { serviceId } = await params;
-  const sp = await searchParams;
-  const initialDesde = typeof sp?.desde === "string" ? sp.desde : "";
-  const initialHasta = typeof sp?.hasta === "string" ? sp.hasta : "";
-  const previewRequested = sp?.preview === "1";
+  try {
+    const { serviceId } = await params;
+    const sp = await searchParams;
+    const initialDesde = typeof sp?.desde === "string" ? sp.desde : "";
+    const initialHasta = typeof sp?.hasta === "string" ? sp.hasta : "";
+    const previewRequested = sp?.preview === "1";
 
-  const { service, mode } = await resolveAnuncioRequest(
-    serviceId,
-    previewRequested,
-  );
+    const { service, mode } = await resolveAnuncioRequest(
+      serviceId,
+      previewRequested,
+    );
 
-  if (!service) {
-    notFound();
-  }
+    if (!service) {
+      notFound();
+    }
 
-  const isOwnerPreview = mode === "owner-preview" || mode === "admin-preview";
+    const isOwnerPreview = mode === "owner-preview" || mode === "admin-preview";
 
-  const [bloqueosCalendario, proveedorRating] = await Promise.all([
-    loadServiceBloqueos(serviceId),
-    loadProveedorRating(service.proveedor_id),
-  ]);
+    const [bloqueosCalendario, proveedorRating] = await Promise.all([
+      loadServiceBloqueos(serviceId),
+      loadProveedorRating(service.proveedor_id),
+    ]);
 
-  const profile = normalizeServiceProfile(service);
-  const theme = getServiceCardTheme(service.vertical);
-  const accent = getVerticalColor(service.vertical);
-  const photos = getServicePhotos(service);
-  const zone = getServiceCardZone(service, profile);
-  const titulo =
-    service.titulo?.trim() ||
-    theme.label ||
-    VERTICAL_DOC_LABELS[service.vertical] ||
-    "Servicio";
-  const tags = getListingTags(service, profile);
+    const profile = normalizeServiceProfile(service);
+    const theme = getServiceCardTheme(service.vertical);
+    const accent = getVerticalColor(service.vertical);
+    const photos = getServicePhotos(service);
+    const zone = getServiceCardZone(service, profile);
+    const titulo =
+      service.titulo?.trim() ||
+      theme.label ||
+      VERTICAL_DOC_LABELS[service.vertical] ||
+      "Servicio";
+    const tags = getListingTags(service, profile);
 
-  const serviceCalendario = buildCalendarioServiceEntry(service, {
-    titulo,
-    label: VERTICAL_DOC_LABELS[service.vertical] || theme.label,
-  });
+    const serviceCalendario = buildCalendarioServiceEntry(service, {
+      titulo,
+      label: VERTICAL_DOC_LABELS[service.vertical] || theme.label,
+    });
 
-  return (
-    <div
-      className="min-h-screen font-sans"
-      style={{ backgroundColor: "#f7f5f2", color: "#1a1a1a" }}
-    >
-      {isOwnerPreview && <AnuncioPreviewBanner />}
-
-      <header
-        className="border-b"
-        style={{ backgroundColor: "#f7f5f2", borderColor: "#e8e4de" }}
+    return (
+      <div
+        className="min-h-screen font-sans"
+        style={{ backgroundColor: "#f7f5f2", color: "#1a1a1a" }}
       >
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-4">
-          <Link href="/" className="shrink-0 no-underline">
-            <p className="text-[18px] leading-none text-[#111]" style={{ fontFamily: SERIF }}>
-              Home<span className="italic" style={{ color: accent }}>&</span>
-              Heart
-            </p>
-          </Link>
-          <Link
-            href="/buscar"
-            className="text-[12px] no-underline transition-opacity hover:opacity-80"
-            style={{ color: "#666" }}
-          >
-            ← Volver a la búsqueda
-          </Link>
-        </div>
-      </header>
+        {isOwnerPreview && <AnuncioPreviewBanner />}
 
-      <div className="w-full" style={{ borderBottom: "1px solid #e8e4de" }}>
-        <div className="mx-auto max-w-6xl">
-          <ServicePhotoGalleryHero
-            photos={photos}
-            vertical={service.vertical}
-            className="w-full"
-          />
-        </div>
-      </div>
-
-      <main className="mx-auto max-w-6xl px-5 py-8">
-        <p
-          className="text-[11px] font-semibold uppercase tracking-wide"
-          style={{ color: accent }}
+        <header
+          className="border-b"
+          style={{ backgroundColor: "#f7f5f2", borderColor: "#e8e4de" }}
         >
-          {VERTICAL_DOC_LABELS[service.vertical] || theme.label}
-        </p>
-
-        <h1
-          className="mt-2 text-[#111]"
-          style={{
-            fontFamily: SERIF,
-            fontWeight: 300,
-            fontSize: "clamp(24px, 4vw, 32px)",
-            lineHeight: 1.2,
-          }}
-        >
-          {titulo}
-        </h1>
-
-        <p className="mt-2 text-[13px] text-[#888]">{zone}</p>
-
-        {tags.length > 0 && (
-          <div className="mt-4 flex flex-wrap gap-1.5">
-            {tags.map((tag) => (
-              <Tag key={tag.text} light={tag.light} color={tag.color}>
-                {tag.text}
-              </Tag>
-            ))}
+          <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-4">
+            <Link href="/" className="shrink-0 no-underline">
+              <p className="text-[18px] leading-none text-[#111]" style={{ fontFamily: SERIF }}>
+                Home<span className="italic" style={{ color: accent }}>&</span>
+                Heart
+              </p>
+            </Link>
+            <Link
+              href="/buscar"
+              className="text-[12px] no-underline transition-opacity hover:opacity-80"
+              style={{ color: "#666" }}
+            >
+              ← Volver a la búsqueda
+            </Link>
           </div>
-        )}
+        </header>
 
-        <div className="mt-8 grid grid-cols-1 items-start gap-8 lg:grid-cols-[1fr_minmax(300px,380px)]">
-          <div
-            className="rounded-xl border bg-white p-5 sm:p-6"
-            style={{ borderColor: "#e8e4de" }}
-          >
-            <ServiceAnuncioContent service={service} showGallery={false} />
-            <AnuncioProveedorBlock
-              profile={profile}
-              proveedorId={service.proveedor_id}
-              rating={proveedorRating}
-              accentColor={accent}
+        <div className="w-full" style={{ borderBottom: "1px solid #e8e4de" }}>
+          <div className="mx-auto max-w-6xl">
+            <ServicePhotoGalleryHero
+              photos={photos}
               vertical={service.vertical}
+              className="w-full"
+            />
+          </div>
+        </div>
+
+        <main className="mx-auto max-w-6xl px-5 py-8">
+          <p
+            className="text-[11px] font-semibold uppercase tracking-wide"
+            style={{ color: accent }}
+          >
+            {VERTICAL_DOC_LABELS[service.vertical] || theme.label}
+          </p>
+
+          <h1
+            className="mt-2 text-[#111]"
+            style={{
+              fontFamily: SERIF,
+              fontWeight: 300,
+              fontSize: "clamp(24px, 4vw, 32px)",
+              lineHeight: 1.2,
+            }}
+          >
+            {titulo}
+          </h1>
+
+          <p className="mt-2 text-[13px] text-[#888]">{zone}</p>
+
+          {tags.length > 0 && (
+            <div className="mt-4 flex flex-wrap gap-1.5">
+              {tags.map((tag) => (
+                <Tag key={tag.text} light={tag.light} color={tag.color}>
+                  {tag.text}
+                </Tag>
+              ))}
+            </div>
+          )}
+
+          <div className="mt-8 grid grid-cols-1 items-start gap-8 lg:grid-cols-[1fr_minmax(300px,380px)]">
+            <div
+              className="rounded-xl border bg-white p-5 sm:p-6"
+              style={{ borderColor: "#e8e4de" }}
+            >
+              <ServiceAnuncioContent service={service} showGallery={false} />
+              <AnuncioProveedorBlock
+                profile={profile}
+                proveedorId={service.proveedor_id}
+                rating={proveedorRating}
+                accentColor={accent}
+                vertical={service.vertical}
+                isOwnerPreview={isOwnerPreview}
+              />
+            </div>
+
+            <AnuncioBookingPanel
+              service={service}
+              serviceCalendario={serviceCalendario}
+              bloqueos={bloqueosCalendario}
+              accentColor={accent}
+              initialDesde={initialDesde}
+              initialHasta={initialHasta}
               isOwnerPreview={isOwnerPreview}
             />
           </div>
-
-          <AnuncioBookingPanel
-            service={service}
-            serviceCalendario={serviceCalendario}
-            bloqueos={bloqueosCalendario}
-            accentColor={accent}
-            initialDesde={initialDesde}
-            initialHasta={initialHasta}
-            isOwnerPreview={isOwnerPreview}
-          />
-        </div>
-      </main>
-    </div>
-  );
+        </main>
+      </div>
+    );
+  } catch (err) {
+    // notFound()/redirect de Next: re-lanzar sin log de diagnóstico.
+    const digest = typeof err?.digest === "string" ? err.digest : "";
+    if (digest.startsWith("NEXT_")) {
+      throw err;
+    }
+    // Diagnóstico temporal: detalle en logs de Vercel antes de re-lanzar.
+    console.error("[anuncio] render error:", err);
+    console.error("[anuncio] render error detail:", {
+      message: err?.message,
+      stack: err?.stack,
+      digest: err?.digest,
+      name: err?.name,
+      cause: err?.cause,
+    });
+    throw err;
+  }
 }
