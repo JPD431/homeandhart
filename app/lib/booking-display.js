@@ -264,7 +264,8 @@ export function isCanceladoEstado(estado) {
 }
 
 /**
- * Desglose de precio para el cliente (lo que pagó / debe pagar).
+ * Precio de cara al cliente: total (+ crédito si aplica), sin desglosar servicio/gestión.
+ * `base` / `gestion` siguen disponibles para cálculos internos o vista proveedor.
  * @returns {{
  *   base: number,
  *   gestion: number,
@@ -273,6 +274,7 @@ export function isCanceladoEstado(estado) {
  *   total: number,
  *   sinGestion: boolean,
  *   lines: Array<{ label: string, amount: number, muted?: boolean }>,
+ *   footnote: { kind: "incluidos" | "sin_gestion", text: string } | null,
  * }}
  */
 export function getClientPriceBreakdown(booking) {
@@ -283,21 +285,15 @@ export function getClientPriceBreakdown(booking) {
   const gestion = sinGestion
     ? 0
     : roundMoney(Math.max(0, total - base));
-  // Si no hay precio_base y la inferencia no cuadra, mostrar gestión por comisión.
   const gestionFallback =
     !sinGestion && gestion <= 0 && total > 0
       ? roundMoney(base * COMMISSION_RATE)
       : gestion;
 
-  const lines = [
-    { label: "Precio del servicio", amount: base },
-  ];
-  if (!sinGestion && gestionFallback > 0) {
-    lines.push({ label: "Gastos de gestión", amount: gestionFallback });
-  } else if (sinGestion) {
-    lines.push({ label: "Gastos de gestión", amount: 0, muted: true });
-  }
+  /** @type {Array<{ label: string, amount: number, muted?: boolean }>} */
+  const lines = [];
   if (credito > 0) {
+    lines.push({ label: "Total reserva", amount: total });
     lines.push({ label: "Crédito aplicado", amount: -credito });
   }
 
@@ -311,6 +307,7 @@ export function getClientPriceBreakdown(booking) {
     total: aPagar,
     sinGestion,
     lines,
+    footnote: getClientPriceFootnote(booking),
   };
 }
 
@@ -334,12 +331,11 @@ export function formatBookingPrice(precio) {
 }
 
 /**
- * Leyenda de precio para la vista del cliente (mismo criterio que checkout /reservar).
+ * Leyenda de precio para la vista del cliente (detalle, checkout, emails).
  * - sin comisión → "Sin gastos de gestión"
- * - con crédito → null (el crédito se explica aparte; no añadir "incluidos")
- * - resto → "gastos de gestión incluidos"
+ * - resto → "Gastos de gestión incluidos"
  *
- * @param {{ cliente_sin_comision?: boolean, credito_aplicado?: number|string|null } | null | undefined} booking
+ * @param {{ cliente_sin_comision?: boolean } | null | undefined} booking
  * @returns {{ kind: "incluidos" | "sin_gestion", text: string } | null}
  */
 export function getClientPriceFootnote(booking) {
@@ -349,12 +345,7 @@ export function getClientPriceFootnote(booking) {
     return { kind: "sin_gestion", text: "Sin gastos de gestión" };
   }
 
-  const credito = Number(booking.credito_aplicado) || 0;
-  if (credito > 0) {
-    return null;
-  }
-
-  return { kind: "incluidos", text: "gastos de gestión incluidos" };
+  return { kind: "incluidos", text: "Gastos de gestión incluidos" };
 }
 
 export function formatBookingDateShort(dateStr) {

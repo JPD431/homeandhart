@@ -613,7 +613,7 @@ export default function ReservaDetallePage() {
 
             <Section
               title={
-                viewerRole === "proveedor" ? "Tu ingreso" : "Desglose del precio"
+                viewerRole === "proveedor" ? "Tu ingreso" : "Precio"
               }
             >
               {viewerRole === "cliente" ? (
@@ -623,19 +623,10 @@ export default function ReservaDetallePage() {
                       key={line.label}
                       className="flex justify-between gap-4"
                       style={{
-                        color: line.muted
-                          ? "#aaa"
-                          : line.amount < 0
-                            ? GREEN
-                            : "#444",
+                        color: line.amount < 0 ? GREEN : "#444",
                       }}
                     >
-                      <span>
-                        {line.label}
-                        {line.muted && priceBreakdown.sinGestion
-                          ? " (exento)"
-                          : ""}
-                      </span>
+                      <span>{line.label}</span>
                       <span className="font-medium tabular-nums">
                         {line.amount < 0
                           ? `−${formatBookingPrice(Math.abs(line.amount))}`
@@ -644,14 +635,34 @@ export default function ReservaDetallePage() {
                     </div>
                   ))}
                   <div
-                    className="mt-2 flex justify-between gap-4 border-t pt-2 text-base font-semibold"
-                    style={{ borderColor: BORDER, color: PRIMARY }}
+                    className={`${priceBreakdown.lines.length > 0 ? "mt-2 border-t pt-2" : ""} flex justify-between gap-4 text-base font-semibold`}
+                    style={{
+                      borderColor: BORDER,
+                      color: PRIMARY,
+                    }}
                   >
-                    <span>Total pagado</span>
+                    <span>
+                      {priceBreakdown.credito > 0
+                        ? "Total a pagar"
+                        : "Total pagado"}
+                    </span>
                     <span className="tabular-nums">
                       {formatBookingPrice(priceBreakdown.total)}
                     </span>
                   </div>
+                  {priceBreakdown.footnote ? (
+                    <p
+                      className="text-[11px] leading-relaxed"
+                      style={{
+                        color:
+                          priceBreakdown.footnote.kind === "sin_gestion"
+                            ? GREEN
+                            : "#888",
+                      }}
+                    >
+                      {priceBreakdown.footnote.text}
+                    </p>
+                  ) : null}
                   {refundBreakdown && (
                     <div className="mt-3 space-y-1 rounded-lg bg-[#f7f5f2] px-3 py-2 text-xs">
                       <p style={{ color: GREEN }}>

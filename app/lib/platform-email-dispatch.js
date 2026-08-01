@@ -505,18 +505,35 @@ const CLIENT_PRICE_LABELS = new Set([
   "Total a pagar",
 ]);
 
-function clientPriceRows(precio_total, credito_aplicado) {
+function clientPriceLegendHtml({ sinGestion = false, extra = "" } = {}) {
+  const text = sinGestion
+    ? "Sin gastos de gestión"
+    : "Gastos de gestión incluidos";
+  const color = sinGestion ? "#0e7a5c" : "#888";
+  return `<span style="display:block;margin-top:4px;font-size:11px;color:${color};font-weight:400;">${text}${extra}</span>`;
+}
+
+/**
+ * Filas de precio para emails al CLIENTE: total + leyenda, sin desglose servicio/gestión.
+ * @param {unknown} precio_total
+ * @param {unknown} credito_aplicado
+ * @param {{ cliente_sin_comision?: boolean }} [opts]
+ */
+function clientPriceRows(precio_total, credito_aplicado, opts = {}) {
   const total = Number(precio_total);
   if (precio_total == null || precio_total === "" || !Number.isFinite(total)) {
     return [];
   }
 
+  const sinGestion = opts.cliente_sin_comision === true;
   const credito = Number(credito_aplicado) || 0;
   if (credito <= 0) {
+    const amount =
+      typeof precio_total === "string" ? precio_total : total.toFixed(2);
     return [
       [
         "Total",
-        `${typeof precio_total === "string" ? precio_total : total.toFixed(2)} € (gastos de gestión incluidos)`,
+        `${amount} €${clientPriceLegendHtml({ sinGestion })}`,
       ],
     ];
   }
@@ -530,12 +547,12 @@ function clientPriceRows(precio_total, credito_aplicado) {
   if (aPagar <= 0) {
     rows.push([
       "Total a pagar",
-      `${formatEurEmail(0)}<span style="display:block;margin-top:4px;font-size:11px;color:#888;font-weight:400;">Cubierto con tu crédito Home&Heart</span>`,
+      `${formatEurEmail(0)}<span style="display:block;margin-top:4px;font-size:11px;color:#888;font-weight:400;">Cubierto con tu crédito Home&Heart</span>${clientPriceLegendHtml({ sinGestion })}`,
     ]);
   } else {
     rows.push([
       "Total a pagar",
-      `${formatEurEmail(aPagar)} (gastos de gestión incluidos)`,
+      `${formatEurEmail(aPagar)}${clientPriceLegendHtml({ sinGestion })}`,
     ]);
   }
 
@@ -559,6 +576,7 @@ function bundleDetailsBlock(data) {
   const priceRowsHtml = clientPriceRows(
     data.precio_total,
     data.credito_aplicado,
+    { cliente_sin_comision: data.cliente_sin_comision === true },
   )
     .map(
       ([label, value]) =>
@@ -584,12 +602,15 @@ function detailsBlock({
   fecha_fin,
   precio_total,
   credito_aplicado,
+  cliente_sin_comision,
 }) {
   const rows = [
     ["Servicio", servicio_titulo],
     ["Fecha de inicio", fecha_inicio],
     fecha_fin ? ["Fecha de fin", fecha_fin] : null,
-    ...clientPriceRows(precio_total, credito_aplicado),
+    ...clientPriceRows(precio_total, credito_aplicado, {
+      cliente_sin_comision: cliente_sin_comision === true,
+    }),
   ].filter(Boolean);
 
   const rowsHtml = rows

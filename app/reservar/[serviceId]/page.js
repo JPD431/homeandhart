@@ -5243,39 +5243,58 @@ export default function ReservarPage() {
                   {precioListo ? (
                     <div
                       style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        fontWeight: 600,
-                        fontSize: 14,
                         marginTop: 8,
                         paddingTop: 8,
                         borderTop: "1px solid #e8e4de",
                       }}
                     >
-                      <span className="text-[#1a1a1a]">
-                        {creditoAplicado > 0 ? (
-                          "Total a pagar"
-                        ) : (
-                          <>
-                            Total{" "}
-                            {clienteSinComision
-                              ? ""
-                              : "(gastos de gestión incluidos)"}
-                          </>
-                        )}
-                      </span>
-                      <span className="text-[#1a1a1a]">
-                        {(creditoAplicado > 0 ? totalAPagar : priceSummary.total).toFixed(2)}€
-                      </span>
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          fontWeight: 600,
+                          fontSize: 14,
+                        }}
+                      >
+                        <span className="text-[#1a1a1a]">
+                          {creditoAplicado > 0 ? "Total a pagar" : "Total"}
+                        </span>
+                        <span className="text-[#1a1a1a]">
+                          {(creditoAplicado > 0
+                            ? totalAPagar
+                            : priceSummary.total
+                          ).toFixed(2)}
+                          €
+                        </span>
+                      </div>
+                      {clienteSinComision ? (
+                        <p
+                          style={{
+                            fontSize: 10,
+                            color: "#0e7a5c",
+                            marginTop: 4,
+                            marginBottom: 0,
+                          }}
+                        >
+                          🎁 Sin gastos de gestión · te quedan{" "}
+                          {getReservasSinComisionCliente(perfilCliente)}{" "}
+                          reservas gratis
+                        </p>
+                      ) : (
+                        <p
+                          style={{
+                            fontSize: 10,
+                            color: "#888",
+                            marginTop: 4,
+                            marginBottom: 0,
+                          }}
+                        >
+                          Gastos de gestión incluidos
+                        </p>
+                      )}
                     </div>
                   ) : (
                     <p className="mt-3 text-[11px] text-[#888]">{precioDetail}</p>
-                  )}
-                  {precioListo && clienteSinComision && (
-                    <div style={{ fontSize: 10, color: "#0e7a5c", marginTop: 4 }}>
-                      🎁 Sin gastos de gestión - te quedan{" "}
-                      {getReservasSinComisionCliente(perfilCliente)} reservas gratis
-                    </div>
                   )}
                 </>
               ) : (
