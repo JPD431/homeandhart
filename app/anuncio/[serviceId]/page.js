@@ -1,4 +1,4 @@
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import AnuncioListingView, {
   buildAnuncioMetadata,
 } from "@/app/anuncio/AnuncioListingView";
@@ -9,8 +9,10 @@ import {
 } from "@/app/lib/public-service";
 
 /**
- * Anuncio PÚBLICO — ISR (sin cookies / sin auth.getUser).
- * Vista previa del dueño: /anuncio/[serviceId]/preview (force-dynamic).
+ * Anuncio PÚBLICO — ISR puro (solo params; sin searchParams ni cookies).
+ * Vista previa: /anuncio/[serviceId]/preview
+ * Compat ?preview=1 → middleware redirect a /preview
+ * Fechas ?desde/?hasta → AnuncioBookingPanel (useSearchParams en cliente)
  */
 export const revalidate = 3600;
 export const dynamicParams = true;
@@ -25,20 +27,10 @@ export async function generateMetadata({ params }) {
   return buildAnuncioMetadata({ service, mode: service ? "public" : null });
 }
 
-export default async function AnuncioPage({ params, searchParams }) {
+export default async function AnuncioPage({ params }) {
   try {
     const { serviceId } = await params;
-    const sp = await searchParams;
 
-    // Compat: ?preview=1 → ruta dinámica con sesión.
-    if (sp?.preview === "1") {
-      redirect(`/anuncio/${serviceId}/preview`);
-    }
-
-    const initialDesde = typeof sp?.desde === "string" ? sp.desde : "";
-    const initialHasta = typeof sp?.hasta === "string" ? sp.hasta : "";
-
-    // Solo carga pública — no createClient / getUser (compatible con ISR).
     const service = await loadPublicServiceById(serviceId);
     if (!service) {
       notFound();
@@ -55,8 +47,6 @@ export default async function AnuncioPage({ params, searchParams }) {
         proveedorRating={proveedorRating}
         bloqueosCalendario={bloqueosCalendario}
         isOwnerPreview={false}
-        initialDesde={initialDesde}
-        initialHasta={initialHasta}
       />
     );
   } catch (err) {

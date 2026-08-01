@@ -56,8 +56,6 @@ export default function AnuncioListingView({
   proveedorRating,
   bloqueosCalendario,
   isOwnerPreview = false,
-  initialDesde = "",
-  initialHasta = "",
 }) {
   const profile = normalizeServiceProfile(service);
   const theme = getServiceCardTheme(service.vertical);
@@ -172,8 +170,6 @@ export default function AnuncioListingView({
             serviceCalendario={serviceCalendario}
             bloqueos={bloqueosCalendario}
             accentColor={accent}
-            initialDesde={initialDesde}
-            initialHasta={initialHasta}
             isOwnerPreview={isOwnerPreview}
           />
         </div>

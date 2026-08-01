@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useMemo, useState } from "react";
+import { Suspense, useCallback, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import CalendarioDisponibilidad from "@/app/components/CalendarioDisponibilidad";
 import { formatShortDate } from "@/app/components/calendario-shared";
 import {
@@ -20,25 +21,19 @@ import {
 
 /**
  * Panel sticky de reserva en /anuncio/[serviceId].
- *
- * @param {object} props
- * @param {object} props.service — fila services (precio, oferta, vertical, id)
- * @param {object} props.serviceCalendario — entrada para CalendarioDisponibilidad
- * @param {object[]} props.bloqueos
- * @param {string} [props.accentColor]
- * @param {string} [props.initialDesde]
- * @param {string} [props.initialHasta]
- * @param {boolean} [props.isOwnerPreview]
+ * Fechas ?desde/?hasta se leen en el cliente (ISR público no toca searchParams).
  */
-export default function AnuncioBookingPanel({
+function AnuncioBookingPanelInner({
   service,
   serviceCalendario,
   bloqueos,
   accentColor = "#1d4f91",
-  initialDesde = "",
-  initialHasta = "",
   isOwnerPreview = false,
 }) {
+  const searchParams = useSearchParams();
+  const initialDesde = searchParams.get("desde") || "";
+  const initialHasta = searchParams.get("hasta") || "";
+
   const theme = getServiceCardTheme(service?.vertical);
   const priceSuffix = supportsModalidadCobro(service?.vertical)
     ? resolveDisplayPriceSuffix(service)
@@ -124,7 +119,10 @@ export default function AnuncioBookingPanel({
       </div>
 
       {isOwnerPreview ? (
-        <p className="mt-5 rounded-lg border px-3 py-2.5 text-center text-[11px] text-[#888]" style={{ borderColor: "#e8e4de", backgroundColor: "#fafaf9" }}>
+        <p
+          className="mt-5 rounded-lg border px-3 py-2.5 text-center text-[11px] text-[#888]"
+          style={{ borderColor: "#e8e4de", backgroundColor: "#fafaf9" }}
+        >
           La reserva estará disponible cuando publiques el anuncio.
         </p>
       ) : (
@@ -145,5 +143,77 @@ export default function AnuncioBookingPanel({
         </>
       )}
     </aside>
+  );
+}
+
+/** Fallback SSR/Suspense: mismo panel sin query de fechas (hasta hidratar). */
+function AnuncioBookingPanelFallback({
+  service,
+  serviceCalendario,
+  bloqueos,
+  accentColor = "#1d4f91",
+  isOwnerPreview = false,
+}) {
+  const theme = getServiceCardTheme(service?.vertical);
+  const priceSuffix = supportsModalidadCobro(service?.vertical)
+    ? resolveDisplayPriceSuffix(service)
+    : theme.priceSuffix;
+  const ofertaActiva = isOfertaActiva(service);
+  const precioConDescuento = ofertaActiva
+    ? getPrecioConDescuento(service.precio, service.oferta_descuento)
+    : null;
+  const displayPrice = ofertaActiva
+    ? formatServiceCardPrice(precioConDescuento, priceSuffix)
+    : formatServiceCardPrice(service?.precio, priceSuffix);
+
+  return (
+    <aside
+      className="rounded-xl border bg-white p-5 shadow-sm md:sticky md:top-6"
+      style={{ borderColor: "#e8e4de" }}
+    >
+      <div className="border-b pb-4" style={{ borderColor: "#f0ede8" }}>
+        <p
+          className="text-[22px] font-semibold leading-none"
+          style={{ color: accentColor }}
+        >
+          {displayPrice}
+        </p>
+      </div>
+      <div className="mt-4">
+        <CalendarioDisponibilidad
+          services={[serviceCalendario]}
+          bloqueos={bloqueos}
+          initialDesde=""
+          initialHasta=""
+          embedded
+          singleMonth
+          showReservaLink={false}
+        />
+      </div>
+      {isOwnerPreview ? (
+        <p
+          className="mt-5 rounded-lg border px-3 py-2.5 text-center text-[11px] text-[#888]"
+          style={{ borderColor: "#e8e4de", backgroundColor: "#fafaf9" }}
+        >
+          La reserva estará disponible cuando publiques el anuncio.
+        </p>
+      ) : (
+        <Link
+          href={buildReservarHref(service.id)}
+          className="mt-5 block w-full rounded-lg py-3 text-center text-[13px] font-semibold text-white no-underline transition-opacity hover:opacity-90"
+          style={{ backgroundColor: accentColor }}
+        >
+          Reservar
+        </Link>
+      )}
+    </aside>
+  );
+}
+
+export default function AnuncioBookingPanel(props) {
+  return (
+    <Suspense fallback={<AnuncioBookingPanelFallback {...props} />}>
+      <AnuncioBookingPanelInner {...props} />
+    </Suspense>
   );
 }

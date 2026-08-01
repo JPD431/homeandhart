@@ -11,7 +11,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { canShowProviderContact } from "@/app/lib/booking-display";
 import { shouldShowProviderDireccion } from "@/app/lib/lugar-servicio";
-import { supabase as browserSupabase } from "@/app/lib/supabase";
 
 export const SERVICE_CONTACT_SELECT =
   "service_id, direccion_exacta, telefono_contacto, location_lat, location_lng, updated_at";
@@ -95,8 +94,16 @@ export function mergeResolvedContactIntoService(service, contact) {
   return { ...service, ...resolved };
 }
 
+/**
+ * Cliente browser solo bajo demanda (formularios cliente sin client pasado).
+ * Import diferido: evita arrastrar createBrowserClient al grafo estático de
+ * Server Components que importan este módulo vía public-service.
+ */
 function pickClient(client) {
-  return client || browserSupabase;
+  if (client) return client;
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy, solo en cliente
+  const { supabase } = require("@/app/lib/supabase");
+  return supabase;
 }
 
 /**
