@@ -300,6 +300,7 @@ export function buildAnuncioHref(serviceId, desde, hasta) {
   return query ? `/anuncio/${serviceId}?${query}` : `/anuncio/${serviceId}`;
 }
 
+/** Vista previa dueño/admin (ruta dinámica con sesión; no ISR). */
 export function buildAnuncioPreviewHref(serviceId) {
-  return `/anuncio/${serviceId}?preview=1`;
+  return `/anuncio/${serviceId}/preview`;
 }

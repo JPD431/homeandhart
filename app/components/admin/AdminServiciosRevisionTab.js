@@ -283,7 +283,7 @@ export default function AdminServiciosRevisionTab({
                 )}
               </div>
               <a
-                href={`/anuncio/${svc.id}?preview=1`}
+                href={`/anuncio/${svc.id}/preview`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="shrink-0 rounded-xl border px-3 py-2 text-sm font-medium transition-opacity hover:opacity-80"

@@ -1,5 +1,5 @@
 /**
- * Aviso en /anuncio/[serviceId] cuando el dueño ve su anuncio no publicado.
+ * Aviso en /anuncio/[serviceId]/preview cuando el dueño ve su anuncio no publicado.
  */
 export default function AnuncioPreviewBanner() {
   return (
