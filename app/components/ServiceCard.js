@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import ServiceCardPhotoCarousel from "@/app/components/ServiceCardPhotoCarousel";
+import ProveedorPreguntarButton from "@/app/components/ProveedorPreguntarButton";
 import { supabase } from "@/app/lib/supabase";
 import {
   buildAnuncioHref,
@@ -328,7 +329,26 @@ export default function ServiceCard({
                 >
                   {reservarLabel}
                 </Link>
-                {!isPreview && (
+                {service.proveedor_id ? (
+                  <div
+                    className="mt-1"
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => e.stopPropagation()}
+                  >
+                    <ProveedorPreguntarButton
+                      proveedorId={service.proveedor_id}
+                      className="block w-full rounded-md border py-2 text-center text-[11px] font-semibold transition-colors hover:bg-[#f7f5f2] disabled:opacity-60"
+                      style={{
+                        borderColor: theme.color,
+                        color: theme.color,
+                        backgroundColor: "#fff",
+                      }}
+                    >
+                      Preguntar
+                    </ProveedorPreguntarButton>
+                  </div>
+                ) : null}
+                {!isPreview && profile.id ? (
                   <Link
                     href={`/proveedor/${profile.id}`}
                     onClick={(e) => e.stopPropagation()}
@@ -336,7 +356,7 @@ export default function ServiceCard({
                   >
                     Ver perfil del proveedor
                   </Link>
-                )}
+                ) : null}
               </>
             ))}
         </div>

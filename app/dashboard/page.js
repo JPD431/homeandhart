@@ -17,6 +17,7 @@ import ProviderListingChecklist, {
 import ListingWeakBanner from '@/app/components/ListingWeakBanner';
 import ClienteVerificadoBadge from '@/app/components/ClienteVerificadoBadge';
 import DataLoadFailed from '@/app/components/DataLoadFailed';
+import ProveedorPreguntarButton from '@/app/components/ProveedorPreguntarButton';
 import { useModo } from '@/app/lib/ModoContext';
 import { getIngresoProveedorFromBooking } from '@/app/lib/ingresos-proveedor';
 import { puedeReportarIncidencia } from '@/app/lib/booking-incidencia';
@@ -497,15 +498,46 @@ function TabCliente({ perfil, reservas, favoritos, viajes, router, BRAND, copiar
               </button>
             </div>
           )}
-          {reservas.slice(0, 5).map(r => (
+          {reservas.slice(0, 5).map(r => {
+            const meta = getBookingStatusMeta(r.estado, { role: 'cliente' });
+            const proveedorId = r.services?.proveedor_id;
+            const showMensaje =
+              meta.actions.includes('mensaje') && Boolean(proveedorId);
+            return (
             <div key={r.id} style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '0.5px solid #f5f3f0', gap: 8}}>
-              <div style={{ minWidth: 0 }}>
+              <div style={{ minWidth: 0, flex: 1 }}>
                 <div style={{fontSize: 12, color: BRAND.dark, fontWeight: 500}}>{r.services?.titulo} · {r.services?.profiles_public?.nombre}</div>
                 <div style={{fontSize: 10, color: '#aaa', marginTop: 1}}>{r.fecha_inicio}{r.fecha_fin ? ` – ${r.fecha_fin}` : ''} · {r.precio_total}€</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+                  <a
+                    href={`/reserva/${r.id}`}
+                    style={{ fontSize: 10, fontWeight: 600, color: BRAND.blue, textDecoration: 'none' }}
+                  >
+                    Ver detalle
+                  </a>
+                  {showMensaje ? (
+                    <ProveedorPreguntarButton
+                      proveedorId={proveedorId}
+                      className=""
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 600,
+                        color: BRAND.blue,
+                        background: 'transparent',
+                        border: 'none',
+                        padding: 0,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Mensaje
+                    </ProveedorPreguntarButton>
+                  ) : null}
+                </div>
               </div>
               <BookingStatusBadge status={r.estado} role="cliente" size="sm" />
             </div>
-          ))}
+            );
+          })}
           <button onClick={() => router.push('/historial')} style={{ minHeight: 44, fontSize: 11, color: BRAND.blue, background: 'none', border: 'none', cursor: 'pointer', display: 'block', marginLeft: 'auto', marginTop: 8, padding: '8px 4px' }}>Ver historial completo →</button>
         </div>
       </div>
@@ -933,6 +965,8 @@ function ReservaRecibidaCard({
   const isConfirmada = booking.estado === 'confirmada';
   const isIncidencia = booking.estado === 'incidencia';
   const canReport = statusMeta.canReportIncidencia || puedeReportarIncidencia(booking.estado);
+  const canMensaje =
+    statusMeta.actions.includes('mensaje') && Boolean(booking.cliente_id);
   const importeReserva = formatImporteReservaRecibida(booking, sinComisionProveedor);
   const showClienteContact = canShowProviderContact(booking.estado) && clienteContacto;
 
@@ -1072,6 +1106,31 @@ function ReservaRecibidaCard({
         >
           Ver detalle
         </a>
+        {canMensaje ? (
+          <ProveedorPreguntarButton
+            proveedorId={booking.cliente_id}
+            className=""
+            style={{
+              minHeight: 40,
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flex: '0 0 auto',
+              minWidth: 110,
+              padding: '0 14px',
+              background: '#fff',
+              color: PRIMARY,
+              border: `1px solid ${PRIMARY}`,
+              borderRadius: 6,
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: 'pointer',
+              boxSizing: 'border-box',
+            }}
+          >
+            Enviar mensaje
+          </ProveedorPreguntarButton>
+        ) : null}
         {isPendiente && (
           <>
             <button

@@ -23,6 +23,7 @@ import DataLoadFailed from "@/app/components/DataLoadFailed";
 import EmptyState from "@/app/components/EmptyState";
 import AyudaLink from "@/app/components/AyudaLink";
 import ReportarIncidenciaForm from "@/app/components/ReportarIncidenciaForm";
+import ProveedorPreguntarButton from "@/app/components/ProveedorPreguntarButton";
 import { canLeaveReview } from "@/app/lib/reviews";
 import { buildLoginUrl } from "@/app/lib/auth-redirect";
 import { supabase } from "@/app/lib/supabase";
@@ -196,6 +197,20 @@ function BookingCard({
 
         <div className="mt-3 flex flex-wrap gap-2">
           <GrayButton href={`/reserva/${booking.id}`}>Ver detalle</GrayButton>
+
+          {statusMeta.actions.includes("mensaje") && service.proveedor_id ? (
+            <ProveedorPreguntarButton
+              proveedorId={service.proveedor_id}
+              className="rounded-md border px-3 py-1.5 text-[11px] font-medium no-underline transition-colors hover:bg-[#f7f5f2] disabled:opacity-60"
+              style={{
+                borderColor: BORDER,
+                backgroundColor: "#fff",
+                color: "#666",
+              }}
+            >
+              Enviar mensaje
+            </ProveedorPreguntarButton>
+          ) : null}
 
           {estado === "completada" && (
             <>
