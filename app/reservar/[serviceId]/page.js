@@ -2557,7 +2557,7 @@ export default function ReservarPage() {
         .single();
 
       if (error || !data) {
-        setErrorMessage("No se encontró el servicio.");
+        setErrorMessage(t?.reservar?.servicioNoEncontrado ?? "No se encontró el servicio.");
         setLoading(false);
         return;
       }
@@ -2743,7 +2743,7 @@ export default function ReservarPage() {
           bundleServices.some((s) => s.vertical === data.vertical))
       ) {
         setErrorMessage(
-          "Ya tienes un servicio de este tipo en el carrito. Elige otra vertical.",
+          t?.reservar?.errMismoTipoEnCarrito ?? "Ya tienes un servicio de este tipo en el carrito. Elige otra vertical.",
         );
         return;
       }
@@ -2769,7 +2769,9 @@ export default function ReservarPage() {
         `${verticals[data.vertical]?.label ?? "Servicio"} · ${formatShortName(data.profiles_public?.nombre, data.profiles_public?.apellido)}`;
       // Aviso temporal: no bloquea el botón de pagar (disabled no depende de successMessage).
       setSuccessVariant("green");
-      setSuccessMessage(`✓ ${nombreServicio} añadido a tu reserva`);
+      setSuccessMessage(t?.reservar?.anadidoConfirmacion
+        ? t.reservar.anadidoConfirmacion(nombreServicio)
+        : `✓ ${nombreServicio} añadido a tu reserva`);
       if (bundleAddedMsgTimerRef.current) {
         clearTimeout(bundleAddedMsgTimerRef.current);
       }
@@ -3220,7 +3222,7 @@ export default function ReservarPage() {
         commission: 0,
         total: 0,
         ready: false,
-        detail: "Introduce las fechas para calcular el precio",
+        detail: t?.reservar?.introduceFechas ?? "Introduce las fechas para calcular el precio",
       };
     }
 
@@ -3239,7 +3241,7 @@ export default function ReservarPage() {
           name,
           base: 0,
           total: 0,
-          detail: "Faltan datos",
+          detail: t?.reservar?.faltanDatos ?? "Faltan datos",
           ready: false,
           vertical: svcForPrice.vertical,
           discountPct: 0,
@@ -3260,7 +3262,7 @@ export default function ReservarPage() {
           name,
           base: 0,
           total: 0,
-          detail: "Elige dónde se presta el servicio",
+          detail: t?.reservar?.eligeDondeSePresta ?? "Elige dónde se presta el servicio",
           ready: false,
           vertical: svcForPrice.vertical,
           discountPct: 0,
@@ -3349,7 +3351,7 @@ export default function ReservarPage() {
         commission: 0,
         total: 0,
         ready: false,
-        detail: failedLine.detail || "Introduce las fechas para calcular el precio",
+        detail: failedLine.detail || (t?.reservar?.introduceFechas ?? "Introduce las fechas para calcular el precio"),
       };
     }
 
@@ -3373,6 +3375,8 @@ export default function ReservarPage() {
     cartByServiceId,
     perfilCliente,
     tarifasPorServicio,
+    verticals,
+    t,
   ]);
 
   const mainBilling = useMemo(() => {
@@ -3413,10 +3417,12 @@ export default function ReservarPage() {
   const precioDetail =
     calendarioError ||
     (disponibilidadChecking
-      ? "Comprobando disponibilidad…"
+      ? (t?.reservar?.comprobandoDisponibilidad ?? "Comprobando disponibilidad…")
       : incompletePriceLine
-        ? incompletePriceLine.detail === "Faltan datos"
-          ? `Completa los datos de: ${incompletePriceLine.name}`
+        ? incompletePriceLine.detail === (t?.reservar?.faltanDatos ?? "Faltan datos")
+          ? (t?.reservar?.completaLosDatos
+              ? t.reservar.completaLosDatos(incompletePriceLine.name)
+              : `Completa los datos de: ${incompletePriceLine.name}`)
           : incompletePriceLine.detail
         : priceSummary.detail);
 
@@ -3459,11 +3465,13 @@ export default function ReservarPage() {
     if (bookabilityBlock) return bookabilityBlock;
     if (calendarioError) return calendarioError;
     if (incompletePriceLine) {
-      return incompletePriceLine.detail === "Faltan datos"
-        ? `Completa datos: ${incompletePriceLine.name}`
+      return incompletePriceLine.detail === (t?.reservar?.faltanDatos ?? "Faltan datos")
+        ? (t?.reservar?.completaDatos
+            ? t.reservar.completaDatos(incompletePriceLine.name)
+            : `Completa datos: ${incompletePriceLine.name}`)
         : incompletePriceLine.detail;
     }
-    if (!aceptaPolitica) return "Acepta la política de cancelación";
+    if (!aceptaPolitica) return t?.reservar?.aceptaPoliticaMensaje ?? "Acepta la política de cancelación";
     return null;
   }, [
     clienteNoVerificado,
@@ -3473,6 +3481,7 @@ export default function ReservarPage() {
     calendarioError,
     incompletePriceLine,
     aceptaPolitica,
+    t,
   ]);
 
   const loadServicesForVertical = useCallback(
@@ -3534,8 +3543,18 @@ export default function ReservarPage() {
     const available = new Set(
       getAvailableComplementaryVerticals(selectedServices),
     );
-    return BUNDLE_TABS.filter((tab) => available.has(tab.id));
-  }, [selectedServices]);
+    const tabLabelMap = {
+      alojamiento: t?.reservar?.tabAlojamiento ?? "Alojamiento",
+      ninos: t?.reservar?.tabNinos ?? "Niñera",
+      mascotas: t?.reservar?.tabMascotas ?? "Mascotas",
+    };
+    return BUNDLE_TABS
+      .filter((tab) => available.has(tab.id))
+      .map((tab) => ({
+        ...tab,
+        label: verticalEmojiLabel(tab.id, tabLabelMap[tab.id] ?? tab.id),
+      }));
+  }, [selectedServices, t]);
 
   // Si la pestaña activa ya está cubierta por el carrito, saltar a una disponible.
   useEffect(() => {
@@ -3705,7 +3724,7 @@ export default function ReservarPage() {
       return;
     }
 
-    const dateError = validateBookingDates(vertical, fechaInicio, hora);
+    const dateError = validateBookingDates(vertical, fechaInicio, hora, t);
     if (dateError) {
       setErrorMessage(dateError);
       releasePreparedIntent();
@@ -3834,11 +3853,11 @@ export default function ReservarPage() {
   const completeBooking = useCallback(
     async (confirmedPaymentIntentId) => {
       if (!userId || !service || !grupoReserva) {
-        throw new Error("Datos de reserva incompletos.");
+        throw new Error(t?.reservar?.errDatosReservaIncompletos ?? "Datos de reserva incompletos.");
       }
 
       if (!precioListo || priceSummary.total <= 0) {
-        throw new Error("Completa las fechas o la duración para calcular el precio.");
+        throw new Error(t?.reservar?.errCompletarFechas ?? "Completa las fechas o la duración para calcular el precio.");
       }
 
       const service_contexts = selectedServices.map((s) => {
@@ -3898,7 +3917,7 @@ export default function ReservarPage() {
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok || data.error) {
-        throw new Error(data.error || "No se pudo completar la reserva.");
+        throw new Error(data.error || (t?.reservar?.errCompletarReserva ?? "No se pudo completar la reserva."));
       }
 
       paymentFinalizedRef.current = true;
@@ -3929,17 +3948,18 @@ export default function ReservarPage() {
       reservarComoFamilia,
       familiaInfo,
       precioListo,
+      t,
     ],
   );
 
   const completeBundleBooking = useCallback(
     async (payments) => {
       if (!userId || !service || !grupoReserva) {
-        throw new Error("Datos de reserva incompletos.");
+        throw new Error(t?.reservar?.errDatosReservaIncompletos ?? "Datos de reserva incompletos.");
       }
 
       if (!precioListo || priceSummary.total <= 0) {
-        throw new Error("Completa las fechas o la duración para calcular el precio.");
+        throw new Error(t?.reservar?.errCompletarFechas ?? "Completa las fechas o la duración para calcular el precio.");
       }
 
       const paymentsList = Array.isArray(payments) ? payments : [];
@@ -3996,7 +4016,7 @@ export default function ReservarPage() {
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok || data.error) {
-        throw new Error(data.error || "No se pudo completar la reserva.");
+        throw new Error(data.error || (t?.reservar?.errCompletarReserva ?? "No se pudo completar la reserva."));
       }
 
       paymentFinalizedRef.current = true;
@@ -4024,6 +4044,7 @@ export default function ReservarPage() {
       reservarComoFamilia,
       familiaInfo,
       precioListo,
+      t,
     ],
   );
 
@@ -4054,7 +4075,7 @@ export default function ReservarPage() {
       complementaryServices.find((s) => s.id === id) ||
       allBundleCandidates.find((s) => s.id === id);
     if (!svc) {
-      setErrorMessage("No se pudo añadir este servicio. Prueba de nuevo.");
+      setErrorMessage(t?.reservar?.errAnadirServicio ?? "No se pudo añadir este servicio. Prueba de nuevo.");
       return;
     }
     const issue = getServiceBookabilityIssue(svc);
@@ -4069,9 +4090,11 @@ export default function ReservarPage() {
       selectedServices.some((s) => s.vertical === svc.vertical)
     ) {
       const label =
-        VERTICALS[svc.vertical]?.label || "este tipo";
+        verticals[svc.vertical]?.label || "este tipo";
       setErrorMessage(
-        `Ya tienes un servicio de ${label.toLowerCase()} en el carrito.`,
+        t?.reservar?.errServicioMismoTipo
+          ? t.reservar.errServicioMismoTipo(label.toLowerCase())
+          : `Ya tienes un servicio de ${label.toLowerCase()} en el carrito.`,
       );
       return;
     }
@@ -4186,7 +4209,7 @@ export default function ReservarPage() {
           </p>
         </header>
         <main className="mx-auto max-w-[1100px] px-6 py-16 text-center text-sm text-[#666]">
-          Cargando servicio…
+          {t?.reservar?.cargandoServicio ?? "Cargando servicio…"}
         </main>
       </div>
     );
@@ -4216,21 +4239,19 @@ export default function ReservarPage() {
                 {unavailableMessage}
               </h1>
               <p className="mt-3 text-sm leading-relaxed text-[#666]">
-                Puede que el proveedor esté completando su perfil o que el
-                servicio esté temporalmente pausado. Explora otras opciones
-                disponibles en tu zona.
+                {t?.reservar?.servicioNoDispDesc ?? "Puede que el proveedor esté completando su perfil o que el servicio esté temporalmente pausado. Explora otras opciones disponibles en tu zona."}
               </p>
               <Link
                 href="/buscar"
                 className="mt-8 inline-block min-h-[44px] px-6 py-3 text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
                 style={{ backgroundColor: "#1d4f91", borderRadius: 6 }}
               >
-                Volver a buscar servicios
+                {t?.reservar?.volverBuscarServicios ?? "Volver a buscar servicios"}
               </Link>
             </>
           ) : (
             <p className="text-sm text-red-600">
-              {errorMessage || "Servicio no disponible."}
+              {errorMessage || (t?.reservar?.servicioNoDisponible ?? "Servicio no disponible.")}
             </p>
           )}
         </main>
@@ -4248,7 +4269,7 @@ export default function ReservarPage() {
     serviceStartAt,
     service.cancellation_policy,
   );
-  const freeCancelDateStr = formatCancelDeadline(freeCancelDeadline);
+  const freeCancelDateStr = formatCancelDeadline(freeCancelDeadline, t);
   function goToBuscarBundle() {
     writeBundleStateToSession(
       buildBundleStateSnapshot({
@@ -4299,7 +4320,7 @@ export default function ReservarPage() {
             className="inline-flex min-h-[44px] items-center text-[12px] no-underline transition-opacity hover:opacity-80"
             style={{ color: "#888" }}
           >
-            ← Volver al perfil
+            {t?.reservar?.volverPerfil ?? "← Volver al perfil"}
           </Link>
           <Link href="/" className="no-underline">
             <p className="text-[18px] leading-none text-[#111]" style={{ fontFamily: SERIF }}>
@@ -4313,6 +4334,7 @@ export default function ReservarPage() {
         datesReady={datesReady}
         aceptaPolitica={aceptaPolitica}
         precioListo={precioListo}
+        t={t}
       />
 
       <main className="mx-auto max-w-[1100px] p-4 sm:p-6">
@@ -4324,7 +4346,7 @@ export default function ReservarPage() {
               className="rounded-[10px] border bg-white p-5"
               style={{ borderColor: "#e8e4de" }}
             >
-              <SectionHeader number={1} title="Tu reserva" />
+              <SectionHeader number={1} title={t?.reservar?.tuReserva ?? "Tu reserva"} />
               {(() => {
                 const mainLine = priceSummary.lines.find((l) => l.id === service.id);
                 const mainOk = mainLine?.ready;
@@ -4337,7 +4359,7 @@ export default function ReservarPage() {
                         color: mainOk ? "#0e7a5c" : "#92400e",
                       }}
                     >
-                      {mainOk ? "OK" : "Faltan datos"}
+                      {mainOk ? "OK" : (t?.reservar?.faltanDatos ?? "Faltan datos")}
                     </span>
                   </div>
                 );
@@ -4383,7 +4405,7 @@ export default function ReservarPage() {
               {showModalidadSelector && (
                 <div className="mt-4">
                   <p className="mb-2 text-[8px] font-medium uppercase tracking-wide text-[#bbb]">
-                    ¿Cómo quieres reservar?
+                    {t?.reservar?.comoQuieresReservar ?? "¿Cómo quieres reservar?"}
                   </p>
                   <div className="flex flex-col gap-2">
                     {modalidadesActivas.map((row) => {
@@ -4454,6 +4476,7 @@ export default function ReservarPage() {
                     setDireccionClienteADefinir(patch.direccionClienteADefinir);
                   }
                 }}
+                t={t}
               />
 
               {(!showModalidadSelector || modalidadCobro) && (
@@ -4472,11 +4495,11 @@ export default function ReservarPage() {
                   >
                     <p className="text-[8px] font-medium uppercase tracking-wide text-[#bbb]">
                       {billingNeedsFechaFin(mainBilling, vertical)
-                        ? "Inicio"
-                        : "Fecha"}
+                        ? (t?.reservar?.inicio ?? "Inicio")
+                        : (t?.reservar?.fecha ?? "Fecha")}
                     </p>
                     <p className="mt-0.5 text-[13px] text-[#2a3a4a]">
-                      {fechaInicio ? formatFechaDisplay(fechaInicio) : "Seleccionar"}
+                      {fechaInicio ? formatFechaDisplay(fechaInicio, t) : (t?.reservar?.seleccionar ?? "Seleccionar")}
                     </p>
                   </button>
                   <button
@@ -4491,14 +4514,14 @@ export default function ReservarPage() {
                     }}
                   >
                     <p className="text-[8px] font-medium uppercase tracking-wide text-[#bbb]">
-                      {billingNeedsFechaFin(mainBilling, vertical) ? "Fin" : "—"}
+                      {billingNeedsFechaFin(mainBilling, vertical) ? (t?.reservar?.fin ?? "Fin") : (t?.reservar?.separador ?? "—")}
                     </p>
                     <p className="mt-0.5 text-[13px] text-[#2a3a4a]">
                       {fechaFin
-                        ? formatFechaDisplay(fechaFin)
+                        ? formatFechaDisplay(fechaFin, t)
                         : billingNeedsFechaFin(mainBilling, vertical)
-                          ? "Seleccionar"
-                          : "—"}
+                          ? (t?.reservar?.seleccionar ?? "Seleccionar")
+                          : (t?.reservar?.separador ?? "—")}
                     </p>
                   </button>
                 </div>
@@ -4524,7 +4547,7 @@ export default function ReservarPage() {
                   className="mt-2 min-h-[44px] border-0 bg-transparent px-1 text-[11px] font-medium hover:underline"
                   style={{ color: "#1d4f91" }}
                 >
-                  Cambiar fechas →
+                  {t?.reservar?.cambiarFechas ?? "Cambiar fechas →"}
                 </button>
               </div>
               )}
@@ -4538,7 +4561,7 @@ export default function ReservarPage() {
                     (mainBilling.kind === "legacy" && vertical === "ninos")) && (
                     <div>
                       <label htmlFor="hora" className="mb-1 block text-[8px] font-medium uppercase tracking-wide text-[#bbb]">
-                        Hora de inicio
+                        {t?.reservar?.horaDeInicio ?? "Hora de inicio"}
                       </label>
                       <input
                         id="hora"
@@ -4556,7 +4579,7 @@ export default function ReservarPage() {
                     (mainBilling.kind === "legacy" && vertical === "ninos")) && (
                     <div>
                       <label htmlFor="duracion" className="mb-1 block text-[8px] font-medium uppercase tracking-wide text-[#bbb]">
-                        Duración (horas)
+                        {t?.reservar?.duracionHoras ?? "Duración (horas)"}
                       </label>
                       <input
                         id="duracion"
@@ -4625,7 +4648,9 @@ export default function ReservarPage() {
                 rows={3}
                 value={mensaje}
                 onChange={(e) => setMensaje(e.target.value)}
-                placeholder={`Mensaje para ${profile.nombre || "el proveedor"} (opcional)...`}
+                placeholder={t?.reservar?.mensajePlaceholder
+                  ? t.reservar.mensajePlaceholder(profile.nombre || "el proveedor")
+                  : `Mensaje para ${profile.nombre || "el proveedor"} (opcional)...`}
                 className="mt-4 w-full resize-y rounded-lg border px-3 py-2.5 text-[12px] text-[#1a1a1a] outline-none focus:ring-2 focus:ring-[#1d4f91]/20"
                 style={{ borderColor: "#e8e4de" }}
               />
@@ -4636,7 +4661,9 @@ export default function ReservarPage() {
                   style={{ borderColor: "#e8e4de", backgroundColor: "#f7f5f2" }}
                 >
                   <label htmlFor="reservar-familia" className="text-[11px] font-medium text-[#444]">
-                    Reservar bajo el grupo familiar {familiaInfo.nombre}
+                    {t?.reservar?.reservarBajoGrupo
+                      ? t.reservar.reservarBajoGrupo(familiaInfo.nombre)
+                      : `Reservar bajo el grupo familiar ${familiaInfo.nombre}`}
                   </label>
                   <button
                     type="button"
@@ -4659,7 +4686,9 @@ export default function ReservarPage() {
 
               {ofertaActiva && (
                 <p className="mt-3 text-[11px] font-medium text-green-700">
-                  {`Oferta activa: ${precioEfectivo}€${verticalConfig.priceSuffix}`}
+                  {t?.reservar?.ofertaActiva
+                    ? t.reservar.ofertaActiva(precioEfectivo, verticalConfig.priceSuffix)
+                    : `Oferta activa: ${precioEfectivo}€${verticalConfig.priceSuffix}`}
                 </p>
               )}
             </section>
@@ -4670,7 +4699,7 @@ export default function ReservarPage() {
                 className="rounded-[10px] border bg-white p-5"
                 style={{ borderColor: "#e8e4de" }}
               >
-                <SectionHeader number={2} title="Política de cancelación" />
+                <SectionHeader number={2} title={t?.reservar?.politicaCancelacion ?? "Política de cancelación"} />
                 <div
                   className="rounded-lg border p-4"
                   style={{ backgroundColor: "#fdf3e3", borderColor: "#e8c47a" }}
@@ -4683,7 +4712,9 @@ export default function ReservarPage() {
                   </p>
                   {refundPercentNow !== null && precioListo && (
                     <p className="mt-2 text-[10px] text-[#92400e]">
-                      Si cancelaras ahora: {refundPercentNow}% de reembolso
+                      {t?.reservar?.siCancelarasAhora
+                        ? t.reservar.siCancelarasAhora(refundPercentNow)
+                        : `Si cancelaras ahora: ${refundPercentNow}% de reembolso`}
                     </p>
                   )}
                 </div>
@@ -4704,9 +4735,9 @@ export default function ReservarPage() {
                       style={{ backgroundColor: aceptaPolitica ? "#e8f0fb" : "#fff" }}
                     />
                     <span className="text-[11px] leading-relaxed text-[#444]">
-                      He leído y acepto la política de cancelación{" "}
-                      <strong style={{ color: "#1d4f91" }}>{cancelPolicy.name}</strong>{" "}
-                      y las condiciones del servicio
+                      {t?.reservar?.aceptoPoliticaFrase
+                        ? t.reservar.aceptoPoliticaFrase(cancelPolicy.name)
+                        : <>He leído y acepto la política de cancelación{" "}<strong style={{ color: "#1d4f91" }}>{cancelPolicy.name}</strong>{" "}y las condiciones del servicio</>}
                     </span>
                   </label>
                 )}
@@ -4718,11 +4749,11 @@ export default function ReservarPage() {
                 className="rounded-[10px] border bg-white p-5"
                 style={{ borderColor: "#e8e4de" }}
               >
-                <SectionHeader number={2} title="Política de cancelación" />
+                <SectionHeader number={2} title={t?.reservar?.politicaCancelacion ?? "Política de cancelación"} />
                 <div className="flex flex-col gap-3">
                   {selectedServices.map((svc) => {
-                    const svcPolicy = getCancelPolicy(svc.cancellation_policy);
-                    const svcConfig = VERTICALS[svc.vertical] ?? VERTICALS.alojamiento;
+                    const svcPolicy = getCancelPolicy(svc.cancellation_policy, cancelPolicies);
+                    const svcConfig = verticals[svc.vertical] ?? verticals.alojamiento;
                     const svcName =
                       svc.titulo ||
                       `${svcConfig.label} · ${formatShortName(svc.profiles_public?.nombre, svc.profiles_public?.apellido)}`;
@@ -4753,7 +4784,7 @@ export default function ReservarPage() {
                           </>
                         ) : (
                           <p className="mt-2 text-[11px] text-[#854d0e]">
-                            Política de cancelación no especificada
+                            {t?.reservar?.politicaNoEspecificada ?? "Política de cancelación no especificada"}
                           </p>
                         )}
                       </div>
@@ -4770,8 +4801,7 @@ export default function ReservarPage() {
                       style={{ backgroundColor: aceptaPolitica ? "#e8f0fb" : "#fff" }}
                     />
                     <span className="text-[11px] leading-relaxed text-[#444]">
-                      He leído y acepto las políticas de cancelación de todos los
-                      servicios reservados
+                      {t?.reservar?.aceptoPoliticaBundle ?? "He leído y acepto las políticas de cancelación de todos los servicios reservados"}
                     </span>
                   </label>
                 )}
@@ -4783,7 +4813,7 @@ export default function ReservarPage() {
               className="rounded-[10px] border bg-white p-5"
               style={{ borderColor: "#e8e4de" }}
             >
-              <SectionHeader number={3} title="¿Añades más servicios?" />
+              <SectionHeader number={3} title={t?.reservar?.anadirMasServicios ?? "¿Añades más servicios?"} />
 
               {datesReady ? (
                 <>
@@ -4797,7 +4827,7 @@ export default function ReservarPage() {
                           marginBottom: 8,
                         }}
                       >
-                        ✓ Añadidos a tu reserva
+                        {t?.reservar?.anadidosAtuReserva ?? "✓ Añadidos a tu reserva"}
                       </div>
                       {bundleServices.map((s) => {
                         const entry = cartByServiceId[s.id];
@@ -4874,7 +4904,7 @@ export default function ReservarPage() {
                                   color: lineReady ? "#0e7a5c" : "#92400e",
                                 }}
                               >
-                                {lineReady ? "OK" : "Faltan datos"}
+                                {lineReady ? "OK" : (t?.reservar?.faltanDatos ?? "Faltan datos")}
                               </span>
                               <span
                                 style={{
@@ -4891,7 +4921,7 @@ export default function ReservarPage() {
                               <button
                                 type="button"
                                 onClick={() => removeComplementaryFromCart(s.id)}
-                                aria-label="Quitar servicio del carrito"
+                                aria-label={t?.reservar?.quitarServicioCarrito ?? "Quitar servicio del carrito"}
                                 style={{
                                   fontSize: 14,
                                   color: "#e53e3e",
@@ -4920,6 +4950,7 @@ export default function ReservarPage() {
                                 onValidationError={(msg) =>
                                   setErrorMessage(msg || "")
                                 }
+                                t={t}
                               />
                             )}
                           </div>
@@ -4936,12 +4967,12 @@ export default function ReservarPage() {
                     }}
                   >
                     <p className="text-[10px] font-semibold text-[#1d4f91]">
-                      ✨ Disponibles para tus fechas
+                      {t?.reservar?.disponiblesParaTusFechas ?? "✨ Disponibles para tus fechas"}
                     </p>
                     {filteredComplementary.length > 0 ? (
                       <ul className="mt-3 flex flex-col gap-2">
                         {filteredComplementary.map((comp) => {
-                          const compConfig = VERTICALS[comp.vertical] ?? VERTICALS.alojamiento;
+                          const compConfig = verticals[comp.vertical] ?? verticals.alojamiento;
                           const isAdded = bundleServices.some((s) => s.id === comp.id);
                           const cardPricing = resolveServiceCardPricing(comp);
                           const providerName = formatShortName(
@@ -4960,7 +4991,7 @@ export default function ReservarPage() {
                                 />
                                 <div className="min-w-0">
                                   <p className="truncate text-[11px] font-semibold text-[#1a1a1a]">
-                                    {providerName || "Proveedor"}
+                                    {providerName || (t?.reservar?.proveedor ?? "Proveedor")}
                                   </p>
                                   <p className="truncate text-[10px] text-[#888]">
                                     {comp.titulo || compConfig.label}
@@ -4988,7 +5019,7 @@ export default function ReservarPage() {
                                       }
                                 }
                               >
-                                {isAdded ? "✓" : "+ Añadir"}
+                                {isAdded ? "✓" : (t?.reservar?.anadir ?? "+ Añadir")}
                               </button>
                             </li>
                           );
@@ -4996,14 +5027,14 @@ export default function ReservarPage() {
                       </ul>
                     ) : (
                       <p className="mt-2 text-[10px] text-[#666]">
-                        No hay servicios complementarios disponibles para estas fechas.
+                        {t?.reservar?.sinServiciosComplementarios ?? "No hay servicios complementarios disponibles para estas fechas."}
                       </p>
                     )}
                   </div>
 
                   <div className="my-4 flex items-center gap-3">
                     <div className="h-px flex-1" style={{ backgroundColor: "#e8e4de" }} />
-                    <span className="text-[10px] text-[#bbb]">¿No encuentras lo que buscas?</span>
+                    <span className="text-[10px] text-[#bbb]">{t?.reservar?.noEncuentrasLoqueBuscas ?? "¿No encuentras lo que buscas?"}</span>
                     <div className="h-px flex-1" style={{ backgroundColor: "#e8e4de" }} />
                   </div>
 
@@ -5030,19 +5061,19 @@ export default function ReservarPage() {
                       ))
                     ) : (
                       <p className="text-[10px] text-[#888]">
-                        {formatCartVerticalsInCartMessage(selectedServices)}
+                        {formatCartVerticalsInCartMessage(selectedServices, t)}
                       </p>
                     )}
                   </div>
 
                   {availableBundleTabs.length === 0 ? null : tabServicesLoading ? (
                     <p className="mt-4 text-center text-[11px] text-[#888]">
-                      Buscando proveedores…
+                      {t?.reservar?.buscandoProveedores ?? "Buscando proveedores…"}
                     </p>
                   ) : tabServices.length > 0 ? (
                     <ul className="mt-4 flex flex-col gap-3">
                       {tabServices.map((comp) => {
-                        const compConfig = VERTICALS[comp.vertical] ?? VERTICALS.alojamiento;
+                        const compConfig = verticals[comp.vertical] ?? verticals.alojamiento;
                         const isAdded = bundleServices.some((s) => s.id === comp.id);
                         const cardPricing = resolveServiceCardPricing(comp);
                         const providerName = formatShortName(
@@ -5102,7 +5133,7 @@ export default function ReservarPage() {
                                         }
                                   }
                                 >
-                                  {isAdded ? "Añadido ✓" : "+ Añadir"}
+                                  {isAdded ? (t?.reservar?.anadido ?? "Añadido ✓") : (t?.reservar?.anadir ?? "+ Añadir")}
                                 </button>
                               </div>
                             </div>
@@ -5112,7 +5143,7 @@ export default function ReservarPage() {
                     </ul>
                   ) : (
                     <p className="mt-4 text-center text-[11px] text-[#888]">
-                      No hay proveedores de este tipo disponibles para tus fechas.
+                      {t?.reservar?.sinProveedores ?? "No hay proveedores de este tipo disponibles para tus fechas."}
                     </p>
                   )}
 
@@ -5122,12 +5153,12 @@ export default function ReservarPage() {
                     className="mt-4 block w-full rounded border py-2.5 text-center text-[11px] font-semibold transition-opacity hover:opacity-80"
                     style={{ borderColor: "#1d4f91", color: "#1d4f91", borderRadius: 6 }}
                   >
-                    🔍 Ver todos los proveedores disponibles →
+                    {t?.reservar?.verTodosProveedores ?? "🔍 Ver todos los proveedores disponibles →"}
                   </button>
                 </>
               ) : (
                 <p className="text-[11px] text-[#888]">
-                  Completa las fechas de tu reserva para ver servicios adicionales disponibles.
+                  {t?.reservar?.completaFechasParaVer ?? "Completa las fechas de tu reserva para ver servicios adicionales disponibles."}
                 </p>
               )}
             </section>
@@ -5157,7 +5188,7 @@ export default function ReservarPage() {
               style={{ borderColor: "#e8e4de" }}
             >
               <h3 className="text-[12px] font-medium text-[#1a1a1a]">
-                Resumen del pedido
+                {t?.reservar?.resumenPedido ?? "Resumen del pedido"}
               </h3>
 
               <div className="mt-4 flex gap-2.5">
@@ -5177,9 +5208,9 @@ export default function ReservarPage() {
                   <p className="text-[10px] text-[#888]">
                     {providerAvgRating
                       ? `${providerAvgRating} ★`
-                      : "Sin valoraciones"}
+                      : (t?.reservar?.sinValoraciones ?? "Sin valoraciones")}
                     {providerReviewCount > 0 &&
-                      ` · ${providerReviewCount} reseña${providerReviewCount !== 1 ? "s" : ""}`}
+                      ` · ${t?.reservar?.nResenas ? t.reservar.nResenas(providerReviewCount) : `${providerReviewCount} reseña${providerReviewCount !== 1 ? "s" : ""}`}`}
                   </p>
                 </div>
               </div>
@@ -5201,7 +5232,7 @@ export default function ReservarPage() {
                   ) : (
                     <div className="mt-4 flex items-center justify-between gap-2 text-[11px]">
                       <span className="truncate text-[#444]">
-                        {mainPriceLine?.name || "Servicio principal"}
+                        {mainPriceLine?.name || (t?.reservar?.servicioPrincipal ?? "Servicio principal")}
                       </span>
                       <span
                         className="shrink-0 font-medium"
@@ -5211,7 +5242,7 @@ export default function ReservarPage() {
                       >
                         {mainPriceLine?.ready
                           ? formatEuro(mainPriceLine.total)
-                          : "Faltan datos"}
+                          : (t?.reservar?.faltanDatos ?? "Faltan datos")}
                       </span>
                     </div>
                   )}
@@ -5232,7 +5263,7 @@ export default function ReservarPage() {
                     })()}
 
                   {bundleLines.map((line) => {
-                    const lineConfig = VERTICALS[line.vertical] ?? verticalConfig;
+                    const lineConfig = verticals[line.vertical] ?? verticalConfig;
                     return (
                       <div
                         key={line.id}
@@ -5251,7 +5282,7 @@ export default function ReservarPage() {
                               color: line.ready ? "#1a1a1a" : "#92400e",
                             }}
                           >
-                            {line.ready ? formatEuro(line.total) : "Faltan datos"}
+                            {line.ready ? formatEuro(line.total) : (t?.reservar?.faltanDatos ?? "Faltan datos")}
                           </span>
                           <button
                             type="button"
@@ -5274,7 +5305,7 @@ export default function ReservarPage() {
                         key={line.id}
                         className="mt-2 flex items-center justify-between text-[11px] font-medium text-green-700"
                       >
-                        <span>Descuento estancia -{line.discountPct}%</span>
+                        <span>{t?.reservar?.descuentoEstancia ? t.reservar.descuentoEstancia(line.discountPct) : `Descuento estancia -${line.discountPct}%`}</span>
                         <span>✓</span>
                       </div>
                     ))}
@@ -5285,13 +5316,13 @@ export default function ReservarPage() {
                         className="mt-2 flex items-center justify-between text-[11px]"
                         style={{ marginTop: 8 }}
                       >
-                        <span className="text-[#444]">Total reserva</span>
+                        <span className="text-[#444]">{t?.reservar?.totalReserva ?? "Total reserva"}</span>
                         <span className="text-[#1a1a1a]">
                           {priceSummary.total.toFixed(2)}€
                         </span>
                       </div>
                       <div className="mt-2 flex items-center justify-between text-[11px] font-medium text-green-700">
-                        <span>Crédito aplicado</span>
+                        <span>{t?.reservar?.creditoAplicado ?? "Crédito aplicado"}</span>
                         <span>−{creditoAplicado.toFixed(2)}€</span>
                       </div>
                     </>
@@ -5314,7 +5345,7 @@ export default function ReservarPage() {
                         }}
                       >
                         <span className="text-[#1a1a1a]">
-                          {creditoAplicado > 0 ? "Total a pagar" : "Total"}
+                          {creditoAplicado > 0 ? (t?.reservar?.totalAPagar ?? "Total a pagar") : (t?.reservar?.total ?? "Total")}
                         </span>
                         <span className="text-[#1a1a1a]">
                           {(creditoAplicado > 0
@@ -5333,9 +5364,9 @@ export default function ReservarPage() {
                             marginBottom: 0,
                           }}
                         >
-                          🎁 Sin gastos de gestión · te quedan{" "}
-                          {getReservasSinComisionCliente(perfilCliente)}{" "}
-                          reservas gratis
+                          {t?.reservar?.sinGastosGestion
+                            ? t.reservar.sinGastosGestion(getReservasSinComisionCliente(perfilCliente))
+                            : `🎁 Sin gastos de gestión · te quedan ${getReservasSinComisionCliente(perfilCliente)} reservas gratis`}
                         </p>
                       ) : (
                         <p
@@ -5346,7 +5377,7 @@ export default function ReservarPage() {
                             marginBottom: 0,
                           }}
                         >
-                          Gastos de gestión incluidos
+                          {t?.reservar?.gastosGestionIncluidos ?? "Gastos de gestión incluidos"}
                         </p>
                       )}
                     </div>
@@ -5362,7 +5393,7 @@ export default function ReservarPage() {
                 className="mt-4 rounded-lg p-3 text-[10px] leading-relaxed text-[#666]"
                 style={{ backgroundColor: "#f7f5f2" }}
               >
-                🛡️ Pago retenido hasta que el servicio se completa. Reembolso total si algo falla.
+                {t?.reservar?.pagoBloqueado ?? "🛡️ Pago retenido hasta que el servicio se completa. Reembolso total si algo falla."}
               </div>
 
               {clienteNoVerificado && dniBlockMessage && (
@@ -5380,8 +5411,8 @@ export default function ReservarPage() {
                         style={{ color: "#1d4f91" }}
                       >
                         {dniRevisionEstado === "rechazado"
-                          ? "Volver a subir →"
-                          : "Subir DNI →"}
+                          ? (t?.reservar?.volverASubir ?? "Volver a subir →")
+                          : (t?.reservar?.subirDni ?? "Subir DNI →")}
                       </Link>
                     </>
                   )}
@@ -5393,7 +5424,7 @@ export default function ReservarPage() {
                         className="font-semibold no-underline hover:underline"
                         style={{ color: "#1d4f91" }}
                       >
-                        Ver estado →
+                        {t?.reservar?.verEstado ?? "Ver estado →"}
                       </Link>
                     </>
                   )}
@@ -5450,7 +5481,7 @@ export default function ReservarPage() {
                       className="min-h-[44px] shrink-0 rounded-lg px-4 text-[12px] font-semibold text-white disabled:opacity-60"
                       style={{ backgroundColor: "#1d4f91" }}
                     >
-                      {telefonoSaving ? "Guardando…" : "Guardar teléfono"}
+                      {telefonoSaving ? (t?.reservar?.guardandoTelefono ?? "Guardando…") : (t?.reservar?.guardarTelefono ?? "Guardar teléfono")}
                     </button>
                   </div>
                   {telefonoSaveError && (
@@ -5474,7 +5505,7 @@ export default function ReservarPage() {
                 isBundle ? (
                   paymentMethodsLoading ? (
                     <p className="mt-4 text-center text-[11px] text-[#666]">
-                      Preparando formulario de pago…
+                      {t?.reservar?.preparandoFormularioPago ?? "Preparando formulario de pago…"}
                     </p>
                   ) : savedPaymentMethods.length > 0 &&
                     !useNewCard &&
@@ -5492,9 +5523,10 @@ export default function ReservarPage() {
                       onComplete={completeBundleBooking}
                       onUseNewCard={() => setUseNewCard(true)}
                       getBookingDateError={() =>
-                        validateBookingDates(vertical, fechaInicio, hora)
+                        validateBookingDates(vertical, fechaInicio, hora, t)
                       }
                       disabled={!aceptaPolitica}
+                      t={t}
                     />
                   ) : grupoReserva ? (
                     <>
@@ -5517,6 +5549,7 @@ export default function ReservarPage() {
                         setErrorMessage={setErrorMessage}
                         service={service}
                         disabled={!aceptaPolitica}
+                        t={t}
                       />
                       {savedPaymentMethods.length > 0 && (
                         <button
@@ -5525,7 +5558,7 @@ export default function ReservarPage() {
                           className="mt-3 w-full text-center text-[11px] font-medium no-underline hover:underline"
                           style={{ color: "#1d4f91" }}
                         >
-                          Usar tarjeta guardada
+                          {t?.reservar?.usarTarjetaGuardada ?? "Usar tarjeta guardada"}
                         </button>
                       )}
                     </>
@@ -5536,12 +5569,14 @@ export default function ReservarPage() {
                       className="mt-4 min-h-[44px] w-full py-3 text-[13px] font-semibold text-white opacity-60"
                       style={{ backgroundColor: "#1d4f91", borderRadius: 6 }}
                     >
-                      Pagar {totalAPagar > 0 ? formatEuro(totalAPagar) : ""} →
+                      {t?.reservar?.pagarBtn
+                        ? t.reservar.pagarBtn(totalAPagar > 0 ? formatEuro(totalAPagar) : "")
+                        : `Pagar ${totalAPagar > 0 ? formatEuro(totalAPagar) : ""} →`}
                     </button>
                   )
                 ) : paymentMethodsLoading || paymentIntentLoading ? (
                   <p className="mt-4 text-center text-[11px] text-[#666]">
-                    Preparando formulario de pago…
+                    {t?.reservar?.preparandoFormularioPago ?? "Preparando formulario de pago…"}
                   </p>
                 ) : savedPaymentMethods.length > 0 &&
                   !useNewCard &&
@@ -5557,9 +5592,10 @@ export default function ReservarPage() {
                     onPaymentSuccess={completeBooking}
                     onUseNewCard={() => setUseNewCard(true)}
                     getBookingDateError={() =>
-                      validateBookingDates(vertical, fechaInicio, hora)
+                      validateBookingDates(vertical, fechaInicio, hora, t)
                     }
                     disabled={!aceptaPolitica}
+                    t={t}
                   />
                 ) : clientSecret && paymentMetadata ? (
                   <>
@@ -5588,6 +5624,7 @@ export default function ReservarPage() {
                         setErrorMessage={setErrorMessage}
                         service={service}
                         disabled={!aceptaPolitica}
+                        t={t}
                       />
                     </Elements>
                     {savedPaymentMethods.length > 0 && (
@@ -5597,7 +5634,7 @@ export default function ReservarPage() {
                         className="mt-3 w-full text-center text-[11px] font-medium no-underline hover:underline"
                         style={{ color: "#1d4f91" }}
                       >
-                        Usar tarjeta guardada
+                        {t?.reservar?.usarTarjetaGuardada ?? "Usar tarjeta guardada"}
                       </button>
                     )}
                   </>
@@ -5608,7 +5645,9 @@ export default function ReservarPage() {
                     className="mt-4 min-h-[44px] w-full py-3 text-[13px] font-semibold text-white opacity-60"
                     style={{ backgroundColor: "#1d4f91", borderRadius: 6 }}
                   >
-                    Pagar {totalAPagar > 0 ? formatEuro(totalAPagar) : ""} →
+                    {t?.reservar?.pagarBtn
+                      ? t.reservar.pagarBtn(totalAPagar > 0 ? formatEuro(totalAPagar) : "")
+                      : `Pagar ${totalAPagar > 0 ? formatEuro(totalAPagar) : ""} →`}
                   </button>
                 )
               ) : (
@@ -5620,20 +5659,24 @@ export default function ReservarPage() {
                 >
                   {payBlockedReason && incompletePriceLine
                     ? payBlockedReason.length > 48
-                      ? `Completa: ${incompletePriceLine.name}`
+                      ? (t?.reservar?.completaX
+                          ? t.reservar.completaX(incompletePriceLine.name)
+                          : `Completa: ${incompletePriceLine.name}`)
                       : payBlockedReason
-                    : payBlockedReason || "Pagar →"}
+                    : payBlockedReason || (t?.reservar?.pagarSimple ?? "Pagar →")}
                 </button>
               )}
 
               {freeCancelDateStr && (
                 <p className="mt-3 text-center text-[9px] text-[#bbb]">
-                  Pago seguro con Stripe · Cancelación gratuita hasta {freeCancelDateStr}
+                  {t?.reservar?.pagoSeguro
+                    ? t.reservar.pagoSeguro(freeCancelDateStr)
+                    : `Pago seguro con Stripe · Cancelación gratuita hasta ${freeCancelDateStr}`}
                 </p>
               )}
               {!freeCancelDateStr && (
                 <p className="mt-3 text-center text-[9px] text-[#bbb]">
-                  Pago seguro con Stripe
+                  {t?.reservar?.pagoSeguroSimple ?? "Pago seguro con Stripe"}
                 </p>
               )}
             </div>

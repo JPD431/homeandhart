@@ -1502,6 +1502,10 @@ export const translations = {
       anadidosAtuReserva: "✓ Añadidos a tu reserva",
       quitarServicioCarrito: "Quitar servicio del carrito",
       volverArriba: "Volver a subir →",
+      usarTarjetaGuardada: "Usar tarjeta guardada",
+      descuentoEstancia: (pct) => `Descuento estancia -${pct}%`,
+      servicioPrincipal: "Servicio principal",
+      proveedor: "Proveedor",
     },
   },
   en: {
@@ -3005,6 +3009,10 @@ export const translations = {
       anadidosAtuReserva: "✓ Added to your booking",
       quitarServicioCarrito: "Remove service from cart",
       volverArriba: "Scroll up →",
+      usarTarjetaGuardada: "Use saved card",
+      descuentoEstancia: (pct) => `Stay discount -${pct}%`,
+      servicioPrincipal: "Main service",
+      proveedor: "Provider",
     },
   },
 };
