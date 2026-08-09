@@ -8,19 +8,23 @@ import { BRAND, SERIF } from "@/app/components/brand";
 import { getUserFamiliaActiva } from "@/app/lib/familia";
 import { formatDateRange, getBookingEstado } from "@/app/lib/viajes";
 import { supabase } from "@/app/lib/supabase";
+import { useLang } from "@/app/lib/LangContext";
+import { useTranslation } from "@/app/lib/i18n";
 
 const inputClass =
   "w-full rounded-xl border px-4 py-3 text-sm text-[#1a1a1a] outline-none focus:ring-2 focus:ring-[#1d4f91]/30";
 
-const STATUS_LABELS = {
-  pendiente: "Pendiente",
-  confirmada: "Confirmada",
-  en_curso: "En curso",
-  completada: "Completada",
-  cancelada: "Cancelada",
-};
-
 export default function NuevoViajePage() {
+  const { lang } = useLang();
+  const t = useTranslation(lang);
+  const tv = t.viajeNuevo;
+  const STATUS_LABELS = {
+    pendiente: tv.statusPendiente,
+    confirmada: tv.statusConfirmada,
+    en_curso: tv.statusEnCurso,
+    completada: tv.statusCompletada,
+    cancelada: tv.statusCancelada,
+  };
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState(null);
@@ -97,11 +101,11 @@ export default function NuevoViajePage() {
   async function handleCreate(e) {
     e.preventDefault();
     if (!nombre.trim()) {
-      setError("Indica un nombre para el viaje.");
+      setError(tv.errNombre);
       return;
     }
     if (!fechaInicio || !fechaFin) {
-      setError("Indica las fechas del viaje.");
+      setError(tv.errFechas);
       return;
     }
 
@@ -153,7 +157,7 @@ export default function NuevoViajePage() {
       >
         <Navbar />
         <main className="mx-auto max-w-2xl px-4 py-16 text-center text-sm text-[#666]">
-          Cargando…
+          {tv.cargando}
         </main>
       </div>
     );
@@ -175,13 +179,13 @@ export default function NuevoViajePage() {
             href="/dashboard"
             className="text-sm text-white/80 no-underline transition-opacity hover:opacity-100"
           >
-            ← Volver al dashboard
+            {tv.volverDashboard}
           </Link>
           <h1
             className="mt-2 text-xl font-semibold sm:text-2xl"
             style={{ fontFamily: SERIF }}
           >
-            Nuevo viaje
+            {tv.titulo}
           </h1>
         </div>
       </header>
@@ -203,14 +207,14 @@ export default function NuevoViajePage() {
               htmlFor="viaje-nombre"
               className="mb-1.5 block text-xs font-medium text-[#444]"
             >
-              Nombre del viaje
+              {tv.labelNombre}
             </label>
             <input
               id="viaje-nombre"
               type="text"
               value={nombre}
               onChange={(e) => setNombre(e.target.value)}
-              placeholder="Ej: Verano en Madrid"
+              placeholder={tv.placeholderNombre}
               className={inputClass}
               style={{ borderColor: BRAND.border }}
             />
@@ -222,7 +226,7 @@ export default function NuevoViajePage() {
                 htmlFor="viaje-inicio"
                 className="mb-1.5 block text-xs font-medium text-[#444]"
               >
-                Fecha inicio
+                {tv.labelInicio}
               </label>
               <input
                 id="viaje-inicio"
@@ -238,7 +242,7 @@ export default function NuevoViajePage() {
                 htmlFor="viaje-fin"
                 className="mb-1.5 block text-xs font-medium text-[#444]"
               >
-                Fecha fin
+                {tv.labelFin}
               </label>
               <input
                 id="viaje-fin"
@@ -257,14 +261,14 @@ export default function NuevoViajePage() {
               htmlFor="viaje-ciudad"
               className="mb-1.5 block text-xs font-medium text-[#444]"
             >
-              Ciudad
+              {tv.labelCiudad}
             </label>
             <input
               id="viaje-ciudad"
               type="text"
               value={ciudad}
               onChange={(e) => setCiudad(e.target.value)}
-              placeholder="Madrid, Barcelona…"
+              placeholder={tv.placeholderCiudad}
               className={inputClass}
               style={{ borderColor: BRAND.border }}
             />
@@ -272,15 +276,15 @@ export default function NuevoViajePage() {
 
           <div className="mt-6">
             <p className="text-sm font-semibold text-[#1a1a1a]">
-              Añadir reservas existentes
+              {tv.annadirReservas}
             </p>
             <p className="mt-1 text-xs text-[#888]">
-              Selecciona las reservas que forman parte de este viaje.
+              {tv.annadirDesc}
             </p>
 
             {bookings.length === 0 ? (
               <p className="mt-3 text-sm text-[#666]">
-                No tienes reservas activas para añadir.
+                {tv.sinReservas}
               </p>
             ) : (
               <ul className="mt-3 flex flex-col gap-2">
@@ -306,7 +310,7 @@ export default function NuevoViajePage() {
                         />
                         <div className="min-w-0 flex-1">
                           <p className="font-medium text-[#1a1a1a]">
-                            {service.titulo || "Servicio"}
+                            {service.titulo || tv.servicioFallback}
                           </p>
                           <p className="mt-0.5 text-xs text-[#888]">
                             {formatDateRange(
@@ -330,7 +334,7 @@ export default function NuevoViajePage() {
             className="mt-6 w-full rounded-xl px-5 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60 sm:w-auto"
             style={{ backgroundColor: BRAND.primary }}
           >
-            {creating ? "Creando…" : "Crear viaje"}
+            {creating ? tv.creando : tv.crearViaje}
           </button>
         </form>
       </main>

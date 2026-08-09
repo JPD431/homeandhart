@@ -9,26 +9,16 @@ import {
 } from "@/app/lib/reviews";
 import { buildLoginUrl } from "@/app/lib/auth-redirect";
 import { supabase } from "@/app/lib/supabase";
+import { useLang } from "@/app/lib/LangContext";
+import { useTranslation } from "@/app/lib/i18n";
 
 const INACTIVE = "#e0e0e0";
 const ICON_SIZE = 36;
 
 const VERTICAL_CONFIG = {
-  alojamiento: {
-    color: "#1d4f91",
-    submitLabel: "Valorar alojamiento",
-    unit: "casita",
-  },
-  mascotas: {
-    color: "#c47d1a",
-    submitLabel: "Valorar cuidador",
-    unit: "huella",
-  },
-  ninos: {
-    color: "#0e7a5c",
-    submitLabel: "Valorar niñera",
-    unit: "corazón",
-  },
+  alojamiento: { color: "#1d4f91" },
+  mascotas: { color: "#c47d1a" },
+  ninos: { color: "#0e7a5c" },
 };
 
 function getVerticalConfig(vertical) {
@@ -120,9 +110,8 @@ function VerticalRatingSelector({
   onSelect,
   onHover,
   onLeave,
+  unit,
 }) {
-  const { unit } = getVerticalConfig(vertical);
-
   return (
     <div className="flex justify-center gap-2" onMouseLeave={onLeave}>
       {[1, 2, 3, 4, 5].map((level) => {
@@ -154,6 +143,8 @@ export default function ResenaPage() {
   const router = useRouter();
   const params = useParams();
   const bookingId = params.bookingId;
+  const { lang } = useLang();
+  const t = useTranslation(lang);
 
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
@@ -168,7 +159,18 @@ export default function ResenaPage() {
   const [submitting, setSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
 
-  const verticalConfig = getVerticalConfig(vertical);
+  const submitLabels = {
+    alojamiento: t.resena.submitAlojamiento,
+    mascotas: t.resena.submitMascotas,
+    ninos: t.resena.submitNinos,
+  };
+  const units = {
+    alojamiento: t.resena.unitAlojamiento,
+    mascotas: t.resena.unitMascotas,
+    ninos: t.resena.unitNinos,
+  };
+  const submitLabel = submitLabels[vertical] ?? submitLabels.alojamiento;
+  const unit = units[vertical] ?? units.alojamiento;
 
   useEffect(() => {
     async function load() {
@@ -219,7 +221,7 @@ export default function ResenaPage() {
         .single();
 
       if (service?.proveedor_id && service.proveedor_id === user.id) {
-        setErrorMessage("No puedes valorar tu propio servicio.");
+        setErrorMessage(t.resena.errorPropio);
         setLoading(false);
         return;
       }
@@ -250,19 +252,19 @@ export default function ResenaPage() {
     }
 
     load();
-  }, [router, bookingId]);
+  }, [router, bookingId, t]);
 
   async function handleSubmit(e) {
     e.preventDefault();
     setErrorMessage("");
 
     if (!bookingMeta?.canSubmit) {
-      setErrorMessage("No se puede dejar reseña ahora.");
+      setErrorMessage(t.resena.errorNoAhora);
       return;
     }
 
     if (valoracion < 1) {
-      setErrorMessage("Selecciona una valoración de 1 a 5.");
+      setErrorMessage(t.resena.errorValoracion);
       return;
     }
 
@@ -283,7 +285,7 @@ export default function ResenaPage() {
       if (!res.ok) {
         if (res.status === 409 || payload.code === "already_reviewed") {
           setErrorMessage(
-            payload.error || "Ya has valorado este servicio.",
+            payload.error || t.resena.errorYaValorado,
           );
           setExistingReview({
             valoracion,
@@ -291,16 +293,16 @@ export default function ResenaPage() {
           });
           return;
         }
-        setErrorMessage(payload.error || "No se pudo guardar la reseña.");
+        setErrorMessage(payload.error || t.resena.errorGuardar);
         return;
       }
 
-      setSuccessMessage("¡Gracias por tu valoración!");
+      setSuccessMessage(t.resena.gracias);
       setTimeout(() => {
         router.push("/historial");
       }, 2000);
     } catch (err) {
-      setErrorMessage(err.message || "No se pudo guardar la reseña.");
+      setErrorMessage(err.message || t.resena.errorGuardar);
     } finally {
       setSubmitting(false);
     }
@@ -312,7 +314,7 @@ export default function ResenaPage() {
         className="flex min-h-screen items-center justify-center font-sans"
         style={{ backgroundColor: BRAND.warm }}
       >
-        <p className="text-sm text-[#666]">Cargando…</p>
+        <p className="text-sm text-[#666]">{t.resena.cargando}</p>
       </div>
     );
   }
@@ -336,7 +338,7 @@ export default function ResenaPage() {
               className="mt-6 inline-block text-sm font-semibold no-underline"
               style={{ color: BRAND.primary }}
             >
-              Volver al historial
+              {t.resena.volverHistorial}
             </a>
           </div>
         ) : existingReview ? (
@@ -345,7 +347,7 @@ export default function ResenaPage() {
               className="text-2xl font-bold text-[#1a1a1a]"
               style={{ fontFamily: SERIF }}
             >
-              Ya has valorado este servicio
+              {t.resena.yaValorado}
             </h1>
             <p className="mt-2 text-sm text-[#666]">
               {proveedorNombre} · {servicioTitulo}
@@ -368,7 +370,7 @@ export default function ResenaPage() {
               className="mt-8 text-center text-2xl font-bold text-[#1a1a1a]"
               style={{ fontFamily: SERIF }}
             >
-              ¿Cómo fue tu experiencia?
+              {t.resena.tituloPregunta}
             </h1>
             <p className="mt-2 text-center text-sm text-[#666]">
               {proveedorNombre} · {servicioTitulo}
@@ -382,6 +384,7 @@ export default function ResenaPage() {
                 onSelect={setValoracion}
                 onHover={setHoverRating}
                 onLeave={() => setHoverRating(0)}
+                unit={unit}
               />
 
               <div>
@@ -389,14 +392,14 @@ export default function ResenaPage() {
                   htmlFor="comentario"
                   className="mb-1.5 block text-xs font-medium text-[#444]"
                 >
-                  Cuéntanos tu experiencia (opcional)
+                  {t.resena.labelComentario}
                 </label>
                 <textarea
                   id="comentario"
                   rows={4}
                   value={comentario}
                   onChange={(e) => setComentario(e.target.value)}
-                  placeholder="¿Qué destacarías de este proveedor?"
+                  placeholder={t.resena.placeholderComentario}
                   className="w-full resize-y rounded-xl border px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-[#1d4f91]/30"
                   style={{ borderColor: BRAND.border }}
                 />
@@ -420,7 +423,7 @@ export default function ResenaPage() {
                 className="w-full rounded-xl py-3.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
                 style={{ backgroundColor: BRAND.primary }}
               >
-                {submitting ? "Enviando…" : verticalConfig.submitLabel}
+                {submitting ? t.resena.enviando : submitLabel}
               </button>
             </form>
           </>

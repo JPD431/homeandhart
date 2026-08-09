@@ -2,8 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
+import { useLang } from "@/app/lib/LangContext";
+import { useTranslation } from "@/app/lib/i18n";
 
 export default function ConfirmarServicioPage() {
+  const { lang } = useLang();
+  const t = useTranslation(lang);
+  const tc = t.confirmarServicio;
   const { bookingId } = useParams();
   const searchParams = useSearchParams();
   const resultado = searchParams.get("resultado");
@@ -102,11 +107,10 @@ export default function ConfirmarServicioPage() {
                 marginBottom: 8,
               }}
             >
-              Enlace no válido
+              {tc.enlaceNoValido}
             </h1>
             <p style={{ fontSize: 14, color: "#888" }}>
-              Este enlace ha expirado o no es válido. Usa el enlace del email que
-              te enviamos al finalizar el servicio.
+              {tc.enlaceExpirado}
             </p>
           </>
         )}
@@ -122,11 +126,10 @@ export default function ConfirmarServicioPage() {
                 marginBottom: 8,
               }}
             >
-              ¡Gracias!
+              {tc.gracias}
             </h1>
             <p style={{ fontSize: 14, color: "#888" }}>
-              Hemos marcado el servicio como realizado y liberado el pago al
-              proveedor. ¿Quieres dejar una reseña?
+              {tc.servicioRealizado}
             </p>
             <button
               onClick={() => router.push(`/resena/${bookingId}`)}
@@ -141,7 +144,7 @@ export default function ConfirmarServicioPage() {
                 cursor: "pointer",
               }}
             >
-              Dejar reseña →
+              {tc.dejarResena}
             </button>
           </>
         )}
@@ -157,15 +160,15 @@ export default function ConfirmarServicioPage() {
                 marginBottom: 8,
               }}
             >
-              Cuéntanos qué pasó
+              {tc.cuentanosQuePaso}
             </h1>
             <p style={{ fontSize: 13, color: "#888", marginBottom: 16 }}>
-              Nuestro equipo revisará tu caso y te contactará en menos de 24h.
+              {tc.equipoContactara}
             </p>
             <textarea
               value={comentario}
               onChange={(e) => setComentario(e.target.value)}
-              placeholder="Describe el problema..."
+              placeholder={tc.describePlaceholder}
               style={{
                 width: "100%",
                 minHeight: 100,
@@ -189,7 +192,7 @@ export default function ConfirmarServicioPage() {
                 cursor: "pointer",
               }}
             >
-              Enviar reporte →
+              {tc.enviarReporte}
             </button>
           </>
         )}
@@ -205,11 +208,10 @@ export default function ConfirmarServicioPage() {
                 marginBottom: 8,
               }}
             >
-              Reporte enviado
+              {tc.reporteEnviado}
             </h1>
             <p style={{ fontSize: 14, color: "#888" }}>
-              El pago queda retenido hasta resolver la incidencia. Te contactaremos
-              pronto.
+              {tc.pagoRetenido}
             </p>
           </>
         )}

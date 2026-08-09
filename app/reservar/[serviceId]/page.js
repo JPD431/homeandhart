@@ -1,5 +1,7 @@
 "use client";
 
+import { useLang } from "@/app/lib/LangContext";
+import { useTranslation } from "@/app/lib/i18n";
 import { loadStripe } from "@stripe/stripe-js";
 import {
   Elements,
@@ -96,42 +98,42 @@ function getReservasSinComisionCliente(perfil) {
   return Number(perfil?.reservas_sin_comision_cliente) || 0;
 }
 
-const CANCEL_POLICIES = {
-  flexible: {
-    name: "Flexible",
-    description:
-      "Cancelación gratuita hasta 24h antes · 50% de reembolso dentro de las 24h previas",
-    tiers: [
-      { label: "Más de 24h antes del inicio", percent: 100 },
-      { label: "Menos de 24h antes del inicio", percent: 50 },
-      { label: "Tras el inicio del servicio", percent: 0 },
-    ],
-  },
-  moderada: {
-    name: "Moderada",
-    description:
-      "Cancelación gratuita hasta 3 días antes · 50% entre 3 días y 24h antes",
-    tiers: [
-      { label: "Más de 3 días antes del inicio", percent: 100 },
-      { label: "Entre 3 días y 24h antes del inicio", percent: 50 },
-      { label: "Menos de 24h antes o tras el inicio", percent: 0 },
-    ],
-  },
-  estricta: {
-    name: "Estricta",
-    description:
-      "Cancelación gratuita hasta 7 días antes · 50% entre 7 y 3 días antes",
-    tiers: [
-      { label: "Más de 7 días antes del inicio", percent: 100 },
-      { label: "Entre 7 y 3 días antes del inicio", percent: 50 },
-      { label: "Menos de 3 días antes o tras el inicio", percent: 0 },
-    ],
-  },
-};
+function getCancelPoliciesT(t) {
+  const r = t.reservar;
+  return {
+    flexible: {
+      name: r.cancelFlexibleName,
+      description: r.cancelFlexibleDesc,
+      tiers: [
+        { label: r.cancelFlexibleTier0, percent: 100 },
+        { label: r.cancelFlexibleTier1, percent: 50 },
+        { label: r.cancelFlexibleTier2, percent: 0 },
+      ],
+    },
+    moderada: {
+      name: r.cancelModeradaName,
+      description: r.cancelModeradaDesc,
+      tiers: [
+        { label: r.cancelModeradaTier0, percent: 100 },
+        { label: r.cancelModeradaTier1, percent: 50 },
+        { label: r.cancelModeradaTier2, percent: 0 },
+      ],
+    },
+    estricta: {
+      name: r.cancelEstrictaName,
+      description: r.cancelEstrictaDesc,
+      tiers: [
+        { label: r.cancelEstrictaTier0, percent: 100 },
+        { label: r.cancelEstrictaTier1, percent: 50 },
+        { label: r.cancelEstrictaTier2, percent: 0 },
+      ],
+    },
+  };
+}
 
-function getCancelPolicy(policyKey) {
+function getCancelPolicy(policyKey, cancelPolicies) {
   const key = normalizeCancelPolicy(policyKey);
-  return CANCEL_POLICIES[key];
+  return cancelPolicies[key];
 }
 
 function parseInheritedSearchDate(value) {
@@ -155,12 +157,12 @@ function parseInheritedSearchDate(value) {
   return value;
 }
 
-function validateBookingDates(vertical, fechaInicio, hora) {
+function validateBookingDates(vertical, fechaInicio, hora, t) {
   if (!fechaInicio) return null;
 
   const hoyStr = new Date().toISOString().split("T")[0];
   if (fechaInicio < hoyStr) {
-    return "La fecha de inicio no puede ser en el pasado";
+    return t ? t.reservar.errFechaEnPasado : "La fecha de inicio no puede ser en el pasado";
   }
 
   if (hora) {
@@ -171,7 +173,7 @@ function validateBookingDates(vertical, fechaInicio, hora) {
       const horaSeleccionada = h * 60 + m;
       const horaActual = ahora.getHours() * 60 + ahora.getMinutes();
       if (horaSeleccionada <= horaActual) {
-        return `La hora ${hora} ya ha pasado. Por favor elige una hora futura.`;
+        return t ? t.reservar.errHoraPasada(hora) : `La hora ${hora} ya ha pasado. Por favor elige una hora futura.`;
       }
     }
   }
@@ -206,6 +208,15 @@ const VERTICALS = {
   },
 };
 
+function getVerticalsT(t) {
+  const r = t.reservar;
+  return {
+    alojamiento: { ...VERTICALS.alojamiento, label: r.vertAlojamientoLabel, priceSuffix: r.vertAlojamientoPriceSuffix, unit: r.vertAlojamientoUnit },
+    ninos: { ...VERTICALS.ninos, label: r.vertNinosLabel, priceSuffix: r.vertNinosPriceSuffix, unit: r.vertNinosUnit },
+    mascotas: { ...VERTICALS.mascotas, label: r.vertMascotasLabel, priceSuffix: r.vertMascotasPriceSuffix, unit: r.vertMascotasUnit },
+  };
+}
+
 const COMPLEMENTARY_VERTICALS = {
   alojamiento: ["ninos", "mascotas"],
   ninos: ["alojamiento", "mascotas"],
@@ -221,6 +232,15 @@ const CART_VERTICAL_SHORT_LABELS = {
   mascotas: "mascotas",
 };
 
+function getCartShortLabelsT(t) {
+  const r = t.reservar;
+  return {
+    alojamiento: r.cartShortAlojamiento,
+    ninos: r.cartShortNinos,
+    mascotas: r.cartShortMascotas,
+  };
+}
+
 /** Verticales que aún se pueden añadir (una por tipo en el carrito). */
 function getAvailableComplementaryVerticals(servicesInCart) {
   const taken = new Set(
@@ -232,16 +252,17 @@ function getAvailableComplementaryVerticals(servicesInCart) {
 /**
  * "Ya tienes X en el carrito" — solo verticales presentes, con comas y "y" final.
  */
-function formatCartVerticalsInCartMessage(servicesInCart) {
+function formatCartVerticalsInCartMessage(servicesInCart, t) {
+  const shortLabels = t ? getCartShortLabelsT(t) : CART_VERTICAL_SHORT_LABELS;
   const present = new Set(
     (servicesInCart ?? []).map((s) => s.vertical).filter(Boolean),
   );
   const labels = ALL_BUNDLE_VERTICAL_IDS.filter((id) => present.has(id)).map(
-    (id) => CART_VERTICAL_SHORT_LABELS[id] || id,
+    (id) => shortLabels[id] || id,
   );
 
   if (labels.length === 0) {
-    return "Ya tienes servicios en el carrito.";
+    return t ? t.reservar.yaServiciosEnCarrito : "Ya tienes servicios en el carrito.";
   }
   if (labels.length === 1) {
     return `Ya tienes ${labels[0]} en el carrito.`;
@@ -322,7 +343,7 @@ function formatShortName(nombre, apellido) {
   return [first, lastInitial].filter(Boolean).join(" ");
 }
 
-function validateEstancia(svc, duration) {
+function validateEstancia(svc, duration, t) {
   if (!duration) return null;
 
   const min =
@@ -335,37 +356,43 @@ function validateEstancia(svc, duration) {
       : null;
 
   if (min != null && min > 0 && duration < min) {
-    return `Este servicio requiere un mínimo de ${min} ${getEstanciaUnit(svc.vertical, min)}`;
+    return t
+      ? t.reservar.errMinEstancia(min, getEstanciaUnit(svc.vertical, min))
+      : `Este servicio requiere un mínimo de ${min} ${getEstanciaUnit(svc.vertical, min)}`;
   }
   if (max != null && max > 0 && duration > max) {
-    return `Este servicio tiene un máximo de ${max} ${getEstanciaUnit(svc.vertical, max)}`;
+    return t
+      ? t.reservar.errMaxEstancia(max, getEstanciaUnit(svc.vertical, max))
+      : `Este servicio tiene un máximo de ${max} ${getEstanciaUnit(svc.vertical, max)}`;
   }
   return null;
 }
 
-function formatEstanciaInfo(vertical, minima, maxima) {
+function formatEstanciaInfo(vertical, minima, maxima, t) {
   const parts = [];
   if (minima != null && minima !== "" && Number(minima) > 0) {
     const n = Number(minima);
-    parts.push(`Mínimo ${n} ${getEstanciaUnit(vertical, n)}`);
+    parts.push(t ? t.reservar.infoMin(n, getEstanciaUnit(vertical, n)) : `Mínimo ${n} ${getEstanciaUnit(vertical, n)}`);
   }
   if (maxima != null && maxima !== "" && Number(maxima) > 0) {
     const n = Number(maxima);
-    parts.push(`Máximo ${n} ${getEstanciaUnit(vertical, n)}`);
+    parts.push(t ? t.reservar.infoMax(n, getEstanciaUnit(vertical, n)) : `Máximo ${n} ${getEstanciaUnit(vertical, n)}`);
   }
   return parts;
 }
 
-function formatAntelacionLabel(hours) {
+function formatAntelacionLabel(hours, t) {
   const h = Number(hours);
   if (h >= 24 && h % 24 === 0) {
     const days = h / 24;
+    if (t) return days === 1 ? t.reservar.unDia : t.reservar.nDias(days);
     return days === 1 ? "1 día" : `${days} días`;
   }
+  if (t) return h === 1 ? t.reservar.unaHora : t.reservar.nHoras(h);
   return h === 1 ? "1 hora" : `${h} horas`;
 }
 
-function validateAntelacion(svc, fechaInicio, hora, mainVertical) {
+function validateAntelacion(svc, fechaInicio, hora, mainVertical, t) {
   const required =
     svc.antelacion_minima != null && svc.antelacion_minima !== ""
       ? Number(svc.antelacion_minima)
@@ -378,18 +405,24 @@ function validateAntelacion(svc, fechaInicio, hora, mainVertical) {
 
   const hoursUntil = (start.getTime() - Date.now()) / (1000 * 60 * 60);
   if (hoursUntil < required) {
-    return `Este servicio requiere reservar con al menos ${formatAntelacionLabel(required)} de antelación`;
+    const label = formatAntelacionLabel(required, t);
+    return t
+      ? t.reservar.errAntelacion(label)
+      : `Este servicio requiere reservar con al menos ${label} de antelación`;
   }
   return null;
 }
 
-function formatAntelacionInfo(antelacionMinima) {
+function formatAntelacionInfo(antelacionMinima, t) {
   const h =
     antelacionMinima != null && antelacionMinima !== ""
       ? Number(antelacionMinima)
       : 24;
   if (!h) return null;
-  return `Reservar con al menos ${formatAntelacionLabel(h)} de antelación`;
+  const label = formatAntelacionLabel(h, t);
+  return t
+    ? t.reservar.infoAntelacion(label)
+    : `Reservar con al menos ${label} de antelación`;
 }
 
 const DIAS_SEMANA_META = [
@@ -401,6 +434,19 @@ const DIAS_SEMANA_META = [
   { id: "sab", label: "Sáb", nombre: "sábados", jsDay: 6 },
   { id: "dom", label: "Dom", nombre: "domingos", jsDay: 0 },
 ];
+
+function getDiasSemanaT(t) {
+  const r = t.reservar;
+  return [
+    { id: "lun", label: r.diaLunLabel, nombre: r.diaLunNombre, jsDay: 1 },
+    { id: "mar", label: r.diaMarLabel, nombre: r.diaMarNombre, jsDay: 2 },
+    { id: "mie", label: r.diaMieLabel, nombre: r.diaMieNombre, jsDay: 3 },
+    { id: "jue", label: r.diaJueLabel, nombre: r.diaJueNombre, jsDay: 4 },
+    { id: "vie", label: r.diaVieLabel, nombre: r.diaVieNombre, jsDay: 5 },
+    { id: "sab", label: r.diaSabLabel, nombre: r.diaSabNombre, jsDay: 6 },
+    { id: "dom", label: r.diaDomLabel, nombre: r.diaDomNombre, jsDay: 0 },
+  ];
+}
 
 const DIAS_DISPONIBLES_DEFAULT = DIAS_SEMANA_META.map((d) => d.id);
 
@@ -422,18 +468,20 @@ function isFechaEnDiasDisponibles(fechaStr, diasDisponibles) {
   return normalizeDiasDisponibles(diasDisponibles).includes(diaId);
 }
 
-function getDiaDisponibleError(fechaStr, diasDisponibles) {
+function getDiaDisponibleError(fechaStr, diasDisponibles, t) {
   const diaId = getDiaIdFromFecha(fechaStr);
-  const nombre =
-    DIAS_SEMANA_META.find((d) => d.id === diaId)?.nombre ?? "ese día";
-  return `Este proveedor no está disponible los ${nombre}. Por favor elige otra fecha.`;
+  const diasMeta = t ? getDiasSemanaT(t) : DIAS_SEMANA_META;
+  const nombre = diasMeta.find((d) => d.id === diaId)?.nombre ?? "ese día";
+  return t
+    ? t.reservar.errDiaNoDisponible(nombre)
+    : `Este proveedor no está disponible los ${nombre}. Por favor elige otra fecha.`;
 }
 
-function validateDiaDisponible(svc, fechaInicio) {
+function validateDiaDisponible(svc, fechaInicio, t) {
   if (!fechaInicio) return null;
   const disponibles = normalizeDiasDisponibles(svc.dias_disponibles);
   if (isFechaEnDiasDisponibles(fechaInicio, disponibles)) return null;
-  return getDiaDisponibleError(fechaInicio, disponibles);
+  return getDiaDisponibleError(fechaInicio, disponibles, t);
 }
 
 async function verificarDisponibilidad(serviceId, fechaInicio, fechaFin) {
@@ -457,10 +505,12 @@ function FechaInicioConDias({
   onValidationError,
   inputClass,
   borderColor,
+  t,
 }) {
   const inputRef = useRef(null);
   const disponibles = normalizeDiasDisponibles(diasDisponibles);
-  const diasLabel = DIAS_SEMANA_META.filter((d) => disponibles.includes(d.id))
+  const diasMeta = t ? getDiasSemanaT(t) : DIAS_SEMANA_META;
+  const diasLabel = diasMeta.filter((d) => disponibles.includes(d.id))
     .map((d) => d.label)
     .join(", ");
 
@@ -468,11 +518,11 @@ function FechaInicioConDias({
     const el = inputRef.current;
     if (!el) return;
     if (value && !isFechaEnDiasDisponibles(value, disponibles)) {
-      el.setCustomValidity(getDiaDisponibleError(value, disponibles));
+      el.setCustomValidity(getDiaDisponibleError(value, disponibles, t));
     } else {
       el.setCustomValidity("");
     }
-  }, [value, disponibles]);
+  }, [value, disponibles, t]);
 
   function handleChange(e) {
     const next = e.target.value;
@@ -483,7 +533,7 @@ function FechaInicioConDias({
       return;
     }
     if (!isFechaEnDiasDisponibles(next, disponibles)) {
-      const err = getDiaDisponibleError(next, disponibles);
+      const err = getDiaDisponibleError(next, disponibles, t);
       e.target.setCustomValidity(err);
       onValidationError(err);
       return;
@@ -505,8 +555,8 @@ function FechaInicioConDias({
       onInput={handleChange}
       title={
         diasLabel
-          ? `Solo puedes reservar en: ${diasLabel}`
-          : "Selecciona una fecha disponible"
+          ? (t ? t.reservar.soloPuedesReservarEn(diasLabel) : `Solo puedes reservar en: ${diasLabel}`)
+          : (t ? t.reservar.seleccionaFechaDisponible : "Selecciona una fecha disponible")
       }
       className={inputClass}
       style={{ borderColor }}
@@ -579,6 +629,7 @@ function LugarServicioBookingFields({
   direccionClienteADefinir,
   onChange,
   compact = false,
+  t,
 }) {
   // Alojamiento: sin selector/bloque (lugar = casa_proveedor implícito).
   // Niñera/mascotas: modalidad siempre definida.
@@ -604,16 +655,16 @@ function LugarServicioBookingFields({
     <div className={compact ? "mb-3" : "mt-4"}>
       {showSelector && (
         <div className="mb-3">
-          <p className={labelClass}>¿Dónde quieres el servicio?</p>
+          <p className={labelClass}>{t ? t.reservar.dondeQuieresServicio : "¿Dónde quieres el servicio?"}</p>
           <div className="flex flex-col gap-2">
             {[
               {
                 value: LUGAR_CASA_PROVEEDOR,
-                label: "En casa del profesional",
+                label: t ? t.reservar.enCasaProfesional : "En casa del profesional",
               },
               {
                 value: LUGAR_CASA_CLIENTE,
-                label: "En mi casa",
+                label: t ? t.reservar.enMiCasa : "En mi casa",
               },
             ].map((opt) => {
               const selected = effectiveLugar === opt.value;
@@ -665,7 +716,7 @@ function LugarServicioBookingFields({
           className="rounded-lg border p-3"
           style={{ borderColor: "#e8e4de", backgroundColor: "#faf9f7" }}
         >
-          <p className={labelClass}>¿Dónde? (opcional)</p>
+          <p className={labelClass}>{t ? t.reservar.dondeOpcional : "¿Dónde? (opcional)"}</p>
           <label className="mb-2 flex cursor-pointer items-start gap-2 text-[12px] text-[#444]">
             <input
               type="checkbox"
@@ -684,7 +735,7 @@ function LugarServicioBookingFields({
               }}
               className="mt-0.5"
             />
-            <span>A definir / lo coordino con el proveedor</span>
+            <span>{t ? t.reservar.aDefinirCoordinar : "A definir / lo coordino con el proveedor"}</span>
           </label>
           {!aDefinirChecked && (
             <input
@@ -698,7 +749,7 @@ function LugarServicioBookingFields({
                     : true,
                 })
               }
-              placeholder="Calle, número, ciudad…"
+              placeholder={t ? t.reservar.calleNumeroCiudad : "Calle, número, ciudad…"}
               className="w-full border px-3 py-2 text-[13px]"
               style={{
                 borderColor: "#e8e4de",
@@ -708,8 +759,7 @@ function LugarServicioBookingFields({
             />
           )}
           <p className="mt-1.5 text-[10px] text-[#999]">
-            No es obligatorio. Si aún no sabes la dirección, déjala a definir y
-            coordináis por teléfono.
+            {t ? t.reservar.direccionNoObligatoria : "No es obligatorio. Si aún no sabes la dirección, déjala a definir y coordináis por teléfono."}
           </p>
         </div>
       )}
@@ -809,6 +859,7 @@ function CartLineBookingFields({
   onToggleCalendar,
   onPatch,
   onValidationError,
+  t,
 }) {
   const svc = entry?.service;
   if (!svc) return null;
@@ -829,12 +880,13 @@ function CartLineBookingFields({
         direccionCliente={entry.direccionCliente}
         direccionClienteADefinir={entry.direccionClienteADefinir}
         onChange={onPatch}
+        t={t}
       />
 
       {showModalidadSelector && (
         <div className="mb-3">
           <p className="mb-2 text-[8px] font-medium uppercase tracking-wide text-[#bbb]">
-            ¿Cómo quieres reservar?
+            {t ? t.reservar.comoQuieresReservar : "¿Cómo quieres reservar?"}
           </p>
           <div className="flex flex-col gap-2">
             {modalidades.map((row) => {
@@ -899,12 +951,12 @@ function CartLineBookingFields({
               }}
             >
               <p className="text-[8px] font-medium uppercase tracking-wide text-[#bbb]">
-                {billingNeedsFechaFin(billing, vertical) ? "Inicio" : "Fecha"}
+                {billingNeedsFechaFin(billing, vertical) ? (t ? t.reservar.inicio : "Inicio") : (t ? t.reservar.fecha : "Fecha")}
               </p>
               <p className="mt-0.5 text-[12px] text-[#2a3a4a]">
                 {entry.fechaInicio
-                  ? formatFechaDisplay(entry.fechaInicio)
-                  : "Seleccionar"}
+                  ? formatFechaDisplay(entry.fechaInicio, t)
+                  : (t ? t.reservar.seleccionar : "Seleccionar")}
               </p>
             </button>
             <button
@@ -919,14 +971,14 @@ function CartLineBookingFields({
               }}
             >
               <p className="text-[8px] font-medium uppercase tracking-wide text-[#bbb]">
-                {billingNeedsFechaFin(billing, vertical) ? "Fin" : "—"}
+                {billingNeedsFechaFin(billing, vertical) ? (t ? t.reservar.fin : "Fin") : (t ? t.reservar.separador : "—")}
               </p>
               <p className="mt-0.5 text-[12px] text-[#2a3a4a]">
                 {entry.fechaFin
-                  ? formatFechaDisplay(entry.fechaFin)
+                  ? formatFechaDisplay(entry.fechaFin, t)
                   : billingNeedsFechaFin(billing, vertical)
-                    ? "Seleccionar"
-                    : "—"}
+                    ? (t ? t.reservar.seleccionar : "Seleccionar")
+                    : (t ? t.reservar.separador : "—")}
               </p>
             </button>
           </div>
@@ -941,7 +993,7 @@ function CartLineBookingFields({
                 fechaFin={entry.fechaFin}
                 onChange={({ desde, hasta }) => {
                   if (desde) {
-                    const diaError = validateDiaDisponible(svc, desde);
+                    const diaError = validateDiaDisponible(svc, desde, t);
                     if (diaError) {
                       onValidationError?.(diaError);
                       return;
@@ -967,7 +1019,7 @@ function CartLineBookingFields({
               (billing.kind === "legacy" && vertical === "ninos")) && (
               <div>
                 <label className="mb-1 block text-[8px] font-medium uppercase tracking-wide text-[#bbb]">
-                  Hora de inicio
+                  {t ? t.reservar.horaDeInicio : "Hora de inicio"}
                 </label>
                 <input
                   type="time"
@@ -983,7 +1035,7 @@ function CartLineBookingFields({
               (billing.kind === "legacy" && vertical === "ninos")) && (
               <div>
                 <label className="mb-1 block text-[8px] font-medium uppercase tracking-wide text-[#bbb]">
-                  Duración (horas)
+                  {t ? t.reservar.duracionHoras : "Duración (horas)"}
                 </label>
                 <input
                   type="number"
@@ -1268,20 +1320,19 @@ const BUNDLE_TABS = [
   { id: "mascotas", label: verticalEmojiLabel("mascotas", "Mascotas") },
 ];
 
-function formatFechaDisplay(dateStr) {
+function formatFechaDisplay(dateStr, t) {
   if (!dateStr) return "—";
   const [y, m, d] = dateStr.split("-").map(Number);
-  const months = [
-    "ene", "feb", "mar", "abr", "may", "jun",
-    "jul", "ago", "sep", "oct", "nov", "dic",
-  ];
+  const months = t
+    ? t.reservar.mesesCortos
+    : ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
   return `${d} ${months[m - 1]} ${y}`;
 }
 
-function formatFechasRango(inicio, fin) {
-  if (!inicio) return "Selecciona fechas";
-  const finStr = fin && fin !== inicio ? ` – ${formatFechaDisplay(fin)}` : "";
-  return `${formatFechaDisplay(inicio)}${finStr}`;
+function formatFechasRango(inicio, fin, t) {
+  if (!inicio) return t ? t.reservar.seleccionaFechas : "Selecciona fechas";
+  const finStr = fin && fin !== inicio ? ` – ${formatFechaDisplay(fin, t)}` : "";
+  return `${formatFechaDisplay(inicio, t)}${finStr}`;
 }
 
 function hasPetFriendly(service) {
@@ -1328,13 +1379,12 @@ function getFreeCancelDeadline(serviceStartAt, policyKey) {
   return deadline;
 }
 
-function formatCancelDeadline(date) {
+function formatCancelDeadline(date, t) {
   if (!date) return null;
   const d = date.getDate();
-  const months = [
-    "enero", "febrero", "marzo", "abril", "mayo", "junio",
-    "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
-  ];
+  const months = t
+    ? t.reservar.mesesLargos
+    : ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
   return `${d} de ${months[date.getMonth()]}`;
 }
 
@@ -1376,11 +1426,11 @@ function ServiceTag({ text, light, color, title }) {
   );
 }
 
-function ProgressBar({ datesReady, aceptaPolitica, precioListo }) {
+function ProgressBar({ datesReady, aceptaPolitica, precioListo, t }) {
   const steps = [
-    { id: 1, label: "Elige fechas" },
-    { id: 2, label: "Confirma" },
-    { id: 3, label: "Paga" },
+    { id: 1, label: t ? t.reservar.pasoFechas : "Elige fechas" },
+    { id: 2, label: t ? t.reservar.pasoConfirma : "Confirma" },
+    { id: 3, label: t ? t.reservar.pasoPaga : "Paga" },
   ];
 
   function getStepStatus(stepId) {
@@ -1494,6 +1544,7 @@ function SavedCardCheckout({
   onUseNewCard,
   getBookingDateError,
   disabled,
+  t,
 }) {
   const [paying, setPaying] = useState(false);
   const [error, setError] = useState("");
@@ -1588,7 +1639,7 @@ function SavedCardCheckout({
         <div className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
           <p>{error}</p>
           <p className="mt-1 text-[12px] text-red-600/90">
-            Tus fechas y datos se mantienen. Puedes reintentar el pago.
+            {t ? t.reservar.tusFechasDatos : "Tus fechas y datos se mantienen. Puedes reintentar el pago."}
           </p>
         </div>
       )}
@@ -1600,10 +1651,10 @@ function SavedCardCheckout({
         style={{ backgroundColor: "#1d4f91", borderRadius: 6 }}
       >
         {paying
-          ? "Procesando pago…"
+          ? (t ? t.reservar.procesandoPago : "Procesando pago…")
           : error
-            ? `Reintentar pago · ${precioTotal.toFixed(2)}€ →`
-            : `Pagar ${precioTotal.toFixed(2)}€ →`}
+            ? (t ? t.reservar.reintentarPago(precioTotal.toFixed(2)) : `Reintentar pago · ${precioTotal.toFixed(2)}€ →`)
+            : (t ? t.reservar.pagarPrecio(precioTotal.toFixed(2)) : `Pagar ${precioTotal.toFixed(2)}€ →`)}
       </button>
       <button
         type="button"
@@ -1611,7 +1662,7 @@ function SavedCardCheckout({
         className="mt-3 w-full text-center text-sm font-medium no-underline hover:underline"
         style={{ color: BRAND.primary }}
       >
-        Usar otra tarjeta
+        {t ? t.reservar.usarOtraTarjeta : "Usar otra tarjeta"}
       </button>
     </div>
   );
@@ -1633,6 +1684,7 @@ function CheckoutForm({
   setErrorMessage,
   service,
   disabled,
+  t,
 }) {
   const stripe = useStripe();
   const elements = useElements();
@@ -1644,7 +1696,7 @@ function CheckoutForm({
 
     if (service?.vertical === "ninos") {
       if (!hora || hora.trim() === "") {
-        setErrorMessage("Por favor selecciona una hora válida");
+        setErrorMessage(t ? t.reservar.seleccionaHoraValida : "Por favor selecciona una hora válida");
         return;
       }
       const hoyStr = new Date().toISOString().split("T")[0];
@@ -1654,13 +1706,13 @@ function CheckoutForm({
         const ahora = new Date();
         const minutosActuales = ahora.getHours() * 60 + ahora.getMinutes();
         if (minutosSeleccionados <= minutosActuales) {
-          setErrorMessage(`La hora ${hora} ya ha pasado. Elige una hora futura.`);
+          setErrorMessage(t ? t.reservar.errHoraPasadaForm(hora) : `La hora ${hora} ya ha pasado. Elige una hora futura.`);
           return;
         }
       }
     }
 
-    const dateError = validateBookingDates(vertical, fechaInicio, hora);
+    const dateError = validateBookingDates(vertical, fechaInicio, hora, t);
     if (dateError) {
       setErrorMessage(dateError);
       return;
@@ -1671,7 +1723,7 @@ function CheckoutForm({
     const fechaInicioDate = new Date(fechaInicio);
 
     if (fechaInicioDate < hoy) {
-      setErrorMessage("La fecha de inicio no puede ser en el pasado");
+      setErrorMessage(t ? t.reservar.errFechaEnPasado : "La fecha de inicio no puede ser en el pasado");
       return;
     }
 
@@ -1689,8 +1741,9 @@ function CheckoutForm({
           0,
         );
         if (horaSeleccionada <= horaMinima) {
+          const horaMinStr = `${String(horaMinima.getHours()).padStart(2, "0")}:${String(horaMinima.getMinutes()).padStart(2, "0")}`;
           setErrorMessage(
-            `La hora debe ser al menos 1 hora desde ahora. Hora minima: ${String(horaMinima.getHours()).padStart(2, "0")}:${String(horaMinima.getMinutes()).padStart(2, "0")}`,
+            t ? t.reservar.errHoraMinima(horaMinStr) : `La hora debe ser al menos 1 hora desde ahora. Hora minima: ${horaMinStr}`,
           );
           return;
         }
@@ -1699,8 +1752,7 @@ function CheckoutForm({
 
     if (!stripe || !elements) return;
     if (!paymentIntentId) {
-      const msg =
-        "El pago aún no está listo. Espera un momento o recarga la página.";
+      const msg = t ? t.reservar.pagoNoListo : "El pago aún no está listo. Espera un momento o recarga la página.";
       setError(msg);
       setErrorMessage(msg);
       return;
@@ -1803,8 +1855,7 @@ function CheckoutForm({
         <div className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
           <p>{error}</p>
           <p className="mt-1 text-[12px] text-red-600/90">
-            Tus fechas, servicio y datos se mantienen. Puedes reintentar sin
-            empezar de cero.
+            {t ? t.reservar.tusFechasServicioDatos : "Tus fechas, servicio y datos se mantienen. Puedes reintentar sin empezar de cero."}
           </p>
         </div>
       )}
@@ -1815,10 +1866,10 @@ function CheckoutForm({
         style={{ backgroundColor: "#1d4f91", borderRadius: 6 }}
       >
         {paying
-          ? "Procesando pago…"
+          ? (t ? t.reservar.procesandoPago : "Procesando pago…")
           : error
-            ? `Reintentar pago · ${precioTotal.toFixed(2)}€ →`
-            : `Pagar ${precioTotal.toFixed(2)}€ →`}
+            ? (t ? t.reservar.reintentarPago(precioTotal.toFixed(2)) : `Reintentar pago · ${precioTotal.toFixed(2)}€ →`)
+            : (t ? t.reservar.pagarPrecio(precioTotal.toFixed(2)) : `Pagar ${precioTotal.toFixed(2)}€ →`)}
       </button>
     </form>
   );
@@ -1836,6 +1887,7 @@ function BundleSavedCardCheckout({
   onUseNewCard,
   getBookingDateError,
   disabled,
+  t,
 }) {
   const [paying, setPaying] = useState(false);
   const [error, setError] = useState("");
@@ -1852,7 +1904,7 @@ function BundleSavedCardCheckout({
     }
 
     if (!grupoReserva) {
-      setError("Datos de reserva incompletos. Recarga la página e inténtalo de nuevo.");
+      setError(t ? t.reservar.datosIncompletosRecarga : "Datos de reserva incompletos. Recarga la página e inténtalo de nuevo.");
       setPaying(false);
       return;
     }
@@ -1943,8 +1995,8 @@ function BundleSavedCardCheckout({
     <div className="mt-6">
       <p className="text-[11px] leading-relaxed text-[#666]">
         {retencionesCount > 1
-          ? `${retencionesCount} retenciones en tarjeta, una por servicio.`
-          : "Retención en tarjeta por servicio."}
+          ? (t ? t.reservar.nRetencionesEnTarjeta(retencionesCount) : `${retencionesCount} retenciones en tarjeta, una por servicio.`)
+          : (t ? t.reservar.retencionTarjeta : "Retención en tarjeta por servicio.")}
       </p>
       <div
         className="mt-3 rounded-xl border px-4 py-4"
@@ -1959,7 +2011,7 @@ function BundleSavedCardCheckout({
         <div className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
           <p>{error}</p>
           <p className="mt-1 text-[12px] text-red-600/90">
-            Tus servicios y fechas se mantienen. Puedes reintentar el pago.
+            {t ? t.reservar.tusServiciosFechas : "Tus servicios y fechas se mantienen. Puedes reintentar el pago."}
           </p>
         </div>
       )}
@@ -1971,10 +2023,10 @@ function BundleSavedCardCheckout({
         style={{ backgroundColor: "#1d4f91", borderRadius: 6 }}
       >
         {paying
-          ? "Procesando pago…"
+          ? (t ? t.reservar.procesandoPago : "Procesando pago…")
           : error
-            ? `Reintentar pago · ${totalAPagar.toFixed(2)}€ →`
-            : `Pagar ${totalAPagar.toFixed(2)}€ →`}
+            ? (t ? t.reservar.reintentarPago(totalAPagar.toFixed(2)) : `Reintentar pago · ${totalAPagar.toFixed(2)}€ →`)
+            : (t ? t.reservar.pagarPrecio(totalAPagar.toFixed(2)) : `Pagar ${totalAPagar.toFixed(2)}€ →`)}
       </button>
       <button
         type="button"
@@ -1982,7 +2034,7 @@ function BundleSavedCardCheckout({
         className="mt-3 w-full text-center text-sm font-medium no-underline hover:underline"
         style={{ color: BRAND.primary }}
       >
-        Usar otra tarjeta
+        {t ? t.reservar.usarOtraTarjeta : "Usar otra tarjeta"}
       </button>
     </div>
   );
@@ -2005,6 +2057,7 @@ function BundleNewCardCheckoutForm({
   setErrorMessage,
   service,
   disabled,
+  t,
 }) {
   const stripe = useStripe();
   const elements = useElements();
@@ -2016,19 +2069,19 @@ function BundleNewCardCheckoutForm({
 
     if (service?.vertical === "ninos") {
       if (!hora || hora.trim() === "") {
-        setErrorMessage("Por favor selecciona una hora válida");
+        setErrorMessage(t ? t.reservar.seleccionaHoraValida : "Por favor selecciona una hora válida");
         return;
       }
     }
 
-    const dateError = validateBookingDates(vertical, fechaInicio, hora);
+    const dateError = validateBookingDates(vertical, fechaInicio, hora, t);
     if (dateError) {
       setErrorMessage(dateError);
       return;
     }
 
     if (!grupoReserva) {
-      setErrorMessage("Datos de reserva incompletos. Recarga la página e inténtalo de nuevo.");
+      setErrorMessage(t ? t.reservar.datosIncompletosRecarga : "Datos de reserva incompletos. Recarga la página e inténtalo de nuevo.");
       return;
     }
 
@@ -2163,15 +2216,15 @@ function BundleNewCardCheckoutForm({
     <form onSubmit={handleSubmit} className="mt-6">
       <p className="mb-3 text-[11px] leading-relaxed text-[#666]">
         {retencionesCount > 1
-          ? `${retencionesCount} retenciones en tarjeta, una por servicio.`
-          : "Retención en tarjeta por servicio."}
+          ? (t ? t.reservar.nRetencionesEnTarjeta(retencionesCount) : `${retencionesCount} retenciones en tarjeta, una por servicio.`)
+          : (t ? t.reservar.retencionTarjeta : "Retención en tarjeta por servicio.")}
       </p>
       <PaymentElement />
       {error && (
         <div className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
           <p>{error}</p>
           <p className="mt-1 text-[12px] text-red-600/90">
-            Tus servicios y fechas se mantienen. Puedes reintentar el pago.
+            {t ? t.reservar.tusServiciosFechas : "Tus servicios y fechas se mantienen. Puedes reintentar el pago."}
           </p>
         </div>
       )}
@@ -2182,10 +2235,10 @@ function BundleNewCardCheckoutForm({
         style={{ backgroundColor: "#1d4f91", borderRadius: 6 }}
       >
         {paying
-          ? "Procesando pago…"
+          ? (t ? t.reservar.procesandoPago : "Procesando pago…")
           : error
-            ? `Reintentar pago · ${totalAPagar.toFixed(2)}€ →`
-            : `Pagar ${totalAPagar.toFixed(2)}€ →`}
+            ? (t ? t.reservar.reintentarPago(totalAPagar.toFixed(2)) : `Reintentar pago · ${totalAPagar.toFixed(2)}€ →`)
+            : (t ? t.reservar.pagarPrecio(totalAPagar.toFixed(2)) : `Pagar ${totalAPagar.toFixed(2)}€ →`)}
       </button>
     </form>
   );
@@ -2205,12 +2258,14 @@ function BundleNewCardCheckout(props) {
         setupFutureUsage: "off_session",
       }}
     >
-      <BundleNewCardCheckoutForm {...props} />
+      <BundleNewCardCheckoutForm {...props} t={props.t} />
     </Elements>
   );
 }
 
 export default function ReservarPage() {
+  const { lang } = useLang();
+  const t = useTranslation(lang);
   const router = useRouter();
   const params = useParams();
   const searchParams = useSearchParams();
@@ -2711,7 +2766,7 @@ export default function ReservarPage() {
       }));
       const nombreServicio =
         data.titulo ||
-        `${VERTICALS[data.vertical]?.label ?? "Servicio"} · ${formatShortName(data.profiles_public?.nombre, data.profiles_public?.apellido)}`;
+        `${verticals[data.vertical]?.label ?? "Servicio"} · ${formatShortName(data.profiles_public?.nombre, data.profiles_public?.apellido)}`;
       // Aviso temporal: no bloquea el botón de pagar (disabled no depende de successMessage).
       setSuccessVariant("green");
       setSuccessMessage(`✓ ${nombreServicio} añadido a tu reserva`);
@@ -2752,7 +2807,9 @@ export default function ReservarPage() {
   }, [cancelarBookingId, userId, loading, router]);
 
   const vertical = service?.vertical ?? "alojamiento";
-  const verticalConfig = VERTICALS[vertical] ?? VERTICALS.alojamiento;
+  const cancelPolicies = useMemo(() => getCancelPoliciesT(t), [t]);
+  const verticals = useMemo(() => getVerticalsT(t), [t]);
+  const verticalConfig = verticals[vertical] ?? verticals.alojamiento;
 
   const getMinHora = () => {
     if (!fechaInicio) return undefined;
@@ -2770,7 +2827,7 @@ export default function ReservarPage() {
   // Solo se aplican ofertas de services.oferta_descuento vía getPrecioEfectivo / calculateServiceBasePrice.
   const precioEfectivo = service ? getPrecioEfectivo(service) : 0;
   const ofertaActiva = service ? isOfertaActiva(service) : false;
-  const cancelPolicy = getCancelPolicy(service?.cancellation_policy);
+  const cancelPolicy = getCancelPolicy(service?.cancellation_policy, cancelPolicies);
 
   const serviceStartAt = useMemo(
     () => getServiceStartDateTime(vertical, fechaInicio, hora),
@@ -3054,7 +3111,7 @@ export default function ReservarPage() {
       } else {
         const names = conflicts
           .map((c) => {
-            const cfg = VERTICALS[c.svc.vertical] ?? VERTICALS.alojamiento;
+            const cfg = verticals[c.svc.vertical] ?? verticals.alojamiento;
             return (
               c.svc.titulo ||
               `${cfg.label} · ${formatShortName(c.svc.profiles_public?.nombre, c.svc.profiles_public?.apellido)}`
@@ -3171,7 +3228,7 @@ export default function ReservarPage() {
     const lines = selectedServices.map((svc) => {
       const entry = cartByServiceId[svc.id];
       const svcForPrice = entry?.service ?? svc;
-      const svcConfig = VERTICALS[svcForPrice.vertical] ?? VERTICALS.alojamiento;
+      const svcConfig = verticals[svcForPrice.vertical] ?? verticals.alojamiento;
       const name =
         svcForPrice.titulo ||
         `${svcConfig.label} · ${formatShortName(svcForPrice.profiles_public?.nombre, svcForPrice.profiles_public?.apellido)}`;

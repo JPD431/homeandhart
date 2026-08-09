@@ -31,6 +31,8 @@ import { MODALIDAD_COBRO_OPTIONS } from "@/app/lib/modalidad-cobro";
 import { supabase } from "@/app/lib/supabase";
 import BookingStatusBadge from "@/app/components/BookingStatusBadge";
 import { friendlyLoadError, withLoadTimeout } from "@/app/lib/with-load-timeout";
+import { useLang } from "@/app/lib/LangContext";
+import { useTranslation } from "@/app/lib/i18n";
 
 function modalidadLabelOf(modalidad) {
   if (!modalidad) return null;
@@ -87,6 +89,8 @@ export default function ReservaDetallePage() {
   const router = useRouter();
   const params = useParams();
   const bookingId = params.bookingId;
+  const { lang } = useLang();
+  const t = useTranslation(lang);
 
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -146,7 +150,7 @@ export default function ReservaDetallePage() {
 
             if (bookingError) throw bookingError;
             if (!row) {
-              setLoadError("No se encontró la reserva.");
+              setLoadError(t.reserva.noEncontrada);
               return;
             }
 
@@ -160,7 +164,7 @@ export default function ReservaDetallePage() {
             else if (proveedorId && proveedorId === user.id) role = "proveedor";
 
             if (!role) {
-              setLoadError("No tienes permiso para ver esta reserva.");
+              setLoadError(t.reserva.sinPermiso);
               return;
             }
             if (cancelled) return;
@@ -236,7 +240,7 @@ export default function ReservaDetallePage() {
   }, [router, bookingId, reloadKey]);
 
   async function handleCancelCliente() {
-    if (!booking || !window.confirm("¿Seguro que quieres cancelar esta reserva?"))
+    if (!booking || !window.confirm(t.reserva.confirmarCancelarCliente))
       return;
 
     setCancelling(true);
@@ -258,9 +262,9 @@ export default function ReservaDetallePage() {
         reembolso_cliente_credito:
           reembolso.credito != null ? reembolso.credito : null,
       }));
-      setSuccessMessage("Reserva cancelada correctamente.");
+      setSuccessMessage(t.reserva.canceladaOk);
     } else {
-      setErrorMessage(data.error || "No se pudo cancelar la reserva. Inténtalo de nuevo.");
+      setErrorMessage(data.error || t.reserva.canceladaError);
     }
     setCancelling(false);
   }
@@ -268,9 +272,7 @@ export default function ReservaDetallePage() {
   async function handleCancelProveedor() {
     if (
       !booking ||
-      !window.confirm(
-        "¿Cancelar esta reserva? Se aplicará la política de cancelación del proveedor.",
-      )
+      !window.confirm(t.reserva.confirmarCancelarProveedor)
     ) {
       return;
     }
@@ -287,9 +289,9 @@ export default function ReservaDetallePage() {
         ...prev,
         estado: data.estado || "cancelada_proveedor",
       }));
-      setSuccessMessage("Reserva cancelada correctamente.");
+      setSuccessMessage(t.reserva.canceladaOk);
     } else {
-      setErrorMessage(data.error || "No se pudo cancelar la reserva. Inténtalo de nuevo.");
+      setErrorMessage(data.error || t.reserva.canceladaError);
     }
     setCancelling(false);
   }
@@ -311,12 +313,12 @@ export default function ReservaDetallePage() {
       }));
       setSuccessMessage(
         accion === "aceptar"
-          ? "Reserva aceptada correctamente."
-          : "Reserva rechazada. Se ha liberado el pago del cliente.",
+          ? t.reserva.reservaAceptada
+          : t.reserva.reservaRechazada,
       );
     } else {
       setErrorMessage(
-        data.error || "No se pudo procesar la respuesta. Inténtalo de nuevo.",
+        data.error || t.reserva.respondError,
       );
     }
     setResponding(false);
@@ -324,11 +326,7 @@ export default function ReservaDetallePage() {
 
   async function handleCompletarServicio() {
     if (!booking) return;
-    if (
-      !window.confirm(
-        "¿Confirmas que el servicio se realizó correctamente? Se marcará como completado y se liberará el pago al proveedor.",
-      )
-    ) {
+    if (!window.confirm(t.reserva.confirmarCompletar)) {
       return;
     }
     setCompleting(true);
@@ -342,7 +340,7 @@ export default function ReservaDetallePage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setErrorMessage(data.error || "No se pudo completar la reserva.");
+        setErrorMessage(data.error || t.reserva.completarError);
         return;
       }
       setBooking((prev) => ({
@@ -351,11 +349,9 @@ export default function ReservaDetallePage() {
         completada_at: prev.completada_at || new Date().toISOString(),
         confirmacion_cliente: "ok",
       }));
-      setSuccessMessage(
-        "Servicio confirmado. Hemos liberado el pago al proveedor.",
-      );
+      setSuccessMessage(t.reserva.completadaOk);
     } catch {
-      setErrorMessage("Error de conexión al completar la reserva.");
+      setErrorMessage(t.reserva.completarConexionError);
     } finally {
       setCompleting(false);
     }
@@ -368,7 +364,7 @@ export default function ReservaDetallePage() {
         style={{ backgroundColor: BRAND.warm }}
       >
         <main className="px-6 py-16 text-center text-sm text-[#666]">
-          Cargando reserva…
+          {t.reserva.cargando}
         </main>
       </div>
     );
@@ -405,12 +401,12 @@ export default function ReservaDetallePage() {
             className="text-sm no-underline"
             style={{ color: "#666" }}
           >
-            ← Volver
+            {t.reserva.volver}
           </Link>
         </nav>
         <main className="mx-auto max-w-lg px-6 py-16 text-center">
           <p className="text-sm text-red-700">
-            {loadError || "No se encontró la reserva."}
+            {loadError || t.reserva.noEncontrada}
           </p>
           <button
             type="button"
@@ -418,14 +414,14 @@ export default function ReservaDetallePage() {
             className="mt-4 mr-3 text-sm font-semibold"
             style={{ color: PRIMARY }}
           >
-            Reintentar
+            {t.reserva.reintentar}
           </button>
           <Link
             href={backHref}
             className="mt-4 inline-block text-sm font-semibold no-underline"
             style={{ color: PRIMARY }}
           >
-            Volver
+            {t.reserva.volverLink}
           </Link>
         </main>
       </div>
@@ -472,7 +468,7 @@ export default function ReservaDetallePage() {
   const backHref =
     viewerRole === "proveedor" ? "/dashboard?tab=proveedor" : "/historial";
   const backLabel =
-    viewerRole === "proveedor" ? "← Mis reservas" : "← Historial";
+    viewerRole === "proveedor" ? t.reserva.volverMisReservas : t.reserva.volverHistorial;
 
   const reviewEligible =
     viewerRole === "cliente" &&
@@ -538,8 +534,8 @@ export default function ReservaDetallePage() {
               <div>
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-[#aaa]">
                   {viewerRole === "proveedor"
-                    ? "Reserva recibida"
-                    : "Detalle de reserva"}
+                    ? t.reserva.reservaRecibida
+                    : t.reserva.detalleReserva}
                 </p>
                 <h1
                   className="mt-1 text-xl text-[#1a1a1a]"
@@ -573,47 +569,47 @@ export default function ReservaDetallePage() {
               {statusMeta.description}
             </p>
 
-            <Section title="Fechas y servicio">
+            <Section title={t.reserva.fechasServicio}>
               <p className="text-sm text-[#1a1a1a]">
                 {getBookingDateRangeLabel(booking)}
               </p>
               {duration && (
-                <p className="mt-0.5 text-xs text-[#888]">Duración: {duration}</p>
+                <p className="mt-0.5 text-xs text-[#888]">{t.reserva.duracion} {duration}</p>
               )}
               {booking.hora && (
                 <p className="mt-0.5 text-xs text-[#888]">
-                  Hora de inicio: {booking.hora}
+                  {t.reserva.horaInicio} {booking.hora}
                 </p>
               )}
               {modalidadLabel && (
                 <p className="mt-0.5 text-xs text-[#888]">
-                  Modalidad: {modalidadLabel}
+                  {t.reserva.modalidad} {modalidadLabel}
                 </p>
               )}
               {lugarLabel && (
-                <p className="mt-0.5 text-xs text-[#888]">Lugar: {lugarLabel}</p>
+                <p className="mt-0.5 text-xs text-[#888]">{t.reserva.lugar} {lugarLabel}</p>
               )}
               {booking.num_huespedes != null && (
                 <p className="mt-0.5 text-xs text-[#888]">
                   {booking.num_huespedes}{" "}
                   {booking.num_huespedes === 1
                     ? vertical === "ninos"
-                      ? "niño"
+                      ? t.reserva.nino
                       : vertical === "mascotas"
-                        ? "mascota"
-                        : "huésped"
+                        ? t.reserva.mascota
+                        : t.reserva.huesped
                     : vertical === "ninos"
-                      ? "niños"
+                      ? t.reserva.ninos
                       : vertical === "mascotas"
-                        ? "mascotas"
-                        : "huéspedes"}
+                        ? t.reserva.mascotas
+                        : t.reserva.huespedes}
                 </p>
               )}
             </Section>
 
             <Section
               title={
-                viewerRole === "proveedor" ? "Tu ingreso" : "Precio"
+                viewerRole === "proveedor" ? t.reserva.tuIngreso : t.reserva.precio
               }
             >
               {viewerRole === "cliente" ? (
@@ -643,8 +639,8 @@ export default function ReservaDetallePage() {
                   >
                     <span>
                       {priceBreakdown.credito > 0
-                        ? "Total a pagar"
-                        : "Total pagado"}
+                        ? t.reserva.totalAPagar
+                        : t.reserva.totalPagado}
                     </span>
                     <span className="tabular-nums">
                       {formatBookingPrice(priceBreakdown.total)}
@@ -666,7 +662,7 @@ export default function ReservaDetallePage() {
                   {refundBreakdown && (
                     <div className="mt-3 space-y-1 rounded-lg bg-[#f7f5f2] px-3 py-2 text-xs">
                       <p style={{ color: GREEN }}>
-                        Devolución:{" "}
+                        {t.reserva.devolucion}{" "}
                         {formatBookingPrice(refundBreakdown.reembolsoTotal)} (
                         {refundBreakdown.reembolsoPct}%)
                       </p>
@@ -674,11 +670,11 @@ export default function ReservaDetallePage() {
                         <p style={{ color: GREEN }}>
                           +
                           {formatBookingPrice(refundBreakdown.reembolsoCredito)}{" "}
-                          a tu crédito
+                          {t.reserva.aTuCredito}
                         </p>
                       )}
                       <p className="font-semibold" style={{ color: PRIMARY }}>
-                        Pagas finalmente:{" "}
+                        {t.reserva.pagasFinalmente}{" "}
                         {formatBookingPrice(refundBreakdown.importeFinal)}
                       </p>
                     </div>
@@ -687,7 +683,7 @@ export default function ReservaDetallePage() {
               ) : (
                 <div className="space-y-1.5 text-sm">
                   <div className="flex justify-between gap-4 text-[#444]">
-                    <span>Base del servicio</span>
+                    <span>{t.reserva.baseServicio}</span>
                     <span className="font-medium tabular-nums">
                       {formatBookingPrice(priceBreakdown.base)}
                     </span>
@@ -696,21 +692,21 @@ export default function ReservaDetallePage() {
                     className="flex justify-between gap-4 border-t pt-2 text-base font-semibold"
                     style={{ borderColor: BORDER, color: GREEN }}
                   >
-                    <span>Recibes</span>
+                    <span>{t.reserva.recibes}</span>
                     <span className="tabular-nums">
                       {formatBookingPrice(ingresoProveedor)}
                     </span>
                   </div>
                   {booking.proveedor_sin_comision && (
                     <p className="text-[11px]" style={{ color: GREEN }}>
-                      🎁 Reserva sin comisión de proveedor
+                      {t.reserva.sinComisionProveedor}
                     </p>
                   )}
                   {booking.pago_liberado_at && (
                     <p className="text-[11px] text-[#888]">
-                      Pago liberado el{" "}
+                      {t.reserva.pagoLiberado}{" "}
                       {new Date(booking.pago_liberado_at).toLocaleDateString(
-                        "es-ES",
+                        lang === "en" ? "en-GB" : "es-ES",
                       )}
                     </p>
                   )}
@@ -719,10 +715,9 @@ export default function ReservaDetallePage() {
             </Section>
 
             {grupoSiblings.length > 0 && (
-              <Section title="Reserva agrupada">
+              <Section title={t.reserva.reservaAgrupada}>
                 <p className="mb-2 text-xs text-[#888]">
-                  Esta reserva forma parte de un grupo con otros servicios
-                  pagados juntos.
+                  {t.reserva.agrupadaDesc}
                 </p>
                 <ul className="space-y-2">
                   <li
@@ -730,10 +725,10 @@ export default function ReservaDetallePage() {
                     style={{ borderColor: PRIMARY, background: "#e8f0fb" }}
                   >
                     <span className="font-medium">
-                      {service.titulo || "Este servicio"}
+                      {service.titulo || t.reserva.esteServicio}
                     </span>
                     <span className="ml-2 text-[#666]">
-                      {formatBookingPrice(booking.precio_total)} · actual
+                      {formatBookingPrice(booking.precio_total)} · {t.reserva.actual}
                     </span>
                   </li>
                   {grupoSiblings.map((sib) => {
@@ -748,7 +743,7 @@ export default function ReservaDetallePage() {
                           style={{ borderColor: BORDER, color: "#1a1a1a" }}
                         >
                           <span>
-                            {sibService?.titulo || "Servicio"}
+                            {sibService?.titulo || t.reserva.servicioFallback}
                             <span className="ml-2 text-[11px] text-[#888]">
                               {
                                 getBookingStatusMeta(sib.estado, {
@@ -772,8 +767,8 @@ export default function ReservaDetallePage() {
               <Section
                 title={
                   viewerRole === "proveedor"
-                    ? "Mensaje del cliente"
-                    : "Tu mensaje"
+                    ? t.reserva.mensajeCliente
+                    : t.reserva.tuMensaje
                 }
               >
                 <p className="text-sm leading-relaxed text-[#444]">
@@ -788,11 +783,11 @@ export default function ReservaDetallePage() {
                 style={{ borderColor: BORDER, backgroundColor: "#f7f5f2" }}
               >
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-[#888]">
-                  Contacto del proveedor
+                  {t.reserva.contactoProveedor}
                 </p>
                 {telefono && (
                   <p className="mt-2 text-sm">
-                    Teléfono:{" "}
+                    {t.reserva.telefono}{" "}
                     <a
                       href={`tel:${telefono}`}
                       className="font-medium no-underline"
@@ -804,14 +799,14 @@ export default function ReservaDetallePage() {
                 )}
                 {providerDireccion && (
                   <p className="mt-1 text-sm text-[#444]">
-                    Dirección: {providerDireccion}
+                    {t.reserva.direccion} {providerDireccion}
                   </p>
                 )}
                 {booking.lugar_servicio === "casa_cliente" && (
                   <p className="mt-1 text-[11px] text-[#888]">
-                    El servicio es en tu casa
+                    {t.reserva.servicioEnTuCasa}
                     {booking.direccion_cliente_a_definir
-                      ? " (dirección a coordinar)"
+                      ? t.reserva.direccionACoordar
                       : ""}
                     .
                   </p>
@@ -828,7 +823,7 @@ export default function ReservaDetallePage() {
                     onError={(msg) => setErrorMessage(msg)}
                     onSuccess={(msg) => setSuccessMessage(msg)}
                   >
-                    Enviar mensaje
+                    {t.reserva.enviarMensaje}
                   </ProveedorPreguntarButton>
                 )}
               </section>
@@ -840,7 +835,7 @@ export default function ReservaDetallePage() {
                 style={{ borderColor: "#bfdbfe", backgroundColor: "#e8f0fb" }}
               >
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1d4f91]">
-                  Contacto del cliente
+                  {t.reserva.contactoCliente}
                 </p>
                 <p className="mt-2 text-sm font-medium text-[#1a1a1a]">
                   {clienteNombre}
@@ -852,7 +847,7 @@ export default function ReservaDetallePage() {
                 </p>
                 {clienteContacto?.telefono && (
                   <p className="mt-1 text-sm">
-                    Teléfono:{" "}
+                    {t.reserva.telefono}{" "}
                     <a
                       href={`tel:${clienteContacto.telefono}`}
                       className="font-medium no-underline"
@@ -866,8 +861,8 @@ export default function ReservaDetallePage() {
                   clienteContacto?.direccion_cliente_a_definir) && (
                   <p className="mt-1 text-sm text-[#444]">
                     {clienteContacto.direccion_cliente
-                      ? `Dirección: ${clienteContacto.direccion_cliente}`
-                      : "Dirección: a coordinar por teléfono"}
+                      ? `${t.reserva.direccion} ${clienteContacto.direccion_cliente}`
+                      : `${t.reserva.direccion} ${t.reserva.coordinarTelefono}`}
                   </p>
                 )}
                 {booking.cliente_id && (
@@ -882,7 +877,7 @@ export default function ReservaDetallePage() {
                     onError={(msg) => setErrorMessage(msg)}
                     onSuccess={(msg) => setSuccessMessage(msg)}
                   >
-                    Enviar mensaje
+                    {t.reserva.enviarMensaje}
                   </ProveedorPreguntarButton>
                 )}
               </section>
@@ -929,7 +924,7 @@ export default function ReservaDetallePage() {
                     disabled={completing}
                     primary
                   >
-                    {completing ? "Confirmando…" : "El servicio se realizó"}
+                    {completing ? t.reserva.confirmando : t.reserva.servicioRealizado}
                   </ActionButton>
                 )}
 
@@ -939,7 +934,7 @@ export default function ReservaDetallePage() {
                     onClick={handleCancelCliente}
                     disabled={cancelling}
                   >
-                    {cancelling ? "Cancelando…" : "Cancelar reserva"}
+                    {cancelling ? t.reserva.cancelando : t.reserva.cancelarReserva}
                   </ActionButton>
                 )}
 
@@ -950,13 +945,13 @@ export default function ReservaDetallePage() {
                     disabled={responding}
                     primary
                   >
-                    {responding ? "Procesando…" : "Aceptar"}
+                    {responding ? t.reserva.procesando : t.reserva.aceptar}
                   </ActionButton>
                   <ActionButton
                     onClick={() => handleRespond("rechazar")}
                     disabled={responding}
                   >
-                    Rechazar
+                    {t.reserva.rechazar}
                   </ActionButton>
                 </>
               )}
@@ -966,7 +961,7 @@ export default function ReservaDetallePage() {
                   onClick={handleCancelProveedor}
                   disabled={cancelling}
                 >
-                  {cancelling ? "Cancelando…" : "Cancelar reserva"}
+                  {cancelling ? t.reserva.cancelando : t.reserva.cancelarReserva}
                 </ActionButton>
               )}
 
@@ -976,18 +971,18 @@ export default function ReservaDetallePage() {
                     href={`/api/facturas/${booking.id}`}
                     primary
                   >
-                    Descargar factura
+                    {t.reserva.descargarFactura}
                   </ActionButton>
                   {reviewed ? (
                     <span
                       className="inline-flex items-center rounded-lg px-4 py-2 text-sm font-semibold"
                       style={{ backgroundColor: "#f0f4f8", color: GREEN }}
                     >
-                      Reseñada ✓
+                      {t.reserva.resenada}
                     </span>
                   ) : reviewEligible ? (
                     <ActionButton href={`/resena/${booking.id}`} primary>
-                      Deja tu reseña
+                      {t.reserva.dejarResena}
                     </ActionButton>
                   ) : null}
                 </>
@@ -998,13 +993,13 @@ export default function ReservaDetallePage() {
                   estado === "cancelada_proveedor" ||
                   estado === "rechazada") && (
                   <ActionButton href="/buscar" primary>
-                    Buscar alternativas
+                    {t.reserva.buscarAlternativas}
                   </ActionButton>
                 )}
 
               {booking.service_id && (
                 <ActionButton href={`/anuncio/${booking.service_id}`}>
-                  Ver anuncio
+                  {t.reserva.verAnuncio}
                 </ActionButton>
               )}
             </div>
