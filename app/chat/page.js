@@ -13,6 +13,8 @@ import {
 import { useModo } from "@/app/lib/ModoContext";
 import { supabase } from "@/app/lib/supabase";
 import { friendlyLoadError, withLoadTimeout } from "@/app/lib/with-load-timeout";
+import { useLang } from "@/app/lib/LangContext";
+import { useTranslation } from "@/app/lib/i18n";
 
 const BLUE = "#1d4f91";
 const AMBER = "#c47d1a";
@@ -24,12 +26,6 @@ const VERTICAL_COLORS = {
   alojamiento: "#1d4f91",
   ninos: "#0e7a5c",
   mascotas: "#c47d1a",
-};
-
-const VERTICAL_LABELS = {
-  alojamiento: "Alojamiento",
-  ninos: "Cuidado de niños",
-  mascotas: "Cuidado de mascotas",
 };
 
 const hideScrollbar = {
@@ -86,16 +82,16 @@ function formatListTime(value) {
   return date.toLocaleDateString("es-ES", { day: "numeric", month: "short" });
 }
 
-function formatLastSeen(lastMessage, otherId) {
+function formatLastSeen(lastMessage, otherId, tc) {
   if (!lastMessage || lastMessage.sender_id !== otherId) {
-    return "Última vez hace un momento";
+    return tc.ultimaVezMomento;
   }
   const diff = Date.now() - new Date(lastMessage.created_at).getTime();
   const hours = Math.floor(diff / 3600000);
-  if (hours < 1) return "En línea ahora";
-  if (hours < 24) return `Última vez hace ${hours}h`;
+  if (hours < 1) return tc.enLineaAhora;
+  if (hours < 24) return tc.ultimaVezHoras.replace("{n}", hours);
   const days = Math.floor(hours / 24);
-  return `Última vez hace ${days}d`;
+  return tc.ultimaVezDias.replace("{n}", days);
 }
 
 function parseJsonMessage(content) {
@@ -118,13 +114,13 @@ function parseOfferContent(content) {
   return parsed?.tipo === "oferta" ? parsed : null;
 }
 
-function getMessagePreview(content) {
+function getMessagePreview(content, tc) {
   const parsed = parseJsonMessage(content);
   if (parsed?.tipo === "oferta") {
     const precio = Number(parsed.precio_especial);
-    return `🏷️ Oferta especial · ${Number.isFinite(precio) ? `${precio.toFixed(0)}€` : ""}`;
+    return `${tc.ofertaPreview} · ${Number.isFinite(precio) ? `${precio.toFixed(0)}€` : ""}`;
   }
-  if (parsed?.tipo === "solicitud_precio") return "💬 Solicitud de precio";
+  if (parsed?.tipo === "solicitud_precio") return tc.solicitudPreview;
   return content;
 }
 
@@ -177,7 +173,7 @@ function Avatar({
   );
 }
 
-function OfertaMessageCard({ message, offer, isMine, onReject, rejecting }) {
+function OfertaMessageCard({ message, offer, isMine, onReject, rejecting, tc }) {
   const rechazada = offer.estado === "rechazada";
   const expirada = offer.valida_hasta < new Date().toISOString().split("T")[0];
   const canRespond = !isMine && !rechazada && !expirada;
@@ -198,7 +194,7 @@ function OfertaMessageCard({ message, offer, isMine, onReject, rejecting }) {
           className="text-[9px] font-medium uppercase tracking-wide"
           style={{ color: BLUE }}
         >
-          🏷️ OFERTA ESPECIAL
+          {tc.ofertaLabel}
         </p>
         <p className="mt-2 text-[13px] font-medium" style={{ color: DARK }}>
           {offer.service_titulo}
@@ -214,17 +210,17 @@ function OfertaMessageCard({ message, offer, isMine, onReject, rejecting }) {
           </span>
         </div>
         <p className="mt-1 text-[10px] text-[#888]">
-          Válida hasta {formatOfferValidUntil(offer.valida_hasta)}
-          {ahorro > 0 && ` · Ahorro ${ahorro.toFixed(0)}€`}
+          {tc.validaHasta} {formatOfferValidUntil(offer.valida_hasta)}
+          {ahorro > 0 && ` · ${tc.ahorro} ${ahorro.toFixed(0)}€`}
         </p>
         {offer.mensaje && (
           <p className="mt-2 whitespace-pre-wrap text-xs text-[#666]">{offer.mensaje}</p>
         )}
         {rechazada && (
-          <p className="mt-2 text-[10px] font-medium text-[#888]">Oferta rechazada</p>
+          <p className="mt-2 text-[10px] font-medium text-[#888]">{tc.ofertaRechazada}</p>
         )}
         {expirada && !rechazada && (
-          <p className="mt-2 text-[10px] font-medium text-[#888]">Oferta caducada</p>
+          <p className="mt-2 text-[10px] font-medium text-[#888]">{tc.ofertaCaducada}</p>
         )}
         {canRespond && (
           <div className="mt-3 flex flex-wrap gap-2">
@@ -233,7 +229,7 @@ function OfertaMessageCard({ message, offer, isMine, onReject, rejecting }) {
               className="inline-flex min-h-[44px] items-center rounded px-3 text-[11px] font-medium text-white no-underline transition-opacity hover:opacity-90"
               style={{ backgroundColor: BLUE }}
             >
-              Aceptar oferta →
+              {tc.aceptarOferta}
             </Link>
             <button
               type="button"
@@ -241,7 +237,7 @@ function OfertaMessageCard({ message, offer, isMine, onReject, rejecting }) {
               disabled={rejecting}
               className="min-h-[44px] rounded bg-[#e5e5e5] px-3 text-[11px] font-medium text-[#666] transition-opacity hover:opacity-90 disabled:opacity-60"
             >
-              {rejecting ? "…" : "Rechazar"}
+              {rejecting ? "…" : tc.rechazar}
             </button>
           </div>
         )}
@@ -261,6 +257,7 @@ function SolicitudPrecioMessageCard({
   onReject,
   onAcceptAndOffer,
   rejecting,
+  tc,
 }) {
   const rechazada = solicitud.estado === "rechazada";
   const canRespond = isProvider && !isMine && !rechazada;
@@ -277,7 +274,7 @@ function SolicitudPrecioMessageCard({
           className="text-[9px] font-medium uppercase tracking-wide"
           style={{ color: AMBER }}
         >
-          💬 SOLICITUD DE PRECIO ESPECIAL
+          {tc.solicitudLabel}
         </p>
         <p className="mt-2 text-[13px] font-medium" style={{ color: DARK }}>
           {solicitud.service_titulo}
@@ -298,7 +295,7 @@ function SolicitudPrecioMessageCard({
           </p>
         )}
         {rechazada && (
-          <p className="mt-2 text-[10px] font-medium text-[#888]">Solicitud rechazada</p>
+          <p className="mt-2 text-[10px] font-medium text-[#888]">{tc.solicitudRechazada}</p>
         )}
         {canRespond && (
           <div className="mt-3 flex flex-wrap gap-2">
@@ -308,7 +305,7 @@ function SolicitudPrecioMessageCard({
               className="min-h-[44px] rounded px-3 text-[11px] font-medium text-white transition-opacity hover:opacity-90"
               style={{ backgroundColor: "#0e7a5c" }}
             >
-              Aceptar y enviar oferta
+              {tc.aceptarYEnviarOferta}
             </button>
             <button
               type="button"
@@ -316,7 +313,7 @@ function SolicitudPrecioMessageCard({
               disabled={rejecting}
               className="min-h-[44px] rounded bg-[#e5e5e5] px-3 text-[11px] font-medium text-[#666] transition-opacity hover:opacity-90 disabled:opacity-60"
             >
-              {rejecting ? "…" : "Rechazar"}
+              {rejecting ? "…" : tc.rechazar}
             </button>
           </div>
         )}
@@ -352,6 +349,15 @@ export default function ChatPage() {
   const searchParams = useSearchParams();
   const conversationParam = searchParams.get("conversation");
   const { modo, esClientePuro } = useModo();
+  const { lang } = useLang();
+  const t = useTranslation(lang);
+  const tc = t.chat;
+
+  const VERTICAL_LABELS = {
+    alojamiento: tc.verticalAlojamiento,
+    ninos: tc.verticalNinos,
+    mascotas: tc.verticalMascotas,
+  };
 
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -706,10 +712,10 @@ export default function ChatPage() {
     if (!q) return conversations;
     return conversations.filter((c) => {
       const name = formatShortName(c.other_nombre, c.other_apellido).toLowerCase();
-      const preview = (getMessagePreview(c.last_message?.content) || "").toLowerCase();
+      const preview = (getMessagePreview(c.last_message?.content, tc) || "").toLowerCase();
       return name.includes(q) || preview.includes(q);
     });
-  }, [conversations, searchQuery]);
+  }, [conversations, searchQuery, tc]);
 
   const unreadTotal = useMemo(
     () =>
@@ -777,7 +783,7 @@ export default function ChatPage() {
       json = null;
     }
     if (!response.ok) {
-      throw new Error(json?.error || "No se pudo enviar el mensaje");
+      throw new Error(json?.error || tc.errorEnviarMensaje);
     }
     if (typeof json?.filter_active === "boolean") {
       setFilterActive(json.filter_active);
@@ -805,7 +811,7 @@ export default function ChatPage() {
       setDraft("");
       maybeNotifyRecipient(selectedId, json.message?.content || "");
     } catch (err) {
-      setErrorMessage(err?.message || "No se pudo enviar el mensaje");
+      setErrorMessage(err?.message || tc.errorEnviarMensaje);
     } finally {
       setSending(false);
     }
@@ -818,7 +824,7 @@ export default function ChatPage() {
     const svc = providerServices.find((s) => s.id === offerServiceId);
     const precio = Number(offerPrecio);
     if (!svc || !precio || precio <= 0 || !offerValidaHasta) {
-      setErrorMessage("Completa servicio, precio especial y fecha de validez.");
+      setErrorMessage(tc.errorOfertaIncompleta);
       return;
     }
 
@@ -843,9 +849,9 @@ export default function ChatPage() {
       setOfferPrecio("");
       setOfferValidaHasta("");
       setOfferMensaje("");
-      maybeNotifyRecipient(selectedId, "🏷️ Oferta especial");
+      maybeNotifyRecipient(selectedId, tc.ofertaPreview);
     } catch (err) {
-      setErrorMessage(err?.message || "No se pudo enviar la oferta");
+      setErrorMessage(err?.message || tc.errorEnviarOferta);
     } finally {
       setSendingOffer(false);
     }
@@ -858,7 +864,7 @@ export default function ChatPage() {
     const svc = otherParticipantServices.find((s) => s.id === requestServiceId);
     const precio = Number(requestPrecio);
     if (!svc || !precio || precio <= 0) {
-      setErrorMessage("Completa servicio y tu propuesta de precio.");
+      setErrorMessage(tc.errorSolicitudIncompleta);
       return;
     }
 
@@ -881,9 +887,9 @@ export default function ChatPage() {
       setShowRequestForm(false);
       setRequestPrecio("");
       setRequestMensaje("");
-      maybeNotifyRecipient(selectedId, "💬 Solicitud de precio");
+      maybeNotifyRecipient(selectedId, tc.solicitudPreview);
     } catch (err) {
-      setErrorMessage(err?.message || "No se pudo enviar la solicitud");
+      setErrorMessage(err?.message || tc.errorEnviarSolicitud);
     } finally {
       setSendingRequest(false);
     }
@@ -897,7 +903,7 @@ export default function ChatPage() {
     setOfferPrecio(String(solicitud.precio_propuesto));
     setOfferMensaje(
       solicitud.mensaje
-        ? `En respuesta a tu solicitud: ${solicitud.mensaje}`
+        ? `${tc.enRespuestaSolicitud} ${solicitud.mensaje}`
         : "",
     );
     setOfferValidaHasta(until.toISOString().split("T")[0]);
@@ -977,7 +983,7 @@ export default function ChatPage() {
           className="flex items-center justify-center text-sm text-[#aaa]"
           style={{ height: "calc(100vh - 57px)" }}
         >
-          Cargando mensajes…
+          {tc.cargandoMensajes}
         </main>
       </div>
     );
@@ -1036,14 +1042,14 @@ export default function ChatPage() {
             style={{ borderBottom: `0.5px solid #f0ede8` }}
           >
             <span className="text-[13px] font-medium" style={{ color: DARK }}>
-              Mensajes
+              {tc.mensajes}
             </span>
             {unreadTotal > 0 && (
               <span
                 className="rounded-full px-2 py-0.5 text-[9px] font-medium text-white"
                 style={{ backgroundColor: BLUE }}
               >
-                {unreadTotal} sin leer
+                {unreadTotal} {tc.sinLeer}
               </span>
             )}
           </div>
@@ -1053,7 +1059,7 @@ export default function ChatPage() {
               type="search"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Buscar conversación..."
+              placeholder={tc.buscarConversacion}
               className="min-h-[44px] w-full border-0 px-4 py-2 text-xs outline-none"
               style={{
                 borderRadius: 20,
@@ -1068,23 +1074,22 @@ export default function ChatPage() {
               {conversations.length === 0 ? (
                 <div className="text-center">
                   <p className="text-sm font-semibold text-[#2a3a4a]">
-                    Aún no tienes conversaciones
+                    {tc.sinConversaciones}
                   </p>
                   <p className="mt-1 text-xs leading-relaxed text-[#888]">
-                    Cuando preguntes a un proveedor desde su anuncio, el chat
-                    aparecerá aquí.
+                    {tc.sinConversacionesDesc}
                   </p>
                   <a
                     href="/buscar"
                     className="mt-4 inline-flex min-h-[44px] items-center justify-center rounded-md px-4 py-2 text-xs font-semibold text-white no-underline"
                     style={{ backgroundColor: BLUE }}
                   >
-                    Explorar servicios
+                    {tc.explorarServicios}
                   </a>
                 </div>
               ) : (
                 <p className="py-4 text-center text-xs text-[#888]">
-                  No hay resultados para esta búsqueda. Prueba otro nombre.
+                  {tc.sinResultados}
                 </p>
               )}
             </div>
@@ -1138,7 +1143,7 @@ export default function ChatPage() {
                               {formatShortName(
                                 conversation.other_nombre,
                                 conversation.other_apellido,
-                              ) || "Usuario"}
+                              ) || tc.usuario}
                             </p>
                             {isProvider &&
                               conversation.other_dni_verificado && (
@@ -1161,8 +1166,8 @@ export default function ChatPage() {
                           }}
                         >
                           {conversation.last_message?.content
-                            ? getMessagePreview(conversation.last_message.content)
-                            : "Sin mensajes todavía"}
+                            ? getMessagePreview(conversation.last_message.content, tc)
+                            : tc.sinMensajes}
                         </p>
                       </div>
                       {unread && (
@@ -1200,9 +1205,9 @@ export default function ChatPage() {
                     type="button"
                     onClick={volverALista}
                     className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center text-sm font-medium text-[#1d4f91] md:hidden"
-                    aria-label="Volver a conversaciones"
+                    aria-label={tc.volverLabel}
                   >
-                    ← Volver
+                    {tc.volverTexto}
                   </button>
                   <Avatar
                     nombre={otherParticipant?.nombre}
@@ -1217,17 +1222,18 @@ export default function ChatPage() {
                         {formatShortName(
                           otherParticipant?.nombre,
                           otherParticipant?.apellido,
-                        ) || "Usuario"}
+                        ) || tc.usuario}
                       </p>
                       {isProvider && otherParticipant?.dni_verificado && (
                         <ClienteVerificadoBadge compact />
                       )}
                     </div>
                     <p className="text-[10px] text-[#aaa]">
-                      {VERTICAL_LABELS[serviceVertical] || "Servicio"} ·{" "}
+                      {VERTICAL_LABELS[serviceVertical] || tc.servicio} ·{" "}
                       {formatLastSeen(
                         selectedConversation.last_message,
                         otherParticipantId,
+                        tc,
                       )}
                     </p>
                   </div>
@@ -1239,7 +1245,7 @@ export default function ChatPage() {
                       className="inline-flex min-h-[44px] items-center rounded border px-3 text-[11px] font-medium no-underline transition-colors hover:bg-[#f7f5f2]"
                       style={{ borderColor: BLUE, color: BLUE }}
                     >
-                      Ver perfil →
+                      {tc.verPerfil}
                     </Link>
                   )}
                   <Link
@@ -1247,7 +1253,7 @@ export default function ChatPage() {
                     className="inline-flex min-h-[44px] items-center rounded border px-3 text-[11px] font-medium no-underline transition-colors hover:bg-[#f7f5f2]"
                     style={{ borderColor: BLUE, color: BLUE }}
                   >
-                    Reservar
+                    {tc.reservar}
                   </Link>
                 </div>
               </div>
@@ -1272,11 +1278,11 @@ export default function ChatPage() {
               >
                 {messagesLoading ? (
                   <p className="text-center text-xs text-[#aaa]">
-                    Cargando mensajes…
+                    {tc.cargandoMensajes}
                   </p>
                 ) : messages.length === 0 ? (
                   <p className="text-center text-xs text-[#aaa]">
-                    Envía el primer mensaje para iniciar la conversación.
+                    {tc.primerMensaje}
                   </p>
                 ) : (
                   <ul className="flex flex-col gap-4">
@@ -1296,6 +1302,7 @@ export default function ChatPage() {
                               isMine={isMine}
                               onReject={handleRejectSpecialMessage}
                               rejecting={rejectingOfferId === message.id}
+                              tc={tc}
                             />
                           </li>
                         );
@@ -1315,6 +1322,7 @@ export default function ChatPage() {
                               onReject={handleRejectSpecialMessage}
                               onAcceptAndOffer={handleAcceptSolicitudAndOffer}
                               rejecting={rejectingOfferId === message.id}
+                              tc={tc}
                             />
                           </li>
                         );
@@ -1380,7 +1388,7 @@ export default function ChatPage() {
                   }}
                 >
                   <p className="mb-2 text-xs font-medium" style={{ color: AMBER }}>
-                    Solicitar precio especial
+                    {tc.solicitarPrecioEspecial}
                   </p>
                   <div className="flex flex-col gap-2">
                     <select
@@ -1402,7 +1410,7 @@ export default function ChatPage() {
                       step="0.01"
                       value={requestPrecio}
                       onChange={(e) => setRequestPrecio(e.target.value)}
-                      placeholder="Tu propuesta de precio (€)"
+                      placeholder={tc.tuPropuestaPrecio}
                       className={inputClass}
                       style={{ borderColor: AMBER }}
                       required
@@ -1411,7 +1419,7 @@ export default function ChatPage() {
                       rows={2}
                       value={requestMensaje}
                       onChange={(e) => setRequestMensaje(e.target.value)}
-                      placeholder="Explica tu solicitud..."
+                      placeholder={tc.explicaTuSolicitud}
                       className={`${inputClass} resize-y`}
                       style={{ borderColor: AMBER }}
                     />
@@ -1421,7 +1429,7 @@ export default function ChatPage() {
                       className="min-h-[44px] self-start rounded px-4 text-xs font-medium text-white disabled:opacity-60"
                       style={{ backgroundColor: BLUE }}
                     >
-                      {sendingRequest ? "Enviando…" : "Enviar solicitud"}
+                      {sendingRequest ? tc.enviando : tc.enviarSolicitud}
                     </button>
                   </div>
                 </form>
@@ -1437,7 +1445,7 @@ export default function ChatPage() {
                   }}
                 >
                   <p className="mb-2 text-xs font-medium" style={{ color: BLUE }}>
-                    Nueva oferta personalizada
+                    {tc.nuevaOfertaPersonalizada}
                   </p>
                   <div className="flex flex-col gap-2">
                     <select
@@ -1460,7 +1468,7 @@ export default function ChatPage() {
                         step="0.01"
                         value={offerPrecio}
                         onChange={(e) => setOfferPrecio(e.target.value)}
-                        placeholder="Precio especial (€)"
+                        placeholder={tc.precioEspecialPlaceholder}
                         className={inputClass}
                         required
                       />
@@ -1477,7 +1485,7 @@ export default function ChatPage() {
                       rows={2}
                       value={offerMensaje}
                       onChange={(e) => setOfferMensaje(e.target.value)}
-                      placeholder="Mensaje de la oferta..."
+                      placeholder={tc.mensajeOfertaPlaceholder}
                       className={`${inputClass} resize-y`}
                     />
                     <button
@@ -1486,7 +1494,7 @@ export default function ChatPage() {
                       className="min-h-[44px] self-start rounded px-4 text-xs font-medium text-white disabled:opacity-60"
                       style={{ backgroundColor: BLUE }}
                     >
-                      {sendingOffer ? "Enviando…" : "Enviar oferta"}
+                      {sendingOffer ? tc.enviando : tc.enviarOferta}
                     </button>
                   </div>
                 </form>
@@ -1515,7 +1523,7 @@ export default function ChatPage() {
                           backgroundColor: showOfferForm ? WARM : "#fff",
                         }}
                       >
-                        🏷️ Enviar oferta
+                        {tc.enviarOfertaBtn}
                       </button>
                     )}
                     {!isProvider && otherParticipantServices.length > 0 && (
@@ -1533,7 +1541,7 @@ export default function ChatPage() {
                           backgroundColor: showRequestForm ? WARM : "#fff",
                         }}
                       >
-                        💬 Solicitar precio
+                        {tc.solicitarPrecioBtn}
                       </button>
                     )}
                   </div>
@@ -1544,7 +1552,7 @@ export default function ChatPage() {
                     type="text"
                     value={draft}
                     onChange={(e) => setDraft(e.target.value)}
-                    placeholder="Escribe un mensaje…"
+                    placeholder={tc.escribeMensaje}
                     className="min-h-[44px] flex-1 border-0 px-4 py-2.5 text-xs outline-none"
                     style={{
                       borderRadius: 20,
@@ -1561,7 +1569,7 @@ export default function ChatPage() {
                       backgroundColor: BLUE,
                     }}
                   >
-                    {sending ? "Enviando…" : "Enviar →"}
+                    {sending ? tc.enviando : tc.enviarBtn}
                   </button>
                 </form>
                 {contactNotice ? (
@@ -1574,18 +1582,18 @@ export default function ChatPage() {
                   </p>
                 ) : filterActive ? (
                   <p className="mt-2 text-[9px] text-[#bbb]">
-                    Contacto oculto hasta confirmar la reserva ([oculto]).
+                    {tc.contactoOculto}
                   </p>
                 ) : (
                   <p className="mt-2 text-[9px] text-[#bbb]">
-                    Reserva confirmada: podéis coordinaros con normalidad.
+                    {tc.reservaConfirmada}
                   </p>
                 )}
               </div>
             </>
           ) : (
             <div className="flex flex-1 items-center justify-center text-xs text-[#aaa]">
-              Selecciona una conversación para ver los mensajes.
+              {tc.seleccionaConversacion}
             </div>
           )}
         </section>

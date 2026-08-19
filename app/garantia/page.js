@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { SERIF } from "@/app/components/brand";
+import { useLang } from "@/app/lib/LangContext";
+import { useTranslation } from "@/app/lib/i18n";
 
 const PRIMARY = "#1d4f91";
 const PRIMARY_DARK = "#163a6b";
@@ -9,76 +11,6 @@ const GREEN = "#0e7a5c";
 const GREEN_DARK = "#085041";
 const BORDER = "#e8e4de";
 const WARM = "#f7f5f2";
-
-const FAQ_ITEMS = [
-  {
-    q: "¿Qué pasa si no hay alternativas disponibles?",
-    a: "Si en 30 minutos no encontramos proveedores verificados disponibles, te reembolsamos el importe íntegro de tu reserva y te ayudamos a buscar manualmente. La garantía cubre el intento activo de sustitución.",
-  },
-  {
-    q: "¿La garantía aplica a los 3 servicios?",
-    a: "Sí. La Garantía Home&Heart está disponible para alojamiento, cuidado de niños y cuidado de mascotas, siempre que la reserva original incluyera la garantía al confirmar.",
-  },
-  {
-    q: "¿Qué penalización tiene el proveedor que cancela?",
-    a: "Las cancelaciones con menos de 24 horas de antelación afectan la valoración del proveedor y pueden suponer penalización en visibilidad. En casos reiterados, revisamos su permanencia en la plataforma.",
-  },
-  {
-    q: "¿Cómo sé que los alternativos son de confianza?",
-    a: "Todos los proveedores alternativos pasan el mismo proceso de verificación que el resto de la red Home&Heart: identidad, referencias y reseñas verificadas. Solo proponemos perfiles con el mismo nivel de confianza.",
-  },
-];
-
-const STEPS = [
-  {
-    num: 1,
-    icon: "📅",
-    title: "Tu proveedor cancela",
-    desc: "Recibes aviso de cancelación con menos de 24 h de antelación. Activamos la garantía al instante.",
-  },
-  {
-    num: 2,
-    icon: "🔍",
-    title: "Activamos la búsqueda",
-    desc: "Nuestro sistema contacta a la red de emergencia verificada en tu zona y fechas.",
-  },
-  {
-    num: 3,
-    icon: "✅",
-    title: "3 alternativas en 30 min",
-    desc: "Te enviamos hasta 3 opciones equivalentes. Eliges y reservas sin esperar confirmación.",
-  },
-];
-
-const CLIENT_CARDS = [
-  {
-    icon: "💰",
-    title: "Precio garantizado",
-    desc: "Intentamos ofrecerte alternativas con precio similar al de tu reserva original.",
-  },
-  {
-    icon: "✅",
-    title: "Mismo nivel de verificación",
-    desc: "Todos los alternativos están verificados con el mismo proceso que el resto de la red.",
-  },
-  {
-    icon: "⚡",
-    title: "Reserva inmediata",
-    desc: "Sin esperar confirmación del proveedor. Activa en minutos.",
-  },
-  {
-    icon: "🤝",
-    title: "Sin gestiones extra",
-    desc: "Nosotros lo gestionamos todo. Tú solo eliges la alternativa.",
-  },
-];
-
-const PROVIDER_BENEFITS = [
-  { icon: "💶", text: "+5% sobre tu precio en reservas de emergencia" },
-  { icon: "🛡️", text: "Badge especial en tu perfil" },
-  { icon: "📈", text: "Más visibilidad en búsquedas prioritarias" },
-  { icon: "⭐", text: "Puntos de confianza extra en tu reputación" },
-];
 
 const CITIES = [
   { name: "Madrid", active: true },
@@ -89,6 +21,9 @@ const CITIES = [
 ];
 
 function GarantiaNavbar() {
+  const { lang } = useLang();
+  const t = useTranslation(lang);
+
   return (
     <nav
       className="flex flex-wrap items-center justify-between gap-4 border-b bg-white px-6 py-3"
@@ -103,17 +38,17 @@ function GarantiaNavbar() {
       </Link>
       <div className="flex flex-wrap items-center gap-5">
         <Link href="/" className="text-sm no-underline" style={{ color: "#666" }}>
-          Inicio
+          {t.garantia.navInicio}
         </Link>
         <Link href="/buscar" className="text-sm no-underline" style={{ color: "#666" }}>
-          Servicios
+          {t.garantia.navServicios}
         </Link>
         <Link
           href="/buscar"
           className="rounded-lg px-4 py-2 text-sm font-semibold text-white no-underline"
           style={{ backgroundColor: PRIMARY }}
         >
-          Buscar proveedores
+          {t.garantia.navBuscar}
         </Link>
       </div>
     </nav>
@@ -152,6 +87,36 @@ function FaqCard({ question, answer }) {
 }
 
 export default function GarantiaPage() {
+  const { lang } = useLang();
+  const t = useTranslation(lang);
+
+  const steps = [
+    { num: 1, icon: "📅", title: t.garantia.step1Titulo, desc: t.garantia.step1Desc },
+    { num: 2, icon: "🔍", title: t.garantia.step2Titulo, desc: t.garantia.step2Desc },
+    { num: 3, icon: "✅", title: t.garantia.step3Titulo, desc: t.garantia.step3Desc },
+  ];
+
+  const clientCards = [
+    { icon: "💰", title: t.garantia.card1Titulo, desc: t.garantia.card1Desc },
+    { icon: "✅", title: t.garantia.card2Titulo, desc: t.garantia.card2Desc },
+    { icon: "⚡", title: t.garantia.card3Titulo, desc: t.garantia.card3Desc },
+    { icon: "🤝", title: t.garantia.card4Titulo, desc: t.garantia.card4Desc },
+  ];
+
+  const providerBenefits = [
+    { icon: "💶", text: t.garantia.benefit1 },
+    { icon: "🛡️", text: t.garantia.benefit2 },
+    { icon: "📈", text: t.garantia.benefit3 },
+    { icon: "⭐", text: t.garantia.benefit4 },
+  ];
+
+  const faqItems = [
+    { q: t.garantia.faq1Q, a: t.garantia.faq1A },
+    { q: t.garantia.faq2Q, a: t.garantia.faq2A },
+    { q: t.garantia.faq3Q, a: t.garantia.faq3A },
+    { q: t.garantia.faq4Q, a: t.garantia.faq4A },
+  ];
+
   return (
     <div className="min-h-screen font-sans" style={{ backgroundColor: "#fff", color: "#1a1a1a" }}>
       <GarantiaNavbar />
@@ -178,7 +143,7 @@ export default function GarantiaPage() {
             className="inline-block text-[9px] font-semibold uppercase tracking-[0.2em]"
             style={{ color: "rgba(255,255,255,0.45)" }}
           >
-            Solo en Home&Heart
+            {t.garantia.soloEn}
           </span>
 
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -201,7 +166,7 @@ export default function GarantiaPage() {
             className="text-[36px] leading-tight text-white"
             style={{ fontFamily: SERIF, fontWeight: 300 }}
           >
-            Garantía{" "}
+            {t.garantia.heroTitulo}{" "}
             <em style={{ fontStyle: "italic", color: "rgba(255,255,255,0.65)" }}>
               Home&Heart
             </em>
@@ -211,16 +176,15 @@ export default function GarantiaPage() {
             className="mx-auto mt-4 text-[15px] leading-relaxed"
             style={{ color: "rgba(255,255,255,0.55)", maxWidth: 520 }}
           >
-            Si tu proveedor cancela con menos de 24 horas, activamos la red de
-            emergencia y te proponemos alternativas verificadas en 30 minutos.
+            {t.garantia.heroDesc}
           </p>
 
           <div className="mt-8 flex flex-wrap justify-center gap-2">
             {[
-              "✓ Solo en Home&Heart",
-              "✓ Proveedores verificados",
-              "✓ En 30 minutos",
-              "✓ Precio protegido",
+              t.garantia.pill1,
+              t.garantia.pill2,
+              t.garantia.pill3,
+              t.garantia.pill4,
             ].map((pill) => (
               <span
                 key={pill}
@@ -242,9 +206,9 @@ export default function GarantiaPage() {
       <main className="mx-auto" style={{ maxWidth: 900, padding: "40px 24px" }}>
         {/* Cómo funciona */}
         <section className="mb-12">
-          <SectionLabel>Cómo funciona</SectionLabel>
+          <SectionLabel>{t.garantia.labelComoFunciona}</SectionLabel>
           <div className="grid gap-4 md:grid-cols-[1fr_auto_1fr_auto_1fr] md:items-stretch">
-            {STEPS.map((step, i) => (
+            {steps.map((step, i) => (
               <div key={step.num} className="contents">
                 <div
                   className="rounded-xl border bg-white p-5"
@@ -268,7 +232,7 @@ export default function GarantiaPage() {
                     {step.desc}
                   </p>
                 </div>
-                {i < STEPS.length - 1 && (
+                {i < steps.length - 1 && (
                   <div
                     className="hidden items-center justify-center text-[#ccc] md:flex"
                     aria-hidden
@@ -283,15 +247,15 @@ export default function GarantiaPage() {
 
         {/* Para clientes */}
         <section className="mb-12">
-          <SectionLabel>Para clientes</SectionLabel>
+          <SectionLabel>{t.garantia.labelParaClientes}</SectionLabel>
           <h2
             className="mb-5 text-xl text-[#1a1a1a]"
             style={{ fontFamily: SERIF, fontWeight: 300 }}
           >
-            Tu tranquilidad está protegida
+            {t.garantia.clientesTitulo}
           </h2>
           <div className="grid gap-4 sm:grid-cols-2">
-            {CLIENT_CARDS.map((card) => (
+            {clientCards.map((card) => (
               <div
                 key={card.title}
                 className="rounded-xl border bg-white p-5"
@@ -313,7 +277,7 @@ export default function GarantiaPage() {
 
         {/* Para proveedores */}
         <section className="mb-12">
-          <SectionLabel>Para proveedores</SectionLabel>
+          <SectionLabel>{t.garantia.labelParaProveedores}</SectionLabel>
           <div
             className="rounded-xl p-6 text-white sm:p-8"
             style={{
@@ -325,21 +289,20 @@ export default function GarantiaPage() {
               className="text-xl"
               style={{ fontFamily: SERIF, fontWeight: 300 }}
             >
-              Únete a la red de emergencia
+              {t.garantia.proveedoresTitulo}
             </h2>
             <p className="mt-2 text-sm text-white/70">
-              Activa tu badge y recibe reservas prioritarias cuando un proveedor
-              cancela en tu zona.
+              {t.garantia.proveedoresDesc}
             </p>
             <Link
               href="/editar-perfil"
               className="mt-5 inline-block rounded-lg bg-white px-5 py-2.5 text-sm font-semibold no-underline"
               style={{ color: GREEN }}
             >
-              Activar mi badge →
+              {t.garantia.activarBadge}
             </Link>
             <div className="mt-6 grid gap-4 sm:grid-cols-2">
-              {PROVIDER_BENEFITS.map((b) => (
+              {providerBenefits.map((b) => (
                 <div key={b.text} className="flex items-start gap-3">
                   <span className="text-lg" aria-hidden>
                     {b.icon}
@@ -353,12 +316,12 @@ export default function GarantiaPage() {
 
         {/* Cobertura */}
         <section className="mb-12">
-          <SectionLabel>Cobertura</SectionLabel>
+          <SectionLabel>{t.garantia.labelCobertura}</SectionLabel>
           <h2
             className="mb-4 text-xl text-[#1a1a1a]"
             style={{ fontFamily: SERIF, fontWeight: 300 }}
           >
-            Ciudades disponibles
+            {t.garantia.ciudadesTitulo}
           </h2>
           <div className="flex flex-wrap gap-2">
             {CITIES.map((city) => (
@@ -381,24 +344,21 @@ export default function GarantiaPage() {
               >
                 {city.name}
                 {!city.active && (
-                  <span className="ml-1.5 text-[10px] font-normal">· Próximamente</span>
+                  <span className="ml-1.5 text-[10px] font-normal">· {t.garantia.proximamente}</span>
                 )}
               </span>
             ))}
           </div>
           <p className="mt-4 text-sm leading-relaxed text-[#666]">
-            La Garantía Home&Heart está operativa en Madrid. Estamos ampliando
-            cobertura a más ciudades. Las reservas fuera de zona activa no
-            incluyen sustitución automática, pero sí el resto de protecciones de
-            la plataforma.
+            {t.garantia.coberturaTexto}
           </p>
         </section>
 
         {/* FAQ */}
         <section className="mb-12">
-          <SectionLabel>Preguntas frecuentes</SectionLabel>
+          <SectionLabel>{t.garantia.labelFaq}</SectionLabel>
           <div className="flex flex-col gap-3">
-            {FAQ_ITEMS.map((item) => (
+            {faqItems.map((item) => (
               <FaqCard key={item.q} question={item.q} answer={item.a} />
             ))}
           </div>
@@ -413,11 +373,10 @@ export default function GarantiaPage() {
             className="text-2xl text-[#1a1a1a]"
             style={{ fontFamily: SERIF, fontWeight: 300 }}
           >
-            ¿Listo para reservar con tranquilidad?
+            {t.garantia.ctaTitulo}
           </h2>
           <p className="mx-auto mt-2 max-w-md text-sm text-[#666]">
-            Encuentra proveedores verificados con la Garantía Home&Heart activa
-            en cada reserva.
+            {t.garantia.ctaDesc}
           </p>
           <div className="mt-6 flex flex-wrap justify-center gap-3">
             <Link
@@ -425,14 +384,14 @@ export default function GarantiaPage() {
               className="rounded-lg px-6 py-3 text-sm font-semibold text-white no-underline"
               style={{ backgroundColor: PRIMARY }}
             >
-              Buscar proveedores verificados →
+              {t.garantia.ctaBuscar}
             </Link>
             <Link
               href="/editar-perfil"
               className="rounded-lg border px-6 py-3 text-sm font-semibold no-underline"
               style={{ borderColor: PRIMARY, color: PRIMARY, backgroundColor: "#fff" }}
             >
-              Ser proveedor de emergencia
+              {t.garantia.ctaProveedor}
             </Link>
           </div>
         </section>

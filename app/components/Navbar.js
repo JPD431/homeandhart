@@ -87,13 +87,14 @@ function ChatNavButton({ unreadCount, onNavigate }) {
 
 function LangSwitcher() {
   const { lang, setLang } = useLang();
+  const t = useTranslation(lang);
 
   return (
     <div
       className="flex items-center gap-0.5 rounded-lg border p-0.5"
       style={{ borderColor: BRAND.border }}
       role="group"
-      aria-label="Idioma"
+      aria-label={t.navbar.ariaIdioma}
     >
       {["es", "en"].map((code) => (
         <button
@@ -123,9 +124,9 @@ function calcPorcentajePerfil(perfil, servicesCount) {
   return pct;
 }
 
-function getModoLabel(modo, esAmbos) {
-  if (!esAmbos) return "Cliente";
-  return modo === "proveedor" ? "Modo proveedor" : "Modo cliente";
+function getModoLabel(modo, esAmbos, t) {
+  if (!esAmbos) return t.navbar.soloCliente;
+  return modo === "proveedor" ? t.navbar.modoProveedor : t.navbar.modoCliente;
 }
 
 function DropdownItem({ href, icon, label, badge, badgeStyle, onNavigate }) {
@@ -170,41 +171,42 @@ function ClienteDropdownLinks({
   reservasActivas,
   sinComision,
   onNavigate,
+  t,
 }) {
   return (
     <>
-      <SectionLabel>Modo cliente</SectionLabel>
+      <SectionLabel>{t.navbar.modoCliente}</SectionLabel>
       <DropdownItem
         href="/dashboard?tab=cliente"
         icon="📅"
-        label="Mis reservas"
-        badge={reservasActivas > 0 ? `${reservasActivas} activas` : null}
+        label={t.navbar.misReservas}
+        badge={reservasActivas > 0 ? `${reservasActivas} ${t.navbar.activas}` : null}
         badgeStyle={{ backgroundColor: "#e8f0fb", color: PRIMARY }}
         onNavigate={onNavigate}
       />
       <DropdownItem
         href="/historial"
         icon="🧾"
-        label="Historial y facturas"
+        label={t.navbar.historialFacturas}
         onNavigate={onNavigate}
       />
       <DropdownItem
         href="/familia"
         icon="👨‍👩‍👧"
-        label="Mi familia"
+        label={t.navbar.miFamilia}
         onNavigate={onNavigate}
       />
       <DropdownItem
         href="/pasaporte"
         icon="🛂"
-        label="Mi pasaporte"
+        label={t.navbar.miPasaporte}
         onNavigate={onNavigate}
       />
       <DropdownItem
         href="/dashboard?tab=referidos"
         icon="🎁"
-        label="Referidos"
-        badge={sinComision > 0 ? `${sinComision} sin comisión` : null}
+        label={t.navbar.referidos}
+        badge={sinComision > 0 ? `${sinComision} ${t.navbar.sinComision}` : null}
         badgeStyle={{ backgroundColor: "#e6f4f0", color: "#0e7a5c" }}
         onNavigate={onNavigate}
       />
@@ -212,32 +214,32 @@ function ClienteDropdownLinks({
   );
 }
 
-function ProveedorDropdownLinks({ mensajesSinLeer, onNavigate }) {
+function ProveedorDropdownLinks({ mensajesSinLeer, onNavigate, t }) {
   return (
     <>
-      <SectionLabel>Modo proveedor</SectionLabel>
+      <SectionLabel>{t.navbar.modoProveedor}</SectionLabel>
       <DropdownItem
         href="/dashboard?tab=proveedor"
         icon="📋"
-        label="Panel de reservas"
+        label={t.navbar.panelReservas}
         onNavigate={onNavigate}
       />
       <DropdownItem
         href="/estadisticas"
         icon="📊"
-        label="Ingresos y estadísticas"
+        label={t.navbar.ingresosEstadisticas}
         onNavigate={onNavigate}
       />
       <DropdownItem
         href="/editar-perfil?tab=servicios"
         icon="✏️"
-        label="Mis servicios"
+        label={t.navbar.misServicios}
         onNavigate={onNavigate}
       />
       <DropdownItem
         href="/chat"
         icon="💬"
-        label="Mensajes"
+        label={t.navbar.mensajes}
         badge={mensajesSinLeer > 0 ? String(mensajesSinLeer) : null}
         badgeStyle={{ backgroundColor: "#fdf3e3", color: "#c47d1a" }}
         onNavigate={onNavigate}
@@ -246,14 +248,14 @@ function ProveedorDropdownLinks({ mensajesSinLeer, onNavigate }) {
   );
 }
 
-function AdminDropdownLinks({ onNavigate }) {
+function AdminDropdownLinks({ onNavigate, t }) {
   return (
     <>
-      <SectionLabel>Administración</SectionLabel>
+      <SectionLabel>{t.navbar.administracion}</SectionLabel>
       <DropdownItem
         href="/admin"
         icon="🛡️"
-        label="Panel admin"
+        label={t.navbar.panelAdmin}
         onNavigate={onNavigate}
       />
       <DropdownItem
@@ -265,7 +267,7 @@ function AdminDropdownLinks({ onNavigate }) {
       <DropdownItem
         href="/"
         icon="🏠"
-        label="Inicio"
+        label={t.navbar.inicio}
         onNavigate={onNavigate}
       />
     </>
@@ -326,28 +328,25 @@ export default function Navbar() {
 
     if (modo === "proveedor" && !esClientePuro) {
       return [
-        { href: "/dashboard?tab=proveedor", label: "Panel", primary: true },
-        { href: "/estadisticas", label: "Ingresos" },
-        {
-          href: "/editar-perfil?tab=servicios",
-          label: "Mis servicios",
-        },
-        { href: "/chat", label: "Mensajes" },
+        { href: "/dashboard?tab=proveedor", label: t.navbar.panel, primary: true },
+        { href: "/estadisticas", label: t.navbar.ingresos },
+        { href: "/editar-perfil?tab=servicios", label: t.navbar.misServicios },
+        { href: "/chat", label: t.navbar.mensajes },
       ];
     }
 
     const links = [
       { href: "/buscar", label: t.navbar.servicios, primary: true },
-      { href: "/dashboard?tab=cliente", label: "Mis reservas" },
-      { href: "/historial", label: "Historial" },
-      { href: "/familia", label: "Familia" },
+      { href: "/dashboard?tab=cliente", label: t.navbar.misReservas },
+      { href: "/historial", label: t.navbar.historial },
+      { href: "/familia", label: t.navbar.familia },
       { href: "/garantia", label: t.navbar.garantia },
     ];
 
     if (esClientePuro && !onboardingIncompleto) {
       links.push({
         href: "/ser-proveedor",
-        label: "Ofrecer mis servicios",
+        label: t.navbar.ofrecerServicios,
       });
     }
 
@@ -458,13 +457,13 @@ export default function Navbar() {
   const showDniBanner =
     user && perfil && !isAdmin && !isClienteVerificado(perfil);
   let dniBannerText = DNI_BANNER_CLIENT_MSG;
-  let dniBannerCta = "Subir DNI →";
+  let dniBannerCta = t.navbar.dniBannerSubir;
   if (dniRevisionEstado === "pendiente") {
     dniBannerText = DNI_BANNER_PENDING_MSG;
-    dniBannerCta = "Ver estado →";
+    dniBannerCta = t.navbar.dniBannerVerEstado;
   } else if (dniRevisionEstado === "rechazado") {
     dniBannerText = DNI_REJECTED_MSG;
-    dniBannerCta = "Volver a subir →";
+    dniBannerCta = t.navbar.dniBannerVolverSubir;
   } else if (modo === "proveedor" && !esClientePuro) {
     dniBannerText = DNI_BANNER_PROVIDER_MSG;
   }
@@ -530,7 +529,7 @@ export default function Navbar() {
             <button
               type="button"
               onClick={() => setMobileMenuOpen(true)}
-              aria-label="Abrir menú"
+              aria-label={t.navbar.ariaAbrirMenu}
               aria-expanded={mobileMenuOpen}
               style={{
                 minHeight: 44,
@@ -694,7 +693,7 @@ export default function Navbar() {
                                   : PRIMARY,
                             }}
                           >
-                            {getModoLabel(modo, esAmbos)}
+                            {getModoLabel(modo, esAmbos, t)}
                           </span>
                         </div>
                       </div>
@@ -714,7 +713,7 @@ export default function Navbar() {
                             marginBottom: 4,
                           }}
                         >
-                          <span>Perfil completado</span>
+                          <span>{t.navbar.perfilCompletado}</span>
                           <span>{porcentajePerfil}%</span>
                         </div>
                         <div
@@ -769,17 +768,19 @@ export default function Navbar() {
 
                       <div style={{ borderBottom: "0.5px solid #f0ede8" }}>
                         {isAdmin ? (
-                          <AdminDropdownLinks onNavigate={closeDropdown} />
+                          <AdminDropdownLinks onNavigate={closeDropdown} t={t} />
                         ) : modo === "proveedor" && !esClientePuro ? (
                           <ProveedorDropdownLinks
                             mensajesSinLeer={mensajesSinLeer}
                             onNavigate={closeDropdown}
+                            t={t}
                           />
                         ) : (
                           <ClienteDropdownLinks
                             reservasActivas={reservasActivas}
                             sinComision={sinComision}
                             onNavigate={closeDropdown}
+                            t={t}
                           />
                         )}
                       </div>
@@ -795,23 +796,23 @@ export default function Navbar() {
                             className="text-xs font-medium no-underline"
                             style={{ color: PRIMARY }}
                           >
-                            Ofrecer mis servicios →
+                            {t.navbar.ofrecerServiciosFlecha}
                           </Link>
                         </div>
                       )}
 
                       <div style={{ borderBottom: "0.5px solid #f0ede8" }}>
-                        <SectionLabel>Cuenta</SectionLabel>
+                        <SectionLabel>{t.navbar.cuenta}</SectionLabel>
                         <DropdownItem
                           href="/editar-perfil"
                           icon="👤"
-                          label="Mi perfil"
+                          label={t.navbar.miPerfil}
                           onNavigate={closeDropdown}
                         />
                         <DropdownItem
                           href="/recuperar-contrasena"
                           icon="🔒"
-                          label="Cambiar contraseña"
+                          label={t.navbar.cambiarContrasena}
                           onNavigate={closeDropdown}
                         />
                       </div>
@@ -829,7 +830,7 @@ export default function Navbar() {
                             cursor: "pointer",
                           }}
                         >
-                          {signingOut ? "Cerrando sesión…" : "Cerrar sesión"}
+                          {signingOut ? t.navbar.cerrandoSesion : t.navbar.cerrarSesion}
                         </button>
                       </div>
                     </div>
@@ -841,7 +842,7 @@ export default function Navbar() {
                 <Link
                   href="/chat"
                   className="relative flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-[#444] no-underline transition-colors hover:bg-[#f7f5f2]"
-                  aria-label="Mensajes"
+                  aria-label={t.navbar.ariaMensajes}
                 >
                   <ChatIcon className="h-5 w-5" />
                 </Link>
@@ -868,7 +869,7 @@ export default function Navbar() {
             <button
               type="button"
               className="fixed inset-0 z-[60] bg-black/30 md:hidden"
-              aria-label="Cerrar menú"
+              aria-label={t.navbar.ariaCerrarMenu}
               onClick={closeMobileMenu}
             />
             <div
@@ -883,13 +884,13 @@ export default function Navbar() {
                 style={{ borderColor: BORDER }}
               >
                 <span className="text-sm font-semibold text-[#2a3a4a]">
-                  Menú
+                  {t.navbar.menu}
                 </span>
                 <button
                   type="button"
                   onClick={closeMobileMenu}
                   className="flex min-h-[44px] min-w-[44px] items-center justify-center text-xl text-[#666]"
-                  aria-label="Cerrar"
+                  aria-label={t.navbar.ariaCerrar}
                 >
                   ×
                 </button>
@@ -951,7 +952,7 @@ export default function Navbar() {
                         className="flex min-h-[44px] items-center justify-center rounded-lg border text-sm font-medium text-[#444] no-underline"
                         style={{ borderColor: BORDER }}
                       >
-                        Mi perfil
+                        {t.navbar.miPerfil}
                       </Link>
                     )}
                     {!isAdmin && (
@@ -961,7 +962,7 @@ export default function Navbar() {
                         className="flex min-h-[44px] items-center justify-center rounded-lg border text-sm font-medium text-[#444] no-underline"
                         style={{ borderColor: BORDER }}
                       >
-                        Mensajes
+                        {t.navbar.mensajes}
                         {mensajesSinLeer > 0 ? ` (${mensajesSinLeer})` : ""}
                       </Link>
                     )}
@@ -972,7 +973,7 @@ export default function Navbar() {
                       className="min-h-[44px] rounded-lg border text-sm font-medium text-[#666] disabled:opacity-60"
                       style={{ borderColor: BORDER }}
                     >
-                      {signingOut ? "Cerrando sesión…" : "Cerrar sesión"}
+                      {signingOut ? t.navbar.cerrandoSesion : t.navbar.cerrarSesion}
                     </button>
                   </>
                 ) : (

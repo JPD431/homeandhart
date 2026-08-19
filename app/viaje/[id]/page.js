@@ -17,11 +17,15 @@ import {
 } from "@/app/lib/viajes";
 import BookingStatusBadge from "@/app/components/BookingStatusBadge";
 import { supabase } from "@/app/lib/supabase";
+import { useLang } from "@/app/lib/LangContext";
+import { useTranslation } from "@/app/lib/i18n";
 
 export default function ViajePage() {
   const router = useRouter();
   const params = useParams();
   const viajeId = params.id;
+  const { lang } = useLang();
+  const t = useTranslation(lang);
 
   const [loading, setLoading] = useState(true);
   const [viaje, setViaje] = useState(null);
@@ -112,11 +116,11 @@ export default function ViajePage() {
       const service = booking.services ?? {};
       return {
         id: booking.id,
-        titulo: service.titulo || "Servicio",
+        titulo: service.titulo || t.viajeDetalle.servicio,
         precio: Number(booking.precio_total) || 0,
       };
     });
-  }, [bookings]);
+  }, [bookings, t]);
 
   const totalCost = useMemo(
     () => costSummary.reduce((sum, item) => sum + item.precio, 0),
@@ -133,9 +137,9 @@ export default function ViajePage() {
     const url = window.location.href;
     try {
       await navigator.clipboard.writeText(url);
-      setShareMessage("¡Link copiado!");
+      setShareMessage(t.viajeDetalle.linkCopiado);
     } catch {
-      setShareMessage("No se pudo copiar el link.");
+      setShareMessage(t.viajeDetalle.errorCopiar);
     }
     setTimeout(() => setShareMessage(""), 2500);
   }
@@ -148,7 +152,7 @@ export default function ViajePage() {
       >
         <Navbar />
         <main className="mx-auto max-w-5xl px-4 py-16 text-center text-sm text-[#666]">
-          Cargando tablón de viaje…
+          {t.viajeDetalle.cargando}
         </main>
       </div>
     );
@@ -173,7 +177,7 @@ export default function ViajePage() {
             className="text-sm no-underline transition-opacity hover:opacity-80"
             style={{ color: BRAND.primary }}
           >
-            ← Mis viajes
+            {t.viajeDetalle.misViajes}
           </Link>
 
           <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -201,7 +205,7 @@ export default function ViajePage() {
                     const nombre =
                       [perfil?.nombre, perfil?.apellido]
                         .filter(Boolean)
-                        .join(" ") || "Miembro";
+                        .join(" ") || t.viajeDetalle.miembro;
 
                     return avatarUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
@@ -236,7 +240,7 @@ export default function ViajePage() {
                 className="rounded-xl border px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-[#e8f0fb]"
                 style={{ borderColor: BRAND.primary, color: BRAND.primary }}
               >
-                Compartir viaje
+                {t.viajeDetalle.compartir}
               </button>
               {shareMessage && (
                 <span className="text-xs text-green-700">{shareMessage}</span>
@@ -253,7 +257,7 @@ export default function ViajePage() {
               className="text-lg font-semibold text-[#1a1a1a]"
               style={{ fontFamily: SERIF }}
             >
-              Timeline del viaje
+              {t.viajeDetalle.timelineTitulo}
             </h2>
 
             {timelineItems.length === 0 ? (
@@ -261,8 +265,7 @@ export default function ViajePage() {
                 className="mt-4 rounded-2xl border bg-white px-6 py-10 text-center text-sm text-[#666]"
                 style={{ borderColor: BRAND.border }}
               >
-                Aún no hay servicios en este viaje. Añade reservas desde la
-                creación del viaje o busca proveedores.
+                {t.viajeDetalle.sinServicios}
               </p>
             ) : (
               <ul className="relative mt-6 flex flex-col gap-4">
@@ -285,7 +288,7 @@ export default function ViajePage() {
                           style={{ borderColor: "#c47d1a" }}
                         >
                           <p className="text-sm font-medium text-[#92400e]">
-                            Sin cobertura · Buscar proveedor
+                            {t.viajeDetalle.sinCobertura}
                           </p>
                           <p className="mt-1 text-xs text-[#888]">
                             {formatDateRange(item.gapStart, item.gapEnd)}
@@ -295,7 +298,7 @@ export default function ViajePage() {
                             className="mt-3 inline-block rounded-xl px-4 py-2 text-sm font-semibold text-white no-underline transition-opacity hover:opacity-90"
                             style={{ backgroundColor: BRAND.primary }}
                           >
-                            Buscar proveedor
+                            {t.viajeDetalle.buscarProveedor}
                           </Link>
                         </div>
                       </li>
@@ -312,7 +315,7 @@ export default function ViajePage() {
                   const proveedorNombre =
                     [proveedor.nombre, proveedor.apellido]
                       .filter(Boolean)
-                      .join(" ") || "Proveedor";
+                      .join(" ") || t.viajeDetalle.proveedor;
 
                   return (
                     <li key={booking.id} className="relative pl-12">
@@ -381,33 +384,31 @@ export default function ViajePage() {
                 className="text-lg font-semibold text-[#1a1a1a]"
                 style={{ fontFamily: SERIF }}
               >
-                Resumen
+                {t.viajeDetalle.resumen}
               </h2>
 
               <div className="mt-4">
                 <p className="text-xs font-semibold uppercase tracking-wide text-[#888]">
-                  Estado general
+                  {t.viajeDetalle.estadoGeneral}
                 </p>
                 {pendientesCount === 0 && bookings.length > 0 ? (
                   <p className="mt-2 text-sm font-semibold text-green-700">
-                    Todo confirmado ✓
+                    {t.viajeDetalle.todoConfirmado}
                   </p>
                 ) : pendientesCount > 0 ? (
                   <p className="mt-2 text-sm font-semibold text-[#92400e]">
-                    {pendientesCount} servicio
-                    {pendientesCount !== 1 ? "s" : ""} pendiente
-                    {pendientesCount !== 1 ? "s" : ""} de confirmar
+                    {t.viajeDetalle.serviciosPendientes(pendientesCount)}
                   </p>
                 ) : (
                   <p className="mt-2 text-sm text-[#666]">
-                    Sin servicios aún
+                    {t.viajeDetalle.sinServiciosAun}
                   </p>
                 )}
               </div>
 
               <div className="mt-6">
                 <p className="text-xs font-semibold uppercase tracking-wide text-[#888]">
-                  Costes
+                  {t.viajeDetalle.costes}
                 </p>
                 {costSummary.length === 0 ? (
                   <p className="mt-2 text-sm text-[#666]">—</p>
@@ -433,7 +434,7 @@ export default function ViajePage() {
                       className="flex items-center justify-between gap-2 border-t pt-3 text-sm font-bold"
                       style={{ borderColor: BRAND.border }}
                     >
-                      <span className="text-[#1a1a1a]">Total del viaje</span>
+                      <span className="text-[#1a1a1a]">{t.viajeDetalle.totalViaje}</span>
                       <span style={{ color: BRAND.primary }}>
                         {formatEuro(totalCost)}
                       </span>

@@ -9,12 +9,16 @@ export function LangProvider({ children }) {
 
   useEffect(() => {
     const saved = localStorage.getItem("lang");
-    if (saved) setLang(saved);
+    if (saved) {
+      setLang(saved);
+      document.cookie = `lang=${saved};path=/;max-age=31536000;SameSite=Lax`;
+    }
   }, []);
 
   const changeLang = (newLang) => {
     setLang(newLang);
     localStorage.setItem("lang", newLang);
+    document.cookie = `lang=${newLang};path=/;max-age=31536000;SameSite=Lax`;
   };
 
   return (

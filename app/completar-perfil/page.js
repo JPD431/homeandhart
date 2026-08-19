@@ -14,27 +14,8 @@ import {
   PersonIcon,
   PetIcon,
 } from "@/app/components/vertical-icons";
-
-const NEEDS_OPTIONS = [
-  {
-    id: "alojamiento",
-    title: "Alojamiento verificado",
-    subtitle: "Pisos y casas para tu estancia",
-    Icon: LodgingIcon,
-  },
-  {
-    id: "ninera",
-    title: "Niñera o cuidador infantil",
-    subtitle: "En tu ciudad o mientras viajas",
-    Icon: PersonIcon,
-  },
-  {
-    id: "mascotas",
-    title: "Cuidador de mascotas",
-    subtitle: "Para cuando viajas o necesitas ayuda",
-    Icon: PetIcon,
-  },
-];
+import { useLang } from "@/app/lib/LangContext";
+import { useTranslation } from "@/app/lib/i18n";
 
 function ProgressDots({ step }) {
   return (
@@ -89,6 +70,8 @@ function CheckCircle({ selected }) {
 
 export default function CompletarPerfilPage() {
   const router = useRouter();
+  const { lang } = useLang();
+  const t = useTranslation(lang);
   const [step, setStep] = useState(0);
   const [selectedNeeds, setSelectedNeeds] = useState([]);
   const [nombre, setNombre] = useState("");
@@ -97,6 +80,27 @@ export default function CompletarPerfilPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [checkingProfile, setCheckingProfile] = useState(true);
+
+  const needsOptions = [
+    {
+      id: "alojamiento",
+      title: t.completarPerfil.alojamientoTitulo,
+      subtitle: t.completarPerfil.alojamientoSubtitulo,
+      Icon: LodgingIcon,
+    },
+    {
+      id: "ninera",
+      title: t.completarPerfil.nineraTitulo,
+      subtitle: t.completarPerfil.nineraSubtitulo,
+      Icon: PersonIcon,
+    },
+    {
+      id: "mascotas",
+      title: t.completarPerfil.mascotasTitulo,
+      subtitle: t.completarPerfil.mascotasSubtitulo,
+      Icon: PetIcon,
+    },
+  ];
 
   useEffect(() => {
     let cancelled = false;
@@ -180,7 +184,7 @@ export default function CompletarPerfilPage() {
 
       if (userError || !user) {
         setSaving(false);
-        setError("Debes iniciar sesión para guardar tu perfil.");
+        setError(t.completarPerfil.errorSesion);
         return;
       }
 
@@ -213,7 +217,7 @@ export default function CompletarPerfilPage() {
         className="flex min-h-screen items-center justify-center font-sans"
         style={{ backgroundColor: BRAND.warm }}
       >
-        <p className="text-sm text-[#888]">Cargando…</p>
+        <p className="text-sm text-[#888]">{t.completarPerfil.cargando}</p>
       </div>
     );
   }
@@ -252,13 +256,13 @@ export default function CompletarPerfilPage() {
                 className="text-2xl leading-snug text-[#1a1a1a]"
                 style={{ fontFamily: SERIF }}
               >
-                ¿Qué necesitas de Home&Heart?
+                {t.completarPerfil.step0Titulo}
               </h1>
               <p className="mt-2 text-sm text-[#666]">
-                Selecciona todo lo que te interese.
+                {t.completarPerfil.step0Subtitulo}
               </p>
               <ul className="mt-6 flex flex-col gap-3">
-                {NEEDS_OPTIONS.map((option) => {
+                {needsOptions.map((option) => {
                   const selected = selectedNeeds.includes(option.id);
                   const { Icon } = option;
                   return (
@@ -304,21 +308,21 @@ export default function CompletarPerfilPage() {
                 className="text-2xl leading-snug text-[#1a1a1a]"
                 style={{ fontFamily: SERIF }}
               >
-                ¿Cómo te llamamos?
+                {t.completarPerfil.step1Titulo}
               </h1>
               <p className="mt-2 text-sm text-[#666]">
-                Solo tu nombre para personalizar la experiencia.
+                {t.completarPerfil.step1Subtitulo}
               </p>
               <div className="mt-6 flex flex-col gap-4">
                 <div>
                   <label htmlFor="nombre" className="sr-only">
-                    Nombre
+                    {t.completarPerfil.labelNombre}
                   </label>
                   <input
                     id="nombre"
                     type="text"
                     autoComplete="given-name"
-                    placeholder="Nombre"
+                    placeholder={t.completarPerfil.placeholderNombre}
                     value={nombre}
                     onChange={(e) => setNombre(e.target.value)}
                     className="w-full rounded-xl border px-4 py-4 text-base text-[#1a1a1a] outline-none focus:ring-2 focus:ring-[#1d4f91]/30"
@@ -327,13 +331,13 @@ export default function CompletarPerfilPage() {
                 </div>
                 <div>
                   <label htmlFor="apellido" className="sr-only">
-                    Apellido
+                    {t.completarPerfil.labelApellido}
                   </label>
                   <input
                     id="apellido"
                     type="text"
                     autoComplete="family-name"
-                    placeholder="Apellido"
+                    placeholder={t.completarPerfil.placeholderApellido}
                     value={apellido}
                     onChange={(e) => setApellido(e.target.value)}
                     className="w-full rounded-xl border px-4 py-4 text-base text-[#1a1a1a] outline-none focus:ring-2 focus:ring-[#1d4f91]/30"
@@ -350,20 +354,20 @@ export default function CompletarPerfilPage() {
                 className="text-2xl leading-snug text-[#1a1a1a]"
                 style={{ fontFamily: SERIF }}
               >
-                ¿En qué ciudad estás?
+                {t.completarPerfil.step2Titulo}
               </h1>
               <p className="mt-2 text-sm text-[#666]">
-                Para mostrarte proveedores cerca de ti.
+                {t.completarPerfil.step2Subtitulo}
               </p>
               <div className="mt-6">
                 <label htmlFor="ciudad" className="sr-only">
-                  Ciudad
+                  {t.completarPerfil.labelCiudad}
                 </label>
                 <input
                   id="ciudad"
                   type="text"
                   autoComplete="address-level2"
-                  placeholder="Madrid, Barcelona..."
+                  placeholder={t.completarPerfil.placeholderCiudad}
                   value={ciudad}
                   onChange={(e) => setCiudad(e.target.value)}
                   className="w-full rounded-xl border px-4 py-4 text-base text-[#1a1a1a] outline-none focus:ring-2 focus:ring-[#1d4f91]/30"
@@ -393,17 +397,16 @@ export default function CompletarPerfilPage() {
                 className="mt-6 text-2xl text-[#1a1a1a]"
                 style={{ fontFamily: SERIF }}
               >
-                ¡Todo listo, bienvenida!
+                {t.completarPerfil.step3Titulo}
               </h1>
               <p
                 className="mt-2 text-lg italic"
                 style={{ color: BRAND.primary }}
               >
-                Donde estés, estamos.
+                {t.completarPerfil.step3Slogan}
               </p>
               <p className="mt-4 max-w-xs text-sm leading-relaxed text-[#5c5c5c]">
-                Tu cuenta está lista. Empieza a explorar proveedores
-                verificados.
+                {t.completarPerfil.step3Desc}
               </p>
               <button
                 type="button"
@@ -411,7 +414,7 @@ export default function CompletarPerfilPage() {
                 className="mt-8 w-full max-w-xs rounded-xl py-3.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
                 style={{ backgroundColor: BRAND.primary }}
               >
-                Ir al inicio
+                {t.completarPerfil.irInicio}
               </button>
             </div>
           )}
@@ -429,7 +432,7 @@ export default function CompletarPerfilPage() {
                 onClick={handleBack}
                 className="text-sm font-medium text-[#666] transition-colors hover:text-[#1d4f91]"
               >
-                ← Atrás
+                {t.completarPerfil.atras}
               </button>
             ) : (
               <span />
@@ -441,7 +444,7 @@ export default function CompletarPerfilPage() {
               className="rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
               style={{ backgroundColor: BRAND.primary }}
             >
-              {saving ? "Guardando…" : "Continuar →"}
+              {saving ? t.completarPerfil.guardando : t.completarPerfil.continuar}
             </button>
           </div>
         )}

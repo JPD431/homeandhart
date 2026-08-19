@@ -93,6 +93,8 @@ import {
   getServiceHeaderTitle,
   getVerticalColor,
 } from "@/app/lib/provider-verticals";
+import { useLang } from "@/app/lib/LangContext";
+import { useTranslation } from "@/app/lib/i18n";
 
 const DARK_BLUE = "#163a6b";
 
@@ -288,6 +290,8 @@ async function geocodeLocationZonesForServices(selectedIds, detailsByService, ci
 const inputClass = PROVIDER_INPUT_CLASS;
 
 function DocUploadRow({ docId, title, required, file, uploaded, uploading, onUpload }) {
+  const { lang } = useLang();
+  const t = useTranslation(lang);
   const ok = !!(file || uploaded);
   return (
     <div
@@ -298,7 +302,7 @@ function DocUploadRow({ docId, title, required, file, uploaded, uploading, onUpl
         <p className="text-sm font-medium text-[#1a1a1a]">
           {title}
           {!required && (
-            <span className="ml-1 text-xs font-normal text-[#888]">(opcional)</span>
+            <span className="ml-1 text-xs font-normal text-[#888]">{t.serProveedor.docOpcional}</span>
           )}
         </p>
         <p className="text-xs" style={{ color: ok ? GREEN : required ? ORANGE : "#888" }}>
@@ -318,7 +322,7 @@ function DocUploadRow({ docId, title, required, file, uploaded, uploading, onUpl
         className="shrink-0 rounded-lg border px-3 py-1.5 text-xs font-semibold disabled:opacity-60"
         style={{ borderColor: PRIMARY, color: PRIMARY }}
       >
-        {uploading ? "…" : ok ? "Cambiar" : "Subir"}
+        {uploading ? "…" : ok ? t.serProveedor.docCambiar : t.serProveedor.docSubir}
       </button>
     </div>
   );
@@ -361,6 +365,8 @@ function calcCompletion(verticales, fields, documentContext) {
 
 export default function SerProveedorPage() {
   const router = useRouter();
+  const { lang } = useLang();
+  const t = useTranslation(lang);
   const profilePhotoRef = useRef(null);
   const documentInputRef = useRef(null);
 
@@ -558,7 +564,7 @@ export default function SerProveedorPage() {
       } catch (err) {
         console.error("[ser-proveedor] Error cargando borrador:", err);
         if (!cancelled) {
-          setErrorMessage("No se pudo cargar tu progreso. Puedes continuar desde aquí.");
+          setErrorMessage(t.serProveedor.errCargando);
           setUserId(user.id);
         }
       } finally {
@@ -574,7 +580,7 @@ export default function SerProveedorPage() {
   }, [router]);
 
   async function persistStepData(stepKey) {
-    if (!userId) throw new Error("No hay sesión activa.");
+    if (!userId) throw new Error(t.serProveedor.errSesionSimple);
 
     if (stepKey === STEP_KEY.VERTICALES) {
       await saveVerticalesStep(userId, verticalesSeleccionados, stepKey);
@@ -685,7 +691,7 @@ export default function SerProveedorPage() {
   }
 
   function addCustomIdioma() {
-    const val = window.prompt("Añadir idioma:");
+    const val = window.prompt(t.serProveedor.addIdiomaPrompt);
     if (val?.trim() && !allIdiomas.includes(val.trim())) {
       setCustomIdiomas((prev) => [...prev, val.trim()]);
       setIdiomas((prev) => [...prev, val.trim()]);
@@ -738,7 +744,7 @@ export default function SerProveedorPage() {
     } catch (err) {
       console.error("Error abriendo vista previa:", err);
       setErrorMessage(
-        "No se pudo abrir la vista previa: " + (err.message || "error desconocido"),
+        t.serProveedor.errVistaPrevia + " " + (err.message || t.serProveedor.errDesconocido),
       );
     } finally {
       setOpeningPreviewVertical(null);
@@ -807,24 +813,24 @@ export default function SerProveedorPage() {
     setErrorMessage("");
     if (stepKey === STEP_KEY.VERTICALES) {
       if (verticalesSeleccionados.length === 0) {
-        setErrorMessage("Selecciona al menos un servicio.");
+        setErrorMessage(t.serProveedor.errSeleccionaServicio);
         return false;
       }
     }
     if (stepKey === STEP_KEY.PERFIL) {
       if (!nombre.trim() || !apellido.trim() || !ciudad.trim()) {
-        setErrorMessage("Completa nombre, apellidos y ciudad.");
+        setErrorMessage(t.serProveedor.errCompleta);
         return false;
       }
       if (!sobreTi.trim()) {
-        setErrorMessage("Cuéntanos por qué deberían elegirte.");
+        setErrorMessage(t.serProveedor.errSobreTi);
         return false;
       }
     }
     if (stepKey === STEP_KEY.SERVICIO_ALOJAMIENTO) {
       const d = serviceDetails.alojamiento;
       if (!d.titulo.trim() || !d.precio || !d.tipo_alojamiento) {
-        setErrorMessage("Completa título, precio y tipo de alojamiento.");
+        setErrorMessage(t.serProveedor.errAlojamiento);
         return false;
       }
       {
@@ -843,7 +849,7 @@ export default function SerProveedorPage() {
     if (stepKey === STEP_KEY.SERVICIO_NINOS) {
       const d = serviceDetails.ninos;
       if (!d.titulo.trim() || !d.precio) {
-        setErrorMessage("Completa título y precio del servicio de niñera.");
+        setErrorMessage(t.serProveedor.errNinos);
         return false;
       }
       const cobroError = validateModalidadCobro(d, "ninos");
@@ -860,7 +866,7 @@ export default function SerProveedorPage() {
     if (stepKey === STEP_KEY.SERVICIO_MASCOTAS) {
       const d = serviceDetails.mascotas;
       if (!d.titulo.trim() || !d.precio) {
-        setErrorMessage("Completa título y precio del servicio de mascotas.");
+        setErrorMessage(t.serProveedor.errMascotas);
         return false;
       }
       const cobroError = validateModalidadCobro(d, "mascotas");
@@ -881,7 +887,7 @@ export default function SerProveedorPage() {
       );
       if (missing.length > 0) {
         setErrorMessage(
-          `Faltan documentos obligatorios: ${missing.map((d) => d.label).join(", ")}`,
+          `${t.serProveedor.errDocsFaltantes} ${missing.map((d) => d.label).join(", ")}`,
         );
         return false;
       }
@@ -908,7 +914,7 @@ export default function SerProveedorPage() {
         if (userId) await saveOnboardingStep(userId, nextKey);
       }
     } catch (err) {
-      setErrorMessage(err.message || "Error al guardar. Inténtalo de nuevo.");
+      setErrorMessage(err.message || t.serProveedor.errGuardar);
     } finally {
       setSavingStep(false);
     }
@@ -928,7 +934,7 @@ export default function SerProveedorPage() {
         error: authError,
       } = await supabase.auth.getUser();
       if (authError || !user) {
-        setErrorMessage("No hay sesión activa. Por favor inicia sesión.");
+        setErrorMessage(t.serProveedor.errSesion);
         setLoading(false);
         return;
       }
@@ -1049,7 +1055,7 @@ export default function SerProveedorPage() {
       setCurrentStepKey(STEP_KEY.CONFIRMACION);
     } catch (err) {
       console.error("Error inesperado:", err);
-      setErrorMessage("Error inesperado: " + err.message);
+      setErrorMessage(t.serProveedor.errInesperado + " " + err.message);
     } finally {
       setLoading(false);
     }
@@ -1212,7 +1218,7 @@ export default function SerProveedorPage() {
               {allIdiomas.map((lang) => (
                 <TagPill key={lang} label={lang} selected={idiomas.includes(lang)} onClick={() => toggleIdioma(lang)} />
               ))}
-              <TagPill label="+ Añadir" selected={false} onClick={addCustomIdioma} color="#666" />
+              <TagPill label={t.serProveedor.addIdiomaLabel} selected={false} onClick={addCustomIdioma} color="#666" />
             </div>
           </div>
         </div>
@@ -1272,7 +1278,7 @@ export default function SerProveedorPage() {
               <input value={d.nru} onChange={(e) => upd("nru", e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
             </div>
           </div>
-          <p className="mt-6 mb-3 text-xs font-medium text-[#444]">Tipo de alojamiento</p>
+          <p className="mt-6 mb-3 text-xs font-medium text-[#444]">{t.serProveedor.tipoAlojamiento}</p>
           <div className="grid gap-2 sm:grid-cols-5">
             {TIPO_ALOJAMIENTO_OPTIONS.map((opt) => (
               <button
@@ -1331,7 +1337,7 @@ export default function SerProveedorPage() {
             sectionSubtitle={SERVICE_LABELS.operativo.subtitle}
           />
           <div className="mt-6 space-y-2">
-            <p className="text-xs font-semibold text-[#444]">Documentos</p>
+            <p className="text-xs font-semibold text-[#444]">{t.serProveedor.documentosTitulo}</p>
             {alojDocs.map((docId) => (
               <DocUploadRow
                 key={docId}
@@ -1385,7 +1391,7 @@ export default function SerProveedorPage() {
               />
             </div>
             <div>
-              <label className="mb-1.5 block text-xs font-medium text-[#444]">Años de experiencia</label>
+              <label className="mb-1.5 block text-xs font-medium text-[#444]">{t.serProveedor.anosExperiencia}</label>
               <input type="number" min="0" value={d.anos_experiencia} onChange={(e) => upd("anos_experiencia", e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
             </div>
             <div className="sm:col-span-2">
@@ -1432,19 +1438,19 @@ export default function SerProveedorPage() {
             sectionSubtitle={SERVICE_LABELS.operativo.subtitle}
           />
           <div className="mt-6 rounded-xl border p-4" style={{ borderColor: BRAND.border, backgroundColor: `${GREEN}08` }}>
-            <p className="text-sm font-semibold text-[#1a1a1a]">Referencias externas</p>
-            <p className="mt-1 text-xs text-[#666]">Pide a familias anteriores que confirmen tu experiencia</p>
+            <p className="text-sm font-semibold text-[#1a1a1a]">{t.serProveedor.referenciasExternas}</p>
+            <p className="mt-1 text-xs text-[#666]">{t.serProveedor.referenciasDesc}</p>
             <button
               type="button"
               className="mt-3 rounded-xl border px-4 py-2 text-sm font-semibold"
               style={{ borderColor: GREEN, color: GREEN }}
-              onClick={() => window.alert("Te enviaremos un enlace para solicitar referencias tras enviar tu perfil.")}
+              onClick={() => window.alert(t.serProveedor.referenciasAlert)}
             >
-              Solicitar referencia
+              {t.serProveedor.solicitarReferencia}
             </button>
           </div>
           <div className="mt-6 space-y-2">
-            <p className="text-xs font-semibold text-[#444]">Documentos</p>
+            <p className="text-xs font-semibold text-[#444]">{t.serProveedor.documentosTitulo}</p>
             {ninosDocs.map((docId) => (
               <DocUploadRow
                 key={docId}
@@ -1497,7 +1503,7 @@ export default function SerProveedorPage() {
               />
             </div>
             <div>
-              <label className="mb-1.5 block text-xs font-medium text-[#444]">Años de experiencia</label>
+              <label className="mb-1.5 block text-xs font-medium text-[#444]">{t.serProveedor.anosExperiencia}</label>
               <input type="number" min="0" value={d.anos_experiencia} onChange={(e) => upd("anos_experiencia", e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
             </div>
             <div className="sm:col-span-2">
@@ -1560,7 +1566,7 @@ export default function SerProveedorPage() {
             sectionSubtitle={SERVICE_LABELS.operativo.subtitle}
           />
           <div className="mt-6 space-y-2">
-            <p className="text-xs font-semibold text-[#444]">Documentos</p>
+            <p className="text-xs font-semibold text-[#444]">{t.serProveedor.documentosTitulo}</p>
             {mascotasDocs.map((docId) => (
               <DocUploadRow
                 key={docId}
@@ -1594,11 +1600,10 @@ export default function SerProveedorPage() {
       return (
         <div>
           <h2 className="text-2xl text-[#1a1a1a]" style={{ fontFamily: SERIF }}>
-            Así te verán las familias
+            {t.serProveedor.previewTitulo}
           </h2>
           <p className="mt-1 text-sm text-[#666]">
-            Revisa que todo esté bien antes de enviar. Cada servicio aparece como un
-            anuncio.
+            {t.serProveedor.previewSubtitulo}
           </p>
 
           <div className="mt-8 space-y-10">
@@ -1664,12 +1669,12 @@ export default function SerProveedorPage() {
                         style={{ color }}
                       >
                         {isOpeningPreview
-                          ? "Guardando borrador…"
-                          : "Ver anuncio completo →"}
+                          ? t.serProveedor.guardandoBorrador
+                          : t.serProveedor.verAnuncioCompleto}
                       </button>
                     ) : (
                       <p className="text-xs text-[#aaa]">
-                        Completa este servicio para ver la vista previa completa
+                        {t.serProveedor.completarPreview}
                       </p>
                     )}
                   </div>
@@ -1683,17 +1688,17 @@ export default function SerProveedorPage() {
 
     if (currentStepKey === STEP_KEY.RESUMEN) {
       const checklist = [
-        { label: "Servicios seleccionados", ok: verticalesSeleccionados.length > 0 },
-        { label: "Perfil personal", ok: nombre.trim() && apellido.trim() && sobreTi.trim() },
-        { label: "Foto de perfil", ok: !!profilePhotoPreview },
+        { label: t.serProveedor.checklistServicios, ok: verticalesSeleccionados.length > 0 },
+        { label: t.serProveedor.checklistPerfil, ok: nombre.trim() && apellido.trim() && sobreTi.trim() },
+        { label: t.serProveedor.checklistFoto, ok: !!profilePhotoPreview },
         ...(verticalesSeleccionados.includes("alojamiento")
-          ? [{ label: "Alojamiento", ok: serviceDetails.alojamiento.titulo.trim() && serviceDetails.alojamiento.precio }]
+          ? [{ label: t.serProveedor.checklistAlojamiento, ok: serviceDetails.alojamiento.titulo.trim() && serviceDetails.alojamiento.precio }]
           : []),
         ...(verticalesSeleccionados.includes("ninos")
-          ? [{ label: "Niñera", ok: serviceDetails.ninos.titulo.trim() && serviceDetails.ninos.precio }]
+          ? [{ label: t.serProveedor.checklistNinos, ok: serviceDetails.ninos.titulo.trim() && serviceDetails.ninos.precio }]
           : []),
         ...(verticalesSeleccionados.includes("mascotas")
-          ? [{ label: "Mascotas", ok: serviceDetails.mascotas.titulo.trim() && serviceDetails.mascotas.precio }]
+          ? [{ label: t.serProveedor.checklistMascotas, ok: serviceDetails.mascotas.titulo.trim() && serviceDetails.mascotas.precio }]
           : []),
         ...getApplicableDocuments(verticalesSeleccionados)
           .filter((d) => d.required)
@@ -1726,11 +1731,10 @@ export default function SerProveedorPage() {
               }}
               role="status"
             >
-              <p className="font-semibold">Puedes enviar a revisión</p>
+              <p className="font-semibold">{t.serProveedor.puedesEnviar}</p>
               <p className="mt-1 text-[13px]">
-                Te recomendamos añadir antes:{" "}
-                <strong>{qualityGaps.join(", ")}</strong>. Podrás completarlos
-                después desde tu dashboard; no alargamos el alta.
+                {t.serProveedor.recomendamosAnadir}{" "}
+                <strong>{qualityGaps.join(", ")}</strong>. {t.serProveedor.podrasCompletar}
               </p>
             </div>
           ) : null}
@@ -1782,7 +1786,7 @@ export default function SerProveedorPage() {
                   {d.precio && (
                     <p className="mt-1 text-sm font-bold" style={{ color: PRIMARY }}>
                       {d.precio}€
-                      {v === "alojamiento" ? "/noche" : v === "ninos" ? "/hora" : "/día"}
+                      {v === "alojamiento" ? t.serProveedor.precioNoche : v === "ninos" ? t.serProveedor.precioHora : t.serProveedor.precioDia}
                     </p>
                   )}
                 </div>
@@ -1791,7 +1795,7 @@ export default function SerProveedorPage() {
           </div>
           <div className="mt-6 rounded-xl border p-4" style={{ borderColor: BRAND.border }}>
             <div className="flex items-center justify-between">
-              <p className="text-sm font-semibold">Completitud del perfil</p>
+              <p className="text-sm font-semibold">{t.serProveedor.completitudPerfil}</p>
               <p className="text-lg font-bold" style={{ color: PRIMARY }}>
                 {completionPct}%
               </p>
@@ -1941,7 +1945,7 @@ export default function SerProveedorPage() {
                         color: "#888",
                       }}
                     >
-                      Lo completa el equipo · te avisamos por email
+                      {t.serProveedor.equipoCompleta}
                     </p>
                   ) : (
                     <a
@@ -1954,7 +1958,7 @@ export default function SerProveedorPage() {
                         color: PRIMARY,
                       }}
                     >
-                      Ir a completar →
+                      {t.serProveedor.irCompletar}
                     </a>
                   )}
                 </div>
@@ -1971,10 +1975,10 @@ export default function SerProveedorPage() {
             }}
           >
             <div style={{ fontSize: 12, color: "#0e7a5c", fontWeight: 500 }}>
-              🎁 Recuerda
+              {t.serProveedor.recuerda}
             </div>
             <div style={{ fontSize: 11, color: "#555", marginTop: 4 }}>
-              Tus primeras 3 reservas son sin comisión
+              {t.serProveedor.primeras3}
             </div>
           </div>
           <div
@@ -2000,7 +2004,7 @@ export default function SerProveedorPage() {
                 minWidth: 220,
               }}
             >
-              Completar lo que falta →
+              {t.serProveedor.completarFalta}
             </button>
             <button
               type="button"
@@ -2017,7 +2021,7 @@ export default function SerProveedorPage() {
                 minWidth: 220,
               }}
             >
-              Ir a mi dashboard
+              {t.serProveedor.irDashboard}
             </button>
           </div>
         </div>
@@ -2070,7 +2074,7 @@ export default function SerProveedorPage() {
         className="flex min-h-screen items-center justify-center font-sans"
         style={{ backgroundColor: BRAND.warm }}
       >
-        <p className="text-sm text-[#888]">Cargando tu progreso…</p>
+        <p className="text-sm text-[#888]">{t.serProveedor.cargandoProgreso}</p>
       </div>
     );
   }

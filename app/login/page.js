@@ -11,6 +11,8 @@ import {
   resolveAuthRedirect,
 } from "@/app/lib/auth-redirect";
 import { supabase } from "@/app/lib/supabase";
+import { useLang } from "@/app/lib/LangContext";
+import { useTranslation } from "@/app/lib/i18n";
 
 const PRIMARY = "#1d4f91";
 const DARK = "#163a6b";
@@ -39,6 +41,9 @@ const labelStyle = {
 };
 
 function AuthShell({ children }) {
+  const { lang } = useLang();
+  const t = useTranslation(lang);
+
   return (
     <div
       className="font-sans"
@@ -74,7 +79,7 @@ function AuthShell({ children }) {
               marginTop: 2,
             }}
           >
-            Donde estés, estamos.
+            {t.footer.slogan}
           </span>
         </Link>
       </div>
@@ -147,7 +152,7 @@ function AuthShell({ children }) {
                 fontWeight: 600,
               }}
             >
-              Confianza local
+              {t.login.tagline}
             </p>
             <h2
               style={{
@@ -159,10 +164,7 @@ function AuthShell({ children }) {
                 margin: 0,
               }}
             >
-              Servicios de confianza para familias{" "}
-              <em style={{ color: "rgba(255,255,255,0.65)", fontStyle: "italic" }}>
-                en movimiento
-              </em>
+              {t.login.titulo}
             </h2>
             <p
               style={{
@@ -172,8 +174,7 @@ function AuthShell({ children }) {
                 marginTop: 14,
               }}
             >
-              Alojamiento, niñera y cuidado de mascotas con documentación
-              revisada por nuestro equipo.
+              {t.login.subtitulo}
             </p>
 
             <div
@@ -184,11 +185,7 @@ function AuthShell({ children }) {
                 marginTop: 32,
               }}
             >
-              {[
-                "Proveedores verificados",
-                "Pago protegido",
-                "Cuidado de confianza",
-              ].map((label) => (
+              {[t.login.pill1, t.login.pill2, t.login.pill3].map((label) => (
                 <div key={label}>
                   <div
                     style={{
@@ -221,9 +218,7 @@ function AuthShell({ children }) {
                   lineHeight: 1.6,
                 }}
               >
-                Documentación revisada por nuestro equipo, un solo pago protegido
-                y la Garantía Home&amp;Heart si tu proveedor cancela con poca
-                antelación.
+                {t.login.garantiaTexto}
               </p>
             </div>
           </div>
@@ -248,6 +243,8 @@ function AuthShell({ children }) {
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { lang } = useLang();
+  const t = useTranslation(lang);
   const emailParam = searchParams.get("email")?.trim() || "";
   const [email, setEmail] = useState(emailParam);
   const [password, setPassword] = useState("");
@@ -305,10 +302,10 @@ function LoginForm() {
           margin: 0,
         }}
       >
-        Iniciar sesión
+        {t.login.formTitulo}
       </h1>
       <p style={{ fontSize: 12, color: "#aaa", marginTop: 6 }}>
-        Accede a tu cuenta de Home&Heart
+        {t.login.formSubtitulo}
       </p>
 
       <form onSubmit={handleSubmit} style={{ marginTop: 28 }}>
@@ -329,7 +326,7 @@ function LoginForm() {
 
         <div style={{ marginBottom: 8 }}>
           <label htmlFor="password" style={labelStyle}>
-            Contraseña
+            {t.login.labelContrasena}
           </label>
           <input
             id="password"
@@ -351,7 +348,7 @@ function LoginForm() {
               textDecoration: "none",
             }}
           >
-            ¿Olvidaste tu contraseña?
+            {t.login.olvidaste}
           </Link>
         </div>
 
@@ -386,7 +383,7 @@ function LoginForm() {
             opacity: loading ? 0.7 : 1,
           }}
         >
-          {loading ? "Iniciando sesión…" : "Entrar →"}
+          {loading ? t.login.iniciando : t.login.entrar}
         </button>
 
         <div
@@ -398,14 +395,14 @@ function LoginForm() {
           }}
         >
           <div style={{ flex: 1, height: 1, background: BORDER }} />
-          <span style={{ fontSize: 11, color: "#bbb" }}>o</span>
+          <span style={{ fontSize: 11, color: "#bbb" }}>{t.login.o}</span>
           <div style={{ flex: 1, height: 1, background: BORDER }} />
         </div>
 
         <p style={{ fontSize: 12, color: "#888", textAlign: "center", margin: 0 }}>
-          ¿No tienes cuenta?{" "}
+          {t.login.sinCuenta}{" "}
           <Link href={registroHref} style={{ color: PRIMARY, textDecoration: "none" }}>
-            Regístrate gratis
+            {t.login.registrarse}
           </Link>
         </p>
         <p
@@ -416,12 +413,12 @@ function LoginForm() {
             marginTop: 10,
           }}
         >
-          ¿Quieres ser proveedor?{" "}
+          {t.login.serProveedor}{" "}
           <Link
             href={registroProveedorHref}
             style={{ color: PRIMARY, textDecoration: "none" }}
           >
-            Únete aquí
+            {t.login.unete}
           </Link>
         </p>
       </form>

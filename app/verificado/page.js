@@ -5,8 +5,13 @@ import { useRouter } from "next/navigation";
 import { fetchPostLoginRedirect } from "@/app/lib/post-login-redirect";
 import { consumeAuthRedirect } from "@/app/lib/auth-redirect";
 import { supabase } from "@/app/lib/supabase";
+import { useLang } from "@/app/lib/LangContext";
+import { useTranslation } from "@/app/lib/i18n";
 
 export default function VerificadoPage() {
+  const { lang } = useLang();
+  const t = useTranslation(lang);
+  const tv = t.verificado;
   const router = useRouter();
   const [countdown, setCountdown] = useState(5);
   const [redirectTo, setRedirectTo] = useState("/completar-perfil");
@@ -107,11 +112,11 @@ export default function VerificadoPage() {
             marginBottom: 8,
           }}
         >
-          ¡Cuenta verificada!
+          {tv.titulo}
         </h1>
 
         <p style={{ fontSize: 14, color: "#888", lineHeight: 1.7, marginBottom: 24 }}>
-          Bienvenida a Home&Heart. Tu cuenta está activa y lista para usar.
+          {tv.bienvenida}
         </p>
 
         <div
@@ -122,9 +127,9 @@ export default function VerificadoPage() {
             marginBottom: 24,
           }}
         >
-          <div style={{ fontSize: 12, color: "#0e7a5c", fontWeight: 500 }}>🎁 Recuerda</div>
+          <div style={{ fontSize: 12, color: "#0e7a5c", fontWeight: 500 }}>{tv.recuerdaLabel}</div>
           <div style={{ fontSize: 11, color: "#555", marginTop: 4 }}>
-            Tus primeras reservas están protegidas con la Garantía Home&Heart
+            {tv.recuerdaTexto}
           </div>
         </div>
 
@@ -146,13 +151,11 @@ export default function VerificadoPage() {
             opacity: ready ? 1 : 0.7,
           }}
         >
-          {ready ? "Continuar →" : "Preparando tu cuenta…"}
+          {ready ? tv.continuar : tv.preparando}
         </button>
 
         <p style={{ fontSize: 11, color: "#bbb" }}>
-          {ready
-            ? `Redirigiendo automáticamente en ${countdown} segundos...`
-            : "Un momento…"}
+          {ready ? tv.redirigiendo(countdown) : tv.momento}
         </p>
       </div>
     </div>

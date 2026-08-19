@@ -28,20 +28,12 @@ import { canLeaveReview } from "@/app/lib/reviews";
 import { buildLoginUrl } from "@/app/lib/auth-redirect";
 import { supabase } from "@/app/lib/supabase";
 import { friendlyLoadError, withLoadTimeout } from "@/app/lib/with-load-timeout";
+import { useLang } from "@/app/lib/LangContext";
+import { useTranslation } from "@/app/lib/i18n";
 
 const PRIMARY = "#1d4f91";
 const GREEN = "#0e7a5c";
 const BORDER = "#e8e4de";
-
-const FILTER_TABS = [
-  { id: "todas", label: "Todas" },
-  { id: "pendiente", label: "Pendientes" },
-  { id: "confirmada", label: "Confirmadas" },
-  { id: "en_curso", label: "En curso" },
-  { id: "completada", label: "Completadas" },
-  { id: "incidencia", label: "Incidencias" },
-  { id: "cancelada", label: "Canceladas" },
-];
 
 function getExtraTags(service, vertical) {
   const tags = [];
@@ -107,6 +99,7 @@ function BookingCard({
   onCancel,
   cancelling,
   onIncidenciaReported,
+  t,
 }) {
   const estado = getBookingEstado(booking);
   const statusMeta = getBookingStatusMeta(booking.estado || estado, {
@@ -153,15 +146,15 @@ function BookingCard({
             {refundBreakdown ? (
               <>
                 <p className="text-[13px] font-semibold" style={{ color: PRIMARY }}>
-                  Pagas: {formatBookingPrice(refundBreakdown.importeFinal)}
+                  {t.historial.pagas} {formatBookingPrice(refundBreakdown.importeFinal)}
                 </p>
                 <p className="mt-0.5 text-[10px] font-medium" style={{ color: GREEN }}>
-                  Devolución: {formatBookingPrice(refundBreakdown.reembolsoTotal)} (
+                  {t.historial.devolucion} {formatBookingPrice(refundBreakdown.reembolsoTotal)} (
                   {refundBreakdown.reembolsoPct}%)
                 </p>
                 {refundBreakdown.reembolsoCredito > 0 && (
                   <p className="mt-0.5 text-[10px] font-medium" style={{ color: GREEN }}>
-                    +{formatBookingPrice(refundBreakdown.reembolsoCredito)} a tu crédito
+                    +{formatBookingPrice(refundBreakdown.reembolsoCredito)} {t.historial.atuCredito}
                   </p>
                 )}
               </>
@@ -196,7 +189,7 @@ function BookingCard({
         </p>
 
         <div className="mt-3 flex flex-wrap gap-2">
-          <GrayButton href={`/reserva/${booking.id}`}>Ver detalle</GrayButton>
+          <GrayButton href={`/reserva/${booking.id}`}>{t.historial.verDetalle}</GrayButton>
 
           {statusMeta.actions.includes("mensaje") && service.proveedor_id ? (
             <ProveedorPreguntarButton
@@ -208,7 +201,7 @@ function BookingCard({
                 color: "#666",
               }}
             >
-              Enviar mensaje
+              {t.historial.enviarMensaje}
             </ProveedorPreguntarButton>
           ) : null}
 
@@ -221,14 +214,14 @@ function BookingCard({
                 className="rounded-md px-3 py-1.5 text-[11px] font-medium text-white no-underline"
                 style={{ backgroundColor: "#0e7a5c" }}
               >
-                Descargar factura
+                {t.historial.descargarFactura}
               </a>
               {reviewed ? (
                 <span
                   className="inline-flex items-center rounded-md px-3 py-1.5 text-[11px] font-medium"
                   style={{ backgroundColor: "#f0f4f8", color: "#0e7a5c" }}
                 >
-                  Reseñada ✓
+                  {t.historial.resenada}
                 </span>
               ) : reviewEligible ? (
                 <Link
@@ -236,7 +229,7 @@ function BookingCard({
                   className="rounded-md px-3 py-1.5 text-[11px] font-medium text-white no-underline"
                   style={{ backgroundColor: PRIMARY }}
                 >
-                  Deja tu reseña
+                  {t.historial.dejarResena}
                 </Link>
               ) : null}
             </>
@@ -247,14 +240,14 @@ function BookingCard({
               onClick={() => onCancel(booking)}
               disabled={cancelling === booking.id}
             >
-              {cancelling === booking.id ? "Cancelando…" : "Cancelar"}
+              {cancelling === booking.id ? t.historial.cancelando : t.historial.cancelar}
             </GrayButton>
           )}
 
           {statusMeta.canReportIncidencia && (
             <div className="w-full">
               <p className="mb-1.5 text-[11px] font-semibold text-[#666]">
-                Problema con esta reserva
+                {t.historial.problemaReserva}
               </p>
               <ReportarIncidenciaForm
                 bookingId={booking.id}
@@ -264,7 +257,7 @@ function BookingCard({
             </div>
           )}
           <AyudaLink
-            label="Ayuda general"
+            label={t.historial.ayudaGeneral}
             style={{ marginTop: 4, fontSize: 11 }}
           />
         </div>
@@ -275,6 +268,8 @@ function BookingCard({
 
 export default function HistorialPage() {
   const router = useRouter();
+  const { lang } = useLang();
+  const t = useTranslation(lang);
   const { toast, showSuccess, showError, dismiss } = useActionToast();
   const [loading, setLoading] = useState(true);
   const [bookings, setBookings] = useState([]);
@@ -286,6 +281,16 @@ export default function HistorialPage() {
   const [loadError, setLoadError] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
   const [creditoDisponible, setCreditoDisponible] = useState(0);
+
+  const filterTabs = useMemo(() => [
+    { id: "todas", label: t.historial.filtroTodas },
+    { id: "pendiente", label: t.historial.filtroPendientes },
+    { id: "confirmada", label: t.historial.filtroConfirmadas },
+    { id: "en_curso", label: t.historial.filtroEnCurso },
+    { id: "completada", label: t.historial.filtroCompletadas },
+    { id: "incidencia", label: t.historial.filtroIncidencias },
+    { id: "cancelada", label: t.historial.filtroCanceladas },
+  ], [t]);
 
   useEffect(() => {
     let cancelled = false;
@@ -423,7 +428,7 @@ export default function HistorialPage() {
   }, [filteredBookings]);
 
   async function handleCancel(booking) {
-    if (!window.confirm("¿Seguro que quieres cancelar esta reserva?")) return;
+    if (!window.confirm(t.historial.confirmarCancelar)) return;
 
     setCancellingId(booking.id);
     setErrorMessage("");
@@ -459,9 +464,9 @@ export default function HistorialPage() {
           (prev) => Math.round((prev + creditoDevuelto) * 100) / 100,
         );
       }
-      showSuccess("Reserva cancelada correctamente.");
+      showSuccess(t.historial.canceladaOk);
     } else {
-      const msg = data.error || "No se pudo cancelar la reserva.";
+      const msg = data.error || t.historial.canceladaError;
       setErrorMessage(msg);
       showError(msg);
     }
@@ -475,9 +480,7 @@ export default function HistorialPage() {
         b.id === bookingId ? { ...b, estado: "incidencia" } : b,
       ),
     );
-    showSuccess(
-      "Incidencia enviada. Nuestro equipo la revisará y te contactará.",
-    );
+    showSuccess(t.historial.incidenciaEnviada);
   }
 
   if (loading) {
@@ -485,7 +488,7 @@ export default function HistorialPage() {
       <div className="min-h-screen font-sans" style={{ backgroundColor: BRAND.warm }}>
         <Navbar />
         <main className="px-7 py-16 text-center text-sm text-[#666]">
-          Cargando historial…
+          {t.historial.cargando}
         </main>
       </div>
     );
@@ -516,10 +519,10 @@ export default function HistorialPage() {
             className="text-[22px] text-[#1a1a1a]"
             style={{ fontFamily: SERIF, fontWeight: 300 }}
           >
-            Historial de reservas
+            {t.historial.titulo}
           </h1>
           <p className="mt-1 text-sm text-[#888]">
-            Todas tus reservas pasadas y activas en un solo lugar
+            {t.historial.subtitulo}
           </p>
         </div>
       </header>
@@ -529,17 +532,17 @@ export default function HistorialPage() {
           className="mx-auto flex flex-wrap items-center justify-center"
           style={{ maxWidth: 900 }}
         >
-          <StatItem label="Total reservas" value={stats.total} showDivider={false} />
-          <StatItem label="Completadas" value={stats.completadas} showDivider />
-          <StatItem label="Activas" value={stats.activas} showDivider />
+          <StatItem label={t.historial.statTotal} value={stats.total} showDivider={false} />
+          <StatItem label={t.historial.statCompletadas} value={stats.completadas} showDivider />
+          <StatItem label={t.historial.statActivas} value={stats.activas} showDivider />
           <StatItem
-            label="Total gastado"
+            label={t.historial.statGastado}
             value={formatBookingPrice(stats.totalGastado)}
             showDivider
           />
           {creditoDisponible > 0 && (
             <StatItem
-              label="Crédito disponible"
+              label={t.historial.statCredito}
               value={formatBookingPrice(creditoDisponible)}
               showDivider
             />
@@ -556,7 +559,7 @@ export default function HistorialPage() {
           style={{ maxWidth: 900 }}
         >
           <div className="flex flex-wrap gap-2">
-            {FILTER_TABS.map((tab) => {
+            {filterTabs.map((tab) => {
               const isActive = activeFilter === tab.id;
               return (
                 <button
@@ -577,7 +580,7 @@ export default function HistorialPage() {
           </div>
           <input
             type="search"
-            placeholder="Buscar servicio o proveedor…"
+            placeholder={t.historial.buscarPlaceholder}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#1d4f91]/20 sm:max-w-[220px]"
@@ -600,16 +603,16 @@ export default function HistorialPage() {
           >
             {bookings.length === 0 ? (
               <EmptyState
-                title="Aún no tienes reservas"
-                description="Explora servicios cerca de ti y reserva alojamiento, niñera o cuidado de mascotas."
-                actionLabel="Buscar servicios"
+                title={t.historial.sinReservas}
+                description={t.historial.sinReservasDesc}
+                actionLabel={t.historial.buscarServicios}
                 actionHref="/buscar"
               />
             ) : (
               <EmptyState
-                title="No hay reservas en esta categoría"
-                description="Prueba otro filtro o vuelve a ver todas tus reservas."
-                actionLabel="Ver todas"
+                title={t.historial.sinFiltro}
+                description={t.historial.sinFiltroDesc}
+                actionLabel={t.historial.verTodas}
                 onAction={() => setActiveFilter("todas")}
               />
             )}
@@ -617,8 +620,7 @@ export default function HistorialPage() {
         ) : (
           <div className="flex flex-col gap-8">
             <p className="text-[11px] leading-relaxed text-[#888]">
-              Los importes incluyen gastos de gestión (salvo reservas sin comisión).
-              El detalle completo está en cada reserva.
+              {t.historial.importesNota}
             </p>
             {groupedByMonth.map(([monthKey, monthBookings]) => (
               <section key={monthKey}>
@@ -640,6 +642,7 @@ export default function HistorialPage() {
                         onCancel={handleCancel}
                         cancelling={cancellingId}
                         onIncidenciaReported={handleIncidenciaReported}
+                        t={t}
                       />
                     </li>
                   ))}

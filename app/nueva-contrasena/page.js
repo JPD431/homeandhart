@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { supabase } from "@/app/lib/supabase";
 import { BRAND } from "@/app/components/brand";
+import { useLang } from "@/app/lib/LangContext";
+import { useTranslation } from "@/app/lib/i18n";
 
 function Logo() {
   return (
@@ -18,6 +20,9 @@ function Logo() {
 }
 
 export default function NuevaContrasenaPage() {
+  const { lang } = useLang();
+  const t = useTranslation(lang);
+  const nc = t.nuevaContrasena;
   const router = useRouter();
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -31,12 +36,12 @@ export default function NuevaContrasenaPage() {
     setSuccess(false);
 
     if (password !== confirmPassword) {
-      setError("Las contraseñas no coinciden.");
+      setError(nc.errorNoCoinciden);
       return;
     }
 
     if (password.length < 6) {
-      setError("La contraseña debe tener al menos 6 caracteres.");
+      setError(nc.errorCorta);
       return;
     }
 
@@ -70,7 +75,7 @@ export default function NuevaContrasenaPage() {
       >
         <Logo />
 
-        <h1 className="text-2xl font-bold text-[#1a1a1a]">Nueva contraseña</h1>
+        <h1 className="text-2xl font-bold text-[#1a1a1a]">{nc.titulo}</h1>
 
         <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4">
           <div>
@@ -78,7 +83,7 @@ export default function NuevaContrasenaPage() {
               htmlFor="password"
               className="mb-1.5 block text-sm font-medium text-[#444]"
             >
-              Nueva contraseña
+              {nc.labelContrasena}
             </label>
             <input
               id="password"
@@ -97,7 +102,7 @@ export default function NuevaContrasenaPage() {
               htmlFor="confirm-password"
               className="mb-1.5 block text-sm font-medium text-[#444]"
             >
-              Confirmar contraseña
+              {nc.labelConfirmar}
             </label>
             <input
               id="confirm-password"
@@ -113,7 +118,7 @@ export default function NuevaContrasenaPage() {
 
           {success && (
             <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">
-              Contraseña actualizada correctamente. Redirigiendo…
+              {nc.actualizada}
             </p>
           )}
 
@@ -129,7 +134,7 @@ export default function NuevaContrasenaPage() {
             className="mt-2 w-full rounded-xl py-3.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
             style={{ backgroundColor: BRAND.primary }}
           >
-            {loading ? "Guardando…" : "Guardar nueva contraseña"}
+            {loading ? nc.guardando : nc.guardar}
           </button>
         </form>
 
@@ -139,7 +144,7 @@ export default function NuevaContrasenaPage() {
             className="font-medium no-underline hover:underline"
             style={{ color: BRAND.primary }}
           >
-            Volver al inicio de sesión
+            {nc.volverLogin}
           </Link>
         </p>
       </div>
