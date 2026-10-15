@@ -11,7 +11,7 @@ import {
 /**
  * Anuncio PÚBLICO — ISR puro (solo params; sin searchParams ni cookies).
  * Vista previa: /anuncio/[serviceId]/preview
- * Compat ?preview=1 → middleware redirect a /preview
+ * Compat ?preview=1 → proxy redirect a /preview
  * Fechas ?desde/?hasta → AnuncioBookingPanel (useSearchParams en cliente)
  */
 export const revalidate = 3600;

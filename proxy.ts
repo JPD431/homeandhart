@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   // Compat legacy: /anuncio/[id]?preview=1 → ruta dinámica con sesión.
   // Fuera del Server Component ISR para no tocar searchParams allí.
   const { pathname, searchParams } = request.nextUrl;
