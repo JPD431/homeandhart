@@ -106,15 +106,15 @@ export function getCapacidadForDisplay(service) {
 }
 
 const CAPACIDAD_DISPLAY_ITEMS = [
-  { key: "personas", singular: "persona", plural: "personas", icon: "👥" },
-  { key: "habitaciones", singular: "habitación", plural: "habitaciones", icon: "🛏️" },
-  { key: "camas", singular: "cama", plural: "camas", icon: "🛌" },
-  { key: "banos", singular: "baño", plural: "baños", icon: "🚿" },
+  { key: "personas", singular: "persona", plural: "personas", singularEn: "person", pluralEn: "people", icon: "👥" },
+  { key: "habitaciones", singular: "habitación", plural: "habitaciones", singularEn: "bedroom", pluralEn: "bedrooms", icon: "🛏️" },
+  { key: "camas", singular: "cama", plural: "camas", singularEn: "bed", pluralEn: "beds", icon: "🛌" },
+  { key: "banos", singular: "baño", plural: "baños", singularEn: "bathroom", pluralEn: "bathrooms", icon: "🚿" },
 ];
 
 const BANO_TIPO_DISPLAY = {
-  [BANO_TIPO_PRIVADO]: { icon: "🔒", label: "Baño", value: "Privado", banoTipo: true },
-  [BANO_TIPO_COMPARTIDO]: { icon: "🚿", label: "Baño", value: "Compartido", banoTipo: true },
+  [BANO_TIPO_PRIVADO]: { icon: "🔒", label: "Baño", value: "Privado", textEn: "Private bathroom", banoTipo: true },
+  [BANO_TIPO_COMPARTIDO]: { icon: "🚿", label: "Baño", value: "Compartido", textEn: "Shared bathroom", banoTipo: true },
 };
 
 /**
@@ -131,9 +131,13 @@ export function formatCountLabel(count, singular, plural) {
 }
 
 /** Texto legible de una fila de capacidad (anuncio / ficha). */
-export function formatCapacidadDisplayRow(row) {
+export function formatCapacidadDisplayRow(row, lang = "es") {
   if (row?.banoTipo) {
+    if (lang === "en" && row.textEn) return row.textEn;
     return `${row.label} ${String(row.value).toLowerCase()}`;
+  }
+  if (lang === "en" && row.singularEn) {
+    return formatCountLabel(row.value, row.singularEn, row.pluralEn);
   }
   return formatCountLabel(row.value, row.singular, row.plural);
 }
@@ -143,11 +147,13 @@ export function getCapacidadDisplayRows(service) {
   const cap = getCapacidadForDisplay(service);
   if (!cap) return [];
 
-  const rows = CAPACIDAD_DISPLAY_ITEMS.map(({ key, singular, plural, icon }) => {
-    const value = cap[key];
-    if (value == null || value === "") return null;
-    return { icon, label: plural, singular, plural, value };
-  }).filter(Boolean);
+  const rows = CAPACIDAD_DISPLAY_ITEMS.map(
+    ({ key, singular, plural, singularEn, pluralEn, icon }) => {
+      const value = cap[key];
+      if (value == null || value === "") return null;
+      return { icon, label: plural, singular, plural, singularEn, pluralEn, value };
+    },
+  ).filter(Boolean);
 
   if (cap.bano_tipo && BANO_TIPO_DISPLAY[cap.bano_tipo]) {
     rows.push(BANO_TIPO_DISPLAY[cap.bano_tipo]);

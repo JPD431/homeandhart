@@ -422,7 +422,15 @@ export function validateHuespedesPrecio(details, vertical) {
  * @param {object} service
  * @returns {string|null}
  */
-export function formatHuespedesPrecioInfo(service) {
+const UNIDADES_PRECIO_EN = {
+  alojamiento: { singular: "guest", plural: "guests", unit: "night" },
+  ninos: { singular: "child", plural: "children", unit: "hour" },
+  mascotas: { singular: "pet", plural: "pets", unit: "day" },
+};
+
+const PRICE_UNIT_EN = { hora: "hour", dia: "day", medio_dia: "half day" };
+
+export function formatHuespedesPrecioInfo(service, lang = "es") {
   const vertical = service?.vertical || "alojamiento";
   if (!supportsUnidadesPrecio(vertical)) return null;
 
@@ -450,20 +458,30 @@ export function formatHuespedesPrecioInfo(service) {
 
   if (!hasMax && !hasInc && !hasExtra) return null;
 
+  const en = lang === "en";
+  const enCopy = UNIDADES_PRECIO_EN[vertical] ?? UNIDADES_PRECIO_EN.alojamiento;
+  const unitSingular = en ? enCopy.singular : copy.unitSingular;
+  const unitPlural = en ? enCopy.plural : copy.unitPlural;
+  const priceUnit = en
+    ? (PRICE_UNIT_EN[modalidad] ?? enCopy.unit)
+    : copy.priceUnit;
+
   const parts = [];
   if (hasMax) {
     const n = Math.floor(max);
-    const word = n === 1 ? copy.unitSingular : copy.unitPlural;
-    parts.push(`Hasta ${n} ${word}`);
+    const word = n === 1 ? unitSingular : unitPlural;
+    parts.push(en ? `Up to ${n} ${word}` : `Hasta ${n} ${word}`);
   }
   if (hasInc) {
-    parts.push(`incluye ${Math.floor(incluidos)}`);
+    parts.push(`${en ? "includes" : "incluye"} ${Math.floor(incluidos)}`);
   }
   if (hasExtra) {
     const euro =
       Number.isInteger(extra) ? String(extra) : extra.toFixed(2).replace(/\.?0+$/, "");
     parts.push(
-      `+${euro}€/${copy.priceUnit} por ${copy.unitSingular} adicional`,
+      en
+        ? `+${euro}€/${priceUnit} per extra ${unitSingular}`
+        : `+${euro}€/${priceUnit} por ${unitSingular} adicional`,
     );
   }
 

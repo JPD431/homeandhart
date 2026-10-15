@@ -137,26 +137,29 @@ export function parseMascotasBooleansFromDb(row) {
 }
 
 /** Filas de plus para ficha de mascotas (anuncio / preview). */
-export function getMascotasDisplayRows(service) {
+export function getMascotasDisplayRows(service, lang = "es") {
   if (!service || service.vertical !== "mascotas") return [];
 
+  const en = lang === "en";
   const rows = [];
   if (service.jardin === true) {
-    rows.push({ icon: "🌿", label: "Tiene jardín" });
+    rows.push({ icon: "🌿", label: en ? "Has a garden" : "Tiene jardín" });
   }
   if (service.paseos_incluidos === true) {
-    rows.push({ icon: "🐕", label: "Paseos incluidos" });
+    rows.push({ icon: "🐕", label: en ? "Walks included" : "Paseos incluidos" });
   }
   if (service.fotos_actualizaciones === true) {
     rows.push({
       icon: "📷",
-      label: "Envía fotos y actualizaciones del cuidado",
+      label: en
+        ? "Sends photos and care updates"
+        : "Envía fotos y actualizaciones del cuidado",
     });
   }
 
   const det = service.mascotas_detalle;
   if (det && typeof det === "object" && det.cerca_veterinario === true) {
-    rows.push({ icon: "🏥", label: "Cerca de veterinario" });
+    rows.push({ icon: "🏥", label: en ? "Close to a vet" : "Cerca de veterinario" });
   }
 
   return rows;

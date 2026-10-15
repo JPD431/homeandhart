@@ -1,7 +1,11 @@
+"use client";
+
 import { resolveAmenitiesGrouped } from "@/app/lib/amenities";
 import { getCapacidadDisplayRows, formatCapacidadDisplayRow } from "@/app/lib/capacidad";
 import { formatHuespedesPrecioInfo } from "@/app/lib/huespedes-precio";
 import { formatModalidadesCobroAnuncio } from "@/app/lib/modalidad-cobro";
+import { useLang } from "@/app/lib/LangContext";
+import { useTranslation } from "@/app/lib/i18n";
 import { getMascotasDisplayRows } from "@/app/lib/service-payload";
 import {
   getServiceCardTheme,
@@ -78,6 +82,9 @@ export default function ServiceAnuncioContent({
   showAmenities = true,
   showGallery = true,
 }) {
+  const { lang } = useLang();
+  const t = useTranslation(lang);
+
   if (!service) return null;
 
   const vertical = service.vertical || "alojamiento";
@@ -93,17 +100,18 @@ export default function ServiceAnuncioContent({
     (vertical === "alojamiento" ||
       vertical === "ninos" ||
       vertical === "mascotas")
-      ? formatHuespedesPrecioInfo(service)
+      ? formatHuespedesPrecioInfo(service, lang)
       : null;
-  const modalidadCobroInfo = formatModalidadesCobroAnuncio(service);
+  const modalidadCobroInfo = formatModalidadesCobroAnuncio(service, undefined, lang);
   const amenityGroups =
     showAmenities && vertical === "alojamiento"
       ? resolveAmenitiesGrouped(
           Array.isArray(service.amenities) ? service.amenities : [],
+          lang,
         )
       : [];
   const mascotasRows =
-    vertical === "mascotas" ? getMascotasDisplayRows(service) : [];
+    vertical === "mascotas" ? getMascotasDisplayRows(service, lang) : [];
 
   return (
     <div className="mt-4 flex flex-col gap-4">
@@ -138,7 +146,7 @@ export default function ServiceAnuncioContent({
       {capacidadRows.length > 0 && (
         <div>
           <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-[#888]">
-            Capacidad
+            {t.anuncio.capacidad}
           </p>
           <div className="flex flex-wrap gap-2">
             {capacidadRows.map((row) => (
@@ -149,7 +157,7 @@ export default function ServiceAnuncioContent({
               >
                 <span aria-hidden>{row.icon}</span>
                 <span className="text-[#444]">
-                  {formatCapacidadDisplayRow(row)}
+                  {formatCapacidadDisplayRow(row, lang)}
                 </span>
               </span>
             ))}
@@ -160,7 +168,7 @@ export default function ServiceAnuncioContent({
       {mascotasRows.length > 0 && (
         <div>
           <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-[#888]">
-            Servicio
+            {t.anuncio.servicio}
           </p>
           <div className="flex flex-wrap gap-2">
             {mascotasRows.map((row) => (
@@ -180,7 +188,7 @@ export default function ServiceAnuncioContent({
       {amenityGroups.length > 0 && (
         <div>
           <p className="mb-3 text-[10px] font-semibold uppercase tracking-wide text-[#888]">
-            Comodidades
+            {t.anuncio.comodidades}
           </p>
           <div className="flex flex-col gap-4">
             {amenityGroups.map((group) => (

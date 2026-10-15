@@ -42,6 +42,33 @@ export function getServiceCardTheme(vertical) {
   );
 }
 
+const VERTICAL_LABEL_EN = {
+  alojamiento: "Accommodation",
+  ninos: "Childcare",
+  mascotas: "Pet care",
+};
+
+/** Etiqueta de vertical según idioma (el tema solo trae la española). */
+export function getServiceCardThemeLabel(vertical, lang = "es") {
+  if (lang === "en") {
+    return VERTICAL_LABEL_EN[vertical] ?? VERTICAL_LABEL_EN.alojamiento;
+  }
+  return getServiceCardTheme(vertical).label;
+}
+
+const PRICE_SUFFIX_EN = {
+  "/ noche": "/ night",
+  "/ hora": "/ hour",
+  "/ día": "/ day",
+  "/ medio día": "/ half day",
+};
+
+/** Traduce los sufijos de precio ("/ noche"…); en español devuelve el original. */
+export function translatePriceSuffix(suffix, lang = "es") {
+  if (lang !== "en") return suffix;
+  return PRICE_SUFFIX_EN[suffix] ?? suffix;
+}
+
 export function getServiceCardInitials(nombre, apellido) {
   const first = nombre?.trim()?.[0] ?? "";
   const last = apellido?.trim()?.[0] ?? "";
@@ -54,8 +81,10 @@ export function formatServiceCardShortName(nombre, apellido) {
   return [first, lastInitial].filter(Boolean).join(" ");
 }
 
-export function formatServiceCardPrice(precio, suffix) {
-  if (precio == null || precio === "") return "Consultar";
+export function formatServiceCardPrice(precio, suffix, lang = "es") {
+  if (precio == null || precio === "") {
+    return lang === "en" ? "Ask for price" : "Consultar";
+  }
   return `${Number(precio)}€${suffix}`;
 }
 
@@ -177,13 +206,13 @@ export function resolveServiceCardPricing(service, lang = "es") {
   return { precio, suffix, useDesde, priceLabel, reservarLabel };
 }
 
-export function getServiceCardZone(service, profile) {
+export function getServiceCardZone(service, profile, lang = "es") {
   return (
     service.location_zone ||
     profile?.location_zone ||
     service.ciudad ||
     profile?.ciudad ||
-    "Zona"
+    (lang === "en" ? "Area" : "Zona")
   );
 }
 
@@ -240,16 +269,25 @@ export function serviceDescriptionIsPetFriendly(service) {
  */
 export function getServiceCardTags(service, profile, lang = "es", options = {}) {
   const tags = [];
+  const en = lang === "en";
 
   if (service.reserva_inmediata === true) {
-    tags.push({ text: "Reserva inmediata ⚡", light: "#fdf3e3", color: "#92400e" });
+    tags.push({
+      text: en ? "Instant booking ⚡" : "Reserva inmediata ⚡",
+      light: "#fdf3e3",
+      color: "#92400e",
+    });
   } else {
-    tags.push({ text: "Reserva con confirmación 🕐", light: "#f7f5f2", color: "#888" });
+    tags.push({
+      text: en ? "Booking with confirmation 🕐" : "Reserva con confirmación 🕐",
+      light: "#f7f5f2",
+      color: "#888",
+    });
   }
 
   if (!options.isPreview && profile?.verificado === true) {
     tags.push({
-      text: "Verificado ✓",
+      text: en ? "Verified ✓" : "Verificado ✓",
       light: "#e8f0fb",
       color: "#163a6b",
       title: getVerificadoBadgeTooltip(lang),
@@ -264,7 +302,11 @@ export function getServiceCardTags(service, profile, lang = "es", options = {}) 
   }
 
   if (service.vertical === "mascotas" && service.fotos_actualizaciones === true) {
-    tags.push({ text: "Envía fotos 📷", light: "#fdf3e3", color: "#92400e" });
+    tags.push({
+      text: en ? "Sends photos 📷" : "Envía fotos 📷",
+      light: "#fdf3e3",
+      color: "#92400e",
+    });
   }
 
   const languages = Array.isArray(profile?.idiomas) ? profile.idiomas : [];

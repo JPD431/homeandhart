@@ -267,8 +267,12 @@ export function getSyncedServicesPrecio(details, vertical) {
 }
 
 /** Filas o legacy → texto anuncio. */
-export function formatModalidadesCobroAnuncio(service, rows) {
+export function formatModalidadesCobroAnuncio(service, rows, lang = "es") {
   if (!service || !supportsModalidadCobro(service.vertical)) return null;
+  const en = lang === "en";
+  const labelHora = en ? "Per hour" : "Por hora";
+  const labelDia = en ? "Per day" : "Por día";
+  const labelMedioDia = en ? "Half day" : "Medio día";
 
   const list = Array.isArray(rows)
     ? rows
@@ -285,9 +289,9 @@ export function formatModalidadesCobroAnuncio(service, rows) {
       if (!Number.isFinite(precio) || precio <= 0) continue;
       const precioStr =
         precio % 1 === 0 ? String(precio) : precio.toFixed(2).replace(/\.?0+$/, "");
-      if (modalidad === "hora") parts.push(`Por hora ${precioStr}€`);
-      else if (modalidad === "dia") parts.push(`Por día ${precioStr}€`);
-      else parts.push(`Medio día ${precioStr}€`);
+      if (modalidad === "hora") parts.push(`${labelHora} ${precioStr}€`);
+      else if (modalidad === "dia") parts.push(`${labelDia} ${precioStr}€`);
+      else parts.push(`${labelMedioDia} ${precioStr}€`);
     }
     return parts.length > 0 ? parts.join(" · ") : null;
   }
@@ -296,13 +300,13 @@ export function formatModalidadesCobroAnuncio(service, rows) {
   const legacy = legacyModalidadForVertical(service.vertical);
   const precio = Number(service.precio);
   if (!Number.isFinite(precio)) {
-    return legacy === "hora" ? "Por hora" : "Por día";
+    return legacy === "hora" ? labelHora : labelDia;
   }
   const precioStr =
     precio % 1 === 0 ? String(precio) : precio.toFixed(2).replace(/\.?0+$/, "");
   return legacy === "hora"
-    ? `Por hora ${precioStr}€`
-    : `Por día ${precioStr}€`;
+    ? `${labelHora} ${precioStr}€`
+    : `${labelDia} ${precioStr}€`;
 }
 
 /** @deprecated alias */

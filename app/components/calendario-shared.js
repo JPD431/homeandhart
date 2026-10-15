@@ -53,9 +53,13 @@ export function buildMonthGrid(viewDate) {
   return cells;
 }
 
-export function formatShortDate(dateStr) {
+export function formatShortDate(dateStr, lang = "es") {
   const d = parseDateStr(dateStr);
   const day = d.getDate();
+  if (lang === "en") {
+    const month = d.toLocaleDateString("en-GB", { month: "short" }).replace(/\.$/, "");
+    return `${day} ${month}`;
+  }
   const month = d
     .toLocaleDateString("es-ES", { month: "short" })
     .replace(/\.$/, "")
