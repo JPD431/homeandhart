@@ -391,7 +391,7 @@ export default function CompletarPerfilPage() {
                 className="flex h-14 w-14 items-center justify-center rounded-2xl text-[#1d4f91]"
                 style={{ backgroundColor: "#fff" }}
               >
-                <HomeIcon className="h-8 w-8" />
+                <LodgingIcon className="h-8 w-8" />
               </span>
               <h1
                 className="mt-6 text-2xl text-[#1a1a1a]"
