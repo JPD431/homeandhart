@@ -390,6 +390,13 @@ export default function ChatPage() {
   );
   const [filterActive, setFilterActive] = useState(true);
   const [contactNotice, setContactNotice] = useState("");
+  // Reloj para el estado "en línea": se refresca cada minuto en vez de leer
+  // Date.now() durante el render.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 60000);
+    return () => clearInterval(id);
+  }, []);
 
   const messagesEndRef = useRef(null);
   const isProvider = modo === "proveedor" && !esClientePuro;
@@ -1009,7 +1016,7 @@ export default function ChatPage() {
   const isOtherOnline =
     selectedConversation?.last_message &&
     selectedConversation.last_message.sender_id === otherParticipantId &&
-    Date.now() - new Date(selectedConversation.last_message.created_at).getTime() <
+    now - new Date(selectedConversation.last_message.created_at).getTime() <
       3600000;
 
   return (
@@ -1079,13 +1086,13 @@ export default function ChatPage() {
                   <p className="mt-1 text-xs leading-relaxed text-[#888]">
                     {tc.sinConversacionesDesc}
                   </p>
-                  <a
+                  <Link
                     href="/buscar"
                     className="mt-4 inline-flex min-h-[44px] items-center justify-center rounded-md px-4 py-2 text-xs font-semibold text-white no-underline"
                     style={{ backgroundColor: BLUE }}
                   >
                     {tc.explorarServicios}
-                  </a>
+                  </Link>
                 </div>
               ) : (
                 <p className="py-4 text-center text-xs text-[#888]">

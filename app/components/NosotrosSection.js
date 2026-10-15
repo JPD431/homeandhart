@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useLang } from "@/app/lib/LangContext";
 import { useTranslation } from "@/app/lib/i18n";
 import { BRAND, SERIF } from "./brand";
@@ -55,13 +56,13 @@ export default function NosotrosSection() {
             >
               {n.subtitulo}
             </p>
-            <a
+            <Link
               href="/nuestra-historia"
               className="mt-6 inline-block text-sm transition-opacity hover:opacity-80"
               style={{ color: BRAND.primary, fontWeight: 500 }}
             >
               {n.historia}
-            </a>
+            </Link>
 
             {/* FAMILY values as compact row */}
             <div className="mt-8 grid grid-cols-3 gap-2 sm:grid-cols-6">

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { BRAND, SERIF } from "@/app/components/brand";
@@ -333,13 +334,13 @@ export default function ResenaPage() {
         {errorMessage && !existingReview && !successMessage ? (
           <div className="mt-8 text-center">
             <p className="text-sm leading-relaxed text-[#666]">{errorMessage}</p>
-            <a
+            <Link
               href="/historial"
               className="mt-6 inline-block text-sm font-semibold no-underline"
               style={{ color: BRAND.primary }}
             >
               {t.resena.volverHistorial}
-            </a>
+            </Link>
           </div>
         ) : existingReview ? (
           <div className="mt-8 text-center">
