@@ -12,56 +12,13 @@ import {
 } from "@/app/lib/viajes";
 import { getVerticalEmoji } from "@/app/lib/vertical-emojis";
 import { supabase } from "@/app/lib/supabase";
+import { useLang } from "@/app/lib/LangContext";
+import { useTranslation } from "@/app/lib/i18n";
 
 const PRIMARY = "#1d4f91";
 const BORDER = "#e8e4de";
 
 const CITY_DOT_COLORS = [PRIMARY, "#0e7a5c", "#c47d1a", "#7c3aed", "#dc2626"];
-
-const LOGROS_DEF = [
-  {
-    id: "primer_alojamiento",
-    emoji: "🏠",
-    titulo: "Primer alojamiento",
-    descripcion: "1 reserva de alojamiento completada",
-    theme: "blue",
-  },
-  {
-    id: "familia_completa",
-    emoji: "🧒",
-    titulo: "Familia completa",
-    descripcion: "Alojamiento + niñera en el mismo viaje",
-    theme: "green",
-  },
-  {
-    id: "viaje_mascota",
-    emoji: "🐕",
-    titulo: "Viaje con mascota",
-    descripcion: "Alojamiento + mascotas en el mismo viaje",
-    theme: "amber",
-  },
-  {
-    id: "cliente_premium",
-    emoji: "⭐",
-    titulo: "Cliente premium",
-    descripcion: "10 reservas completadas",
-    theme: "blue",
-  },
-  {
-    id: "viajero_frecuente",
-    emoji: "🌍",
-    titulo: "Viajero frecuente",
-    descripcion: "5 ciudades diferentes",
-    theme: "green",
-  },
-  {
-    id: "embajador",
-    emoji: "💎",
-    titulo: "Embajador H&H",
-    descripcion: "5 referidos",
-    theme: "amber",
-  },
-];
 
 const UNLOCKED_THEMES = {
   blue: { bg: "#e8f0fb", border: PRIMARY, badgeBg: "#e8f0fb", badgeColor: PRIMARY },
@@ -193,12 +150,60 @@ function getViajeEmoji(viaje) {
 
 export default function PasaportePage() {
   const router = useRouter();
+  const { lang } = useLang();
+  const t = useTranslation(lang);
+
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState(null);
   const [userId, setUserId] = useState(null);
   const [completadas, setCompletadas] = useState([]);
   const [viajes, setViajes] = useState([]);
   const [referidosCount, setReferidosCount] = useState(0);
+
+  const logrosDef = useMemo(() => [
+    {
+      id: "primer_alojamiento",
+      emoji: "🏠",
+      titulo: t.pasaporte.logroPrimerAlojTitulo,
+      descripcion: t.pasaporte.logroPrimerAlojDesc,
+      theme: "blue",
+    },
+    {
+      id: "familia_completa",
+      emoji: "🧒",
+      titulo: t.pasaporte.logroFamiliaCompletaTitulo,
+      descripcion: t.pasaporte.logroFamiliaCompletaDesc,
+      theme: "green",
+    },
+    {
+      id: "viaje_mascota",
+      emoji: "🐕",
+      titulo: t.pasaporte.logroViajeMascotaTitulo,
+      descripcion: t.pasaporte.logroViajeMascotaDesc,
+      theme: "amber",
+    },
+    {
+      id: "cliente_premium",
+      emoji: "⭐",
+      titulo: t.pasaporte.logroClientePremiumTitulo,
+      descripcion: t.pasaporte.logroClientePremiumDesc,
+      theme: "blue",
+    },
+    {
+      id: "viajero_frecuente",
+      emoji: "🌍",
+      titulo: t.pasaporte.logroViajeroFrecuenteTitulo,
+      descripcion: t.pasaporte.logroViajeroFrecuenteDesc,
+      theme: "green",
+    },
+    {
+      id: "embajador",
+      emoji: "💎",
+      titulo: t.pasaporte.logroEmbajadorTitulo,
+      descripcion: t.pasaporte.logroEmbajadorDesc,
+      theme: "amber",
+    },
+  ], [t]);
 
   useEffect(() => {
     async function load() {
@@ -296,7 +301,7 @@ export default function PasaportePage() {
   );
 
   const nombreCompleto =
-    [profile?.nombre, profile?.apellido].filter(Boolean).join(" ") || "Viajero";
+    [profile?.nombre, profile?.apellido].filter(Boolean).join(" ") || t.pasaporte.viajero;
   const memberNumber = userId
     ? userId.replace(/-/g, "").slice(0, 6).toUpperCase()
     : "——";
@@ -306,7 +311,7 @@ export default function PasaportePage() {
       <div className="min-h-screen font-sans" style={{ backgroundColor: BRAND.warm }}>
         <Navbar />
         <main className="px-6 py-16 text-center text-sm text-[#666]">
-          Cargando tu pasaporte…
+          {t.pasaporte.cargando}
         </main>
       </div>
     );
@@ -345,7 +350,7 @@ export default function PasaportePage() {
                   className="inline-block rounded-full px-3 py-1 text-[10px] font-semibold tracking-wide"
                   style={{ backgroundColor: "rgba(255,255,255,0.12)" }}
                 >
-                  Home&Heart · Pasaporte familiar
+                  {t.pasaporte.pasaporteFamiliar}
                 </span>
                 <h1
                   className="mt-3 text-[24px] text-white"
@@ -364,10 +369,10 @@ export default function PasaportePage() {
 
             <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
               {[
-                { label: "Ciudades", value: stats.ciudadesVisitadas },
-                { label: "Reservas", value: stats.reservasCompletadas },
-                { label: "Noches", value: stats.nochesAlojamiento },
-                { label: "Horas cuidado", value: stats.horasNinos },
+                { label: t.pasaporte.labelCiudades, value: stats.ciudadesVisitadas },
+                { label: t.pasaporte.labelReservas, value: stats.reservasCompletadas },
+                { label: t.pasaporte.labelNoches, value: stats.nochesAlojamiento },
+                { label: t.pasaporte.labelHorasCuidado, value: stats.horasNinos },
               ].map((item) => (
                 <div key={item.label}>
                   <p
@@ -382,7 +387,7 @@ export default function PasaportePage() {
             </div>
 
             <div className="mt-6 flex flex-wrap justify-center gap-4 sm:justify-start">
-              {LOGROS_DEF.map((logro) => {
+              {logrosDef.map((logro) => {
                 const unlocked = logrosUnlocked.has(logro.id);
                 return (
                   <div key={logro.id} className="flex flex-col items-center">
@@ -411,10 +416,10 @@ export default function PasaportePage() {
 
         {/* 4 stats cards */}
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <StatCard label="Ciudades visitadas" value={stats.ciudadesVisitadas} />
-          <StatCard label="Reservas totales" value={stats.reservasCompletadas} />
-          <StatCard label="Noches alojadas" value={stats.nochesAlojamiento} />
-          <StatCard label="Proveedores distintos" value={stats.proveedoresDistintos} />
+          <StatCard label={t.pasaporte.statCiudades} value={stats.ciudadesVisitadas} />
+          <StatCard label={t.pasaporte.statReservas} value={stats.reservasCompletadas} />
+          <StatCard label={t.pasaporte.statNoches} value={stats.nochesAlojamiento} />
+          <StatCard label={t.pasaporte.statProveedores} value={stats.proveedoresDistintos} />
         </div>
 
         {/* Grid 2 columnas */}
@@ -423,10 +428,10 @@ export default function PasaportePage() {
             className="rounded-xl border bg-white p-5"
             style={{ borderColor: BORDER }}
           >
-            <h2 className="text-sm font-semibold text-[#1a1a1a]">Ciudades visitadas</h2>
+            <h2 className="text-sm font-semibold text-[#1a1a1a]">{t.pasaporte.seccionCiudades}</h2>
             {stats.ciudadesLista.length === 0 ? (
               <p className="mt-4 text-sm text-[#666]">
-                Aún no has completado reservas en ninguna ciudad.
+                {t.pasaporte.sinCiudades}
               </p>
             ) : (
               <ul className="mt-4 flex flex-col gap-2">
@@ -450,14 +455,17 @@ export default function PasaportePage() {
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
                       <span className="text-xs text-[#888]">
-                        {ciudad.count} reserva{ciudad.count !== 1 ? "s" : ""}
+                        {ciudad.count}{" "}
+                        {ciudad.count !== 1
+                          ? t.pasaporte.reservaPlural
+                          : t.pasaporte.reservaSingular}
                       </span>
                       {ciudad.favorita && (
                         <span
                           className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
                           style={{ backgroundColor: "#fee2e2", color: "#dc2626" }}
                         >
-                          ❤️ Favorita
+                          {t.pasaporte.favorita}
                         </span>
                       )}
                     </div>
@@ -471,10 +479,10 @@ export default function PasaportePage() {
             className="rounded-xl border bg-white p-5"
             style={{ borderColor: BORDER }}
           >
-            <h2 className="text-sm font-semibold text-[#1a1a1a]">Mis viajes</h2>
+            <h2 className="text-sm font-semibold text-[#1a1a1a]">{t.pasaporte.seccionViajes}</h2>
             {viajes.length === 0 ? (
               <p className="mt-4 text-sm text-[#666]">
-                Crea tu primer viaje para construir tu pasaporte.
+                {t.pasaporte.sinViajes}
               </p>
             ) : (
               <ul className="mt-4 flex flex-col gap-2">
@@ -497,8 +505,10 @@ export default function PasaportePage() {
                           <p className="text-[11px] text-[#888]">
                             {formatDateRange(viaje.fecha_inicio, viaje.fecha_fin)}
                             {" · "}
-                            {reservas.length} servicio
-                            {reservas.length !== 1 ? "s" : ""}
+                            {reservas.length}{" "}
+                            {reservas.length !== 1
+                              ? t.pasaporte.servicioPlural
+                              : t.pasaporte.servicioSingular}
                           </p>
                         </div>
                       </Link>
@@ -512,7 +522,7 @@ export default function PasaportePage() {
               className="mt-4 inline-flex items-center gap-1 text-sm font-semibold no-underline"
               style={{ color: PRIMARY }}
             >
-              + Crear nuevo viaje
+              {t.pasaporte.crearViaje}
             </Link>
           </section>
         </div>
@@ -523,10 +533,10 @@ export default function PasaportePage() {
             className="mb-4 text-sm font-semibold text-[#1a1a1a]"
             style={{ fontFamily: SERIF }}
           >
-            Logros
+            {t.pasaporte.seccionLogros}
           </h2>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {LOGROS_DEF.map((logro) => {
+            {logrosDef.map((logro) => {
               const unlocked = logrosUnlocked.has(logro.id);
               const theme = UNLOCKED_THEMES[logro.theme];
               const progress = getLogroProgress(
@@ -568,7 +578,7 @@ export default function PasaportePage() {
                         color: theme.badgeColor,
                       }}
                     >
-                      Desbloqueado ✓
+                      {t.pasaporte.desbloqueado}
                     </span>
                   ) : (
                     <span
@@ -577,7 +587,7 @@ export default function PasaportePage() {
                     >
                       {progress
                         ? `${progress.current}/${progress.target}`
-                        : "Bloqueado"}
+                        : t.pasaporte.bloqueado}
                     </span>
                   )}
                 </div>

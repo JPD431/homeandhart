@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import Navbar from "@/app/components/Navbar";
@@ -9,6 +8,8 @@ import { BRAND, SERIF } from "@/app/components/brand";
 import { getIngresoProveedorFromBooking } from "@/app/lib/ingresos-proveedor";
 import { supabase } from "@/app/lib/supabase";
 import { friendlyLoadError, withLoadTimeout } from "@/app/lib/with-load-timeout";
+import { useLang } from "@/app/lib/LangContext";
+import { useTranslation } from "@/app/lib/i18n";
 
 const PRIMARY = "#1d4f91";
 const BORDER = "#e8e4de";
@@ -19,22 +20,7 @@ const VERTICAL_COLORS = {
   mascotas: "#c47d1a",
 };
 
-const STATUS_META = {
-  completada: { label: "Completadas", color: "#0e7a5c" },
-  confirmada: { label: "Confirmadas", color: PRIMARY },
-  pendiente: { label: "Pendientes", color: "#c47d1a" },
-  en_curso: { label: "En curso", color: "#7c3aed" },
-  cancelada: { label: "Canceladas", color: "#dc2626" },
-};
-
 const STATUS_ORDER = ["completada", "confirmada", "pendiente", "en_curso", "cancelada"];
-
-const PERIOD_TABS = [
-  { id: "7d", label: "7 días", days: 7 },
-  { id: "30d", label: "30 días", days: 30 },
-  { id: "3m", label: "3 meses", days: 90 },
-  { id: "todo", label: "Todo", days: null },
-];
 
 function getReservasSinComisionProveedor(perfil) {
   return Number(perfil?.reservas_sin_comision_proveedor) || 0;
@@ -98,8 +84,8 @@ function formatEuroRounded(value) {
 }
 
 function getPeriodDays(period) {
-  const tab = PERIOD_TABS.find((t) => t.id === period);
-  return tab?.days ?? null;
+  const map = { "7d": 7, "30d": 30, "3m": 90 };
+  return map[period] ?? null;
 }
 
 function isInRange(dateStr, start, end) {
@@ -129,28 +115,32 @@ function filterPreviousPeriod(items, period, dateField = "created_at") {
   return items.filter((item) => isInRange(item[dateField], prevStart, prevEnd));
 }
 
-function calcTrend(current, previous) {
+function calcTrend(current, previous, T) {
+  const sinCambio = T?.sinCambio ?? "Sin cambio";
+  const nuevo = T?.nuevo ?? "Nuevo";
+  const tendencia = T?.tendencia ?? ((dir, pct) => `${dir} ${pct}% vs período anterior`);
+
   if (previous === 0) {
-    if (current === 0) return { label: "Sin cambio", up: null };
-    return { label: "Nuevo", up: true };
+    if (current === 0) return { label: sinCambio, up: null };
+    return { label: nuevo, up: true };
   }
   const diff = ((current - previous) / previous) * 100;
   const rounded = Math.round(Math.abs(diff));
-  if (Math.abs(diff) < 0.5) return { label: "Sin cambio", up: null };
+  if (Math.abs(diff) < 0.5) return { label: sinCambio, up: null };
   return {
-    label: `${diff >= 0 ? "↑" : "↓"} ${rounded}% vs período anterior`,
+    label: tendencia(diff >= 0 ? "↑" : "↓", rounded),
     up: diff >= 0,
   };
 }
 
-function getLast6Months() {
+function getLast6Months(locale = "es-ES") {
   const months = [];
   const now = new Date();
   for (let i = 5; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     months.push({
       key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
-      label: d.toLocaleDateString("es-ES", { month: "short" }),
+      label: d.toLocaleDateString(locale, { month: "short" }),
     });
   }
   return months;
@@ -198,6 +188,9 @@ function Stars({ value, size = 14 }) {
 
 export default function EstadisticasPage() {
   const router = useRouter();
+  const { lang } = useLang();
+  const t = useTranslation(lang);
+
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
@@ -206,6 +199,21 @@ export default function EstadisticasPage() {
   const [services, setServices] = useState([]);
   const [reviews, setReviews] = useState([]);
   const [sinComisionProveedor, setSinComisionProveedor] = useState(false);
+
+  const STATUS_META = useMemo(() => ({
+    completada: { label: t.estadisticas.statusCompletadas, color: "#0e7a5c" },
+    confirmada: { label: t.estadisticas.statusConfirmadas, color: PRIMARY },
+    pendiente: { label: t.estadisticas.statusPendientes, color: "#c47d1a" },
+    en_curso: { label: t.estadisticas.statusEnCurso, color: "#7c3aed" },
+    cancelada: { label: t.estadisticas.statusCanceladas, color: "#dc2626" },
+  }), [t]);
+
+  const periodTabs = useMemo(() => [
+    { id: "7d", label: t.estadisticas.periodo7d },
+    { id: "30d", label: t.estadisticas.periodo30d },
+    { id: "3m", label: t.estadisticas.periodo3m },
+    { id: "todo", label: t.estadisticas.periodoTodo },
+  ], [t]);
 
   useEffect(() => {
     let cancelled = false;
@@ -380,27 +388,29 @@ export default function EstadisticasPage() {
 
   const trends = useMemo(() => {
     const showTrend = period !== "todo";
+    const T = t.estadisticas;
     return {
       ingresos: showTrend
-        ? calcTrend(metrics.ingresosNetos, metrics.prevIngresosNetos)
+        ? calcTrend(metrics.ingresosNetos, metrics.prevIngresosNetos, T)
         : null,
       reservas: showTrend
-        ? calcTrend(metrics.totalReservas, metrics.prevTotalReservas)
+        ? calcTrend(metrics.totalReservas, metrics.prevTotalReservas, T)
         : null,
       valoracion:
         showTrend && metrics.valoracionMedia != null && metrics.prevValoracionMedia != null
-          ? calcTrend(metrics.valoracionMedia, metrics.prevValoracionMedia)
+          ? calcTrend(metrics.valoracionMedia, metrics.prevValoracionMedia, T)
           : showTrend && metrics.valoracionMedia != null && metrics.prevValoracionMedia == null
-            ? { label: "Nuevo", up: true }
+            ? { label: T.nuevo, up: true }
             : null,
       conversion: showTrend
-        ? calcTrend(metrics.tasaConversion, metrics.prevTasaConversion)
+        ? calcTrend(metrics.tasaConversion, metrics.prevTasaConversion, T)
         : null,
     };
-  }, [metrics, period]);
+  }, [metrics, period, t]);
 
   const monthlyData = useMemo(() => {
-    const months = getLast6Months();
+    const locale = lang === "en" ? "en-GB" : "es-ES";
+    const months = getLast6Months(locale);
     const counts = Object.fromEntries(months.map((m) => [m.key, 0]));
 
     for (const booking of periodBookings) {
@@ -415,7 +425,7 @@ export default function EstadisticasPage() {
       ...month,
       count: counts[month.key],
     }));
-  }, [periodBookings]);
+  }, [periodBookings, lang]);
 
   const maxMonthlyCount = useMemo(
     () => Math.max(...monthlyData.map((m) => m.count), 1),
@@ -479,7 +489,7 @@ export default function EstadisticasPage() {
       <div className="min-h-screen font-sans" style={{ backgroundColor: BRAND.warm }}>
         <Navbar />
         <main className="px-6 py-16 text-center text-sm text-[#666]">
-          Cargando estadísticas…
+          {t.estadisticas.cargando}
         </main>
       </div>
     );
@@ -515,10 +525,10 @@ export default function EstadisticasPage() {
             className="text-[22px] text-[#1a1a1a]"
             style={{ fontFamily: SERIF, fontWeight: 300 }}
           >
-            Mis estadísticas
+            {t.estadisticas.titulo}
           </h1>
           <p className="mt-1 text-sm text-[#888]">
-            Panel de rendimiento · Proveedor verificado
+            {t.estadisticas.subtitulo}
           </p>
         </div>
       </header>
@@ -528,7 +538,7 @@ export default function EstadisticasPage() {
         style={{ borderColor: BORDER }}
       >
         <div className="mx-auto flex flex-wrap gap-2 max-w-5xl">
-          {PERIOD_TABS.map((tab) => {
+          {periodTabs.map((tab) => {
             const isActive = period === tab.id;
             return (
               <button
@@ -552,31 +562,31 @@ export default function EstadisticasPage() {
       <main className="mx-auto max-w-5xl space-y-5 px-6 py-6">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard
-            label="Ingresos netos"
+            label={t.estadisticas.ingresosNetos}
             value={formatEuro(metrics.ingresosNetos)}
-            sublabel="Tras comisiones (IVA incl.)"
+            sublabel={t.estadisticas.ingresosSubtitulo}
             trend={trends.ingresos}
           />
           <StatCard
-            label="Reservas recibidas"
+            label={t.estadisticas.reservasRecibidas}
             value={metrics.totalReservas}
-            sublabel="En el período seleccionado"
+            sublabel={t.estadisticas.reservasSubtitulo}
             trend={trends.reservas}
           />
           <StatCard
-            label="Valoración media"
+            label={t.estadisticas.valoracionMedia}
             value={valoracionDisplay === "—" ? "—" : `${valoracionDisplay} ★`}
             sublabel={
               metrics.reviewCount > 0
-                ? `${metrics.reviewCount} valoración${metrics.reviewCount > 1 ? "es" : ""}`
-                : "Sin valoraciones"
+                ? t.estadisticas.valoracionCount(metrics.reviewCount)
+                : t.estadisticas.sinValoraciones
             }
             trend={trends.valoracion}
           />
           <StatCard
-            label="Tasa de conversión"
+            label={t.estadisticas.tasaConversion}
             value={`${metrics.tasaConversion.toFixed(0)}%`}
-            sublabel="Completadas / total reservas"
+            sublabel={t.estadisticas.tasaSubtitulo}
             trend={trends.conversion}
           />
         </div>
@@ -587,12 +597,16 @@ export default function EstadisticasPage() {
         >
           <div className="flex flex-wrap items-center gap-4 text-sm">
             <div>
-              <p className="text-[10px] uppercase tracking-widest text-white/60">Cobrado</p>
+              <p className="text-[10px] uppercase tracking-widest text-white/60">
+                {t.estadisticas.cobrado}
+              </p>
               <p className="mt-0.5 text-lg font-medium">{formatEuroRounded(metrics.cobrado)}</p>
             </div>
             <div className="hidden h-8 w-px bg-white/20 sm:block" />
             <div>
-              <p className="text-[10px] uppercase tracking-widest text-white/60">Pendiente de cobrar</p>
+              <p className="text-[10px] uppercase tracking-widest text-white/60">
+                {t.estadisticas.pendienteCobrar}
+              </p>
               <p className="mt-0.5 text-lg font-medium">{formatEuroRounded(metrics.pendienteDeCobrar)}</p>
             </div>
           </div>
@@ -611,12 +625,12 @@ export default function EstadisticasPage() {
               />
             </div>
             <p className="mt-2 text-xs text-white/70">
-              Total estimado:{" "}
+              {t.estadisticas.totalEstimado}{" "}
               <span className="font-semibold text-white">
                 {formatEuroRounded(metrics.totalEstimado)}
               </span>
               {" · "}
-              {metrics.porcentajeCobrado}% cobrado
+              {t.estadisticas.pctCobrado(metrics.porcentajeCobrado)}
             </p>
           </div>
         </div>
@@ -625,8 +639,8 @@ export default function EstadisticasPage() {
           className="rounded-xl border bg-white p-5"
           style={{ borderColor: BORDER }}
         >
-          <h2 className="text-sm font-semibold text-[#1a1a1a]">Reservas por mes</h2>
-          <p className="mt-0.5 text-[10px] text-[#888]">Últimos 6 meses</p>
+          <h2 className="text-sm font-semibold text-[#1a1a1a]">{t.estadisticas.reservasPorMes}</h2>
+          <p className="mt-0.5 text-[10px] text-[#888]">{t.estadisticas.ultimos6Meses}</p>
 
           <div className="mt-5 grid grid-cols-6 gap-2 sm:gap-3">
             {monthlyData.map((month) => {
@@ -663,12 +677,12 @@ export default function EstadisticasPage() {
           style={{ borderColor: BORDER }}
         >
           <h2 className="text-sm font-semibold text-[#1a1a1a]">
-            Servicios más reservados
+            {t.estadisticas.serviciosMasReservados}
           </h2>
 
           {servicesStats.length === 0 ? (
             <p className="mt-4 text-sm text-[#666]">
-              Aún no tienes reservas en este período.
+              {t.estadisticas.sinReservasPeriodo}
             </p>
           ) : (
             <div className="mt-4 overflow-x-auto">
@@ -678,9 +692,9 @@ export default function EstadisticasPage() {
                     className="border-b text-[10px] font-semibold uppercase tracking-wide text-[#bbb]"
                     style={{ borderColor: BORDER }}
                   >
-                    <th className="px-2 py-2">Servicio</th>
-                    <th className="px-2 py-2 text-right">Reservas</th>
-                    <th className="px-2 py-2 text-right">Ingresos</th>
+                    <th className="px-2 py-2">{t.estadisticas.thServicio}</th>
+                    <th className="px-2 py-2 text-right">{t.estadisticas.thReservas}</th>
+                    <th className="px-2 py-2 text-right">{t.estadisticas.thIngresos}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -726,7 +740,7 @@ export default function EstadisticasPage() {
             className="rounded-xl border bg-white p-5"
             style={{ borderColor: BORDER }}
           >
-            <h2 className="text-sm font-semibold text-[#1a1a1a]">Por estado</h2>
+            <h2 className="text-sm font-semibold text-[#1a1a1a]">{t.estadisticas.porEstado}</h2>
             <ul className="mt-4 flex flex-col gap-2.5">
               {STATUS_ORDER.map((status) => {
                 const meta = STATUS_META[status];
@@ -758,9 +772,9 @@ export default function EstadisticasPage() {
             className="rounded-xl border bg-white p-5"
             style={{ borderColor: BORDER }}
           >
-            <h2 className="text-sm font-semibold text-[#1a1a1a]">Valoraciones</h2>
+            <h2 className="text-sm font-semibold text-[#1a1a1a]">{t.estadisticas.seccionValoraciones}</h2>
             {periodReviews.length === 0 ? (
-              <p className="mt-4 text-sm text-[#666]">Sin valoraciones aún.</p>
+              <p className="mt-4 text-sm text-[#666]">{t.estadisticas.sinValoracionesAun}</p>
             ) : (
               <div className="mt-4">
                 <p
@@ -806,9 +820,9 @@ export default function EstadisticasPage() {
             className="rounded-xl border bg-white p-5"
             style={{ borderColor: BORDER }}
           >
-            <h2 className="text-sm font-semibold text-[#1a1a1a]">Visitas</h2>
+            <h2 className="text-sm font-semibold text-[#1a1a1a]">{t.estadisticas.visitas}</h2>
             <p className="mt-6 rounded-lg bg-[#f7f5f2] px-4 py-8 text-center text-sm text-[#888]">
-              Próximamente
+              {t.estadisticas.proximamente}
             </p>
           </section>
         </div>

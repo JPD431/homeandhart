@@ -7,6 +7,8 @@ import Navbar from "@/app/components/Navbar";
 import { SERIF } from "@/app/components/brand";
 import { getServiceCoverPhoto } from "@/app/lib/service-card-display";
 import { supabase } from "@/app/lib/supabase";
+import { useLang } from "@/app/lib/LangContext";
+import { useTranslation } from "@/app/lib/i18n";
 
 const VERTICAL_THEME = {
   alojamiento: {
@@ -29,35 +31,11 @@ const VERTICAL_THEME = {
   },
 };
 
-const CANCEL_STYLES = {
-  flexible: { label: "Flexible", color: "#0e7a5c", light: "#e6f4f0" },
-  moderada: { label: "Moderada", color: "#1d4f91", light: "#e8f0fb" },
-  estricta: { label: "Estricta", color: "#c47d1a", light: "#fdf3e3" },
-};
-
 const LEGACY_CANCEL = {
   "24h": "flexible",
   "48h": "moderada",
   "7d": "estricta",
 };
-
-const ROW_LABELS = [
-  "Precio",
-  "Valoración",
-  "Verificado",
-  "Tiempo respuesta",
-  "Tipo de reserva",
-  "Avales externos",
-  "Disponible para viajar",
-  "Idiomas",
-  "Cancelación",
-  "Red de emergencia",
-];
-
-function getCancelStyle(policyKey) {
-  const key = LEGACY_CANCEL[policyKey] ?? policyKey ?? "moderada";
-  return CANCEL_STYLES[key] || CANCEL_STYLES.moderada;
-}
 
 function formatShortName(nombre, apellido) {
   const first = nombre?.trim() || "";
@@ -75,11 +53,6 @@ function getZone(service, profile) {
   );
 }
 
-function formatPrice(precio, suffix) {
-  if (precio == null || precio === "") return "Consultar";
-  return `${Number(precio)}€${suffix}`;
-}
-
 function isBookableService(service) {
   return (
     service?.disponible === true && service?.profiles_public?.verificado === true
@@ -95,11 +68,45 @@ function CompararContent() {
     [idsParam],
   );
 
+  const { lang } = useLang();
+  const t = useTranslation(lang);
+
   const [services, setServices] = useState([]);
   const [ratingsByProveedor, setRatingsByProveedor] = useState({});
   const [avalesByProveedor, setAvalesByProveedor] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  // Row labels computed from translations
+  const ROW_LABELS = [
+    t.comparar.rowPrecio,
+    t.comparar.rowValoracion,
+    t.comparar.rowVerificado,
+    t.comparar.rowTiempoRespuesta,
+    t.comparar.rowTipoReserva,
+    t.comparar.rowAvales,
+    t.comparar.rowDisponibleViajar,
+    t.comparar.rowIdiomas,
+    t.comparar.rowCancelacion,
+    t.comparar.rowRedEmergencia,
+  ];
+
+  // Cancel styles with translated labels
+  const CANCEL_STYLES = {
+    flexible: { label: t.comparar.cancelFlexible, color: "#0e7a5c", light: "#e6f4f0" },
+    moderada: { label: t.comparar.cancelModerada, color: "#1d4f91", light: "#e8f0fb" },
+    estricta: { label: t.comparar.cancelEstricta, color: "#c47d1a", light: "#fdf3e3" },
+  };
+
+  function getCancelStyle(policyKey) {
+    const key = LEGACY_CANCEL[policyKey] ?? policyKey ?? "moderada";
+    return CANCEL_STYLES[key] || CANCEL_STYLES.moderada;
+  }
+
+  function formatPrice(precio, suffix) {
+    if (precio == null || precio === "") return t.comparar.consultar;
+    return `${Number(precio)}€${suffix}`;
+  }
 
   useEffect(() => {
     if (ids.length === 0) {
@@ -264,7 +271,7 @@ function CompararContent() {
                   borderRadius: 12,
                 }}
               >
-                Mejor precio
+                {t.comparar.mejorPrecio}
               </span>
             )}
           </div>
@@ -279,16 +286,16 @@ function CompararContent() {
               fontWeight: service.id === bestRatingId ? 600 : 400,
             }}
           >
-            {avg} ★ ({reviewCount} reseñas)
+            {avg} ★ {t.comparar.resenas(reviewCount)}
           </p>
         ) : (
-          <p style={{ margin: 0, fontSize: 14, color: "#bbb" }}>Sin valoraciones</p>
+          <p style={{ margin: 0, fontSize: 14, color: "#bbb" }}>{t.comparar.sinValoraciones}</p>
         );
       case 2:
         return profile.verificado === true ? (
-          <span style={{ color: "#0e7a5c", fontSize: 14, fontWeight: 600 }}>✓ Verificado</span>
+          <span style={{ color: "#0e7a5c", fontSize: 14, fontWeight: 600 }}>{t.comparar.verificado}</span>
         ) : (
-          <span style={{ color: "#bbb", fontSize: 14 }}>✗ No verificado</span>
+          <span style={{ color: "#bbb", fontSize: 14 }}>{t.comparar.noVerificado}</span>
         );
       case 3:
         if (profile.badge_respuesta === "rapido") {
@@ -304,7 +311,7 @@ function CompararContent() {
                 borderRadius: 12,
               }}
             >
-              ⚡ Responde rápido
+              {t.comparar.respondeRapido}
             </span>
           );
         }
@@ -321,17 +328,17 @@ function CompararContent() {
                 borderRadius: 12,
               }}
             >
-              🕐 Responde en pocas horas
+              {t.comparar.respondePocasHoras}
             </span>
           );
         }
         return <span style={{ color: "#bbb", fontSize: 14 }}>—</span>;
       case 4:
         return service.reserva_inmediata === true ? (
-          <span style={{ color: "#0e7a5c", fontSize: 13, fontWeight: 600 }}>Inmediata ⚡</span>
+          <span style={{ color: "#0e7a5c", fontSize: 13, fontWeight: 600 }}>{t.comparar.reservaInmediata}</span>
         ) : (
           <span style={{ color: "#c47d1a", fontSize: 13, fontWeight: 600 }}>
-            Con confirmación
+            {t.comparar.conConfirmacion}
           </span>
         );
       case 5:
@@ -349,9 +356,9 @@ function CompararContent() {
         );
       case 6:
         return service.disponible_para_viajar === true ? (
-          <span style={{ color: "#0e7a5c", fontSize: 14 }}>✓ Sí</span>
+          <span style={{ color: "#0e7a5c", fontSize: 14 }}>{t.comparar.si}</span>
         ) : (
-          <span style={{ color: "#bbb", fontSize: 14 }}>✗ No</span>
+          <span style={{ color: "#bbb", fontSize: 14 }}>{t.comparar.no}</span>
         );
       case 7:
         return idiomas.length > 0 ? (
@@ -379,9 +386,9 @@ function CompararContent() {
         );
       case 9:
         return service.proveedor_emergencia === true ? (
-          <span style={{ color: "#0e7a5c", fontSize: 14 }}>✓ Sí</span>
+          <span style={{ color: "#0e7a5c", fontSize: 14 }}>{t.comparar.si}</span>
         ) : (
-          <span style={{ color: "#bbb", fontSize: 14 }}>✗ No</span>
+          <span style={{ color: "#bbb", fontSize: 14 }}>{t.comparar.no}</span>
         );
       default:
         return null;
@@ -398,15 +405,15 @@ function CompararContent() {
           style={{ fontFamily: SERIF, fontSize: 22, fontWeight: 400, margin: 0 }}
         >
           {loading
-            ? "Comparando proveedores…"
-            : `Comparando ${services.length} proveedor${services.length !== 1 ? "es" : ""}`}
+            ? t.comparar.tituloCargando
+            : t.comparar.titulo(services.length)}
         </h1>
         <p className="mt-2 text-[14px] leading-relaxed text-[#888]">
-          Compara precio, valoración, disponibilidad y garantías antes de reservar.
+          {t.comparar.subtitulo}
         </p>
 
         {loading && (
-          <p className="mt-10 text-center text-[13px] text-[#888]">Cargando comparación…</p>
+          <p className="mt-10 text-center text-[13px] text-[#888]">{t.comparar.cargando}</p>
         )}
 
         {!loading && error && (
@@ -417,15 +424,15 @@ function CompararContent() {
           <div className="mt-10 text-center">
             <p className="text-[14px] text-[#888]">
               {ids.length >= 2
-                ? "Los servicios seleccionados no están disponibles para comparar en este momento."
-                : "Selecciona al menos 2 servicios en la búsqueda para comparar."}
+                ? t.comparar.sinServiciosDisponibles
+                : t.comparar.seleccionaMinimo2}
             </p>
             <Link
               href="/buscar"
               className="mt-4 inline-block rounded-md px-5 py-2.5 text-[13px] font-semibold text-white no-underline"
               style={{ background: "#1d4f91" }}
             >
-              Ir a buscar
+              {t.comparar.irABuscar}
             </Link>
           </div>
         )}
@@ -490,7 +497,7 @@ function CompararContent() {
                         fontFamily: SERIF,
                       }}
                     >
-                      {formatShortName(profile.nombre, profile.apellido) || "Proveedor"}
+                      {formatShortName(profile.nombre, profile.apellido) || t.comparar.proveedorFallback}
                     </p>
                     <p style={{ margin: "4px 0 0", fontSize: 11, color: "#888" }}>
                       {getZone(service, profile)}
@@ -501,7 +508,7 @@ function CompararContent() {
                       </p>
                     ) : (
                       <p style={{ margin: "6px 0 0", fontSize: 11, color: "#bbb" }}>
-                        Sin valoraciones
+                        {t.comparar.sinValoraciones}
                       </p>
                     )}
                     <Link
@@ -509,7 +516,7 @@ function CompararContent() {
                       className="mt-3 inline-block w-full rounded-md py-2 text-center text-[12px] font-semibold text-white no-underline"
                       style={{ background: theme.color }}
                     >
-                      Reservar →
+                      {t.comparar.reservar}
                     </Link>
                   </div>
                 );
@@ -570,7 +577,7 @@ function CompararContent() {
                       className="block w-full rounded-md py-2.5 text-center text-[13px] font-semibold text-white no-underline"
                       style={{ background: theme.color }}
                     >
-                      Reservar →
+                      {t.comparar.reservar}
                     </Link>
                   </div>
                 );
@@ -586,7 +593,7 @@ function CompararContent() {
             className="mt-6 border bg-white px-4 py-2 text-[12px] font-medium transition-colors hover:bg-[#f7f5f2]"
             style={{ borderColor: "#e8e4de", borderRadius: 6, color: "#666" }}
           >
-            ← Volver a buscar
+            {t.comparar.volverABuscar}
           </button>
         )}
       </main>
@@ -595,8 +602,10 @@ function CompararContent() {
 }
 
 export default function CompararPage() {
+  const { lang } = useLang();
+  const t = useTranslation(lang);
   return (
-    <Suspense fallback={<div style={{ padding: 24, color: "#888" }}>Cargando…</div>}>
+    <Suspense fallback={<div style={{ padding: 24, color: "#888" }}>{t.comparar.cargandoSuspense}</div>}>
       <CompararContent />
     </Suspense>
   );

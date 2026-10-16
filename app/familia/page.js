@@ -12,6 +12,8 @@ import {
 } from "@/app/lib/familia";
 import { formatDateRange, getBookingEstado } from "@/app/lib/viajes";
 import { supabase } from "@/app/lib/supabase";
+import { useLang } from "@/app/lib/LangContext";
+import { useTranslation } from "@/app/lib/i18n";
 
 const PRIMARY = "#1d4f91";
 const GREEN = "#0e7a5c";
@@ -25,28 +27,28 @@ const VERTICAL_GRADIENTS = {
 };
 
 const STATUS_STYLES = {
-  pendiente: { bg: "#fef3c7", color: "#c47d1a", label: "Pendiente" },
-  confirmada: { bg: "#e8f0fb", color: PRIMARY, label: "Confirmada" },
-  en_curso: { bg: "#ede9fe", color: "#7c3aed", label: "En curso" },
-  completada: { bg: "#e6f4f0", color: GREEN, label: "Completada" },
-  cancelada: { bg: "#fee2e2", color: "#dc2626", label: "Cancelada" },
+  pendiente: { bg: "#fef3c7", color: "#c47d1a" },
+  confirmada: { bg: "#e8f0fb", color: PRIMARY },
+  en_curso: { bg: "#ede9fe", color: "#7c3aed" },
+  completada: { bg: "#e6f4f0", color: GREEN },
+  cancelada: { bg: "#fee2e2", color: "#dc2626" },
 };
 
 const inputClass =
   "w-full rounded-xl border px-4 py-3 text-sm text-[#1a1a1a] outline-none focus:ring-2 focus:ring-[#1d4f91]/30";
 
-function formatMemberDate(value) {
+function formatMemberDate(value, lang) {
   if (!value) return "—";
-  return new Date(value).toLocaleDateString("es-ES", {
+  return new Date(value).toLocaleDateString(lang === "en" ? "en-GB" : "es-ES", {
     day: "numeric",
     month: "short",
     year: "numeric",
   });
 }
 
-function formatFamiliaDate(value) {
+function formatFamiliaDate(value, lang) {
   if (!value) return "";
-  return new Date(value).toLocaleDateString("es-ES", {
+  return new Date(value).toLocaleDateString(lang === "en" ? "en-GB" : "es-ES", {
     month: "long",
     year: "numeric",
   });
@@ -95,14 +97,14 @@ function MiembroAvatar({
   );
 }
 
-function RolBadge({ rol, estado }) {
+function RolBadge({ rol, estado, t }) {
   if (estado === "pendiente") {
     return (
       <span
         className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
         style={{ backgroundColor: "#fdf3e3", color: "#c47d1a" }}
       >
-        Pendiente
+        {t.familia.rolPendiente}
       </span>
     );
   }
@@ -112,7 +114,7 @@ function RolBadge({ rol, estado }) {
         className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
         style={{ backgroundColor: "#e8f0fb", color: PRIMARY }}
       >
-        Admin
+        {t.familia.rolAdmin}
       </span>
     );
   }
@@ -121,25 +123,27 @@ function RolBadge({ rol, estado }) {
       className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
       style={{ backgroundColor: "#f3f4f6", color: "#666" }}
     >
-      Miembro
+      {t.familia.rolMiembro}
     </span>
   );
 }
 
-function StatusBadge({ status }) {
+function StatusBadge({ status, t }) {
   const key = status ?? "pendiente";
   const style = STATUS_STYLES[key] ?? STATUS_STYLES.pendiente;
+  const labelKey = `status${key.charAt(0).toUpperCase()}${key.replace(/_([a-z])/g, (_, c) => c.toUpperCase()).slice(1)}`;
+  const label = t.familia[labelKey] ?? key;
   return (
     <span
       className="inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold"
       style={{ backgroundColor: style.bg, color: style.color }}
     >
-      {style.label}
+      {label}
     </span>
   );
 }
 
-function getViajeEmoji(viaje) {
+function getViajeEmoji() {
   return "🧳";
 }
 
@@ -147,6 +151,8 @@ function FamiliaPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const aceptarId = searchParams.get("aceptar");
+  const { lang } = useLang();
+  const t = useTranslation(lang);
 
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState(null);
@@ -271,16 +277,16 @@ function FamiliaPageContent() {
           const data = await res.json().catch(() => ({}));
 
           if (res.ok) {
-            setSuccess(data.message || "¡Te has unido al grupo familiar!");
+            setSuccess(data.message || t.familia.successUnido);
           } else if (data.code === "already_in_family") {
-            setError(data.error || "Ya formas parte de otro grupo familiar.");
+            setError(data.error || t.familia.errorYaOtraFamilia);
           } else if (data.code === "already_active") {
-            setSuccess(data.message || "Ya formas parte de este grupo familiar.");
+            setSuccess(data.message || t.familia.successYaActivo);
           } else {
-            setError(data.error || "No se pudo aceptar la invitación.");
+            setError(data.error || t.familia.errorAceptar);
           }
         } catch {
-          setError("Error de conexión al aceptar la invitación.");
+          setError(t.familia.errorAceptarConexion);
         }
         router.replace("/familia");
       }
@@ -291,12 +297,13 @@ function FamiliaPageContent() {
     }
 
     init();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router, aceptarId, loadFamilia]);
 
   async function handleCreateFamilia(e) {
     e.preventDefault();
     if (!nombreFamilia.trim()) {
-      setError("Indica un nombre para tu familia.");
+      setError(t.familia.errorNombreFamilia);
       return;
     }
 
@@ -335,7 +342,7 @@ function FamiliaPageContent() {
       return;
     }
 
-    setSuccess("Grupo familiar creado correctamente.");
+    setSuccess(t.familia.successCreado);
     setNombreFamilia("");
     await loadFamilia(userId);
   }
@@ -353,7 +360,7 @@ function FamiliaPageContent() {
   async function handleInvite(e) {
     e.preventDefault();
     if (!inviteEmail.trim()) {
-      setError("Indica un email para invitar.");
+      setError(t.familia.errorInviteEmail);
       return;
     }
 
@@ -377,23 +384,23 @@ function FamiliaPageContent() {
         setError(
           data.error ||
             (res.status === 401
-              ? "Debes iniciar sesión para invitar."
+              ? t.familia.errorLogin
               : res.status === 403
-                ? "No tienes permiso para invitar a esta familia."
+                ? t.familia.errorPermiso
                 : res.status === 409
-                  ? "Esa persona ya está en el grupo o tiene una invitación pendiente."
-                  : "No se pudo enviar la invitación."),
+                  ? t.familia.errorYaEnGrupo
+                  : t.familia.errorInvitar),
         );
         return;
       }
 
       setInviting(false);
       setInviteEmail("");
-      setSuccess("Invitación enviada correctamente.");
+      setSuccess(t.familia.successInvitado);
       await loadFamilia(userId);
     } catch {
       setInviting(false);
-      setError("Error de conexión al enviar la invitación.");
+      setError(t.familia.errorConexion);
     }
   }
 
@@ -410,7 +417,7 @@ function FamiliaPageContent() {
     );
 
     setResendingId(null);
-    setSuccess("Invitación reenviada correctamente.");
+    setSuccess(t.familia.successReenviado);
   }
 
   async function handleRemoveMember(memberId) {
@@ -429,7 +436,7 @@ function FamiliaPageContent() {
       return;
     }
 
-    setSuccess("Miembro eliminado del grupo.");
+    setSuccess(t.familia.successEliminado);
     await loadFamilia(userId);
   }
 
@@ -445,7 +452,7 @@ function FamiliaPageContent() {
     return (
       <div className="min-h-screen font-sans" style={{ backgroundColor: BRAND.warm }}>
         <Navbar />
-        <main className="px-6 py-16 text-center text-sm text-[#666]">Cargando…</main>
+        <main className="px-6 py-16 text-center text-sm text-[#666]">{t.familia.cargando}</main>
       </div>
     );
   }
@@ -467,7 +474,7 @@ function FamiliaPageContent() {
 
         <FamiliaInviteBanner
           onAccepted={(data) => {
-            setSuccess(data.message || "¡Te has unido al grupo familiar!");
+            setSuccess(data.message || t.familia.successUnido);
             setError("");
             if (userId) loadFamilia(userId);
           }}
@@ -485,25 +492,24 @@ function FamiliaPageContent() {
               className="mt-4 text-[20px] text-[#1a1a1a]"
               style={{ fontFamily: SERIF, fontWeight: 300 }}
             >
-              Crea tu grupo familiar
+              {t.familia.crearTitulo}
             </h1>
             <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-[#666]">
-              Coordina reservas con tu familia: todos los miembros podrán ver y
-              hacer reservas bajo el mismo grupo.
+              {t.familia.crearDesc}
             </p>
             <form onSubmit={handleCreateFamilia} className="mx-auto mt-6 max-w-sm text-left">
               <label
                 htmlFor="nombre-familia"
                 className="mb-1.5 block text-xs font-medium text-[#444]"
               >
-                Nombre de tu familia
+                {t.familia.nombreLabel}
               </label>
               <input
                 id="nombre-familia"
                 type="text"
                 value={nombreFamilia}
                 onChange={(e) => setNombreFamilia(e.target.value)}
-                placeholder="Ej: Familia García"
+                placeholder={t.familia.nombrePlaceholder}
                 className={inputClass}
                 style={{ borderColor: BORDER }}
               />
@@ -513,7 +519,7 @@ function FamiliaPageContent() {
                 className="mt-4 w-full rounded-xl px-5 py-3 text-sm font-semibold text-white disabled:opacity-60"
                 style={{ backgroundColor: GREEN }}
               >
-                {creating ? "Creando…" : "Crear grupo"}
+                {creating ? t.familia.creando : t.familia.crearGrupo}
               </button>
             </form>
           </section>
@@ -544,7 +550,7 @@ function FamiliaPageContent() {
                       className="inline-block rounded-full px-3 py-1 text-[10px] font-semibold tracking-wide"
                       style={{ backgroundColor: "rgba(255,255,255,0.12)" }}
                     >
-                      Grupo familiar · Home&Heart
+                      {t.familia.grupoFamiliar}
                     </span>
                     <h1
                       className="mt-3 text-[24px] text-white"
@@ -553,10 +559,12 @@ function FamiliaPageContent() {
                       {familia.nombre}
                     </h1>
                     <p className="mt-1 text-sm text-white/60">
-                      {activos} miembro{activos !== 1 ? "s" : ""} activo
-                      {pendientes > 0 ? ` · ${pendientes} pendiente${pendientes !== 1 ? "s" : ""}` : ""}
+                      {activos} {activos !== 1 ? t.familia.miembrosActivos : t.familia.miembroActivo}
+                      {pendientes > 0
+                        ? ` · ${pendientes} ${pendientes !== 1 ? t.familia.pendientePlural : t.familia.pendienteSingular}`
+                        : ""}
                       {familia.created_at
-                        ? ` · Desde ${formatFamiliaDate(familia.created_at)}`
+                        ? ` · ${t.familia.desde} ${formatFamiliaDate(familia.created_at, lang)}`
                         : ""}
                     </p>
                   </div>
@@ -573,12 +581,12 @@ function FamiliaPageContent() {
                     const nombre =
                       perfil
                         ? [perfil.nombre, perfil.apellido].filter(Boolean).join(" ")
-                        : miembro.email_invitado || "Invitado";
+                        : miembro.email_invitado || t.familia.invitado;
                     const rolLabel = isPending
-                      ? "Pendiente"
+                      ? t.familia.rolPendiente
                       : isAdminMember
-                        ? "Admin"
-                        : "Miembro";
+                        ? t.familia.rolAdmin
+                        : t.familia.rolMiembro;
 
                     return (
                       <div key={miembro.id} className="flex flex-col items-center">
@@ -608,7 +616,7 @@ function FamiliaPageContent() {
                       onClick={scrollToInvite}
                       className="flex h-11 w-11 items-center justify-center rounded-full text-lg text-white/80 transition-colors hover:bg-white/10"
                       style={{ border: "2px dashed rgba(255,255,255,0.4)" }}
-                      aria-label="Invitar miembro"
+                      aria-label={t.familia.invitarAriaLabel}
                     >
                       +
                     </button>
@@ -622,7 +630,7 @@ function FamiliaPageContent() {
               className="rounded-xl border bg-white p-5"
               style={{ borderColor: BORDER }}
             >
-              <h2 className="text-sm font-semibold text-[#1a1a1a]">Miembros</h2>
+              <h2 className="text-sm font-semibold text-[#1a1a1a]">{t.familia.miembros}</h2>
               <ul className="mt-4 flex flex-col gap-3">
                 {miembros.map((miembro) => {
                   const perfil = miembro.profiles_public;
@@ -630,10 +638,10 @@ function FamiliaPageContent() {
                   const nombre =
                     perfil
                       ? [perfil.nombre, perfil.apellido].filter(Boolean).join(" ")
-                      : miembro.email_invitado || "Invitado";
+                      : miembro.email_invitado || t.familia.invitado;
                   const subtitulo = isPending
-                    ? `${miembro.email_invitado || "—"} · ${formatMemberDate(miembro.created_at)}`
-                    : formatMemberDate(miembro.created_at);
+                    ? `${miembro.email_invitado || "—"} · ${formatMemberDate(miembro.created_at, lang)}`
+                    : formatMemberDate(miembro.created_at, lang);
 
                   return (
                     <li
@@ -651,7 +659,7 @@ function FamiliaPageContent() {
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
                             <p className="truncate font-medium text-[#1a1a1a]">{nombre}</p>
-                            <RolBadge rol={miembro.rol} estado={miembro.estado} />
+                            <RolBadge rol={miembro.rol} estado={miembro.estado} t={t} />
                           </div>
                           <p className="text-[11px] text-[#888]">{subtitulo}</p>
                         </div>
@@ -665,7 +673,7 @@ function FamiliaPageContent() {
                               onClick={() => handleResendInvite(miembro)}
                               className="text-[11px] font-medium text-[#666] underline disabled:opacity-60"
                             >
-                              {resendingId === miembro.id ? "Enviando…" : "Reenviar"}
+                              {resendingId === miembro.id ? t.familia.enviando : t.familia.reenviar}
                             </button>
                             <button
                               type="button"
@@ -673,7 +681,7 @@ function FamiliaPageContent() {
                               onClick={() => handleRemoveMember(miembro.id)}
                               className="text-[11px] font-medium text-[#666] underline disabled:opacity-60"
                             >
-                              Cancelar
+                              {t.familia.cancelar}
                             </button>
                           </>
                         )}
@@ -686,7 +694,7 @@ function FamiliaPageContent() {
                               onClick={() => handleRemoveMember(miembro.id)}
                               className="text-[11px] font-medium text-red-600 underline disabled:opacity-60"
                             >
-                              {removingId === miembro.id ? "Eliminando…" : "Eliminar"}
+                              {removingId === miembro.id ? t.familia.eliminando : t.familia.eliminar}
                             </button>
                           )}
                       </div>
@@ -706,7 +714,7 @@ function FamiliaPageContent() {
                     type="email"
                     value={inviteEmail}
                     onChange={(e) => setInviteEmail(e.target.value)}
-                    placeholder="Email del familiar"
+                    placeholder={t.familia.emailPlaceholder}
                     className={inputClass}
                     style={{ borderColor: BORDER }}
                   />
@@ -716,7 +724,7 @@ function FamiliaPageContent() {
                     className="shrink-0 rounded-xl px-5 py-3 text-sm font-semibold text-white disabled:opacity-60"
                     style={{ backgroundColor: PRIMARY }}
                   >
-                    {inviting ? "Enviando…" : "Enviar invitación →"}
+                    {inviting ? t.familia.enviando : t.familia.enviarInvitacion}
                   </button>
                 </form>
               )}
@@ -729,11 +737,11 @@ function FamiliaPageContent() {
                 style={{ borderColor: BORDER }}
               >
                 <h2 className="text-sm font-semibold text-[#1a1a1a]">
-                  Reservas del grupo
+                  {t.familia.reservasGrupo}
                 </h2>
                 {reservas.length === 0 ? (
                   <p className="mt-4 text-sm text-[#666]">
-                    Aún no hay reservas del grupo.
+                    {t.familia.sinReservas}
                   </p>
                 ) : (
                   <ul className="mt-4 flex flex-col gap-3">
@@ -742,7 +750,7 @@ function FamiliaPageContent() {
                       const cliente = booking.profiles_public ?? {};
                       const reservo =
                         [cliente.nombre, cliente.apellido].filter(Boolean).join(" ") ||
-                        "Miembro";
+                        t.familia.miembroFallback;
                       const vertical = service.vertical ?? "alojamiento";
                       const estado = getBookingEstado(booking);
 
@@ -766,7 +774,7 @@ function FamiliaPageContent() {
                               {service.titulo || "Servicio"}
                             </p>
                             <p className="text-[11px] text-[#888]">
-                              Reservó {reservo}
+                              {t.familia.reservo} {reservo}
                             </p>
                             <p className="text-[10px] text-[#aaa]">
                               {formatDateRange(booking.fecha_inicio, booking.fecha_fin)}
@@ -774,7 +782,7 @@ function FamiliaPageContent() {
                               {formatPrice(booking.precio_total)}
                             </p>
                             <div className="mt-1.5">
-                              <StatusBadge status={estado} />
+                              <StatusBadge status={estado} t={t} />
                             </div>
                           </div>
                         </li>
@@ -787,7 +795,7 @@ function FamiliaPageContent() {
                   className="mt-4 inline-block text-sm font-semibold no-underline"
                   style={{ color: PRIMARY }}
                 >
-                  Ver todas →
+                  {t.familia.verTodas}
                 </Link>
               </section>
 
@@ -796,11 +804,11 @@ function FamiliaPageContent() {
                 style={{ borderColor: BORDER }}
               >
                 <h2 className="text-sm font-semibold text-[#1a1a1a]">
-                  Viajes del grupo
+                  {t.familia.viajesGrupo}
                 </h2>
                 {viajes.length === 0 ? (
                   <p className="mt-4 text-sm text-[#666]">
-                    Aún no hay viajes del grupo.
+                    {t.familia.sinViajes}
                   </p>
                 ) : (
                   <ul className="mt-4 flex flex-col gap-2">
@@ -815,7 +823,7 @@ function FamiliaPageContent() {
                             className="flex items-center gap-3 rounded-lg border px-3 py-2.5 no-underline transition-colors hover:bg-[#f7f5f2]"
                             style={{ borderColor: BORDER }}
                           >
-                            <span className="text-lg">{getViajeEmoji(viaje)}</span>
+                            <span className="text-lg">{getViajeEmoji()}</span>
                             <div className="min-w-0 flex-1">
                               <p className="truncate text-sm font-medium text-[#1a1a1a]">
                                 {viaje.nombre}
@@ -823,10 +831,9 @@ function FamiliaPageContent() {
                               <p className="text-[11px] text-[#888]">
                                 {formatDateRange(viaje.fecha_inicio, viaje.fecha_fin)}
                                 {" · "}
-                                {numServicios} servicio
-                                {numServicios !== 1 ? "s" : ""}
+                                {numServicios} {numServicios !== 1 ? t.familia.servicioPlural : t.familia.servicioSingular}
                                 {" · "}
-                                {activos} miembro{activos !== 1 ? "s" : ""}
+                                {activos} {activos !== 1 ? t.familia.miembroPlural : t.familia.miembroSingular}
                               </p>
                             </div>
                           </Link>
@@ -840,7 +847,7 @@ function FamiliaPageContent() {
                   className="mt-4 inline-flex items-center gap-1 rounded-lg px-4 py-2 text-sm font-semibold text-white no-underline"
                   style={{ backgroundColor: GREEN }}
                 >
-                  + Crear nuevo viaje
+                  {t.familia.crearViaje}
                 </Link>
               </section>
             </div>
@@ -857,7 +864,7 @@ export default function FamiliaPage() {
       fallback={
         <div className="min-h-screen font-sans" style={{ backgroundColor: BRAND.warm }}>
           <Navbar />
-          <main className="px-6 py-16 text-center text-sm text-[#666]">Cargando…</main>
+          <main className="px-6 py-16 text-center text-sm text-[#666]">…</main>
         </div>
       }
     >

@@ -16,7 +16,9 @@ export function daysBetween(start, end) {
   const b = new Date(`${end}T12:00:00`);
   const diff = b.getTime() - a.getTime();
   if (diff < 0) return 0;
-  return Math.max(1, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+  // round, no ceil: ambas fechas son a las 12:00 locales, así que la diferencia
+  // es un nº entero de días ±1 h si hay cambio de hora de por medio.
+  return Math.max(1, Math.round(diff / (1000 * 60 * 60 * 24)));
 }
 
 function addDaysToDateStr(dateStr, offsetDays) {

@@ -5,11 +5,16 @@ import { useEffect, useState } from "react";
 import Navbar from "@/app/components/Navbar";
 import { BRAND, SERIF } from "@/app/components/brand";
 import { CONOCE_DESDE_OPTIONS } from "@/app/lib/referencias";
+import { useLang } from "@/app/lib/LangContext";
+import { useTranslation } from "@/app/lib/i18n";
 
 const inputClass =
   "w-full rounded-xl border px-4 py-3 text-sm text-[#1a1a1a] outline-none focus:ring-2 focus:ring-[#1d4f91]/30";
 
 export default function ReferenciaPublicPage() {
+  const { lang } = useLang();
+  const t = useTranslation(lang);
+  const tr = t.referencias;
   const params = useParams();
   const token = params.token;
 
@@ -32,7 +37,7 @@ export default function ReferenciaPublicPage() {
 
       if (!res.ok || !data.nombre_referente) {
         setError(
-          data.error || "Enlace de referencia no válido o expirado.",
+          data.error || tr.errEnlace,
         );
         setLoading(false);
         return;
@@ -56,11 +61,11 @@ export default function ReferenciaPublicPage() {
   async function handleSubmit(e) {
     e.preventDefault();
     if (!conoceDesde) {
-      setError("Indica cuánto tiempo conoces a esta persona.");
+      setError(tr.errTiempo);
       return;
     }
     if (recomendaria === null) {
-      setError("Indica si recomendarías sus servicios.");
+      setError(tr.errRecomendacion);
       return;
     }
 
@@ -87,7 +92,7 @@ export default function ReferenciaPublicPage() {
     }
 
     if (!res.ok || !data.ok) {
-      setError(data.error || "No se pudo enviar el aval.");
+      setError(data.error || tr.errEnviar);
       return;
     }
 
@@ -102,7 +107,7 @@ export default function ReferenciaPublicPage() {
       >
         <Navbar />
         <main className="mx-auto max-w-lg px-4 py-16 text-center text-sm text-[#666]">
-          Cargando…
+          {tr.cargando}
         </main>
       </div>
     );
@@ -123,7 +128,7 @@ export default function ReferenciaPublicPage() {
           >
             <p className="text-4xl">✓</p>
             <p className="mt-4 text-lg font-semibold text-green-700">
-              ¡Gracias! Tu aval ayudará a {proveedorNombre} a generar confianza.
+              {tr.gracias(proveedorNombre)}
             </p>
           </div>
         ) : error && !referencia ? (
@@ -142,11 +147,10 @@ export default function ReferenciaPublicPage() {
               className="text-xl font-semibold text-[#1a1a1a]"
               style={{ fontFamily: SERIF }}
             >
-              Aval para {proveedorNombre}
+              {tr.avalPara(proveedorNombre)}
             </h1>
             <p className="mt-2 text-sm leading-relaxed text-[#666]">
-              Hola {referencia?.nombre_referente}, {proveedorNombre} te ha pedido
-              que compartas tu experiencia como referencia en Home&Heart.
+              {tr.intro(referencia?.nombre_referente, proveedorNombre)}
             </p>
 
             {error && (
@@ -161,7 +165,7 @@ export default function ReferenciaPublicPage() {
                   htmlFor="conoce-desde"
                   className="mb-1.5 block text-xs font-medium text-[#444]"
                 >
-                  ¿Cuánto tiempo conoces a {proveedorNombre.split(" ")[0]}?
+                  {tr.cuantoTiempo(proveedorNombre.split(" ")[0])}
                 </label>
                 <select
                   id="conoce-desde"
@@ -171,7 +175,7 @@ export default function ReferenciaPublicPage() {
                   className={inputClass}
                   style={{ borderColor: BRAND.border }}
                 >
-                  <option value="">Selecciona…</option>
+                  <option value="">{tr.selecciona}</option>
                   {CONOCE_DESDE_OPTIONS.map((opt) => (
                     <option key={opt.value} value={opt.value}>
                       {opt.label}
@@ -182,12 +186,12 @@ export default function ReferenciaPublicPage() {
 
               <div>
                 <p className="mb-2 text-xs font-medium text-[#444]">
-                  ¿Recomendarías sus servicios?
+                  {tr.recomendarias}
                 </p>
                 <div className="flex gap-3">
                   {[
-                    { value: true, label: "Sí" },
-                    { value: false, label: "No" },
+                    { value: true, label: tr.si },
+                    { value: false, label: tr.no },
                   ].map((opt) => (
                     <button
                       key={String(opt.value)}
@@ -216,14 +220,14 @@ export default function ReferenciaPublicPage() {
                   htmlFor="comentario"
                   className="mb-1.5 block text-xs font-medium text-[#444]"
                 >
-                  Comentario libre
+                  {tr.comentarioLabel}
                 </label>
                 <textarea
                   id="comentario"
                   rows={4}
                   value={comentario}
                   onChange={(e) => setComentario(e.target.value)}
-                  placeholder="Cuéntanos tu experiencia con esta persona…"
+                  placeholder={tr.comentarioPlaceholder}
                   className={`${inputClass} resize-y`}
                   style={{ borderColor: BRAND.border }}
                 />
@@ -235,7 +239,7 @@ export default function ReferenciaPublicPage() {
                 className="w-full rounded-xl py-3.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
                 style={{ backgroundColor: BRAND.primary }}
               >
-                {submitting ? "Enviando…" : "Enviar mi aval"}
+                {submitting ? tr.enviando : tr.enviarAval}
               </button>
             </form>
           </div>

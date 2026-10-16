@@ -8,8 +8,13 @@ import Footer from "@/app/components/Footer";
 import AyudaSoporteForm from "@/app/components/AyudaSoporteForm";
 import { BRAND, SERIF } from "@/app/components/brand";
 import { supabase } from "@/app/lib/supabase";
+import { useLang } from "@/app/lib/LangContext";
+import { useTranslation } from "@/app/lib/i18n";
 
 function AyudaInner() {
+  const { lang } = useLang();
+  const t = useTranslation(lang);
+  const ta = t.ayuda;
   const searchParams = useSearchParams();
   const [authed, setAuthed] = useState(null);
   const asuntoParam = searchParams?.get("asunto") || "";
@@ -37,17 +42,16 @@ function AyudaInner() {
           className="text-2xl text-[#1a1a1a]"
           style={{ fontFamily: SERIF }}
         >
-          ¿Necesitas ayuda?
+          {ta.titulo}
         </h1>
         <p className="mt-2 text-sm leading-relaxed text-[#555]">
-          Para dudas de cuenta, activación o pagos. Si el problema es con una
-          reserva concreta, usa{" "}
-          <strong>Reportar incidencia</strong> desde esa reserva.
+          {ta.subtituloA}{" "}
+          <strong>{ta.subtituloB}</strong> {ta.subtituloC}
         </p>
 
         <div className="mt-6">
           {authed === null ? (
-            <p className="text-sm text-[#888]">Cargando…</p>
+            <p className="text-sm text-[#888]">{ta.cargando}</p>
           ) : authed ? (
             <AyudaSoporteForm
               highlighted={highlighted}
@@ -59,8 +63,7 @@ function AyudaInner() {
               style={{ borderColor: BRAND.border }}
             >
               <p className="text-sm text-[#444]">
-                Inicia sesión para enviarnos un mensaje con el contexto de tu
-                cuenta, o escríbenos a{" "}
+                {ta.noAuthedA}{" "}
                 <a
                   href="mailto:soporte@homeandheart.es"
                   className="font-semibold"
@@ -75,7 +78,7 @@ function AyudaInner() {
                 className="mt-4 inline-flex min-h-10 items-center rounded-lg px-4 py-2 text-sm font-semibold text-white"
                 style={{ backgroundColor: BRAND.primary }}
               >
-                Iniciar sesión
+                {ta.iniciarSesion}
               </Link>
             </div>
           )}
@@ -83,7 +86,7 @@ function AyudaInner() {
 
         <p className="mt-6 text-center text-xs text-[#888]">
           <Link href="/dashboard" style={{ color: BRAND.primary }}>
-            Volver al panel
+            {ta.volverPanel}
           </Link>
         </p>
       </main>

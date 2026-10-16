@@ -79,9 +79,9 @@ export function estimateReadingTime(text) {
   return Math.max(1, Math.ceil(words / 200));
 }
 
-export function formatBlogDate(dateStr) {
+export function formatBlogDate(dateStr, lang = "es") {
   if (!dateStr) return "";
-  return new Date(dateStr).toLocaleDateString("es-ES", {
+  return new Date(dateStr).toLocaleDateString(lang === "en" ? "en-GB" : "es-ES", {
     day: "numeric",
     month: "long",
     year: "numeric",

@@ -5,10 +5,13 @@ import { Suspense, useCallback, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import CalendarioDisponibilidad from "@/app/components/CalendarioDisponibilidad";
 import { formatShortDate } from "@/app/components/calendario-shared";
+import { useLang } from "@/app/lib/LangContext";
+import { useTranslation } from "@/app/lib/i18n";
 import {
   buildReservarHref,
   formatServiceCardPrice,
   getServiceCardTheme,
+  translatePriceSuffix,
 } from "@/app/lib/service-card-display";
 import {
   resolveDisplayPriceSuffix,
@@ -18,6 +21,26 @@ import {
   getPrecioConDescuento,
   isOfertaActiva,
 } from "@/app/lib/ofertas";
+
+/** Precio mostrado (con oferta aplicada si hay) y sufijo, ya en el idioma activo. */
+function resolveBookingPrice(service, lang) {
+  const theme = getServiceCardTheme(service?.vertical);
+  const priceSuffix = translatePriceSuffix(
+    supportsModalidadCobro(service?.vertical)
+      ? resolveDisplayPriceSuffix(service)
+      : theme.priceSuffix,
+    lang,
+  );
+  const ofertaActiva = isOfertaActiva(service);
+  const precioConDescuento = ofertaActiva
+    ? getPrecioConDescuento(service.precio, service.oferta_descuento)
+    : null;
+  const displayPrice = ofertaActiva
+    ? formatServiceCardPrice(precioConDescuento, priceSuffix, lang)
+    : formatServiceCardPrice(service?.precio, priceSuffix, lang);
+
+  return { priceSuffix, ofertaActiva, displayPrice };
+}
 
 /**
  * Panel sticky de reserva en /anuncio/[serviceId].
@@ -30,22 +53,16 @@ function AnuncioBookingPanelInner({
   accentColor = "#1d4f91",
   isOwnerPreview = false,
 }) {
+  const { lang } = useLang();
+  const t = useTranslation(lang);
   const searchParams = useSearchParams();
   const initialDesde = searchParams.get("desde") || "";
   const initialHasta = searchParams.get("hasta") || "";
 
-  const theme = getServiceCardTheme(service?.vertical);
-  const priceSuffix = supportsModalidadCobro(service?.vertical)
-    ? resolveDisplayPriceSuffix(service)
-    : theme.priceSuffix;
-  const ofertaActiva = isOfertaActiva(service);
-  const precioConDescuento = ofertaActiva
-    ? getPrecioConDescuento(service.precio, service.oferta_descuento)
-    : null;
-
-  const displayPrice = ofertaActiva
-    ? formatServiceCardPrice(precioConDescuento, priceSuffix)
-    : formatServiceCardPrice(service?.precio, priceSuffix);
+  const { priceSuffix, ofertaActiva, displayPrice } = resolveBookingPrice(
+    service,
+    lang,
+  );
 
   const [fechaDesde, setFechaDesde] = useState(initialDesde);
   const [fechaHasta, setFechaHasta] = useState(initialHasta);
@@ -61,13 +78,13 @@ function AnuncioBookingPanelInner({
   );
 
   const reservaLabel = useMemo(() => {
-    if (!fechaDesde) return "Reservar";
+    if (!fechaDesde) return t.anuncio.reservar;
     const fin = fechaHasta || fechaDesde;
     if (fechaDesde === fin) {
-      return `Reservar · ${formatShortDate(fechaDesde)}`;
+      return `${t.anuncio.reservar} · ${formatShortDate(fechaDesde, lang)}`;
     }
-    return `Reservar · ${formatShortDate(fechaDesde)} – ${formatShortDate(fin)}`;
-  }, [fechaDesde, fechaHasta]);
+    return `${t.anuncio.reservar} · ${formatShortDate(fechaDesde, lang)} – ${formatShortDate(fin, lang)}`;
+  }, [fechaDesde, fechaHasta, lang, t]);
 
   return (
     <aside
@@ -84,7 +101,7 @@ function AnuncioBookingPanelInner({
               {displayPrice}
             </p>
             <p className="text-[13px] text-[#aaa] line-through">
-              {formatServiceCardPrice(service.precio, priceSuffix)}
+              {formatServiceCardPrice(service.precio, priceSuffix, lang)}
             </p>
             {service.oferta_descuento ? (
               <span
@@ -123,7 +140,7 @@ function AnuncioBookingPanelInner({
           className="mt-5 rounded-lg border px-3 py-2.5 text-center text-[11px] text-[#888]"
           style={{ borderColor: "#e8e4de", backgroundColor: "#fafaf9" }}
         >
-          La reserva estará disponible cuando publiques el anuncio.
+          {t.anuncio.reservaDisponiblePublicar}
         </p>
       ) : (
         <>
@@ -137,7 +154,7 @@ function AnuncioBookingPanelInner({
 
           {!fechaDesde && (
             <p className="mt-2 text-center text-[10px] text-[#aaa]">
-              También puedes elegir fechas en la página de reserva
+              {t.anuncio.tambienFechas}
             </p>
           )}
         </>
@@ -154,17 +171,9 @@ function AnuncioBookingPanelFallback({
   accentColor = "#1d4f91",
   isOwnerPreview = false,
 }) {
-  const theme = getServiceCardTheme(service?.vertical);
-  const priceSuffix = supportsModalidadCobro(service?.vertical)
-    ? resolveDisplayPriceSuffix(service)
-    : theme.priceSuffix;
-  const ofertaActiva = isOfertaActiva(service);
-  const precioConDescuento = ofertaActiva
-    ? getPrecioConDescuento(service.precio, service.oferta_descuento)
-    : null;
-  const displayPrice = ofertaActiva
-    ? formatServiceCardPrice(precioConDescuento, priceSuffix)
-    : formatServiceCardPrice(service?.precio, priceSuffix);
+  const { lang } = useLang();
+  const t = useTranslation(lang);
+  const { displayPrice } = resolveBookingPrice(service, lang);
 
   return (
     <aside
@@ -195,7 +204,7 @@ function AnuncioBookingPanelFallback({
           className="mt-5 rounded-lg border px-3 py-2.5 text-center text-[11px] text-[#888]"
           style={{ borderColor: "#e8e4de", backgroundColor: "#fafaf9" }}
         >
-          La reserva estará disponible cuando publiques el anuncio.
+          {t.anuncio.reservaDisponiblePublicar}
         </p>
       ) : (
         <Link
@@ -203,7 +212,7 @@ function AnuncioBookingPanelFallback({
           className="mt-5 block w-full rounded-lg py-3 text-center text-[13px] font-semibold text-white no-underline transition-opacity hover:opacity-90"
           style={{ backgroundColor: accentColor }}
         >
-          Reservar
+          {t.anuncio.reservar}
         </Link>
       )}
     </aside>

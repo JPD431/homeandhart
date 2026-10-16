@@ -110,6 +110,8 @@ import {
 import DataLoadFailed from "@/app/components/DataLoadFailed";
 import { supabase } from "@/app/lib/supabase";
 import { friendlyLoadError, withLoadTimeout } from "@/app/lib/with-load-timeout";
+import { useLang } from "@/app/lib/LangContext";
+import { useTranslation } from "@/app/lib/i18n";
 
 import {
   loadProviderDocuments,
@@ -137,14 +139,19 @@ import { REVISION_EN_REVISION } from "@/app/lib/onboarding-persist";
 /** Params antiguos de pestañas por vertical → redirigen a ?tab=servicios */
 const LEGACY_VERTICAL_TAB_PARAMS = ["alojamiento", "ninos", "mascotas"];
 
-function buildPublishReminderMessage(vertical, missingDocs) {
+function buildPublishReminderMessage(vertical, missingDocs, t) {
   const verticalLabel =
     VERTICALS.find((v) => v.id === vertical)?.label?.toLowerCase() || vertical;
   const list = formatMissingPublishDocumentLabels(missingDocs).join(", ");
+  if (t?.editarPerfil) {
+    return `${t.editarPerfil.docsPublicarPre} ${verticalLabel}, ${t.editarPerfil.docsPublicarPost} ${list}.`;
+  }
   return `Guardamos tus cambios. Para publicar tu ${verticalLabel}, todavía necesitas: ${list}.`;
 }
 
 function DocumentsPublishReminder({ vertical, missingDocs }) {
+  const { lang } = useLang();
+  const t = useTranslation(lang);
   if (!vertical || missingDocs.length === 0) return null;
 
   const verticalLabel =
@@ -160,9 +167,9 @@ function DocumentsPublishReminder({ vertical, missingDocs }) {
         color: "#5c4a32",
       }}
     >
-      <p className="font-semibold">Documentación pendiente para publicar</p>
+      <p className="font-semibold">{t.editarPerfil.docsPublicarTitle}</p>
       <p className="mt-1">
-        Guardamos tus cambios. Para publicar tu {verticalLabel}, todavía necesitas:{" "}
+        {t.editarPerfil.docsPublicarPre} {verticalLabel}, {t.editarPerfil.docsPublicarPost}{" "}
         <span className="font-medium">{list}</span>.
       </p>
     </div>
@@ -396,13 +403,15 @@ function ServiceAvailabilityHeader({
   metaLabel = "",
   actions = null,
 }) {
+  const { lang } = useLang();
+  const t = useTranslation(lang);
   const status = getServiceAvailabilityDisplay(
     service.revision_estado,
     service.disponible,
   );
   const canToggle = servicioRevisionAprobada(service.revision_estado);
   const activo = service.disponible === true;
-  const titulo = service.details?.titulo?.trim() || "Sin título";
+  const titulo = service.details?.titulo?.trim() || t.editarPerfil.sinTitulo;
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3">
@@ -435,14 +444,14 @@ function ServiceAvailabilityHeader({
             type="button"
             role="switch"
             aria-checked={activo}
-            aria-label={activo ? "Pausar servicio" : "Activar servicio"}
+            aria-label={activo ? t.editarPerfil.pausarServicio : t.editarPerfil.activarServicio}
             disabled={toggling || service.isNew}
             onClick={() => onToggle(service.id)}
             className="relative h-7 w-12 shrink-0 rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-50"
             style={{
               backgroundColor: activo ? SERVICE_ACTIVE_GREEN : "#d1d5db",
             }}
-            title={activo ? "Pausar (ocultar de búsqueda)" : "Activar (mostrar en búsqueda)"}
+            title={activo ? t.editarPerfil.pausarTitle : t.editarPerfil.activarTitle}
           >
             <span
               className="absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform"
@@ -458,6 +467,8 @@ function ServiceAvailabilityHeader({
 }
 
 function OfertaEspecialFields({ serviceId, details, onChange }) {
+  const { lang } = useLang();
+  const t = useTranslation(lang);
   const enabled = details.oferta_activa === true;
 
   function update(field, val) {
@@ -468,7 +479,7 @@ function OfertaEspecialFields({ serviceId, details, onChange }) {
     <div>
       <div className="flex items-center justify-between gap-4">
         <p className="text-sm font-semibold text-[#1a1a1a]">
-          Oferta especial con descuento
+          {t.editarPerfil.ofertaEspecialTitulo}
         </p>
         <button
           type="button"
@@ -488,7 +499,7 @@ function OfertaEspecialFields({ serviceId, details, onChange }) {
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <div className="sm:col-span-2">
             <label className="mb-1.5 block text-xs font-medium text-[#444]">
-              Título de la oferta
+              {t.editarPerfil.ofertaTitulo}
             </label>
             <input
               type="text"
@@ -500,7 +511,7 @@ function OfertaEspecialFields({ serviceId, details, onChange }) {
           </div>
           <div>
             <label className="mb-1.5 block text-xs font-medium text-[#444]">
-              Descuento (%)
+              {t.editarPerfil.ofertaDescuento}
             </label>
             <input
               type="number"
@@ -514,7 +525,7 @@ function OfertaEspecialFields({ serviceId, details, onChange }) {
           </div>
           <div>
             <label className="mb-1.5 block text-xs font-medium text-[#444]">
-              Válida hasta
+              {t.editarPerfil.ofertaValidaHasta}
             </label>
             <input
               type="date"
@@ -526,7 +537,7 @@ function OfertaEspecialFields({ serviceId, details, onChange }) {
           </div>
           <div className="sm:col-span-2">
             <label className="mb-1.5 block text-xs font-medium text-[#444]">
-              Descripción de la oferta
+              {t.editarPerfil.ofertaDescripcion}
             </label>
             <textarea
               rows={3}
@@ -543,6 +554,8 @@ function OfertaEspecialFields({ serviceId, details, onChange }) {
 }
 
 function DescuentosDuracionFields({ serviceId, details, onChange }) {
+  const { lang } = useLang();
+  const t = useTranslation(lang);
   const enabled = details.descuentos_duracion_activa === true;
   const niveles = Array.isArray(details.descuentos_duracion)
     ? details.descuentos_duracion
@@ -567,10 +580,10 @@ function DescuentosDuracionFields({ serviceId, details, onChange }) {
 
   return (
     <div className="mt-6 border-t pt-6" style={{ borderColor: BRAND.border }}>
-      <p className="text-sm font-semibold text-[#1a1a1a]">Descuentos por duración</p>
+      <p className="text-sm font-semibold text-[#1a1a1a]">{t.editarPerfil.descuentosDuracionTitulo}</p>
       <div className="mt-3 flex items-center justify-between gap-4">
         <p className="text-sm text-[#444]">
-          ¿Ofreces descuento por estancias largas?
+          {t.editarPerfil.descuentosDuracionPregunta}
         </p>
         <button
           type="button"
@@ -606,7 +619,7 @@ function DescuentosDuracionFields({ serviceId, details, onChange }) {
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <label className="mb-1.5 block text-xs font-medium text-[#444]">
-                    A partir de X {unitLabel}
+                    {t.editarPerfil.descuentosDuracionAPartirDe} {unitLabel}
                   </label>
                   <input
                     type="number"
@@ -619,7 +632,7 @@ function DescuentosDuracionFields({ serviceId, details, onChange }) {
                 </div>
                 <div>
                   <label className="mb-1.5 block text-xs font-medium text-[#444]">
-                    Descuento (%)
+                    {t.editarPerfil.ofertaDescuento}
                   </label>
                   <input
                     type="number"
@@ -648,7 +661,7 @@ function DescuentosDuracionFields({ serviceId, details, onChange }) {
               className="self-start text-sm font-semibold"
               style={{ color: BRAND.primary }}
             >
-              Añadir otro nivel
+              {t.editarPerfil.descuentosDuracionAnadir}
             </button>
           )}
         </div>
@@ -676,6 +689,8 @@ function EditSectionCard({ id, title, subtitle, children }) {
 }
 
 function ServiceEditForm({ vertical, details: rawDetails, onChange, userId, serviceId, onUploadError }) {
+  const { lang } = useLang();
+  const t = useTranslation(lang);
   const details = useMemo(
     () => mergeServiceDetails(rawDetails, vertical),
     [rawDetails, vertical],
@@ -742,7 +757,7 @@ function ServiceEditForm({ vertical, details: rawDetails, onChange, userId, serv
       </div>
       {(vertical === "ninos" || vertical === "mascotas") && (
         <div>
-          <label className="mb-1.5 block text-xs font-medium text-[#444]">Años de experiencia</label>
+          <label className="mb-1.5 block text-xs font-medium text-[#444]">{t.editarPerfil.anosExperiencia}</label>
           <input
             type="number"
             min="0"
@@ -1035,6 +1050,8 @@ function Card({ title, headerRight, children }) {
 }
 
 function PreviewPanel({ fotoPreview, nombre, apellido, ciudad, services }) {
+  const { lang } = useLang();
+  const t = useTranslation(lang);
   const displayName = [nombre, apellido].filter(Boolean).join(" ") || "Tu nombre";
   const initials = [nombre?.[0], apellido?.[0]].filter(Boolean).join("").toUpperCase() || "?";
   const firstService = services.find((s) => s.disponible) || services[0];
@@ -1043,10 +1060,10 @@ function PreviewPanel({ fotoPreview, nombre, apellido, ciudad, services }) {
     : null;
   const priceUnit =
     firstService?.vertical === "alojamiento"
-      ? "/noche"
+      ? t.serProveedor.precioNoche
       : firstService?.vertical === "ninos"
-        ? "/hora"
-        : "/día";
+        ? t.serProveedor.precioHora
+        : t.serProveedor.precioDia;
 
   return (
     <div
@@ -1054,7 +1071,7 @@ function PreviewPanel({ fotoPreview, nombre, apellido, ciudad, services }) {
       style={{ borderColor: BRAND.border }}
     >
       <p className="mb-3 text-[10px] font-semibold uppercase tracking-widest text-[#888]">
-        Vista previa
+        {t.editarPerfil.vistaPrevia}
       </p>
       <div className="overflow-hidden rounded-xl border" style={{ borderColor: BRAND.border }}>
         <div className="flex h-32 items-center justify-center bg-[#f5f3ef]">
@@ -1100,7 +1117,7 @@ function PreviewPanel({ fotoPreview, nombre, apellido, ciudad, services }) {
             className="mt-3 w-full rounded-xl py-2.5 text-sm font-semibold text-white"
             style={{ backgroundColor: PRIMARY }}
           >
-            Reservar
+            {t.editarPerfil.reservar}
           </button>
         </div>
       </div>
@@ -1109,9 +1126,11 @@ function PreviewPanel({ fotoPreview, nombre, apellido, ciudad, services }) {
 }
 
 function EditarPerfilPageFallback() {
+  const { lang } = useLang();
+  const t = useTranslation(lang);
   return (
     <div className="min-h-screen font-sans" style={{ backgroundColor: BRAND.warm }}>
-      <main className="px-6 py-16 text-center text-sm text-[#666]">Cargando perfil…</main>
+      <main className="px-6 py-16 text-center text-sm text-[#666]">{t.editarPerfil.cargandoPerfil}</main>
     </div>
   );
 }
@@ -1119,6 +1138,8 @@ function EditarPerfilPageFallback() {
 function EditarPerfilContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { lang } = useLang();
+  const t = useTranslation(lang);
   const tabParam = searchParams.get("tab");
   const serviceIdParam = searchParams.get("serviceId");
   const sectionParam = searchParams.get("section");
@@ -1484,13 +1505,13 @@ function EditarPerfilContent() {
 
       if (!res.ok) {
         setErrorMessage(
-          payload.error || "No se pudo actualizar la disponibilidad.",
+          payload.error || t.editarPerfil.errDisponibilidad,
         );
         return;
       }
 
       if (typeof payload.disponible !== "boolean") {
-        setErrorMessage("La API no confirmó el nuevo estado.");
+        setErrorMessage(t.editarPerfil.errDisponibilidadAPI);
         return;
       }
 
@@ -1507,12 +1528,12 @@ function EditarPerfilContent() {
       );
       setSuccessMessage(
         payload.disponible
-          ? "Servicio activado. Ya es visible en la búsqueda."
-          : "Servicio en pausa. Ya no aparece en la búsqueda.",
+          ? t.editarPerfil.servicioActivado
+          : t.editarPerfil.servicioPausado,
       );
     } catch (err) {
       setErrorMessage(
-        err.message || "No se pudo actualizar la disponibilidad.",
+        err.message || t.editarPerfil.errDisponibilidad,
       );
     } finally {
       setTogglingDisponibleId(null);
@@ -1531,22 +1552,22 @@ function EditarPerfilContent() {
   const mostrarTabServicios =
     perfil?.role === "proveedor" || tieneServicios;
   const tabs = [
-    { id: "perfil", label: "Perfil personal" },
+    { id: "perfil", label: t.editarPerfil.tabPerfil },
     ...(mostrarTabServicios
-      ? [{ id: "servicios", label: "Mis servicios" }]
+      ? [{ id: "servicios", label: t.editarPerfil.tabServicios }]
       : []),
-    ...(tieneServicios ? [{ id: "documentos", label: "Documentos" }] : []),
-    { id: "cuenta", label: "Cuenta" },
+    ...(tieneServicios ? [{ id: "documentos", label: t.editarPerfil.tabDocumentos }] : []),
+    { id: "cuenta", label: t.editarPerfil.tabCuenta },
   ];
 
   function renderMisServiciosCard() {
     return (
-      <Card title="Mis servicios">
+      <Card title={t.editarPerfil.misServiciosTitulo}>
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm text-[#666]">
             {services.length === 0
-              ? "Aún no tienes anuncios. Crea el primero."
-              : `${services.length} ${services.length === 1 ? "anuncio" : "anuncios"}`}
+              ? t.editarPerfil.sinAnuncios
+              : `${services.length} ${services.length === 1 ? t.editarPerfil.anuncio : t.editarPerfil.anuncios}`}
           </p>
           {!addingService ? (
             <button
@@ -1555,7 +1576,7 @@ function EditarPerfilContent() {
               className="rounded-lg px-4 py-2 text-sm font-semibold text-white"
               style={{ backgroundColor: PRIMARY }}
             >
-              + Crear anuncio
+              {t.editarPerfil.crearAnuncio}
             </button>
           ) : null}
         </div>
@@ -1585,7 +1606,7 @@ function EditarPerfilContent() {
                   className="font-semibold underline"
                   style={{ color: PRIMARY }}
                 >
-                  Ir a configurar cobros
+                  {t.editarPerfil.irConfigCobros}
                 </Link>
               </>
             )}
@@ -1620,7 +1641,7 @@ function EditarPerfilContent() {
                         className="rounded-lg border px-3 py-1.5 text-xs font-semibold no-underline transition-colors hover:bg-[#f7f5f2]"
                         style={{ borderColor: BRAND.border, color: PRIMARY }}
                       >
-                        Vista previa
+                        {t.editarPerfil.vistaPrevia}
                       </a>
                       <button
                         type="button"
@@ -1632,7 +1653,7 @@ function EditarPerfilContent() {
                         className="rounded-lg border px-3 py-1.5 text-xs font-semibold"
                         style={{ borderColor: BRAND.border, color: PRIMARY }}
                       >
-                        {isEditing ? "Cerrar" : "Editar"}
+                        {isEditing ? t.editarPerfil.cerrar : t.editarPerfil.editar}
                       </button>
                     </div>
                   }
@@ -1659,7 +1680,7 @@ function EditarPerfilContent() {
                         className="rounded-lg border px-4 py-2 text-sm font-semibold"
                         style={{ borderColor: BRAND.border, color: "#666" }}
                       >
-                        Cancelar
+                        {t.editarPerfil.cancelar}
                       </button>
                     </div>
                   </div>
@@ -1675,9 +1696,9 @@ function EditarPerfilContent() {
           >
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-sm font-semibold">Nuevo anuncio</p>
+                <p className="text-sm font-semibold">{t.editarPerfil.nuevoAnuncio}</p>
                 <p className="mt-1 text-xs text-[#888]">
-                  Elige la vertical y completa los datos.
+                  {t.editarPerfil.nuevoAnuncioDesc}
                 </p>
               </div>
               <button
@@ -1686,7 +1707,7 @@ function EditarPerfilContent() {
                 className="shrink-0 rounded-lg border px-3 py-1.5 text-xs font-semibold"
                 style={{ borderColor: BRAND.border, color: "#666" }}
               >
-                Cancelar
+                {t.editarPerfil.cancelar}
               </button>
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
@@ -1739,10 +1760,10 @@ function EditarPerfilContent() {
                 className="rounded-lg border px-4 py-2 text-sm font-semibold"
                 style={{ borderColor: BRAND.border, color: "#666" }}
               >
-                Cancelar
+                {t.editarPerfil.cancelar}
               </button>
               <p className="text-[11px] text-[#888]">
-                Usa «Guardar cambios» arriba para crear el anuncio.
+                {t.editarPerfil.usarGuardar}
               </p>
             </div>
           </div>
@@ -1792,9 +1813,9 @@ function EditarPerfilContent() {
           ];
         });
       }
-      setSuccessMessage("Documento subido correctamente ✓");
+      setSuccessMessage(t.editarPerfil.documentoSubido);
     } catch (err) {
-      setErrorMessage(err.message || "Error al subir el documento.");
+      setErrorMessage(err.message || t.editarPerfil.errDocumento);
     } finally {
       setUploadingDoc(null);
       setActiveDocumentId(null);
@@ -1804,7 +1825,7 @@ function EditarPerfilContent() {
   async function handleSolicitarReferencia(e) {
     e.preventDefault();
     if (!userId || !refNombre.trim() || !refEmail.trim()) {
-      setRefError("Completa el nombre y el email del referente.");
+      setRefError(t.editarPerfil.refErrCompleta);
       return;
     }
 
@@ -1826,7 +1847,7 @@ function EditarPerfilContent() {
 
     if (!res.ok || !data.ok) {
       setRefSending(false);
-      setRefError(data.error || "No se pudo enviar la solicitud.");
+      setRefError(data.error || t.editarPerfil.refErrEnviar);
       return;
     }
 
@@ -1839,7 +1860,7 @@ function EditarPerfilContent() {
     setRefEmail("");
     setRefRelacion(RELACION_OPTIONS[0]);
     setRefSending(false);
-    setRefMessage("Solicitud enviada. El referente recibirá un email para completar el aval.");
+    setRefMessage(t.editarPerfil.refSuccess);
   }
 
   async function handleSubmit(e) {
@@ -2317,7 +2338,7 @@ function EditarPerfilContent() {
           setActiveTab("documentos");
           router.replace(buildEditarPerfilTabHref("documentos"), { scroll: false });
           setSuccessMessage(
-            `${revisionFeedback} ${buildPublishReminderMessage(reminderVertical, missingPublishDocs)}`,
+            `${revisionFeedback} ${buildPublishReminderMessage(reminderVertical, missingPublishDocs, t)}`,
           );
           return;
         }
@@ -2329,7 +2350,7 @@ function EditarPerfilContent() {
       }
     } catch (err) {
       console.error("[editar-perfil] error al guardar", err);
-      setErrorMessage(err.message || "Error al guardar los cambios.");
+      setErrorMessage(err.message || t.editarPerfil.errGuardarCambios);
     } finally {
       setSubmitting(false);
     }
@@ -2342,7 +2363,7 @@ function EditarPerfilContent() {
       const res = await fetch("/api/auth/export-data", { method: "GET" });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "No se pudo exportar tus datos");
+        throw new Error(data.error || t.editarPerfil.errExportarDatos);
       }
       const blob = await res.blob();
       const disposition = res.headers.get("Content-Disposition") || "";
@@ -2356,22 +2377,16 @@ function EditarPerfilContent() {
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-      setSuccessMessage("Descarga de tus datos lista.");
+      setSuccessMessage(t.editarPerfil.descargaLista);
     } catch (err) {
-      setErrorMessage(err?.message || "Error al descargar tus datos");
+      setErrorMessage(err?.message || t.editarPerfil.errDescargarDatos);
     } finally {
       setExportingData(false);
     }
   };
 
   const handleEliminarCuenta = async () => {
-    const confirmacion = confirm(
-      "¿Eliminar tu cuenta de forma irreversible?\n\n" +
-        "• Se borrarán tus documentos (DNI, antecedentes) y se anonimizarán tus datos.\n" +
-        "• Las reservas pasadas se conservan sin datos personales (obligación contable).\n" +
-        "• No podrás eliminar la cuenta si tienes reservas activas.\n\n" +
-        "Esta acción no se puede deshacer.",
-    );
+    const confirmacion = confirm(t.editarPerfil.eliminarConfirm);
 
     if (!confirmacion) return;
 
@@ -2399,7 +2414,7 @@ function EditarPerfilContent() {
       }
 
       if (res.status === 409 || data.code === "active_bookings") {
-        alert(data.error || "Tienes reservas activas. Resuélvelas antes de eliminar la cuenta.");
+        alert(data.error || t.editarPerfil.eliminarActivasMsg);
         return;
       }
 
@@ -2418,19 +2433,16 @@ function EditarPerfilContent() {
         return;
       }
 
-      alert(
-        "Error al eliminar la cuenta: " +
-          (data.error || "Inténtalo de nuevo"),
-      );
+      alert(t.editarPerfil.eliminarErr + ": " + (data.error || "Inténtalo de nuevo"));
     } catch {
-      alert("Error al eliminar la cuenta");
+      alert(t.editarPerfil.eliminarErr);
     }
   };
 
   if (loading) {
     return (
       <div className="min-h-screen font-sans" style={{ backgroundColor: BRAND.warm }}>
-        <main className="px-6 py-16 text-center text-sm text-[#666]">Cargando perfil…</main>
+        <main className="px-6 py-16 text-center text-sm text-[#666]">{t.editarPerfil.cargandoPerfil}</main>
       </div>
     );
   }
@@ -2456,7 +2468,7 @@ function EditarPerfilContent() {
       if (esClienteSinServicios) {
         return (
           <div>
-            <Card title="Sobre ti">
+            <Card title={t.editarPerfil.sobreTi}>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <label className="mb-1.5 block text-xs font-medium text-[#444]">{PROFILE_LABELS.nombre}</label>
@@ -2499,7 +2511,7 @@ function EditarPerfilContent() {
                 />
               </div>
               <div className="mt-4">
-                <label className="mb-1.5 block text-xs font-medium text-[#444]">Teléfono móvil</label>
+                <label className="mb-1.5 block text-xs font-medium text-[#444]">{t.editarPerfil.telefonoMovil}</label>
                 {!hasTelefono({ telefono }) && (
                   <p
                     className="mb-2 rounded-lg px-3 py-2 text-[11px] leading-relaxed"
@@ -2527,7 +2539,7 @@ function EditarPerfilContent() {
               </div>
               <div className="mt-4">
                 <label className="mb-1.5 block text-xs font-medium text-[#444]">
-                  Cuéntanos un poco sobre ti
+                  {t.editarPerfil.cuentanosLabel}
                 </label>
                 <textarea
                   rows={4}
@@ -2536,7 +2548,7 @@ function EditarPerfilContent() {
                     markDirty();
                     setDescripcion(e.target.value);
                   }}
-                  placeholder="Familia con dos hijos, viajamos a menudo..."
+                  placeholder={t.editarPerfil.cuentanosPlaceholder}
                   className={`${inputClass} resize-y`}
                   style={{ borderColor: BRAND.border }}
                 />
@@ -2556,17 +2568,16 @@ function EditarPerfilContent() {
               </div>
             </Card>
 
-            <Card title="¿Quieres ofrecer servicios también?">
+            <Card title={t.editarPerfil.quieresOfrecer}>
               <p className="text-sm leading-relaxed text-[#666]">
-                Conviértete en proveedor y empieza a ganar dinero ofreciendo alojamiento, cuidado de
-                niños o mascotas.
+                {t.editarPerfil.quieresOfrecerDesc}
               </p>
               <Link
                 href="/ser-proveedor"
                 className="mt-4 inline-block text-sm font-semibold no-underline"
                 style={{ color: PRIMARY }}
               >
-                Hazte proveedor →
+                {t.editarPerfil.hacerteProveedor}
               </Link>
             </Card>
           </div>
@@ -2575,7 +2586,7 @@ function EditarPerfilContent() {
 
       return (
         <div>
-          <Card title="Foto de perfil">
+          <Card title={t.editarPerfil.fotoPerfil}>
             <input ref={profilePhotoRef} type="file" accept="image/jpeg,image/png" className="hidden" onChange={handleProfilePhotoChange} />
             <div className="flex items-center gap-4">
               {fotoPreview ? (
@@ -2588,7 +2599,7 @@ function EditarPerfilContent() {
               )}
               <div>
                 <p className="text-sm font-semibold text-[#1a1a1a]">{[nombre, apellido].filter(Boolean).join(" ") || "Tu nombre"}</p>
-                <p className="text-xs text-[#888]">Subida: {fotoFecha}</p>
+                <p className="text-xs text-[#888]">{t.editarPerfil.subida} {fotoFecha}</p>
                 <button type="button" onClick={() => profilePhotoRef.current?.click()} className="mt-2 text-xs font-semibold" style={{ color: PRIMARY }}>
                   {PROFILE_LABELS.cambiarFoto}
                 </button>
@@ -2596,7 +2607,7 @@ function EditarPerfilContent() {
             </div>
           </Card>
 
-          <Card title="Información personal">
+          <Card title={t.editarPerfil.informacionPersonal}>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <label className="mb-1.5 block text-xs font-medium text-[#444]">{PROFILE_LABELS.nombre}</label>
@@ -2611,7 +2622,7 @@ function EditarPerfilContent() {
                 <input type="text" required value={ciudad} onChange={(e) => { markDirty(); setCiudad(e.target.value); }} className={inputClass} style={{ borderColor: BRAND.border }} />
               </div>
               <div>
-                <label className="mb-1.5 block text-xs font-medium text-[#444]">Teléfono móvil</label>
+                <label className="mb-1.5 block text-xs font-medium text-[#444]">{t.editarPerfil.telefonoMovil}</label>
                 {providerMissingContactBanner(
                   {
                     telefono,
@@ -2645,7 +2656,7 @@ function EditarPerfilContent() {
               </div>
               <div>
                 <label className="mb-1.5 block text-xs font-medium text-[#444]">
-                  Email de contacto
+                  {t.editarPerfil.emailContacto}
                 </label>
                 <input
                   type="email"
@@ -2659,8 +2670,7 @@ function EditarPerfilContent() {
                   style={{ borderColor: BRAND.border }}
                 />
                 <p className="mt-1 text-[10px] text-[#aaa]">
-                  Por defecto usamos el email de tu cuenta; cámbialo si quieres otro de
-                  contacto
+                  {t.editarPerfil.emailContactoDesc}
                 </p>
               </div>
               <div>
@@ -2688,11 +2698,11 @@ function EditarPerfilContent() {
 
           {/* Resumen: la lista completa vive en ?tab=servicios */}
           {mostrarTabServicios ? (
-            <Card title="Mis servicios">
+            <Card title={t.editarPerfil.misServiciosTitulo}>
               <p className="text-sm text-[#666]">
                 {services.length === 0
-                  ? "Aún no tienes anuncios publicados."
-                  : `Tienes ${services.length} ${services.length === 1 ? "anuncio" : "anuncios"}.`}
+                  ? t.editarPerfil.aunNoAnuncios
+                  : `${t.editarPerfil.tienes} ${services.length} ${services.length === 1 ? t.editarPerfil.anuncio : t.editarPerfil.anuncios}.`}
               </p>
               <button
                 type="button"
@@ -2700,13 +2710,13 @@ function EditarPerfilContent() {
                 className="mt-3 text-sm font-semibold"
                 style={{ color: PRIMARY }}
               >
-                Ir a Mis servicios →
+                {t.editarPerfil.irMisServicios}
               </button>
             </Card>
           ) : null}
 
           {perfil?.role === "proveedor" && (
-            <Card title="Referencias externas">
+            <Card title={t.serProveedor.referenciasExternas}>
               {referencias.length > 0 && (
                 <ul className="mb-4 flex flex-col gap-2">
                   {referencias.map((ref) =>
@@ -2718,11 +2728,11 @@ function EditarPerfilContent() {
                             <div className="mt-1.5 flex flex-col gap-1 text-xs text-[#666]">
                               {ref.recomendaria != null && (
                                 <span className={ref.recomendaria ? "font-medium text-[#0e7a5c]" : "text-[#888]"}>
-                                  {ref.recomendaria ? "Recomienda" : "No recomienda"}
+                                  {ref.recomendaria ? t.editarPerfil.recomienda : t.editarPerfil.noRecomienda}
                                 </span>
                               )}
                               {ref.conoce_desde && (
-                                <span>Se conocen: {ref.conoce_desde}</span>
+                                <span>{t.editarPerfil.seConocen} {ref.conoce_desde}</span>
                               )}
                               {ref.comentario && (
                                 <p className="mt-0.5 italic leading-relaxed">{ref.comentario}</p>
@@ -2745,14 +2755,14 @@ function EditarPerfilContent() {
                 {refError && <p className="mb-2 text-xs text-red-600">{refError}</p>}
                 {refMessage && <p className="mb-2 text-xs text-green-700">{refMessage}</p>}
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <input type="text" placeholder="Nombre referente" value={refNombre} onChange={(e) => setRefNombre(e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
-                  <input type="email" placeholder="Email referente" value={refEmail} onChange={(e) => setRefEmail(e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
+                  <input type="text" placeholder={t.editarPerfil.refNombrePlaceholder} value={refNombre} onChange={(e) => setRefNombre(e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
+                  <input type="email" placeholder={t.editarPerfil.refEmailPlaceholder} value={refEmail} onChange={(e) => setRefEmail(e.target.value)} className={inputClass} style={{ borderColor: BRAND.border }} />
                 </div>
                 <select value={refRelacion} onChange={(e) => setRefRelacion(e.target.value)} className={`${inputClass} mt-3`} style={{ borderColor: BRAND.border }}>
                   {RELACION_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
                 </select>
                 <button type="button" onClick={handleSolicitarReferencia} disabled={refSending} className="mt-3 rounded-lg px-4 py-2 text-sm font-semibold text-white" style={{ backgroundColor: PRIMARY }}>
-                  {refSending ? "Enviando…" : "Solicitar referencia"}
+                  {refSending ? t.editarPerfil.refEnviando : t.editarPerfil.refSolicitar}
                 </button>
               </div>
             </Card>
@@ -2789,18 +2799,17 @@ function EditarPerfilContent() {
     if (activeTab === "cuenta") {
       return (
         <div>
-          <Card title="Cuenta">
-            <label className="mb-1.5 block text-xs font-medium text-[#444]">Email</label>
+          <Card title={t.editarPerfil.tabCuenta}>
+            <label className="mb-1.5 block text-xs font-medium text-[#444]">{t.editarPerfil.email}</label>
             <input type="email" readOnly value={userEmail} className={inputClass} style={{ borderColor: BRAND.border, backgroundColor: "#f7f5f2" }} />
             <div className="mt-4">
-              <label className="mb-1.5 block text-xs font-medium text-[#444]">Nueva contraseña</label>
-              <input type="password" value={nuevaPassword} onChange={(e) => { markDirty(); setNuevaPassword(e.target.value); }} placeholder="Mínimo 6 caracteres" className={inputClass} style={{ borderColor: BRAND.border }} />
+              <label className="mb-1.5 block text-xs font-medium text-[#444]">{t.editarPerfil.nuevaContrasena}</label>
+              <input type="password" value={nuevaPassword} onChange={(e) => { markDirty(); setNuevaPassword(e.target.value); }} placeholder={t.editarPerfil.nuevaContrasenaPlaceholder} className={inputClass} style={{ borderColor: BRAND.border }} />
             </div>
           </Card>
-          <Card title="Tus datos (RGPD)">
+          <Card title={t.editarPerfil.tusDatos}>
             <p className="mb-3 text-xs leading-relaxed text-[#666]">
-              Descarga un archivo JSON con tus datos personales en Home&amp;Heart
-              (perfil, reservas, mensajes enviados, reseñas, servicios, crédito, etc.).
+              {t.editarPerfil.tusDatosDesc}
             </p>
             <button
               type="button"
@@ -2809,16 +2818,16 @@ function EditarPerfilContent() {
               className="min-h-[44px] rounded-lg px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
               style={{ backgroundColor: PRIMARY }}
             >
-              {exportingData ? "Preparando descarga…" : "Descargar mis datos"}
+              {exportingData ? t.editarPerfil.preparandoDescarga : t.editarPerfil.descargarMisDatos}
             </button>
           </Card>
-          <Card title="Zona de peligro">
+          <Card title={t.editarPerfil.zonaPeligro}>
             <button
               type="button"
               onClick={handleEliminarCuenta}
               className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-100"
             >
-              Eliminar mi cuenta
+              {t.editarPerfil.eliminarMiCuenta}
             </button>
           </Card>
         </div>
@@ -2839,7 +2848,7 @@ function EditarPerfilContent() {
             <Link href="/dashboard" className="text-sm no-underline" style={{ color: "#666" }}>← Dashboard</Link>
           </div>
           <button type="submit" form="editar-perfil-form" disabled={submitting} className="rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" style={{ backgroundColor: PRIMARY }}>
-            {submitting ? "Guardando…" : "Guardar cambios"}
+            {submitting ? t.editarPerfil.guardando : t.editarPerfil.guardarCambios}
           </button>
         </div>
         <div className="flex gap-0 overflow-x-auto border-t px-4" style={{ borderColor: BRAND.border }}>
@@ -2882,7 +2891,7 @@ function EditarPerfilContent() {
               className="font-semibold underline"
               style={{ color: "#1d4f91" }}
             >
-              Ir a Perfil →
+              {t.editarPerfil.irPerfilBtn}
             </button>
           </div>
         )}
@@ -2919,9 +2928,9 @@ function EditarPerfilContent() {
 
       {dirty && (
         <div className="fixed bottom-0 left-0 right-0 z-50 flex items-center justify-between border-t bg-white px-6 py-3 shadow-lg" style={{ borderColor: BRAND.border }}>
-          <span className="text-sm text-[#888]">Cambios sin guardar</span>
+          <span className="text-sm text-[#888]">{t.editarPerfil.cambiosSinGuardar}</span>
           <button type="submit" form="editar-perfil-form" disabled={submitting} className="rounded-lg px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60" style={{ backgroundColor: PRIMARY }}>
-            {submitting ? "Guardando…" : "Guardar cambios →"}
+            {submitting ? t.editarPerfil.guardando : t.editarPerfil.guardarCambiosFinal}
           </button>
         </div>
       )}

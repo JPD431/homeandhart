@@ -85,15 +85,15 @@ function SearchField({ label, children, onClick }) {
             }
           : undefined
       }
-      className={`flex min-h-[44px] min-w-0 flex-1 flex-col justify-center px-5 py-2 md:py-0 ${onClick ? "cursor-pointer" : ""}`}
+      className={`flex min-h-[72px] min-w-0 flex-1 flex-col justify-center px-6 py-4 md:py-3 transition-colors ${onClick ? "cursor-pointer hover:bg-[#faf9f7]" : ""}`}
     >
       <span
-        className="text-[8px] font-medium uppercase tracking-wide"
-        style={{ color: "#bbb" }}
+        className="text-[10px] font-semibold uppercase tracking-widest"
+        style={{ color: "#888" }}
       >
         {label}
       </span>
-      <div className="mt-0.5 min-h-[20px] overflow-visible">{children}</div>
+      <div className="mt-1.5 min-h-[22px] overflow-visible">{children}</div>
     </div>
   );
 }
@@ -101,8 +101,8 @@ function SearchField({ label, children, onClick }) {
 function DateTrigger({ value, placeholder }) {
   return (
     <span
-      className="block w-full text-[13px]"
-      style={{ color: value ? "#2a3a4a" : "#bbb" }}
+      className="block w-full text-sm"
+      style={{ color: value ? "#1a1a1a" : "#aaa" }}
     >
       {value ? formatShortDate(value) : placeholder}
     </span>
@@ -400,7 +400,7 @@ export default function Hero() {
         <form
           onSubmit={handleSearch}
           className="border-y bg-white"
-          style={{ borderColor: "#e8e4de" }}
+          style={{ borderColor: "#e8e4de", boxShadow: "0 4px 16px rgba(0,0,0,0.07)" }}
         >
           <div className="mx-auto flex max-w-6xl flex-col md:flex-row md:items-stretch">
             <SearchField label={extra.ciudad}>
@@ -410,7 +410,7 @@ export default function Hero() {
                 onChange={setQuery}
                 placeholder={t.hero.placeholder}
                 className="w-full"
-                inputClassName="w-full bg-transparent text-[13px] outline-none placeholder:text-[#bbb]"
+                inputClassName="w-full bg-transparent text-sm outline-none placeholder:text-[#aaa]"
               />
             </SearchField>
 
@@ -450,8 +450,8 @@ export default function Hero() {
                 id="hero-vertical"
                 value={activeTab}
                 onChange={(e) => setActiveTab(e.target.value)}
-                className="w-full cursor-pointer appearance-none bg-transparent text-[13px] font-medium outline-none"
-                style={{ color: "#2a3a4a" }}
+                className="w-full cursor-pointer appearance-none bg-transparent text-sm font-medium outline-none"
+                style={{ color: "#1a1a1a" }}
               >
                 {tabs.map((tab) => (
                   <option key={tab.id} value={tab.id}>
@@ -463,7 +463,7 @@ export default function Hero() {
 
             <button
               type="submit"
-              className="w-full min-h-[44px] shrink-0 px-7 text-[13px] font-semibold text-white transition-opacity hover:opacity-90 md:w-auto md:min-h-0 md:h-full"
+              className="w-full min-h-[72px] shrink-0 px-8 text-sm font-semibold tracking-wide text-white transition-opacity hover:opacity-90 md:w-auto md:min-h-0 md:h-full"
               style={{
                 backgroundColor: "#1d4f91",
                 borderRadius: 0,

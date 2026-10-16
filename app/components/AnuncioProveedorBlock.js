@@ -1,6 +1,10 @@
+"use client";
+
 import Link from "next/link";
 import ProveedorPreguntarButton from "@/app/components/ProveedorPreguntarButton";
 import { SERIF } from "@/app/components/brand";
+import { useLang } from "@/app/lib/LangContext";
+import { useTranslation } from "@/app/lib/i18n";
 import { formatProveedorRatingAvg } from "@/app/lib/reviews";
 import {
   getServiceCardInitials,
@@ -39,6 +43,9 @@ export default function AnuncioProveedorBlock({
   vertical = "alojamiento",
   isOwnerPreview = false,
 }) {
+  const { lang } = useLang();
+  const t = useTranslation(lang);
+
   if (!profile || !proveedorId) return null;
 
   const theme = getServiceCardTheme(vertical);
@@ -60,7 +67,7 @@ export default function AnuncioProveedorBlock({
         className="text-[13px] font-semibold uppercase tracking-wide text-[#888]"
         style={{ fontFamily: SERIF }}
       >
-        Tu proveedor
+        {t.anuncio.tuProveedor}
       </h2>
 
       <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-start">
@@ -68,7 +75,7 @@ export default function AnuncioProveedorBlock({
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={avatarUrl}
-            alt={fullName || "Proveedor"}
+            alt={fullName || t.anuncio.proveedor}
             className="h-16 w-16 shrink-0 rounded-full object-cover"
           />
         ) : (
@@ -85,7 +92,7 @@ export default function AnuncioProveedorBlock({
             className="text-[17px] text-[#111]"
             style={{ fontFamily: SERIF, fontWeight: 400 }}
           >
-            {fullName || "Proveedor"}
+            {fullName || t.anuncio.proveedor}
           </p>
 
           {valoracionMedia ? (
@@ -93,11 +100,12 @@ export default function AnuncioProveedorBlock({
               ★ {valoracionMedia}
               <span className="text-[#888]">
                 {" "}
-                · {numReviews} reseña{numReviews !== 1 ? "s" : ""}
+                · {numReviews}{" "}
+                {numReviews !== 1 ? t.anuncio.resenas : t.anuncio.resena}
               </span>
             </p>
           ) : (
-            <p className="mt-1 text-[12px] text-[#aaa]">Aún sin valoraciones</p>
+            <p className="mt-1 text-[12px] text-[#aaa]">{t.anuncio.sinValoraciones}</p>
           )}
 
           {bio ? (
@@ -116,7 +124,7 @@ export default function AnuncioProveedorBlock({
               color: "#fff",
             }}
           >
-            Contactar
+            {t.anuncio.contactar}
           </ProveedorPreguntarButton>
         )}
 
@@ -125,7 +133,7 @@ export default function AnuncioProveedorBlock({
           className="text-center text-[12px] font-medium no-underline transition-opacity hover:opacity-80 sm:text-left"
           style={{ color: accentColor || theme.color }}
         >
-          Ver perfil completo →
+          {t.anuncio.verPerfil}
         </Link>
       </div>
     </section>

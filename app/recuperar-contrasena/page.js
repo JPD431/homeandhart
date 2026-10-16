@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useState } from "react";
 import { supabase } from "@/app/lib/supabase";
 import { BRAND } from "@/app/components/brand";
+import { useLang } from "@/app/lib/LangContext";
+import { useTranslation } from "@/app/lib/i18n";
 
 function Logo() {
   return (
@@ -17,6 +19,8 @@ function Logo() {
 }
 
 export default function RecuperarContrasenaPage() {
+  const { lang } = useLang();
+  const t = useTranslation(lang);
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
@@ -59,9 +63,9 @@ export default function RecuperarContrasenaPage() {
       >
         <Logo />
 
-        <h1 className="text-2xl font-bold text-[#1a1a1a]">Recuperar contraseña</h1>
+        <h1 className="text-2xl font-bold text-[#1a1a1a]">{t.recuperarContrasena.titulo}</h1>
         <p className="mt-2 text-sm text-[#666]">
-          Te enviaremos un email para restablecer tu contraseña
+          {t.recuperarContrasena.subtitulo}
         </p>
 
         <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4">
@@ -86,7 +90,7 @@ export default function RecuperarContrasenaPage() {
 
           {success && (
             <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">
-              ¡Email enviado! Revisa tu bandeja de entrada.
+              {t.recuperarContrasena.emailEnviado}
             </p>
           )}
 
@@ -102,7 +106,7 @@ export default function RecuperarContrasenaPage() {
             className="mt-2 w-full rounded-xl py-3.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
             style={{ backgroundColor: BRAND.primary }}
           >
-            {loading ? "Enviando…" : "Enviar instrucciones"}
+            {loading ? t.recuperarContrasena.enviando : t.recuperarContrasena.enviarInstrucciones}
           </button>
         </form>
 
@@ -112,7 +116,7 @@ export default function RecuperarContrasenaPage() {
             className="font-medium no-underline hover:underline"
             style={{ color: BRAND.primary }}
           >
-            Volver al inicio de sesión
+            {t.recuperarContrasena.volver}
           </Link>
         </p>
       </div>

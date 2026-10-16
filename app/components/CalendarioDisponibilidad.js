@@ -5,8 +5,6 @@ import { useEffect, useMemo, useState } from "react";
 import { BRAND, SERIF } from "@/app/components/brand";
 import {
   ChevronIcon,
-  MONTH_NAMES,
-  WEEKDAY_LABELS,
   buildMonthGrid,
   formatShortDate,
   getHoyStr,
@@ -14,6 +12,8 @@ import {
   isInRange,
   parseDateStr,
 } from "@/app/components/calendario-shared";
+import { useLang } from "@/app/lib/LangContext";
+import { useTranslation } from "@/app/lib/i18n";
 
 const DIA_ID_BY_JS = {
   0: "dom",
@@ -48,8 +48,10 @@ function MonthCalendar({
   hoyStr,
   onDayClick,
 }) {
+  const { lang } = useLang();
+  const t = useTranslation(lang);
   const cells = buildMonthGrid(viewDate);
-  const monthLabel = `${MONTH_NAMES[viewDate.getMonth()]} ${viewDate.getFullYear()}`;
+  const monthLabel = `${t.calendario.meses[viewDate.getMonth()]} ${viewDate.getFullYear()}`;
 
   return (
     <div className="min-w-0 flex-1">
@@ -57,7 +59,7 @@ function MonthCalendar({
         {monthLabel}
       </p>
       <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-semibold uppercase tracking-wide text-[#888]">
-        {WEEKDAY_LABELS.map((label) => (
+        {t.calendario.dias.map((label) => (
           <span key={label} className="py-1">
             {label}
           </span>
@@ -143,6 +145,8 @@ export default function CalendarioDisponibilidad({
   showReservaLink = true,
   onDatesChange,
 }) {
+  const { lang } = useLang();
+  const t = useTranslation(lang);
   const hoy = new Date();
   const hoyStr = getHoyStr();
 
@@ -206,10 +210,10 @@ export default function CalendarioDisponibilidad({
     if (!fechaInicio) return "";
     const fin = fechaFin || fechaInicio;
     if (fechaInicio === fin) {
-      return `Reservar ${formatShortDate(fechaInicio)}`;
+      return `${t.calendario.reservar} ${formatShortDate(fechaInicio, lang)}`;
     }
-    return `Reservar ${formatShortDate(fechaInicio)} – ${formatShortDate(fin)}`;
-  }, [fechaInicio, fechaFin]);
+    return `${t.calendario.reservar} ${formatShortDate(fechaInicio, lang)} – ${formatShortDate(fin, lang)}`;
+  }, [fechaInicio, fechaFin, lang, t]);
 
   if (!services.length) return null;
 
@@ -227,17 +231,17 @@ export default function CalendarioDisponibilidad({
             className="text-xl font-bold text-[#1a1a1a] sm:text-2xl"
             style={{ fontFamily: SERIF }}
           >
-            Disponibilidad
+            {t.calendario.disponibilidad}
           </h2>
           <p className="mt-1 text-sm text-[#666]">
-            Elige tus fechas en el calendario y reserva directamente.
+            {t.calendario.disponibilidadDesc}
           </p>
         </>
       )}
 
       {embedded && (
         <p className="mb-3 text-[11px] font-medium text-[#666]">
-          Elige tus fechas
+          {t.calendario.eligeFechas}
         </p>
       )}
 
@@ -247,7 +251,7 @@ export default function CalendarioDisponibilidad({
             htmlFor="calendario-servicio"
             className="mb-1.5 block text-xs font-medium text-[#444]"
           >
-            Servicio
+            {t.calendario.servicio}
           </label>
           <select
             id="calendario-servicio"
@@ -275,7 +279,7 @@ export default function CalendarioDisponibilidad({
           onClick={() => shiftMonth(-1)}
           className="flex h-10 w-10 items-center justify-center rounded-full border transition-colors hover:bg-[#f7f7f7]"
           style={{ borderColor: BRAND.border, color: BRAND.primary }}
-          aria-label="Mes anterior"
+          aria-label={t.calendario.mesAnterior}
         >
           <ChevronIcon direction="left" />
         </button>
@@ -287,14 +291,14 @@ export default function CalendarioDisponibilidad({
           className="text-xs font-semibold transition-opacity hover:opacity-80"
           style={{ color: BRAND.primary }}
         >
-          Hoy
+          {t.calendario.hoy}
         </button>
         <button
           type="button"
           onClick={() => shiftMonth(1)}
           className="flex h-10 w-10 items-center justify-center rounded-full border transition-colors hover:bg-[#f7f7f7]"
           style={{ borderColor: BRAND.border, color: BRAND.primary }}
-          aria-label="Mes siguiente"
+          aria-label={t.calendario.mesSiguiente}
         >
           <ChevronIcon direction="right" />
         </button>
@@ -331,20 +335,20 @@ export default function CalendarioDisponibilidad({
         className={`flex flex-wrap gap-3 text-xs text-[#666] ${embedded ? "mt-3" : "mt-5"}`}
       >
         <span className="inline-flex items-center gap-1.5">
-          <span className="h-3 w-3 rounded bg-[#dcfce7]" /> Disponible
+          <span className="h-3 w-3 rounded bg-[#dcfce7]" /> {t.calendario.disponible}
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="h-3 w-3 rounded bg-[#e5e7eb] line-through" /> Ocupado
+          <span className="h-3 w-3 rounded bg-[#e5e7eb] line-through" /> {t.calendario.ocupado}
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="h-3 w-3 rounded bg-[#f3f4f6]" /> No disponible
+          <span className="h-3 w-3 rounded bg-[#f3f4f6]" /> {t.calendario.noDisponible}
         </span>
         <span className="inline-flex items-center gap-1.5">
           <span
             className="h-3 w-3 rounded border-2"
             style={{ borderColor: BRAND.primary }}
           />{" "}
-          Hoy
+          {t.calendario.hoy}
         </span>
       </div>
 

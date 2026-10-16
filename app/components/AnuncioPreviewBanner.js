@@ -1,7 +1,15 @@
+"use client";
+
+import { useLang } from "@/app/lib/LangContext";
+import { useTranslation } from "@/app/lib/i18n";
+
 /**
  * Aviso en /anuncio/[serviceId]/preview cuando el dueño ve su anuncio no publicado.
  */
 export default function AnuncioPreviewBanner() {
+  const { lang } = useLang();
+  const t = useTranslation(lang);
+
   return (
     <div
       className="border-b px-5 py-3 text-center text-[12px] leading-relaxed"
@@ -12,9 +20,9 @@ export default function AnuncioPreviewBanner() {
       }}
       role="status"
     >
-      <strong className="font-semibold">Vista previa</strong>
-      {" — así verán las familias tu anuncio. "}
-      <span className="text-[#92400e]">Aún no está publicado.</span>
+      <strong className="font-semibold">{t.anuncio.previewTitulo}</strong>
+      {t.anuncio.previewTexto}
+      <span className="text-[#92400e]">{t.anuncio.previewNoPublicado}</span>
     </div>
   );
 }

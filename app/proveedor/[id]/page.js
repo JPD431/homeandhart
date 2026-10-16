@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { cookies } from "next/headers";
 import CalendarioDisponibilidad from "@/app/components/CalendarioDisponibilidad";
 import FavoritoButton from "@/app/components/FavoritoButton";
 import ReportarPerfilButton from "@/app/components/ReportarPerfilButton";
@@ -24,7 +25,8 @@ import {
 } from "@/app/lib/reviews";
 import { getServiceDescription } from "@/app/lib/service-card-display";
 import { getPublicSupabase } from "@/app/lib/supabase-public";
-import { VERIFICADO_BADGE_TOOLTIP_ES } from "@/app/lib/verification-copy";
+import { getVerificadoBadgeTooltip } from "@/app/lib/verification-copy";
+import { translations } from "@/app/lib/i18n";
 
 /** ISR: no pre-renderizar todos los proveedores en build. */
 export const revalidate = 3600;
@@ -34,52 +36,17 @@ export async function generateStaticParams() {
   return [];
 }
 
-const VERTICAL_THEME = {
-  alojamiento: {
-    label: "Alojamiento",
-    color: "#1d4f91",
-    light: "#e8f0fb",
-    priceSuffix: "/ noche",
-  },
-  ninos: {
-    label: "Cuidado de niños",
-    color: "#0e7a5c",
-    light: "#e6f4f0",
-    priceSuffix: "/ hora",
-  },
-  mascotas: {
-    label: "Cuidado de mascotas",
-    color: "#c47d1a",
-    light: "#fdf3e3",
-    priceSuffix: "/ día",
-  },
+// Colors and non-translatable theme parts stay at module level
+const VERTICAL_COLORS = {
+  alojamiento: { color: "#1d4f91", light: "#e8f0fb" },
+  ninos: { color: "#0e7a5c", light: "#e6f4f0" },
+  mascotas: { color: "#c47d1a", light: "#fdf3e3" },
 };
-
-const CANCEL_POLICIES = {
-  flexible: { name: "Flexible" },
-  moderada: { name: "Moderada" },
-  estricta: { name: "Estricta" },
-};
-
-const DIAS_SEMANA_PILLS = [
-  { id: "lun", label: "Lun" },
-  { id: "mar", label: "Mar" },
-  { id: "mie", label: "Mié" },
-  { id: "jue", label: "Jue" },
-  { id: "vie", label: "Vie" },
-  { id: "sab", label: "Sáb" },
-  { id: "dom", label: "Dom" },
-];
 
 const GOLD = "#c8922a";
 
 const PROFILES_PUBLIC_SELECT =
   "id, nombre, apellido, foto_perfil, foto_url, ciudad, location_zone, descripcion, idiomas, verificado, badge_respuesta, tiempo_respuesta_horas, role, anos_experiencia, fecha_registro";
-
-function getCancelPolicy(policyKey) {
-  const key = normalizeCancelPolicy(policyKey);
-  return CANCEL_POLICIES[key];
-}
 
 function getInitials(nombre, apellido) {
   const first = nombre?.trim()?.[0] ?? "";
@@ -87,40 +54,33 @@ function getInitials(nombre, apellido) {
   return (first + last).toUpperCase() || "?";
 }
 
-function formatPrice(precio, suffix) {
-  if (precio == null || precio === "") return "Consultar";
+function formatPrice(precio, suffix, tp) {
+  if (precio == null || precio === "") return tp.consultar;
   return `${Number(precio)}€${suffix}`;
 }
 
-function formatEstanciaMinima(service) {
+function formatEstanciaMinima(service, tp) {
   const n = service.estancia_minima;
   if (n == null || n === "" || Number(n) <= 0) return null;
   const count = Number(n);
   if (service.vertical === "alojamiento") {
-    return `Mín. ${count} ${count === 1 ? "noche" : "noches"}`;
+    return `${tp.estanciaMin} ${count} ${count === 1 ? tp.nocheSingular : tp.nochePlural}`;
   }
   if (service.vertical === "ninos") {
-    return `Mín. ${count} ${count === 1 ? "hora" : "horas"}`;
+    return `${tp.estanciaMin} ${count} ${count === 1 ? tp.horaSingular : tp.horaPlural}`;
   }
-  return `Mín. ${count} ${count === 1 ? "día" : "días"}`;
+  return `${tp.estanciaMin} ${count} ${count === 1 ? tp.diaSingular : tp.diaPlural}`;
 }
 
 function normalizeDiasDisponiblesProveedor(dias) {
-  if (!Array.isArray(dias) || dias.length === 0) {
-    return DIAS_SEMANA_PILLS.map((d) => d.id);
-  }
+  const ALL_DAYS = ["lun", "mar", "mie", "jue", "vie", "sab", "dom"];
+  if (!Array.isArray(dias) || dias.length === 0) return ALL_DAYS;
   return dias;
 }
 
 function hasPetFriendly(service) {
   const desc = getServiceDescription(service).toLowerCase();
   return /pet[-_\s]?friendly/i.test(desc);
-}
-
-function getPrimaryVertical(services) {
-  if (!services?.length) return VERTICAL_THEME.alojamiento;
-  const vertical = services[0].vertical;
-  return VERTICAL_THEME[vertical] ?? VERTICAL_THEME.alojamiento;
 }
 
 function StarRating({ value, size = 12 }) {
@@ -171,37 +131,6 @@ function StatItem({ value, label }) {
       </p>
     </div>
   );
-}
-
-function getServiceTags(service) {
-  const tags = [];
-  const cancelPolicy = getCancelPolicy(service.cancellation_policy);
-  const estanciaMinLabel = formatEstanciaMinima(service);
-
-  if (service.vertical === "alojamiento") {
-    tags.push({ text: "NRU ✓", light: "#e8f0fb", color: "#163a6b" });
-  }
-
-  if (
-    service.vertical === "alojamiento" &&
-    (service.disponible_para_viajar || hasPetFriendly(service))
-  ) {
-    tags.push({ text: "Pet-friendly 🐾", light: "#e6f4f0", color: "#085041" });
-  }
-
-  if (service.reserva_inmediata) {
-    tags.push({ text: "Reserva inmediata ⚡", light: "#fdf3e3", color: "#92400e" });
-  }
-
-  if (cancelPolicy) {
-    tags.push({ text: cancelPolicy.name, light: "#f7f5f2", color: "#888" });
-  }
-
-  if (estanciaMinLabel) {
-    tags.push({ text: estanciaMinLabel, light: "#f7f5f2", color: "#888" });
-  }
-
-  return tags;
 }
 
 export async function generateMetadata({ params }) {
@@ -260,6 +189,82 @@ export async function generateMetadata({ params }) {
 export default async function ProveedorPage({ params }) {
   const { id } = await params;
   const supabase = getPublicSupabase();
+
+  // Lang detection from cookie (set by LangContext on the client)
+  const cookieStore = await cookies();
+  const lang = cookieStore.get("lang")?.value ?? "es";
+  const tp = (translations[lang] ?? translations.es).proveedor;
+
+  // Localized VERTICAL_THEME (built inside component to use tp)
+  const VERTICAL_THEME = {
+    alojamiento: {
+      label: tp.verticalAlojamiento,
+      color: VERTICAL_COLORS.alojamiento.color,
+      light: VERTICAL_COLORS.alojamiento.light,
+      priceSuffix: tp.precioNoche,
+    },
+    ninos: {
+      label: tp.verticalNinos,
+      color: VERTICAL_COLORS.ninos.color,
+      light: VERTICAL_COLORS.ninos.light,
+      priceSuffix: tp.precioHora,
+    },
+    mascotas: {
+      label: tp.verticalMascotas,
+      color: VERTICAL_COLORS.mascotas.color,
+      light: VERTICAL_COLORS.mascotas.light,
+      priceSuffix: tp.precioDia,
+    },
+  };
+
+  // Localized cancel policies
+  const CANCEL_POLICIES = {
+    flexible: { name: tp.cancelFlexible },
+    moderada: { name: tp.cancelModerada },
+    estricta: { name: tp.cancelEstricta },
+  };
+
+  function getCancelPolicy(policyKey) {
+    const key = normalizeCancelPolicy(policyKey);
+    return CANCEL_POLICIES[key];
+  }
+
+  function getServiceTags(service) {
+    const tags = [];
+    const cancelPolicy = getCancelPolicy(service.cancellation_policy);
+    const estanciaMinLabel = formatEstanciaMinima(service, tp);
+
+    if (service.vertical === "alojamiento") {
+      tags.push({ text: tp.nruTag, light: "#e8f0fb", color: "#163a6b" });
+    }
+
+    if (
+      service.vertical === "alojamiento" &&
+      (service.disponible_para_viajar || hasPetFriendly(service))
+    ) {
+      tags.push({ text: tp.petFriendlyTag, light: "#e6f4f0", color: "#085041" });
+    }
+
+    if (service.reserva_inmediata) {
+      tags.push({ text: tp.reservaInmediataTag, light: "#fdf3e3", color: "#92400e" });
+    }
+
+    if (cancelPolicy) {
+      tags.push({ text: cancelPolicy.name, light: "#f7f5f2", color: "#888" });
+    }
+
+    if (estanciaMinLabel) {
+      tags.push({ text: estanciaMinLabel, light: "#f7f5f2", color: "#888" });
+    }
+
+    return tags;
+  }
+
+  function getPrimaryVertical(services) {
+    if (!services?.length) return VERTICAL_THEME.alojamiento;
+    const vertical = services[0].vertical;
+    return VERTICAL_THEME[vertical] ?? VERTICAL_THEME.alojamiento;
+  }
 
   const { data: profile, error: profileError } = await supabase
     .from("profiles_public")
@@ -418,6 +423,7 @@ export default async function ProveedorPage({ params }) {
     ? Math.min(...(services ?? []).map((s) => Number(s.antelacion_minima) || 24))
     : 24;
   const firstServiceId = services?.[0]?.id;
+  const verificadoBadgeTooltip = getVerificadoBadgeTooltip(lang);
 
   const servicesParaTraduccion = (services ?? []).map((service) => {
     const vertical = VERTICAL_THEME[service.vertical] ?? VERTICAL_THEME.alojamiento;
@@ -450,14 +456,14 @@ export default async function ProveedorPage({ params }) {
               className="text-[12px] no-underline transition-opacity hover:opacity-80"
               style={{ color: "#888" }}
             >
-              ← Buscar
+              {tp.volver}
             </Link>
             <Link
               href="/dashboard"
               className="px-3.5 py-1.5 text-[12px] font-semibold text-white no-underline transition-opacity hover:opacity-90"
               style={{ backgroundColor: "#1d4f91", borderRadius: 4 }}
             >
-              Mi cuenta
+              {tp.miCuenta}
             </Link>
           </div>
         </div>
@@ -495,7 +501,7 @@ export default async function ProveedorPage({ params }) {
                 className="text-[#111]"
                 style={{ fontFamily: SERIF, fontWeight: 300, fontSize: 22 }}
               >
-                {fullName || "Proveedor"}
+                {fullName || tp.proveedorFallback}
               </h1>
               <p className="mt-1 text-[12px] text-[#888]">{zone}</p>
 
@@ -504,29 +510,29 @@ export default async function ProveedorPage({ params }) {
                   <Tag
                     light="#e8f0fb"
                     color="#163a6b"
-                    title={VERIFICADO_BADGE_TOOLTIP_ES}
+                    title={verificadoBadgeTooltip}
                   >
-                    Verificado ✓
+                    {tp.verificado}
                   </Tag>
                 )}
                 {avalesCount > 0 && (
                   <Tag light="#e6f4f0" color="#085041">
-                    {avalesCount} aval{avalesCount !== 1 ? "es" : ""}
+                    {avalesCount} {avalesCount !== 1 ? tp.avales : tp.aval}
                   </Tag>
                 )}
                 {profile.badge_respuesta === "rapido" && (
                   <Tag light="#e6f4f0" color="#085041">
-                    ⚡ Responde rápido
+                    {tp.respondeRapido}
                   </Tag>
                 )}
                 {profile.badge_respuesta === "pocas_horas" && (
                   <Tag light="#fdf3e3" color="#92400e">
-                    🕐 Responde en pocas horas
+                    {tp.respondePocasHoras}
                   </Tag>
                 )}
                 {hasAlojamiento && (
                   <Tag light="#e8f0fb" color="#163a6b">
-                    NRU ✓
+                    {tp.nruBadge}
                   </Tag>
                 )}
               </div>
@@ -560,7 +566,7 @@ export default async function ProveedorPage({ params }) {
                   className="w-full min-w-[140px] rounded px-5 py-2.5 text-center text-[12px] font-semibold text-white no-underline transition-opacity hover:opacity-90 lg:w-auto"
                   style={{ backgroundColor: "#1d4f91", borderRadius: 4 }}
                 >
-                  Reservar
+                  {tp.reservar}
                 </Link>
               )}
               <ProveedorPreguntarButton
@@ -568,12 +574,12 @@ export default async function ProveedorPage({ params }) {
                 className="w-full min-w-[140px] rounded border px-5 py-2.5 text-[12px] font-semibold transition-colors hover:bg-[#e8f0fb] disabled:opacity-60 lg:w-auto"
                 style={{ borderColor: "#1d4f91", color: "#1d4f91", borderRadius: 4 }}
               >
-                Preguntar 💬
+                {tp.preguntar}
               </ProveedorPreguntarButton>
               <div className="proveedor-reportar-wrap">
                 <ReportarPerfilButton
                   proveedorId={id}
-                  proveedorNombre={fullName || "Proveedor"}
+                  proveedorNombre={fullName || tp.proveedorFallback}
                 />
               </div>
             </div>
@@ -586,11 +592,11 @@ export default async function ProveedorPage({ params }) {
           >
             <StatItem
               value={averageRating ?? "—"}
-              label="Valoración media"
+              label={tp.valoracionMedia}
             />
-            <StatItem value={reservasCount} label="Nº reservas" />
-            <StatItem value={avalesCount} label="Nº avales externos" />
-            <StatItem value={`${respondeHoras}h`} label="Responde en" />
+            <StatItem value={reservasCount} label={tp.numReservas} />
+            <StatItem value={avalesCount} label={tp.numAvales} />
+            <StatItem value={`${respondeHoras}h`} label={tp.respondeEn} />
           </div>
         </header>
 
@@ -607,12 +613,12 @@ export default async function ProveedorPage({ params }) {
                 className="text-[13px] font-semibold uppercase tracking-wide text-[#888]"
                 style={{ fontFamily: SERIF }}
               >
-                Servicios disponibles
+                {tp.serviciosDisponibles}
               </h2>
 
               {(!services || services.length === 0) && (
                 <p className="mt-3 text-[12px] text-[#888]">
-                  Este proveedor no tiene servicios activos en este momento.
+                  {tp.sinServicios}
                 </p>
               )}
 
@@ -625,8 +631,8 @@ export default async function ProveedorPage({ params }) {
                     ? getPrecioConDescuento(service.precio, service.oferta_descuento)
                     : null;
                   const displayPrice = ofertaActiva
-                    ? formatPrice(precioConDescuento, vertical.priceSuffix)
-                    : formatPrice(service.precio, vertical.priceSuffix);
+                    ? formatPrice(precioConDescuento, vertical.priceSuffix, tp)
+                    : formatPrice(service.precio, vertical.priceSuffix, tp);
                   const tags = getServiceTags(service);
 
                   return (
@@ -680,11 +686,11 @@ export default async function ProveedorPage({ params }) {
                 className="text-[13px] font-semibold uppercase tracking-wide text-[#888]"
                 style={{ fontFamily: SERIF }}
               >
-                Reseñas
+                {tp.resenas}
               </h2>
 
               {reviewCount === 0 ? (
-                <p className="mt-3 text-[12px] text-[#888]">Aún no tiene valoraciones</p>
+                <p className="mt-3 text-[12px] text-[#888]">{tp.sinValoraciones}</p>
               ) : (
                 <>
                   <div
@@ -704,7 +710,7 @@ export default async function ProveedorPage({ params }) {
                           size={14}
                         />
                         <p className="mt-1 text-[10px] text-[#aaa]">
-                          {reviewCount} reseña{reviewCount > 1 ? "s" : ""}
+                          {tp.numResenas(reviewCount)}
                         </p>
                       </div>
                     </div>
@@ -740,7 +746,7 @@ export default async function ProveedorPage({ params }) {
                   className="text-[13px] font-semibold uppercase tracking-wide text-[#888]"
                   style={{ fontFamily: SERIF }}
                 >
-                  Avales externos
+                  {tp.avalesExternos}
                 </h2>
                 <ul className="mt-4 flex flex-col gap-3">
                   {referenciasCompletadas.map((ref, index) => (
@@ -768,7 +774,7 @@ export default async function ProveedorPage({ params }) {
                           )}
                           {ref.recomendaria === true && (
                             <p className="mt-2 text-[10px] font-semibold text-[#0e7a5c]">
-                              ✓ Recomendaría
+                              {tp.recomendaria}
                             </p>
                           )}
                         </div>

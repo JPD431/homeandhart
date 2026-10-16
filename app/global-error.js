@@ -113,6 +113,8 @@ export default function GlobalError({ error, reset }) {
             >
               Reintentar
             </button>
+            {/* <a> a propósito: global-error sustituye al layout raíz y hace falta una recarga completa para recuperarse. */}
+            {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
             <a
               href="/"
               style={{

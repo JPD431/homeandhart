@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { BRAND, SERIF } from "@/app/components/brand";
+import { useLang } from "@/app/lib/LangContext";
+import { useTranslation } from "@/app/lib/i18n";
 import { buildLoginUrl } from "@/app/lib/auth-redirect";
 import {
   DNI_SUBIR_RUTA,
@@ -69,6 +71,9 @@ function StatusShell({ children }) {
 }
 
 function SubirDniForm() {
+  const { lang } = useLang();
+  const t = useTranslation(lang);
+  const td = t.subirDni;
   const router = useRouter();
   const searchParams = useSearchParams();
   const nextParam = searchParams.get("next");
@@ -125,12 +130,12 @@ function SubirDniForm() {
     setError("");
 
     if (!file) {
-      setError("Selecciona una foto o PDF de tu documento.");
+      setError(td.errSinArchivo);
       return;
     }
 
     if (!consent) {
-      setError("Debes aceptar el consentimiento para continuar.");
+      setError(td.errConsentimiento);
       return;
     }
 
@@ -164,7 +169,7 @@ function SubirDniForm() {
       setFile(null);
       setConsent(false);
     } catch (err) {
-      setError(err.message || "No se pudo guardar el documento.");
+      setError(err.message || td.errGuardar);
     } finally {
       setSaving(false);
     }
@@ -176,7 +181,7 @@ function SubirDniForm() {
         className="flex min-h-screen items-center justify-center font-sans"
         style={{ backgroundColor: BRAND.warm }}
       >
-        <p className="text-sm text-[#888]">Cargando…</p>
+        <p className="text-sm text-[#888]">{td.cargando}</p>
       </div>
     );
   }
@@ -188,24 +193,23 @@ function SubirDniForm() {
     return (
       <StatusShell>
         <h1 className="text-2xl text-[#1a1a1a]" style={{ fontFamily: SERIF }}>
-          Identidad verificada
+          {td.verificadoTitulo}
         </h1>
         <p className="mt-2 text-sm leading-relaxed text-[#666]">
-          Tu documento ha sido aprobado. Ya puedes reservar servicios en
-          Home&Heart.
+          {td.verificadoDesc}
         </p>
         <div
           className="mt-5 rounded-lg px-3 py-2.5 text-sm leading-relaxed"
           style={{ backgroundColor: "#e6f4f0", color: "#085041" }}
         >
-          Cliente verificado ✓
+          {td.verificadoBadge}
         </div>
         <Link
           href={continueHref}
           className="mt-6 block w-full rounded-xl py-3.5 text-center text-sm font-semibold text-white no-underline transition-opacity hover:opacity-90"
           style={{ backgroundColor: BRAND.primary }}
         >
-          Continuar
+          {td.continuar}
         </Link>
       </StatusShell>
     );
@@ -215,24 +219,23 @@ function SubirDniForm() {
     return (
       <StatusShell>
         <h1 className="text-2xl text-[#1a1a1a]" style={{ fontFamily: SERIF }}>
-          Documento en revisión
+          {td.revisionTitulo}
         </h1>
         <p className="mt-2 text-sm leading-relaxed text-[#666]">
-          Tu DNI está en revisión. Te avisaremos cuando lo verifiquemos; suele
-          ser rápido. Hasta entonces no podrás completar una reserva.
+          {td.revisionDesc}
         </p>
         <div
           className="mt-5 rounded-lg px-3 py-2.5 text-sm leading-relaxed"
           style={{ backgroundColor: "#fdf4e7", color: "#92400e" }}
         >
-          Tu DNI está en revisión
+          {td.revisionBadge}
         </div>
         <Link
           href={continueHref}
           className="mt-6 block w-full rounded-xl border py-3.5 text-center text-sm font-semibold no-underline transition-opacity hover:opacity-90"
           style={{ borderColor: BRAND.border, color: BRAND.primary }}
         >
-          Volver
+          {td.volver}
         </Link>
       </StatusShell>
     );
@@ -244,12 +247,10 @@ function SubirDniForm() {
     <StatusShell>
       <form onSubmit={handleSubmit}>
         <h1 className="text-2xl text-[#1a1a1a]" style={{ fontFamily: SERIF }}>
-          {isRechazado ? "Vuelve a subir tu documento" : "Verifica tu identidad"}
+          {isRechazado ? td.rechazadoTitulo : td.normTitulo}
         </h1>
         <p className="mt-2 text-sm leading-relaxed text-[#666]">
-          {isRechazado
-            ? "Tu documento fue rechazado. Sube una foto o PDF legible de tu DNI, NIE o pasaporte vigente para volver a intentarlo."
-            : "Para la seguridad de las familias y proveedores de Home&Heart, necesitamos verificar tu identidad. Sube una foto o PDF de tu DNI, NIE o pasaporte vigente."}
+          {isRechazado ? td.rechazadoDesc : td.normDesc}
         </p>
 
         {isRechazado && (
@@ -257,7 +258,7 @@ function SubirDniForm() {
             className="mt-4 rounded-lg px-3 py-2.5 text-sm leading-relaxed"
             style={{ backgroundColor: "#fef2f2", color: "#b91c1c" }}
           >
-            Documento rechazado — puedes volver a subirlo.
+            {td.rechazadoBadge}
           </div>
         )}
 
@@ -266,7 +267,7 @@ function SubirDniForm() {
             htmlFor="dni-file"
             className="block text-xs font-semibold uppercase tracking-wide text-[#888]"
           >
-            Documento de identidad
+            {td.labelDocumento}
           </label>
           <input
             id="dni-file"
@@ -277,7 +278,7 @@ function SubirDniForm() {
             style={{ borderColor: BRAND.border }}
           />
           {file && (
-            <p className="mt-1 text-xs text-[#666]">Archivo: {file.name}</p>
+            <p className="mt-1 text-xs text-[#666]">{td.archivo} {file.name}</p>
           )}
         </div>
 
@@ -305,19 +306,18 @@ function SubirDniForm() {
           className="mt-6 w-full rounded-xl py-3.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
           style={{ backgroundColor: BRAND.primary }}
         >
-          {saving ? "Guardando…" : isRechazado ? "Volver a enviar" : "Guardar y continuar"}
+          {saving ? td.guardando : isRechazado ? td.reenviar : td.guardarContinuar}
         </button>
 
         <p className="mt-4 text-center text-xs text-[#888]">
-          Puedes{" "}
           <Link
             href={skipHref}
             className="font-medium no-underline hover:underline"
             style={{ color: BRAND.primary }}
           >
-            hacerlo más tarde
+            {td.hacerloMasTarde}
           </Link>
-          . Necesitarás la verificación para reservar o publicar servicios.
+          {td.tardeSufijo}
         </p>
       </form>
     </StatusShell>
@@ -332,7 +332,7 @@ export default function SubirDniPage() {
           className="flex min-h-screen items-center justify-center font-sans"
           style={{ backgroundColor: BRAND.warm }}
         >
-          <p className="text-sm text-[#888]">Cargando…</p>
+          <p className="text-sm text-[#888]">…</p>
         </div>
       }
     >

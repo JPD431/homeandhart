@@ -29,10 +29,12 @@ import {
 } from '@/app/lib/booking-display';
 import { supabase } from '@/app/lib/supabase';
 import { friendlyLoadError, withLoadTimeout } from '@/app/lib/with-load-timeout';
+import { useLang } from '@/app/lib/LangContext';
+import { useTranslation } from '@/app/lib/i18n';
 
 const BRAND = {
   blue: '#1d4f91',
-  green: '#0e7a5c', 
+  green: '#0e7a5c',
   amber: '#c47d1a',
   warm: '#f7f5f2',
   border: '#e8e4de',
@@ -54,6 +56,8 @@ function DashboardContent() {
   const tabParam = searchParams.get('tab');
   const bookingHighlight = searchParams.get('booking');
   const { modo, setModo, puedeAlternarModo, isAdmin, onboardingIncompleto } = useModo();
+  const { lang } = useLang();
+  const t = useTranslation(lang);
   const [user, setUser] = useState(null);
   const [perfil, setPerfil] = useState(null);
   const [reservas, setReservas] = useState([]);
@@ -208,7 +212,7 @@ function DashboardContent() {
   const copiarLink = (codigo) => {
     const link = `${window.location.origin}/registro?ref=${codigo}`;
     if (navigator.clipboard && window.isSecureContext) {
-      navigator.clipboard.writeText(link).then(() => alert('¡Link copiado!'));
+      navigator.clipboard.writeText(link).then(() => alert(t.dashboard.linkCopiado));
     } else {
       const el = document.createElement('textarea');
       el.value = link;
@@ -216,11 +220,11 @@ function DashboardContent() {
       el.select();
       document.execCommand('copy');
       document.body.removeChild(el);
-      alert('¡Link copiado!');
+      alert(t.dashboard.linkCopiado);
     }
   };
 
-  if (loading) return <div style={{background: BRAND.warm, minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center'}}><p style={{color: '#aaa'}}>Cargando...</p></div>;
+  if (loading) return <div style={{background: BRAND.warm, minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center'}}><p style={{color: '#aaa'}}>{t.dashboard.cargando}</p></div>;
 
   if (loadError) {
     return (
@@ -237,6 +241,12 @@ function DashboardContent() {
   const nombreMostrar = perfil?.nombre || user?.email?.split('@')[0] || 'usuario';
   const enModoProveedor = modo === 'proveedor' && puedeAlternarModo;
   const clientTabs = ['cliente', 'familia', 'pasaporte', 'referidos'];
+  const tabLabels = {
+    cliente: t.dashboard.tabCliente,
+    familia: t.dashboard.tabFamilia,
+    pasaporte: t.dashboard.tabPasaporte,
+    referidos: t.dashboard.tabReferidos,
+  };
 
   return (
     <div style={{background: BRAND.warm, minHeight: '100vh'}}>
@@ -263,20 +273,20 @@ function DashboardContent() {
           <p style={{ margin: 0, fontSize: 13, color: '#085041', lineHeight: 1.5 }}>
             {perfil?.cobros_activos === true ? (
               <>
-                <strong style={{ color: BRAND.green }}>¡Tu anuncio ya está activo!</strong>{' '}
-                Ya puedes recibir reservas.
+                <strong style={{ color: BRAND.green }}>{t.dashboard.stripeBannerAnuncioActivo}</strong>{' '}
+                {t.dashboard.stripeBannerYaPuedesRecibir}
               </>
             ) : (
               <>
-                <strong style={{ color: BRAND.green }}>¡Listo!</strong> Estamos activando tus
-                cobros. En unos segundos tu anuncio pasará a activo si ya estaba aprobado.
+                <strong style={{ color: BRAND.green }}>{t.dashboard.stripeBannerListo}</strong>{' '}
+                {t.dashboard.stripeBannerActivandoCobros}
               </>
             )}
           </p>
           <button
             type="button"
             onClick={dismissStripeBanner}
-            aria-label="Cerrar"
+            aria-label={t.dashboard.cerrar}
             style={{
               flexShrink: 0,
               background: 'none',
@@ -306,13 +316,14 @@ function DashboardContent() {
           }}
         >
           <p style={{ margin: 0, fontSize: 13, color: '#5c4a32', lineHeight: 1.5 }}>
-            Parece que no terminaste de configurar tus cobros. Puedes continuar cuando quieras
-            desde el botón <strong>Configurar cobros</strong> en tu panel de proveedor.
+            {t.dashboard.stripeBannerRefreshPre}{' '}
+            <strong>{t.dashboard.stripeBannerRefreshBtn}</strong>{' '}
+            {t.dashboard.stripeBannerRefreshPost}
           </p>
           <button
             type="button"
             onClick={dismissStripeBanner}
-            aria-label="Cerrar"
+            aria-label={t.dashboard.cerrar}
             style={{
               flexShrink: 0,
               background: 'none',
@@ -356,7 +367,7 @@ function DashboardContent() {
               whiteSpace: 'nowrap',
             }}
           >
-            Completar datos →
+            {t.dashboard.completarDatos}
           </Link>
         </div>
       )}
@@ -367,18 +378,18 @@ function DashboardContent() {
         className="flex overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
         style={{ background: '#fff', borderBottom: `0.5px solid ${BRAND.border}`, padding: '0 16px' }}
       >
-        {clientTabs.map(t => (
+        {clientTabs.map(tab => (
           <button
-            key={t}
-            onClick={() => setClientSubTab(t)}
+            key={tab}
+            onClick={() => setClientSubTab(tab)}
             className="shrink-0"
             style={{
               minHeight: 44,
               padding: '12px 20px',
               fontSize: 12,
-              color: clientSubTab === t ? BRAND.blue : '#888',
-              borderBottom: clientSubTab === t ? `2px solid ${BRAND.blue}` : '2px solid transparent',
-              fontWeight: clientSubTab === t ? 500 : 400,
+              color: clientSubTab === tab ? BRAND.blue : '#888',
+              borderBottom: clientSubTab === tab ? `2px solid ${BRAND.blue}` : '2px solid transparent',
+              fontWeight: clientSubTab === tab ? 500 : 400,
               background: 'none',
               border: 'none',
               cursor: 'pointer',
@@ -386,7 +397,7 @@ function DashboardContent() {
               whiteSpace: 'nowrap',
             }}
           >
-            {t.charAt(0).toUpperCase() + t.slice(1)}
+            {tabLabels[tab]}
           </button>
         ))}
       </div>
@@ -398,20 +409,20 @@ function DashboardContent() {
         style={{ background: '#fff', borderBottom: `0.5px solid ${BRAND.border}`, padding: '20px 16px' }}
       >
         <div>
-          <div style={{ fontSize: 'clamp(22px, 4vw, 26px)', fontWeight: 300, color: BRAND.dark, fontFamily: 'Georgia, serif' }}>Hola, <em style={{color: BRAND.blue}}>{nombreMostrar}.</em></div>
+          <div style={{ fontSize: 'clamp(22px, 4vw, 26px)', fontWeight: 300, color: BRAND.dark, fontFamily: 'Georgia, serif' }}>{t.dashboard.hola} <em style={{color: BRAND.blue}}>{nombreMostrar}.</em></div>
           <div style={{fontSize: 12, color: '#aaa', marginTop: 4}}>
-            {enModoProveedor ? 'Panel de proveedor · Home&Heart' : 'Bienvenida a tu panel · Home&Heart'}
+            {enModoProveedor ? t.dashboard.subtituloProveedor : t.dashboard.subtituloCliente}
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button onClick={() => router.push('/editar-perfil')} style={{ minHeight: 44, background: '#fff', color: BRAND.blue, border: `1px solid ${BRAND.blue}`, padding: '10px 18px', borderRadius: 4, fontSize: 12, cursor: 'pointer' }}>Editar perfil</button>
+          <button onClick={() => router.push('/editar-perfil')} style={{ minHeight: 44, background: '#fff', color: BRAND.blue, border: `1px solid ${BRAND.blue}`, padding: '10px 18px', borderRadius: 4, fontSize: 12, cursor: 'pointer' }}>{t.dashboard.editarPerfil}</button>
           {enModoProveedor ? (
             <>
-              <button onClick={() => router.push('/estadisticas')} style={{ minHeight: 44, background: BRAND.blue, color: '#fff', border: 'none', padding: '10px 18px', borderRadius: 4, fontSize: 12, cursor: 'pointer', fontWeight: 500 }}>Ver estadísticas</button>
-              <button onClick={() => router.push('/editar-perfil?tab=servicios')} style={{ minHeight: 44, background: '#fff', color: BRAND.blue, border: `1px solid ${BRAND.blue}`, padding: '10px 18px', borderRadius: 4, fontSize: 12, cursor: 'pointer' }}>Mis servicios</button>
+              <button onClick={() => router.push('/estadisticas')} style={{ minHeight: 44, background: BRAND.blue, color: '#fff', border: 'none', padding: '10px 18px', borderRadius: 4, fontSize: 12, cursor: 'pointer', fontWeight: 500 }}>{t.dashboard.verEstadisticas}</button>
+              <button onClick={() => router.push('/editar-perfil?tab=servicios')} style={{ minHeight: 44, background: '#fff', color: BRAND.blue, border: `1px solid ${BRAND.blue}`, padding: '10px 18px', borderRadius: 4, fontSize: 12, cursor: 'pointer' }}>{t.dashboard.misServicios}</button>
             </>
           ) : (
-            <button onClick={() => router.push('/buscar')} style={{ minHeight: 44, background: BRAND.blue, color: '#fff', border: 'none', padding: '10px 18px', borderRadius: 4, fontSize: 12, cursor: 'pointer', fontWeight: 500 }}>Buscar proveedores</button>
+            <button onClick={() => router.push('/buscar')} style={{ minHeight: 44, background: BRAND.blue, color: '#fff', border: 'none', padding: '10px 18px', borderRadius: 4, fontSize: 12, cursor: 'pointer', fontWeight: 500 }}>{t.dashboard.buscarProveedores}</button>
           )}
         </div>
       </div>
@@ -425,13 +436,14 @@ function DashboardContent() {
             router={router}
             BRAND={BRAND}
             highlightBookingId={bookingHighlight}
+            t={t}
           />
         ) : (
           <>
-            {clientSubTab === 'cliente' && <TabCliente perfil={perfil} reservas={reservas} favoritos={favoritos} viajes={viajes} router={router} BRAND={BRAND} copiarLink={copiarLink} />}
-            {clientSubTab === 'familia' && <TabFamilia perfil={perfil} router={router} BRAND={BRAND} />}
+            {clientSubTab === 'cliente' && <TabCliente perfil={perfil} reservas={reservas} favoritos={favoritos} viajes={viajes} router={router} BRAND={BRAND} copiarLink={copiarLink} t={t} />}
+            {clientSubTab === 'familia' && <TabFamilia perfil={perfil} router={router} BRAND={BRAND} t={t} />}
             {clientSubTab === 'pasaporte' && router.push('/pasaporte')}
-            {clientSubTab === 'referidos' && <TabReferidos perfil={perfil} BRAND={BRAND} copiarLink={copiarLink} />}
+            {clientSubTab === 'referidos' && <TabReferidos perfil={perfil} BRAND={BRAND} copiarLink={copiarLink} t={t} />}
           </>
         )}
       </div>
@@ -461,7 +473,7 @@ export default function DashboardPage() {
   );
 }
 
-function TabCliente({ perfil, reservas, favoritos, viajes, router, BRAND, copiarLink }) {
+function TabCliente({ perfil, reservas, favoritos, viajes, router, BRAND, copiarLink, t }) {
   const creditoDisponible = Number(perfil?.credito_disponible) || 0;
 
   return (
@@ -470,14 +482,14 @@ function TabCliente({ perfil, reservas, favoritos, viajes, router, BRAND, copiar
       {/* RESERVAS */}
       <div className="sm:col-span-2" style={{background: '#fff', borderRadius: 10, border: `0.5px solid ${BRAND.border}`, overflow: 'hidden'}}>
         <div style={{padding: '13px 16px', borderBottom: `0.5px solid #f0ede8`, display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
-          <span style={{fontSize: 11, fontWeight: 500, color: BRAND.dark}}>📅 Mis reservas</span>
-          <span style={{fontSize: 9, padding: '2px 7px', borderRadius: 8, background: '#e8f0fb', color: '#163a6b'}}>{reservas.filter(r => ['confirmada','pendiente','en_curso'].includes(r.estado)).length} activas</span>
+          <span style={{fontSize: 11, fontWeight: 500, color: BRAND.dark}}>📅 {t.dashboard.misReservas}</span>
+          <span style={{fontSize: 9, padding: '2px 7px', borderRadius: 8, background: '#e8f0fb', color: '#163a6b'}}>{reservas.filter(r => ['confirmada','pendiente','en_curso'].includes(r.estado)).length} {t.dashboard.activas}</span>
         </div>
         <div style={{padding: '13px 16px'}}>
           {reservas.length === 0 && (
             <div style={{ textAlign: 'center', padding: '20px 0' }}>
               <p style={{ fontSize: 13, color: '#888', margin: '0 0 12px' }}>
-                Aún no tienes reservas como cliente.
+                {t.dashboard.sinReservasCliente}
               </p>
               <button
                 type="button"
@@ -494,7 +506,7 @@ function TabCliente({ perfil, reservas, favoritos, viajes, router, BRAND, copiar
                   fontWeight: 500,
                 }}
               >
-                Buscar un servicio
+                {t.dashboard.buscarServicio}
               </button>
             </div>
           )}
@@ -513,7 +525,7 @@ function TabCliente({ perfil, reservas, favoritos, viajes, router, BRAND, copiar
                     href={`/reserva/${r.id}`}
                     style={{ fontSize: 10, fontWeight: 600, color: BRAND.blue, textDecoration: 'none' }}
                   >
-                    Ver detalle
+                    {t.dashboard.verDetalle}
                   </a>
                   {showMensaje ? (
                     <ProveedorPreguntarButton
@@ -529,7 +541,7 @@ function TabCliente({ perfil, reservas, favoritos, viajes, router, BRAND, copiar
                         cursor: 'pointer',
                       }}
                     >
-                      Mensaje
+                      {t.dashboard.mensaje}
                     </ProveedorPreguntarButton>
                   ) : null}
                 </div>
@@ -538,48 +550,48 @@ function TabCliente({ perfil, reservas, favoritos, viajes, router, BRAND, copiar
             </div>
             );
           })}
-          <button onClick={() => router.push('/historial')} style={{ minHeight: 44, fontSize: 11, color: BRAND.blue, background: 'none', border: 'none', cursor: 'pointer', display: 'block', marginLeft: 'auto', marginTop: 8, padding: '8px 4px' }}>Ver historial completo →</button>
+          <button onClick={() => router.push('/historial')} style={{ minHeight: 44, fontSize: 11, color: BRAND.blue, background: 'none', border: 'none', cursor: 'pointer', display: 'block', marginLeft: 'auto', marginTop: 8, padding: '8px 4px' }}>{t.dashboard.verHistorialCompleto}</button>
         </div>
       </div>
 
       {/* PERFIL */}
       <div style={{background: '#fff', borderRadius: 10, border: `0.5px solid ${BRAND.border}`, overflow: 'hidden'}}>
-        <div style={{padding: '13px 16px', borderBottom: '0.5px solid #f0ede8'}}><span style={{fontSize: 11, fontWeight: 500, color: BRAND.dark}}>👤 Mi perfil</span></div>
+        <div style={{padding: '13px 16px', borderBottom: '0.5px solid #f0ede8'}}><span style={{fontSize: 11, fontWeight: 500, color: BRAND.dark}}>👤 {t.dashboard.miPerfil}</span></div>
         <div style={{padding: '13px 16px'}}>
           <div style={{display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10}}>
             <div style={{width: 40, height: 40, borderRadius: '50%', background: BRAND.blue, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, color: '#fff', fontWeight: 300}}>{(perfil?.nombre || 'U')[0]}</div>
-            <div><div style={{fontSize: 13, fontWeight: 500, color: BRAND.dark}}>{perfil?.nombre} {perfil?.apellido}</div><div style={{fontSize: 10, color: '#aaa'}}>{perfil?.ciudad} · Cliente</div></div>
+            <div><div style={{fontSize: 13, fontWeight: 500, color: BRAND.dark}}>{perfil?.nombre} {perfil?.apellido}</div><div style={{fontSize: 10, color: '#aaa'}}>{perfil?.ciudad} · {t.dashboard.rolCliente}</div></div>
           </div>
           <div style={{display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 10}}>
             {perfil?.codigo_referido && <span style={{fontSize: 8, padding: '2px 7px', borderRadius: 8, background: '#e8f0fb', color: '#163a6b'}}>{perfil.codigo_referido}</span>}
             {getReservasSinComisionCliente(perfil) > 0 && (
               <span style={{fontSize: 8, padding: '2px 7px', borderRadius: 8, background: '#e6f4f0', color: '#085041'}}>
-                {getReservasSinComisionCliente(perfil)} sin comisión 🎁
+                {getReservasSinComisionCliente(perfil)} {t.dashboard.sinComision}
               </span>
             )}
           </div>
           {creditoDisponible > 0 && (
             <p style={{ fontSize: 11, color: BRAND.green, fontWeight: 500, marginBottom: 10 }}>
-              Crédito disponible: {creditoDisponible.toFixed(2)}€
+              {t.dashboard.creditoDisponible} {creditoDisponible.toFixed(2)}€
             </p>
           )}
-          <button onClick={() => router.push('/editar-perfil')} style={{ width: '100%', minHeight: 44, background: '#f7f5f2', color: BRAND.blue, border: `0.5px solid ${BRAND.blue}`, padding: '10px 8px', borderRadius: 5, fontSize: 10, cursor: 'pointer', fontWeight: 500 }}>Editar perfil</button>
+          <button onClick={() => router.push('/editar-perfil')} style={{ width: '100%', minHeight: 44, background: '#f7f5f2', color: BRAND.blue, border: `0.5px solid ${BRAND.blue}`, padding: '10px 8px', borderRadius: 5, fontSize: 10, cursor: 'pointer', fontWeight: 500 }}>{t.dashboard.editarPerfil}</button>
         </div>
       </div>
 
       {/* FAVORITOS */}
       <div style={{background: '#fff', borderRadius: 10, border: `0.5px solid ${BRAND.border}`, overflow: 'hidden'}}>
         <div style={{padding: '13px 16px', borderBottom: '0.5px solid #f0ede8', display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
-          <span style={{fontSize: 11, fontWeight: 500, color: BRAND.dark}}>❤️ Favoritos</span>
+          <span style={{fontSize: 11, fontWeight: 500, color: BRAND.dark}}>❤️ {t.dashboard.favoritosTitulo}</span>
           <span style={{fontSize: 9, padding: '2px 7px', borderRadius: 8, background: '#fdf3e3', color: '#92400e'}}>{favoritos.length}</span>
         </div>
         <div style={{padding: '13px 16px'}}>
           {favoritos.length === 0 && (
             <EmptyState
               compact
-              title="Sin favoritos todavía"
-              description="Guarda proveedores que te gusten para encontrarlos rápido."
-              actionLabel="Explorar servicios"
+              title={t.dashboard.sinFavoritosTitulo}
+              description={t.dashboard.sinFavoritosDesc}
+              actionLabel={t.dashboard.explorarServicios}
               actionHref="/buscar"
             />
           )}
@@ -595,16 +607,16 @@ function TabCliente({ perfil, reservas, favoritos, viajes, router, BRAND, copiar
 
       {/* PASAPORTE */}
       <div style={{background: '#fff', borderRadius: 10, border: `0.5px solid ${BRAND.border}`, overflow: 'hidden'}}>
-        <div style={{padding: '13px 16px', borderBottom: '0.5px solid #f0ede8'}}><span style={{fontSize: 11, fontWeight: 500, color: BRAND.dark}}>🛂 Mi pasaporte</span></div>
+        <div style={{padding: '13px 16px', borderBottom: '0.5px solid #f0ede8'}}><span style={{fontSize: 11, fontWeight: 500, color: BRAND.dark}}>🛂 {t.dashboard.miPasaporte}</span></div>
         <div style={{padding: 0}}>
           <div onClick={() => router.push('/pasaporte')} style={{background: 'linear-gradient(135deg, #1d4f91 0%, #163a6b 100%)', padding: 16, cursor: 'pointer'}}>
             <div style={{fontSize: 10, color: 'rgba(255,255,255,.5)', letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 6}}>Home&Heart · Pasaporte</div>
             <div style={{fontSize: 16, fontWeight: 300, color: '#fff', fontFamily: 'Georgia, serif', marginBottom: 10}}>{perfil?.nombre} {perfil?.apellido}</div>
             <div style={{display: 'flex', gap: 16}}>
-              <div><div style={{fontSize: 18, fontWeight: 200, color: '#fff'}}>—</div><div style={{fontSize: 9, color: 'rgba(255,255,255,.5)'}}>Ciudades</div></div>
-              <div><div style={{fontSize: 18, fontWeight: 200, color: '#fff'}}>—</div><div style={{fontSize: 9, color: 'rgba(255,255,255,.5)'}}>Reservas</div></div>
+              <div><div style={{fontSize: 18, fontWeight: 200, color: '#fff'}}>—</div><div style={{fontSize: 9, color: 'rgba(255,255,255,.5)'}}>{t.dashboard.pasaporteCiudades}</div></div>
+              <div><div style={{fontSize: 18, fontWeight: 200, color: '#fff'}}>—</div><div style={{fontSize: 9, color: 'rgba(255,255,255,.5)'}}>{t.dashboard.pasaporteReservas}</div></div>
             </div>
-            <div style={{fontSize: 10, color: 'rgba(255,255,255,.4)', marginTop: 10}}>Ver pasaporte completo →</div>
+            <div style={{fontSize: 10, color: 'rgba(255,255,255,.4)', marginTop: 10}}>{t.dashboard.verPasaporteCompleto}</div>
           </div>
         </div>
       </div>
@@ -612,44 +624,44 @@ function TabCliente({ perfil, reservas, favoritos, viajes, router, BRAND, copiar
       {/* VIAJES */}
       <div style={{background: '#fff', borderRadius: 10, border: `0.5px solid ${BRAND.border}`, overflow: 'hidden'}}>
         <div style={{padding: '13px 16px', borderBottom: '0.5px solid #f0ede8', display: 'flex', justifyContent: 'space-between'}}>
-          <span style={{fontSize: 11, fontWeight: 500, color: BRAND.dark}}>✈️ Mis viajes</span>
+          <span style={{fontSize: 11, fontWeight: 500, color: BRAND.dark}}>✈️ {t.dashboard.misViajes}</span>
         </div>
         <div style={{padding: '13px 16px'}}>
           {viajes.length === 0 ? (
-            <p style={{fontSize: 11, color: '#aaa'}}>Organiza todos tus servicios en un viaje</p>
+            <p style={{fontSize: 11, color: '#aaa'}}>{t.dashboard.organizaTusViajes}</p>
           ) : (
             viajes.map(viaje => (
               <Link key={viaje.id} href={`/viaje/${viaje.id}`} style={{display:'block', padding:'8px 0', borderBottom:'0.5px solid #f5f3f0', textDecoration:'none'}}>
                 <div style={{fontSize:12, fontWeight:500, color:'#2a3a4a'}}>📍 {viaje.ciudad || viaje.nombre}</div>
-                <div style={{fontSize:10, color:'#aaa'}}>{viaje.fecha_inicio} — {viaje.fecha_fin} · {viaje.viaje_reservas?.length || 0} servicio(s)</div>
+                <div style={{fontSize:10, color:'#aaa'}}>{viaje.fecha_inicio} — {viaje.fecha_fin} · {viaje.viaje_reservas?.length || 0} {t.dashboard.serviciosSufijo}</div>
               </Link>
             ))
           )}
-          <Link href="/viaje/nuevo" style={{fontSize:11, color:'#1d4f91', fontWeight:500, display:'block', marginTop:8}}>+ Nuevo viaje</Link>
+          <Link href="/viaje/nuevo" style={{fontSize:11, color:'#1d4f91', fontWeight:500, display:'block', marginTop:8}}>{t.dashboard.nuevoViaje}</Link>
         </div>
       </div>
 
       {/* REFERIDOS */}
       <div style={{background: '#fff', borderRadius: 10, border: `0.5px solid ${BRAND.border}`, overflow: 'hidden'}}>
-        <div style={{padding: '13px 16px', borderBottom: '0.5px solid #f0ede8'}}><span style={{fontSize: 11, fontWeight: 500, color: BRAND.dark}}>🎁 Referidos</span></div>
+        <div style={{padding: '13px 16px', borderBottom: '0.5px solid #f0ede8'}}><span style={{fontSize: 11, fontWeight: 500, color: BRAND.dark}}>🎁 {t.dashboard.referidosTitulo}</span></div>
         <div style={{padding: '13px 16px'}}>
           <div style={{background: '#f7f5f2', border: `0.5px solid ${BRAND.border}`, borderRadius: 6, padding: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8}}>
-            <div><div style={{fontSize: 9, color: '#bbb', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 2}}>Tu código</div><div style={{fontSize: 13, fontWeight: 500, color: BRAND.blue}}>{perfil?.codigo_referido || '—'}</div></div>
-            <button onClick={() => copiarLink(perfil?.codigo_referido)} style={{ minHeight: 44, fontSize: 10, color: BRAND.blue, border: `0.5px solid ${BRAND.blue}`, padding: '8px 12px', borderRadius: 4, background: '#fff', cursor: 'pointer', whiteSpace: 'nowrap' }}>Copiar link</button>
+            <div><div style={{fontSize: 9, color: '#bbb', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 2}}>{t.dashboard.tuCodigo}</div><div style={{fontSize: 13, fontWeight: 500, color: BRAND.blue}}>{perfil?.codigo_referido || '—'}</div></div>
+            <button onClick={() => copiarLink(perfil?.codigo_referido)} style={{ minHeight: 44, fontSize: 10, color: BRAND.blue, border: `0.5px solid ${BRAND.blue}`, padding: '8px 12px', borderRadius: 4, background: '#fff', cursor: 'pointer', whiteSpace: 'nowrap' }}>{t.dashboard.copiarLink}</button>
           </div>
-          <p style={{fontSize: 10, color: '#888', lineHeight: 1.5}}>Por cada amigo que reserve recibirás 1 reserva extra sin comisión.</p>
-          <div style={{marginTop: 8, fontSize: 11, color: '#666', display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '0.5px solid #f5f3f0'}}><span>Reservas sin comisión</span><span style={{fontWeight: 500, color: '#0e7a5c'}}>{getReservasSinComisionCliente(perfil)} 🎁</span></div>
+          <p style={{fontSize: 10, color: '#888', lineHeight: 1.5}}>{t.dashboard.referidosInfoCorta}</p>
+          <div style={{marginTop: 8, fontSize: 11, color: '#666', display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '0.5px solid #f5f3f0'}}><span>{t.dashboard.reservasSinComision}</span><span style={{fontWeight: 500, color: '#0e7a5c'}}>{getReservasSinComisionCliente(perfil)} 🎁</span></div>
         </div>
       </div>
     </div>
     <div style={{ marginTop: 14, textAlign: 'center' }}>
-      <AyudaLink label="¿Necesitas ayuda? Contactar con soporte" />
+      <AyudaLink label={t.dashboard.necesitasAyudaSoporte} />
     </div>
     </div>
   );
 }
 
-function TabProveedor({ perfil, userEmail, router, BRAND, highlightBookingId }) {
+function TabProveedor({ perfil, userEmail, router, BRAND, highlightBookingId, t }) {
   const deudaPendiente = Number(perfil?.deuda_pendiente) || 0;
   const saldoPendienteTransferir =
     Math.round((Number(perfil?.saldo_pendiente_transferir) || 0) * 100) / 100;
@@ -668,16 +680,16 @@ function TabProveedor({ perfil, userEmail, router, BRAND, highlightBookingId }) 
       const res = await fetch('/api/stripe/connect/create-account', { method: 'POST' });
       const data = await res.json();
       if (!res.ok || data.error) {
-        setConnectError(data.error || 'No se pudo iniciar la configuración de cobros.');
+        setConnectError(data.error || t.dashboard.cobrosErrorInicio);
         return;
       }
       if (data.url) {
         window.location.href = data.url;
         return;
       }
-      setConnectError('No se recibió la URL de onboarding de Stripe.');
+      setConnectError(t.dashboard.cobrosErrorUrl);
     } catch {
-      setConnectError('Error de conexión. Inténtalo de nuevo.');
+      setConnectError(t.dashboard.cobrosErrorConexion);
     } finally {
       setConnectLoading(false);
     }
@@ -709,8 +721,8 @@ function TabProveedor({ perfil, userEmail, router, BRAND, highlightBookingId }) 
           }
           label={
             perfil?.verificado === true && !cobrosActivos
-              ? '¿Atascado? Contactar con soporte'
-              : '¿Necesitas ayuda?'
+              ? t.dashboard.atascadoSoporte
+              : t.dashboard.necesitasAyuda
           }
         />
       </div>
@@ -725,7 +737,7 @@ function TabProveedor({ perfil, userEmail, router, BRAND, highlightBookingId }) 
           }}
         >
           <p style={{ fontSize: 13, fontWeight: 600, color: '#2a3a4a', margin: 0 }}>
-            Tienes una compensación pendiente
+            {t.dashboard.compensacionTitulo}
           </p>
           <p
             style={{
@@ -736,8 +748,8 @@ function TabProveedor({ perfil, userEmail, router, BRAND, highlightBookingId }) 
               lineHeight: 1.5,
             }}
           >
-            Por una o más cancelaciones, tienes una compensación pendiente de{' '}
-            {deudaPendiente.toFixed(2)}€. Se descontará automáticamente de tus próximos cobros.
+            {t.dashboard.compensacionDesc1}{' '}
+            {deudaPendiente.toFixed(2)}€. {t.dashboard.compensacionDesc2}
           </p>
         </div>
       )}
@@ -752,7 +764,7 @@ function TabProveedor({ perfil, userEmail, router, BRAND, highlightBookingId }) 
           }}
         >
           <p style={{ fontSize: 13, fontWeight: 600, color: '#2a3a4a', margin: 0 }}>
-            Cobro en camino
+            {t.dashboard.cobroEnCaminoTitulo}
           </p>
           <p
             style={{
@@ -763,16 +775,15 @@ function TabProveedor({ perfil, userEmail, router, BRAND, highlightBookingId }) 
               lineHeight: 1.5,
             }}
           >
-            Tienes {saldoPendienteTransferir.toFixed(2)}€ pendientes de envío a tu cuenta. Se
-            enviarán automáticamente cuando el total alcance el mínimo de 0,50€.
+            {t.dashboard.cobroEnCaminoDesc1} {saldoPendienteTransferir.toFixed(2)}€ {t.dashboard.cobroEnCaminoDesc2}
           </p>
         </div>
       )}
       <div style={{ textAlign: 'center', padding: '24px 0 16px' }}>
         <div style={{ background: '#e6f4f0', borderRadius: 8, padding: '12px 16px', marginBottom: 16 }}>
-          <div style={{ fontSize: 11, color: '#888', marginBottom: 4 }}>Reservas sin comisión</div>
+          <div style={{ fontSize: 11, color: '#888', marginBottom: 4 }}>{t.dashboard.sinComisionTitulo}</div>
           <div style={{ fontSize: 20, fontWeight: 600, color: '#0e7a5c' }}>{getReservasSinComisionProveedor(perfil)} 🎁</div>
-          <div style={{ fontSize: 10, color: '#666', marginTop: 4 }}>Recibirás el 100% del pago en estas reservas</div>
+          <div style={{ fontSize: 10, color: '#666', marginTop: 4 }}>{t.dashboard.sinComisionSubtitulo}</div>
         </div>
 
         {!cobrosActivos ? (
@@ -797,10 +808,10 @@ function TabProveedor({ perfil, userEmail, router, BRAND, highlightBookingId }) 
               }}
             >
               {perfil?.verificado === true
-                ? '¡Tu anuncio está aprobado! ✓'
+                ? t.dashboard.anuncioAprobado
                 : cobrosIncompletos
-                  ? 'Cobros pendientes de completar'
-                  : 'Cobros pendientes'}
+                  ? t.dashboard.cobrosPendientesCompletar
+                  : t.dashboard.cobrosPendientes}
             </p>
             <p
               style={{
@@ -813,11 +824,11 @@ function TabProveedor({ perfil, userEmail, router, BRAND, highlightBookingId }) 
             >
               {perfil?.verificado === true
                 ? cobrosIncompletos
-                  ? 'Solo te falta completar tus cobros para empezar a recibir reservas. Es el último paso.'
-                  : 'Solo te falta configurar tus cobros para empezar a recibir reservas. Es el último paso: estás a un clic de estar activo.'
+                  ? t.dashboard.cobrosAprobadoCompletar
+                  : t.dashboard.cobrosAprobadoConfigurar
                 : cobrosIncompletos
-                  ? 'Has empezado a conectar Stripe, pero los cobros aún no están activos. Complétalo para poder recibir reservas y pagos.'
-                  : 'Sin cobros activos no puedes recibir reservas ni pagos. Configura Stripe para activarlos.'}
+                  ? t.dashboard.cobrosIncompletosDesc
+                  : t.dashboard.cobrosSinActivar}
             </p>
             <button
               type="button"
@@ -837,10 +848,10 @@ function TabProveedor({ perfil, userEmail, router, BRAND, highlightBookingId }) 
               }}
             >
               {connectLoading
-                ? 'Conectando…'
+                ? t.dashboard.conectando
                 : cobrosIncompletos
-                  ? 'Completar cobros'
-                  : 'Configurar cobros'}
+                  ? t.dashboard.completarCobros
+                  : t.dashboard.configurarCobros}
             </button>
           </div>
         ) : (
@@ -859,7 +870,7 @@ function TabProveedor({ perfil, userEmail, router, BRAND, highlightBookingId }) 
             }}
           >
             <p style={{ fontSize: 12, color: '#085041', margin: 0, fontWeight: 500 }}>
-              Cobros activos ✓
+              {t.dashboard.cobrosActivos}
             </p>
             <button
               type="button"
@@ -878,7 +889,7 @@ function TabProveedor({ perfil, userEmail, router, BRAND, highlightBookingId }) 
                 opacity: connectLoading ? 0.7 : 1,
               }}
             >
-              {connectLoading ? 'Conectando…' : 'Gestionar cobros'}
+              {connectLoading ? t.dashboard.conectando : t.dashboard.gestionarCobros}
             </button>
           </div>
         )}
@@ -900,15 +911,16 @@ function TabProveedor({ perfil, userEmail, router, BRAND, highlightBookingId }) 
           </p>
         )}
 
-        <p style={{ fontSize: 14, color: '#aaa', marginBottom: 16 }}>Panel de proveedor</p>
-        <button onClick={() => router.push('/estadisticas')} style={{ minHeight: 44, background: BRAND.blue, color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 4, fontSize: 12, cursor: 'pointer', marginRight: 8 }}>Ver estadísticas</button>
-        <button onClick={() => router.push('/editar-perfil?tab=servicios')} style={{ minHeight: 44, background: '#fff', color: BRAND.blue, border: `1px solid ${BRAND.blue}`, padding: '10px 20px', borderRadius: 4, fontSize: 12, cursor: 'pointer' }}>Editar servicios</button>
+        <p style={{ fontSize: 14, color: '#aaa', marginBottom: 16 }}>{t.dashboard.labelPanelProveedor}</p>
+        <button onClick={() => router.push('/estadisticas')} style={{ minHeight: 44, background: BRAND.blue, color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 4, fontSize: 12, cursor: 'pointer', marginRight: 8 }}>{t.dashboard.verEstadisticasBtn}</button>
+        <button onClick={() => router.push('/editar-perfil?tab=servicios')} style={{ minHeight: 44, background: '#fff', color: BRAND.blue, border: `1px solid ${BRAND.blue}`, padding: '10px 20px', borderRadius: 4, fontSize: 12, cursor: 'pointer' }}>{t.dashboard.editarServicios}</button>
       </div>
       <ReservasRecibidas
         perfil={perfil}
         BRAND={BRAND}
         highlightBookingId={highlightBookingId}
         router={router}
+        t={t}
       />
     </div>
   );
@@ -930,18 +942,18 @@ function formatReservaFechas(booking) {
   return booking.fecha_inicio || '—';
 }
 
-function formatImporteReservaRecibida(booking, sinComisionProveedor) {
+function formatImporteReservaRecibida(booking, sinComisionProveedor, t) {
   if (booking.pago_liberado_at != null) {
     if (booking.importe_transferido != null) {
       return {
-        label: 'Cobrado:',
+        label: t.dashboard.cobradoLabel,
         amount: `${Number(booking.importe_transferido).toFixed(2)}€`,
       };
     }
-    return { label: 'Cobrado:', amount: '—' };
+    return { label: t.dashboard.cobradoLabel, amount: '—' };
   }
   return {
-    label: 'Cobras (estimado):',
+    label: t.dashboard.cobrasLabel,
     amount: `${getIngresoProveedorFromBooking(booking, { sinComisionProveedor }).toFixed(2)}€`,
   };
 }
@@ -959,6 +971,7 @@ function ReservaRecibidaCard({
   canceling,
   onIncidenciaReported,
   highlighted = false,
+  t,
 }) {
   const statusMeta = getBookingStatusMeta(booking.estado, { role: 'proveedor' });
   const isPendiente = booking.estado === 'pendiente';
@@ -967,7 +980,7 @@ function ReservaRecibidaCard({
   const canReport = statusMeta.canReportIncidencia || puedeReportarIncidencia(booking.estado);
   const canMensaje =
     statusMeta.actions.includes('mensaje') && Boolean(booking.cliente_id);
-  const importeReserva = formatImporteReservaRecibida(booking, sinComisionProveedor);
+  const importeReserva = formatImporteReservaRecibida(booking, sinComisionProveedor, t);
   const showClienteContact = canShowProviderContact(booking.estado) && clienteContacto;
 
   return (
@@ -1039,11 +1052,11 @@ function ReservaRecibidaCard({
               }}
             >
               <div style={{ fontWeight: 600, fontSize: 11, marginBottom: 4 }}>
-                Contacto del cliente
+                {t.dashboard.contactoCliente}
               </div>
               {clienteContacto.telefono && (
                 <div>
-                  Teléfono:{' '}
+                  {t.dashboard.telefonoLabel}{' '}
                   <a
                     href={`tel:${clienteContacto.telefono}`}
                     style={{ color: '#1d4f91', fontWeight: 600 }}
@@ -1057,15 +1070,15 @@ function ReservaRecibidaCard({
                 clienteContacto.direccion_cliente_a_definir === true) && (
                 <div style={{ marginTop: 4 }}>
                   {clienteContacto.direccion_cliente
-                    ? `Dirección: ${clienteContacto.direccion_cliente}`
+                    ? `${t.dashboard.direccionLabel} ${clienteContacto.direccion_cliente}`
                     : clienteContacto.direccion_cliente_a_definir
-                      ? 'Dirección: A definir (coordinar por teléfono)'
+                      ? t.dashboard.direccionADefinir
                       : null}
                 </div>
               )}
               {booking.lugar_servicio === 'casa_proveedor' && (
                 <div style={{ marginTop: 4, fontSize: 11, color: '#666' }}>
-                  El servicio es en tu casa
+                  {t.dashboard.servicioEnTuCasa}
                 </div>
               )}
             </div>
@@ -1104,7 +1117,7 @@ function ReservaRecibidaCard({
             boxSizing: 'border-box',
           }}
         >
-          Ver detalle
+          {t.dashboard.verDetalle}
         </a>
         {canMensaje ? (
           <ProveedorPreguntarButton
@@ -1128,7 +1141,7 @@ function ReservaRecibidaCard({
               boxSizing: 'border-box',
             }}
           >
-            Enviar mensaje
+            {t.dashboard.enviarMensaje}
           </ProveedorPreguntarButton>
         ) : null}
         {isPendiente && (
@@ -1151,7 +1164,7 @@ function ReservaRecibidaCard({
                 opacity: responding ? 0.6 : 1,
               }}
             >
-              {responding ? 'Procesando…' : 'Aceptar'}
+              {responding ? t.dashboard.procesando : t.dashboard.aceptar}
             </button>
             <button
               type="button"
@@ -1171,7 +1184,7 @@ function ReservaRecibidaCard({
                 opacity: responding ? 0.6 : 1,
               }}
             >
-              {responding ? 'Procesando…' : 'Rechazar'}
+              {responding ? t.dashboard.procesando : t.dashboard.rechazar}
             </button>
           </>
         )}
@@ -1194,7 +1207,7 @@ function ReservaRecibidaCard({
               opacity: canceling ? 0.6 : 1,
             }}
           >
-            {canceling ? 'Cancelando…' : 'Cancelar reserva'}
+            {canceling ? t.dashboard.cancelandoReserva : t.dashboard.cancelarReserva}
           </button>
         )}
       </div>
@@ -1218,7 +1231,7 @@ function ReservaRecibidaCard({
       {canReport && (
         <div style={{ marginTop: 12 }}>
           <p style={{ margin: '0 0 6px', fontSize: 11, fontWeight: 600, color: '#666' }}>
-            Problema con esta reserva
+            {t.dashboard.problemaReserva}
           </p>
           <ReportarIncidenciaForm
             bookingId={booking.id}
@@ -1228,13 +1241,13 @@ function ReservaRecibidaCard({
         </div>
       )}
       <div style={{ marginTop: 10 }}>
-        <AyudaLink label="Ayuda general (cuenta, cobros…)" />
+        <AyudaLink label={t.dashboard.ayudaGeneralCobros} />
       </div>
     </div>
   );
 }
 
-function ReservasRecibidas({ perfil, BRAND, highlightBookingId, router }) {
+function ReservasRecibidas({ perfil, BRAND, highlightBookingId, router, t }) {
   const { toast, showSuccess, showError, dismiss } = useActionToast();
   const [bookings, setBookings] = useState([]);
   const [serviceMap, setServiceMap] = useState({});
@@ -1286,7 +1299,7 @@ function ReservasRecibidas({ perfil, BRAND, highlightBookingId, router }) {
         if (servicesError) throw servicesError;
 
         const servicesList = services ?? [];
-        const map = Object.fromEntries(servicesList.map((s) => [s.id, s.titulo || 'Servicio']));
+        const map = Object.fromEntries(servicesList.map((s) => [s.id, s.titulo || t.dashboard.servicioFallback]));
         setServiceMap(map);
 
         const serviceIds = servicesList.map((s) => s.id);
@@ -1326,7 +1339,7 @@ function ReservasRecibidas({ perfil, BRAND, highlightBookingId, router }) {
           const verified = {};
           for (const p of profiles ?? []) {
             const full = [p.nombre, p.apellido].filter(Boolean).join(' ').trim();
-            names[p.id] = full || 'Cliente';
+            names[p.id] = full || t.dashboard.clienteFallback;
             verified[p.id] = p.dni_verificado === true;
           }
           setClientNames(names);
@@ -1342,7 +1355,7 @@ function ReservasRecibidas({ perfil, BRAND, highlightBookingId, router }) {
     } finally {
       setLoading(false);
     }
-  }, [perfil?.id]);
+  }, [perfil?.id, t]);
 
   useEffect(() => {
     loadReservasRecibidas();
@@ -1364,8 +1377,8 @@ function ReservasRecibidas({ perfil, BRAND, highlightBookingId, router }) {
   async function handleRespond(bookingId, action) {
     const confirmMsg =
       action === 'aceptar'
-        ? '¿Aceptar esta reserva?'
-        : '¿Rechazar esta reserva? Se liberará el pago retenido del cliente.';
+        ? t.dashboard.confirmarAceptar
+        : t.dashboard.confirmarRechazar;
     if (!window.confirm(confirmMsg)) return;
 
     setRespondingId(bookingId);
@@ -1382,7 +1395,7 @@ function ReservasRecibidas({ perfil, BRAND, highlightBookingId, router }) {
       const data = await res.json();
 
       if (!res.ok || !data.success) {
-        const msg = data.error || 'No se pudo procesar la reserva.';
+        const msg = data.error || t.dashboard.errorProcesarReserva;
         setActionError(msg);
         showError(msg);
         return;
@@ -1394,8 +1407,8 @@ function ReservasRecibidas({ perfil, BRAND, highlightBookingId, router }) {
 
       const okMsg =
         action === 'aceptar'
-          ? 'Reserva aceptada correctamente.'
-          : 'Reserva rechazada. Se ha liberado el pago del cliente.';
+          ? t.dashboard.reservaAceptada
+          : t.dashboard.reservaRechazada;
       setActionSuccess(okMsg);
       showSuccess(okMsg);
 
@@ -1416,7 +1429,7 @@ function ReservasRecibidas({ perfil, BRAND, highlightBookingId, router }) {
         }
       }
     } catch (err) {
-      const msg = err.message || 'Error de conexión.';
+      const msg = err.message || t.dashboard.cobrosErrorConexion;
       setActionError(msg);
       showError(msg);
     } finally {
@@ -1428,18 +1441,13 @@ function ReservasRecibidas({ perfil, BRAND, highlightBookingId, router }) {
     setBookings((prev) =>
       prev.map((b) => (b.id === bookingId ? { ...b, estado: 'incidencia' } : b)),
     );
-    const msg =
-      'Incidencia enviada. Nuestro equipo la revisará y te contactará.';
+    const msg = t.dashboard.incidenciaEnviada;
     setActionSuccess(msg);
     showSuccess(msg);
   }
 
   async function handleCancelProvider(bookingId) {
-    if (
-      !window.confirm(
-        '¿Seguro que quieres cancelar esta reserva confirmada? El cliente recibirá el reembolso íntegro y esta cancelación puede afectar a tu cuenta.',
-      )
-    ) {
+    if (!window.confirm(t.dashboard.confirmarCancelarProveedor)) {
       return;
     }
 
@@ -1457,7 +1465,7 @@ function ReservasRecibidas({ perfil, BRAND, highlightBookingId, router }) {
       const data = await res.json();
 
       if (!res.ok || !data.success) {
-        const msg = data.error || 'No se pudo cancelar la reserva.';
+        const msg = data.error || t.dashboard.errorCancelarReserva;
         setActionError(msg);
         showError(msg);
         return;
@@ -1469,18 +1477,18 @@ function ReservasRecibidas({ perfil, BRAND, highlightBookingId, router }) {
         ),
       );
 
-      setActionSuccess('Reserva cancelada correctamente.');
-      showSuccess('Reserva cancelada correctamente.');
+      setActionSuccess(t.dashboard.reservaCancelada);
+      showSuccess(t.dashboard.reservaCancelada);
 
       if (data.stripe_ok === false) {
         setStripeWarning(
           data.stripe_error
-            ? `La cancelación se registró, pero hubo una incidencia con el reembolso: ${data.stripe_error}`
-            : 'La cancelación se registró, pero hubo una incidencia al procesar el reembolso del cliente. Contacta con soporte si persiste.',
+            ? `${t.dashboard.stripeWarningPre} ${data.stripe_error}`
+            : t.dashboard.stripeWarningGenerico,
         );
       }
     } catch (err) {
-      const msg = err.message || 'Error de conexión.';
+      const msg = err.message || t.dashboard.cobrosErrorConexion;
       setActionError(msg);
       showError(msg);
     } finally {
@@ -1512,7 +1520,7 @@ function ReservasRecibidas({ perfil, BRAND, highlightBookingId, router }) {
           }}
         >
           <span style={{ fontSize: 12, fontWeight: 600, color: BRAND.dark }}>
-            📥 Reservas recibidas
+            📥 {t.dashboard.reservasRecibidas}
           </span>
           {pendientes.length > 0 && (
             <span
@@ -1525,7 +1533,7 @@ function ReservasRecibidas({ perfil, BRAND, highlightBookingId, router }) {
                 color: AMBER,
               }}
             >
-              {pendientes.length} pendiente{pendientes.length !== 1 ? 's' : ''}
+              {pendientes.length} {pendientes.length !== 1 ? t.dashboard.pendientes : t.dashboard.pendiente}
             </span>
           )}
         </div>
@@ -1533,7 +1541,7 @@ function ReservasRecibidas({ perfil, BRAND, highlightBookingId, router }) {
         <div style={{ padding: '13px 16px' }}>
           {loading && (
             <p style={{ fontSize: 12, color: '#aaa', textAlign: 'center', padding: '20px 0' }}>
-              Cargando reservas…
+              {t.dashboard.cargandoReservas}
             </p>
           )}
 
@@ -1565,7 +1573,7 @@ function ReservasRecibidas({ perfil, BRAND, highlightBookingId, router }) {
                   cursor: 'pointer',
                 }}
               >
-                Reintentar
+                {t.dashboard.reintentar}
               </button>
             </div>
           )}
@@ -1618,16 +1626,16 @@ function ReservasRecibidas({ perfil, BRAND, highlightBookingId, router }) {
           {!loading && !loadError && bookings.length === 0 && (
             <EmptyState
               compact
-              title="Aún no has recibido reservas"
+              title={t.dashboard.sinReservasProvTitulo}
               description={
                 perfil?.verificado && perfil?.cobros_activos
-                  ? "Cuando actives tus anuncios y alguien reserve, aparecerán aquí."
-                  : "Completa los primeros pasos de arriba (documentos, aprobación y cobros) y publica tu servicio."
+                  ? t.dashboard.sinReservasProvActivo
+                  : t.dashboard.sinReservasProvInactivo
               }
               actionLabel={
                 perfil?.verificado && perfil?.cobros_activos
-                  ? "Ir a mis servicios"
-                  : "Completar mi alta"
+                  ? t.dashboard.irMisServicios
+                  : t.dashboard.completarAlta
               }
               actionHref="/editar-perfil?tab=servicios"
             />
@@ -1645,14 +1653,14 @@ function ReservasRecibidas({ perfil, BRAND, highlightBookingId, router }) {
                   marginBottom: 10,
                 }}
               >
-                Requieren tu respuesta
+                {t.dashboard.requierenRespuesta}
               </p>
               {pendientes.map((booking) => (
                 <ReservaRecibidaCard
                   key={booking.id}
                   booking={booking}
-                  serviceTitulo={serviceMap[booking.service_id] || 'Servicio'}
-                  clienteNombre={clientNames[booking.cliente_id] || 'Cliente'}
+                  serviceTitulo={serviceMap[booking.service_id] || t.dashboard.servicioFallback}
+                  clienteNombre={clientNames[booking.cliente_id] || t.dashboard.clienteFallback}
                   clienteVerificado={clientVerified[booking.cliente_id] === true}
                   clienteContacto={clienteContactos[booking.id] || null}
                   sinComisionProveedor={sinComisionProveedor}
@@ -1662,6 +1670,7 @@ function ReservasRecibidas({ perfil, BRAND, highlightBookingId, router }) {
                   canceling={cancelingId === booking.id}
                   onIncidenciaReported={handleIncidenciaReported}
                   highlighted={booking.id === highlightBookingId}
+                  t={t}
                 />
               ))}
             </>
@@ -1680,15 +1689,15 @@ function ReservasRecibidas({ perfil, BRAND, highlightBookingId, router }) {
                     margin: '20px 0 10px',
                   }}
                 >
-                  Historial
+                  {t.dashboard.historial}
                 </p>
               )}
               {resto.map((booking) => (
                 <ReservaRecibidaCard
                   key={booking.id}
                   booking={booking}
-                  serviceTitulo={serviceMap[booking.service_id] || 'Servicio'}
-                  clienteNombre={clientNames[booking.cliente_id] || 'Cliente'}
+                  serviceTitulo={serviceMap[booking.service_id] || t.dashboard.servicioFallback}
+                  clienteNombre={clientNames[booking.cliente_id] || t.dashboard.clienteFallback}
                   clienteVerificado={clientVerified[booking.cliente_id] === true}
                   clienteContacto={clienteContactos[booking.id] || null}
                   sinComisionProveedor={sinComisionProveedor}
@@ -1698,6 +1707,7 @@ function ReservasRecibidas({ perfil, BRAND, highlightBookingId, router }) {
                   canceling={cancelingId === booking.id}
                   onIncidenciaReported={handleIncidenciaReported}
                   highlighted={booking.id === highlightBookingId}
+                  t={t}
                 />
               ))}
             </>
@@ -1709,30 +1719,30 @@ function ReservasRecibidas({ perfil, BRAND, highlightBookingId, router }) {
   );
 }
 
-function TabFamilia({ perfil, router, BRAND }) {
+function TabFamilia({ perfil, router, BRAND, t }) {
   return (
     <div style={{textAlign: 'center', padding: '40px 0'}}>
-      <p style={{fontSize: 14, color: '#aaa', marginBottom: 16}}>Gestiona tu grupo familiar</p>
-      <button onClick={() => router.push('/familia')} style={{ minHeight: 44, background: BRAND.blue, color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 4, fontSize: 12, cursor: 'pointer' }}>Ir a mi familia</button>
+      <p style={{fontSize: 14, color: '#aaa', marginBottom: 16}}>{t.dashboard.gestionaFamilia}</p>
+      <button onClick={() => router.push('/familia')} style={{ minHeight: 44, background: BRAND.blue, color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 4, fontSize: 12, cursor: 'pointer' }}>{t.dashboard.irMiFamilia}</button>
     </div>
   );
 }
 
-function TabReferidos({ perfil, BRAND, copiarLink }) {
+function TabReferidos({ perfil, BRAND, copiarLink, t }) {
   return (
     <div style={{maxWidth: 480, margin: '0 auto', padding: '20px 0'}}>
       <div style={{background: '#fff', borderRadius: 10, border: `0.5px solid #e8e4de`, padding: 24}}>
-        <h2 style={{fontSize: 16, fontWeight: 300, color: '#2a3a4a', fontFamily: 'Georgia, serif', marginBottom: 16}}>Tu programa de referidos</h2>
+        <h2 style={{fontSize: 16, fontWeight: 300, color: '#2a3a4a', fontFamily: 'Georgia, serif', marginBottom: 16}}>{t.dashboard.programaReferidos}</h2>
         <div style={{background: '#f7f5f2', border: '0.5px solid #e8e4de', borderRadius: 8, padding: 14, marginBottom: 14}}>
-          <div style={{fontSize: 9, color: '#bbb', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 4}}>Tu código único</div>
+          <div style={{fontSize: 9, color: '#bbb', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 4}}>{t.dashboard.tuCodigoUnico}</div>
           <div style={{fontSize: 20, fontWeight: 500, color: BRAND.blue, letterSpacing: '.04em'}}>{perfil?.codigo_referido || '—'}</div>
         </div>
-        <p style={{fontSize: 12, color: '#888', lineHeight: 1.7, marginBottom: 16}}>Comparte tu código con amigos. Cada vez que alguien se registre con tu código y complete su primera reserva, recibirás 1 reserva extra sin comisión.</p>
+        <p style={{fontSize: 12, color: '#888', lineHeight: 1.7, marginBottom: 16}}>{t.dashboard.referidosDesc}</p>
         <div style={{background: '#e6f4f0', borderRadius: 6, padding: 12, marginBottom: 14}}>
-          <div style={{fontSize: 11, color: '#085041', fontWeight: 500, marginBottom: 4}}>Tus reservas sin comisión</div>
+          <div style={{fontSize: 11, color: '#085041', fontWeight: 500, marginBottom: 4}}>{t.dashboard.tusReservasSinComision}</div>
           <div style={{fontSize: 28, fontWeight: 200, color: '#0e7a5c'}}>{getReservasSinComisionCliente(perfil)}</div>
         </div>
-        <button onClick={() => copiarLink(perfil?.codigo_referido)} style={{ width: '100%', minHeight: 44, background: BRAND.blue, color: '#fff', border: 'none', padding: 12, borderRadius: 5, fontSize: 12, cursor: 'pointer', fontWeight: 500 }}>Copiar link de invitación</button>
+        <button onClick={() => copiarLink(perfil?.codigo_referido)} style={{ width: '100%', minHeight: 44, background: BRAND.blue, color: '#fff', border: 'none', padding: 12, borderRadius: 5, fontSize: 12, cursor: 'pointer', fontWeight: 500 }}>{t.dashboard.copiarLinkInvitacion}</button>
       </div>
     </div>
   );

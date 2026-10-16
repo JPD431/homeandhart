@@ -16,6 +16,8 @@ import {
   PRIVACY_VERSION,
   TERMS_VERSION,
 } from "@/app/lib/legal-versions";
+import { useLang } from "@/app/lib/LangContext";
+import { useTranslation } from "@/app/lib/i18n";
 
 const PRIMARY = "#1d4f91";
 const DARK = "#163a6b";
@@ -44,22 +46,10 @@ const labelStyle = {
   fontWeight: 600,
 };
 
-const ROLES = [
-  {
-    id: "cliente",
-    emoji: "👨‍👩‍👧",
-    title: "Soy familia",
-    subtitle: "Busco servicios",
-  },
-  {
-    id: "proveedor",
-    emoji: "⭐",
-    title: "Soy proveedor",
-    subtitle: "Ofrezco servicios",
-  },
-];
-
 function AuthShell({ children }) {
+  const { lang } = useLang();
+  const t = useTranslation(lang);
+
   return (
     <div style={{ minHeight: "100vh", background: WARM, fontFamily: "sans-serif" }}>
       {/* MINI NAV */}
@@ -85,7 +75,7 @@ function AuthShell({ children }) {
             Home<span style={{ fontStyle: "italic", color: PRIMARY }}>&</span>Heart
           </span>
           <span style={{ display: "block", fontSize: 10, color: "#bbb", marginTop: 2 }}>
-            Donde estés, estamos.
+            {t.registro.slogan}
           </span>
         </Link>
       </div>
@@ -154,7 +144,7 @@ function AuthShell({ children }) {
                 fontWeight: 600,
               }}
             >
-              Únete gratis
+              {t.registro.uneteTitulo}
             </p>
             <h2
               style={{
@@ -166,9 +156,9 @@ function AuthShell({ children }) {
                 margin: 0,
               }}
             >
-              La forma más humana de encontrar{" "}
+              {t.registro.heroTitulo}{" "}
               <em style={{ color: "rgba(255,255,255,0.65)", fontStyle: "italic" }}>
-                ayuda cerca de ti
+                {t.registro.heroEmphasis}
               </em>
             </h2>
             <p
@@ -179,8 +169,7 @@ function AuthShell({ children }) {
                 marginTop: 14,
               }}
             >
-              Crea tu cuenta en un minuto y empieza a reservar o a ofrecer tus
-              servicios con total confianza.
+              {t.registro.heroDesc}
             </p>
 
             <div
@@ -191,11 +180,7 @@ function AuthShell({ children }) {
                 marginTop: 32,
               }}
             >
-              {[
-                "Proveedores verificados",
-                "Pago protegido",
-                "Cuidado de confianza",
-              ].map((label) => (
+              {[t.registro.pill1, t.registro.pill2, t.registro.pill3].map((label) => (
                 <div key={label}>
                   <div
                     style={{
@@ -228,9 +213,7 @@ function AuthShell({ children }) {
                   lineHeight: 1.6,
                 }}
               >
-                Documentación revisada por nuestro equipo, un solo pago protegido
-                y la Garantía Home&amp;Heart si tu proveedor cancela con poca
-                antelación.
+                {t.registro.garantiaDesc}
               </p>
             </div>
           </div>
@@ -252,6 +235,9 @@ function RegistroForm() {
   const roleParam = searchParams.get("role");
   const emailParam = searchParams.get("email")?.trim() || null;
 
+  const { lang } = useLang();
+  const t = useTranslation(lang);
+
   const [nombre, setNombre] = useState("");
   const [apellido, setApellido] = useState("");
   const [email, setEmail] = useState("");
@@ -267,6 +253,21 @@ function RegistroForm() {
   const [resendMessage, setResendMessage] = useState("");
   const [codigoInvitacion, setCodigoInvitacion] = useState(refCode || "");
   const [mostrarCodigoInvitacion, setMostrarCodigoInvitacion] = useState(!!refCode);
+
+  const roles = [
+    {
+      id: "cliente",
+      emoji: "👨‍👩‍👧",
+      title: t.registro.rolFamiliaTitle,
+      subtitle: t.registro.rolFamiliaSubtitle,
+    },
+    {
+      id: "proveedor",
+      emoji: "⭐",
+      title: t.registro.rolProveedorTitle,
+      subtitle: t.registro.rolProveedorSubtitle,
+    },
+  ];
 
   useEffect(() => {
     if (roleParam === "proveedor") setRole("proveedor");
@@ -289,19 +290,17 @@ function RegistroForm() {
     setError("");
 
     if (password !== confirmPassword) {
-      setError("Las contraseñas no coinciden.");
+      setError(t.registro.errorContrasenas);
       return;
     }
 
     if (password.length < 6) {
-      setError("La contraseña debe tener al menos 6 caracteres.");
+      setError(t.registro.errorContrasenaCorta);
       return;
     }
 
     if (!aceptaTerminos || !aceptaPrivacidad) {
-      setError(
-        "Debes aceptar los términos de uso y la política de privacidad para crear la cuenta.",
-      );
+      setError(t.registro.errorTerminos);
       return;
     }
 
@@ -316,7 +315,7 @@ function RegistroForm() {
       const { valid } = await response.json();
 
       if (!valid) {
-        setError("Código no válido");
+        setError(t.registro.errorCodigo);
         return;
       }
     }
@@ -414,7 +413,7 @@ function RegistroForm() {
       return;
     }
 
-    setResendMessage("Email de verificación reenviado.");
+    setResendMessage(t.registro.reenviado);
   }
 
   if (mensajeVerificacion) {
@@ -431,15 +430,22 @@ function RegistroForm() {
               margin: 0,
             }}
           >
-            Revisa tu email
+            {t.registro.verificacionTitulo}
           </h1>
           <p style={{ fontSize: 12, color: "#888", marginTop: 12, lineHeight: 1.7 }}>
-            Te hemos enviado un enlace de verificación a{" "}
-            <strong style={{ color: "#1a1a1a" }}>{email}</strong>. Haz clic en el
-            enlace para activar tu cuenta.
+            {t.registro.verificacionDesc(email).split(email).map((part, i, arr) =>
+              i < arr.length - 1 ? (
+                <span key={i}>
+                  {part}
+                  <strong style={{ color: "#1a1a1a" }}>{email}</strong>
+                </span>
+              ) : (
+                <span key={i}>{part}</span>
+              )
+            )}
           </p>
           <p style={{ fontSize: 11, color: "#bbb", marginTop: 12 }}>
-            ¿No lo ves? Revisa la carpeta de spam.
+            {t.registro.verificacionSpam}
           </p>
           {error && (
             <p
@@ -488,7 +494,7 @@ function RegistroForm() {
               opacity: resendLoading ? 0.7 : 1,
             }}
           >
-            {resendLoading ? "Reenviando…" : "Reenviar email"}
+            {resendLoading ? t.registro.reenviando : t.registro.reenviar}
           </button>
           <Link
             href="/"
@@ -500,7 +506,7 @@ function RegistroForm() {
               textDecoration: "none",
             }}
           >
-            Volver al inicio
+            {t.registro.volverInicio}
           </Link>
         </div>
       </AuthShell>
@@ -518,15 +524,15 @@ function RegistroForm() {
           margin: 0,
         }}
       >
-        Crear cuenta
+        {t.registro.formTitulo}
       </h1>
       <p style={{ fontSize: 12, color: "#aaa", marginTop: 6 }}>
-        Es gratis y solo tarda un minuto
+        {t.registro.formSubtitulo}
       </p>
 
       <form onSubmit={handleSubmit} style={{ marginTop: 24 }}>
         <div className="mb-4 grid grid-cols-1 gap-2.5 md:grid-cols-2">
-          {ROLES.map((option) => {
+          {roles.map((option) => {
             const isSelected = role === option.id;
             return (
               <button
@@ -572,7 +578,7 @@ function RegistroForm() {
         <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-2">
           <div>
             <label htmlFor="nombre" style={labelStyle}>
-              Nombre
+              {t.registro.labelNombre}
             </label>
             <input
               id="nombre"
@@ -586,7 +592,7 @@ function RegistroForm() {
           </div>
           <div>
             <label htmlFor="apellido" style={labelStyle}>
-              Apellido
+              {t.registro.labelApellido}
             </label>
             <input
               id="apellido"
@@ -618,7 +624,7 @@ function RegistroForm() {
 
         <div style={{ marginBottom: 16 }}>
           <label htmlFor="password" style={labelStyle}>
-            Contraseña
+            {t.registro.labelContrasena}
           </label>
           <input
             id="password"
@@ -631,13 +637,13 @@ function RegistroForm() {
             style={inputStyle}
           />
           <p style={{ fontSize: 10, color: "#bbb", marginTop: 6 }}>
-            Mínimo 8 caracteres
+            {t.registro.contrasenaHint}
           </p>
         </div>
 
         <div style={{ marginBottom: 16 }}>
           <label htmlFor="confirmPassword" style={labelStyle}>
-            Confirmar contraseña
+            {t.registro.labelConfirmarContrasena}
           </label>
           <input
             id="confirmPassword"
@@ -666,12 +672,12 @@ function RegistroForm() {
                 cursor: "pointer",
               }}
             >
-              🎁 ¿Tienes código de invitación? Añadir
+              {t.registro.codigoBtn}
             </button>
           ) : (
             <div>
               <label htmlFor="codigoInvitacion" style={labelStyle}>
-                Código de invitación
+                {t.registro.labelCodigo}
               </label>
               <div style={{ position: "relative" }}>
                 <span
@@ -707,7 +713,7 @@ function RegistroForm() {
                     fontWeight: 500,
                   }}
                 >
-                  ✓ Aplicado · 1 reserva extra sin comisión
+                  {t.registro.codigoAplicado}
                 </p>
               )}
             </div>
@@ -727,15 +733,15 @@ function RegistroForm() {
             required
           />
           <span style={{ fontSize: 11, color: "#666", lineHeight: 1.6 }}>
-            He leído y acepto los{" "}
+            {t.registro.aceptoTerminosA}{" "}
             <Link
               href={LEGAL_DOC_PATHS.terminos}
               target="_blank"
               style={{ color: PRIMARY }}
             >
-              Términos de uso
+              {t.registro.terminosLink}
             </Link>{" "}
-            de Home&Heart (v. {TERMS_VERSION})
+            {t.registro.aceptoTerminosB(TERMS_VERSION)}
           </span>
         </label>
 
@@ -752,15 +758,15 @@ function RegistroForm() {
             required
           />
           <span style={{ fontSize: 11, color: "#666", lineHeight: 1.6 }}>
-            He leído y acepto la{" "}
+            {t.registro.aceptoPrivacidadA}{" "}
             <Link
               href={LEGAL_DOC_PATHS.privacidad}
               target="_blank"
               style={{ color: PRIMARY }}
             >
-              Política de privacidad
+              {t.registro.privacidadLink}
             </Link>{" "}
-            de Home&Heart (v. {PRIVACY_VERSION})
+            {t.registro.aceptoPrivacidadB(PRIVACY_VERSION)}
           </span>
         </label>
 
@@ -801,7 +807,7 @@ function RegistroForm() {
                 : "pointer",
           }}
         >
-          {loading ? "Creando cuenta…" : "Crear cuenta gratis →"}
+          {loading ? t.registro.creando : t.registro.crearBtn}
         </button>
 
         <p
@@ -812,9 +818,9 @@ function RegistroForm() {
             marginTop: 20,
           }}
         >
-          ¿Ya tienes cuenta?{" "}
+          {t.registro.yaTienesCuenta}{" "}
           <Link href={loginHref} style={{ color: PRIMARY, textDecoration: "none" }}>
-            Iniciar sesión
+            {t.registro.iniciarSesion}
           </Link>
         </p>
       </form>
@@ -823,6 +829,9 @@ function RegistroForm() {
 }
 
 export default function RegistroPage() {
+  const { lang } = useLang();
+  const t = useTranslation(lang);
+
   return (
     <Suspense
       fallback={
@@ -830,7 +839,7 @@ export default function RegistroPage() {
           className="flex min-h-screen items-center justify-center font-sans"
           style={{ background: WARM }}
         >
-          <p style={{ fontSize: 12, color: "#888" }}>Cargando…</p>
+          <p style={{ fontSize: 12, color: "#888" }}>{t.registro.cargando}</p>
         </div>
       }
     >

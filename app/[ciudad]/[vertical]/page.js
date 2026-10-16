@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { cookies } from "next/headers";
 import { getServiceCoverPhoto } from "@/app/lib/service-card-display";
 import { SERIF } from "@/app/components/brand";
 import {
@@ -8,12 +9,8 @@ import {
   formatProveedorRatingAvg,
 } from "@/app/lib/reviews";
 import { getPublicSupabase } from "@/app/lib/supabase-public";
-import {
-  VERIFICACION_ALOJAMIENTO_ES,
-  VERIFICACION_MASCOTAS_ES,
-  VERIFICACION_NINERAS_ES,
-  VERIFICADO_BADGE_TOOLTIP_ES,
-} from "@/app/lib/verification-copy";
+import { getVerificadoBadgeTooltip } from "@/app/lib/verification-copy";
+import { translations } from "@/app/lib/i18n";
 
 const PRIMARY = "#1d4f91";
 const BORDER = "#e8e4de";
@@ -55,103 +52,6 @@ const VERTICAL_THEME = {
   },
 };
 
-const TITULOS = {
-  nineras: (ciudad) =>
-    `Niñeras en ${ciudad} · Documentación revisada · Home&Heart`,
-  alojamiento: (ciudad) =>
-    `Alojamiento pet-friendly en ${ciudad} · NRU revisado · Home&Heart`,
-  mascotas: (ciudad) =>
-    `Cuidadores de mascotas en ${ciudad} · Documentación revisada · Home&Heart`,
-};
-
-const DESCRIPCIONES = {
-  nineras: (ciudad) =>
-    `Encuentra niñeras en ${ciudad}. Antes de activar el perfil revisamos DNI, antecedentes penales, certificado de delitos sexuales y mayoría de edad. Reserva online con pago protegido.`,
-  alojamiento: (ciudad) =>
-    `Apartamentos y casas pet-friendly en ${ciudad}. Los anfitriones verifican su identidad y aportan el NRU, que revisamos antes de publicar. Reserva con pago protegido.`,
-  mascotas: (ciudad) =>
-    `Cuidadores de mascotas en ${ciudad}. Presentan DNI y antecedentes penales, revisados por nuestro equipo antes de activar el perfil. Reserva online con pago protegido.`,
-};
-
-const H1S = {
-  nineras: (ciudad) => `Niñeras en ${ciudad}`,
-  alojamiento: (ciudad) => `Alojamiento pet-friendly en ${ciudad}`,
-  mascotas: (ciudad) => `Cuidadores de mascotas en ${ciudad}`,
-};
-
-const SUBTITULOS = {
-  nineras: VERIFICACION_NINERAS_ES,
-  alojamiento: VERIFICACION_ALOJAMIENTO_ES,
-  mascotas: VERIFICACION_MASCOTAS_ES,
-};
-
-const PROVEEDOR_CTA = {
-  nineras: "¿Eres niñera? Únete",
-  alojamiento: "¿Eres anfitrión? Únete",
-  mascotas: "¿Eres cuidador de mascotas? Únete",
-};
-
-const BUSCAR_LABEL = {
-  nineras: "niñeras",
-  alojamiento: "alojamiento",
-  mascotas: "cuidadores de mascotas",
-};
-
-function getFaqs(ciudad) {
-  return {
-    nineras: [
-      {
-        q: `¿Cómo se verifican las niñeras en ${ciudad}?`,
-        a: VERIFICACION_NINERAS_ES,
-      },
-      {
-        q: `¿Cuánto cuesta una niñera en ${ciudad}?`,
-        a: "Las niñeras en Home&Heart cobran entre 15€ y 25€ por hora dependiendo de su experiencia y formación.",
-      },
-      {
-        q: "¿Puedo contratar una niñera para un viaje?",
-        a: 'Sí. Muchas niñeras tienen activada la opción "Disponible para viajar" y pueden acompañarte en tus viajes.',
-      },
-      {
-        q: "¿Hay garantía si la niñera cancela?",
-        a: "Sí. Si tu niñera cancela con menos de 24h, la Garantía Home&Heart te busca una alternativa verificada en 30 minutos.",
-      },
-    ],
-    alojamiento: [
-      {
-        q: `¿Qué es el NRU en alojamientos de ${ciudad}?`,
-        a: "El Número de Registro Único (NRU) identifica alojamientos turísticos registrados. Antes de publicar, revisamos el NRU declarado por el anfitrión junto con su identidad.",
-      },
-      {
-        q: "¿Todos los alojamientos son pet-friendly?",
-        a: 'No todos, pero puedes filtrar por "Pet-friendly" en el buscador para ver solo los que aceptan mascotas.',
-      },
-      {
-        q: "¿Qué pasa si el anfitrión cancela?",
-        a: "La Garantía Home&Heart te busca alojamiento alternativo verificado en 30 minutos si la cancelación es con menos de 24h.",
-      },
-      {
-        q: `¿Cómo se verifican los anfitriones en ${ciudad}?`,
-        a: VERIFICACION_ALOJAMIENTO_ES,
-      },
-    ],
-    mascotas: [
-      {
-        q: `¿Cómo se verifican los cuidadores de mascotas en ${ciudad}?`,
-        a: VERIFICACION_MASCOTAS_ES,
-      },
-      {
-        q: "¿Puedo ver fotos de mi mascota mientras está al cuidado?",
-        a: 'Sí. Los cuidadores con el badge "Envía fotos" mandan actualizaciones periódicas a los dueños.',
-      },
-      {
-        q: `¿Hay cuidadores con jardín en ${ciudad}?`,
-        a: 'Sí. Puedes filtrar por "Con jardín" en el buscador para ver cuidadores que tienen espacio exterior.',
-      },
-    ],
-  };
-}
-
 function formatShortName(nombre, apellido) {
   const n = nombre?.trim();
   const a = apellido?.trim();
@@ -183,7 +83,21 @@ export async function generateMetadata({ params }) {
   const { ciudad, vertical } = await params;
   if (!isValidRoute(ciudad, vertical)) return { title: "Home&Heart" };
 
+  // For metadata we use ES as canonical (SEO default)
+  const tv = translations.es.ciudadVertical;
   const ciudadCapital = capitalizeCiudad(ciudad);
+
+  const TITULOS = {
+    nineras: tv.metaTituloNineras,
+    alojamiento: tv.metaTituloAlojamiento,
+    mascotas: tv.metaTituloMascotas,
+  };
+  const DESCRIPCIONES = {
+    nineras: tv.metaDescNineras,
+    alojamiento: tv.metaDescAlojamiento,
+    mascotas: tv.metaDescMascotas,
+  };
+
   const title = TITULOS[vertical](ciudadCapital);
   const description = DESCRIPCIONES[vertical](ciudadCapital);
 
@@ -194,7 +108,7 @@ export async function generateMetadata({ params }) {
   };
 }
 
-function ProviderCard({ service, theme, rating }) {
+function ProviderCard({ service, theme, rating, verificadoTooltip, verificadoLabel }) {
   const profile = service.profiles_public ?? {};
   const nombre = formatShortName(profile.nombre, profile.apellido) || "Proveedor";
   const zone = service.location_zone || service.ciudad || profile.ciudad || "";
@@ -260,9 +174,9 @@ function ProviderCard({ service, theme, rating }) {
           {profile.verificado && (
             <span
               className="mt-1.5 inline-block text-[9px] font-semibold text-[#0e7a5c]"
-              title={VERIFICADO_BADGE_TOOLTIP_ES}
+              title={verificadoTooltip}
             >
-              ✓ Verificado
+              {verificadoLabel}
             </span>
           )}
         </div>
@@ -377,15 +291,67 @@ export default async function LandingPage({ params }) {
   const { ciudad, vertical } = await params;
   if (!isValidRoute(ciudad, vertical)) notFound();
 
+  // Lang detection from cookie (set by LangContext on the client)
+  const cookieStore = await cookies();
+  const lang = cookieStore.get("lang")?.value ?? "es";
+  const tv = (translations[lang] ?? translations.es).ciudadVertical;
+
   const ciudadCapital = capitalizeCiudad(ciudad);
   const verticalDB = VERTICAL_DB[vertical];
   const theme = VERTICAL_THEME[verticalDB];
-  const faqs = getFaqs(ciudadCapital)[vertical];
   const buscarHref = `/buscar?vertical=${VERTICAL_BUSCAR[vertical]}&ciudad=${encodeURIComponent(ciudadCapital)}`;
+  const verificadoBadgeTooltip = getVerificadoBadgeTooltip(lang);
+
+  // Localized string maps (moved inside component from module level)
+  const H1S = {
+    nineras: tv.h1Nineras,
+    alojamiento: tv.h1Alojamiento,
+    mascotas: tv.h1Mascotas,
+  };
+
+  const SUBTITULOS = {
+    nineras: tv.subtituloNineras,
+    alojamiento: tv.subtituloAlojamiento,
+    mascotas: tv.subtituloMascotas,
+  };
+
+  const PROVEEDOR_CTA = {
+    nineras: tv.ctaJoinNineras,
+    alojamiento: tv.ctaJoinAlojamiento,
+    mascotas: tv.ctaJoinMascotas,
+  };
+
+  const BUSCAR_LABEL = {
+    nineras: tv.buscarLabelNineras,
+    alojamiento: tv.buscarLabelAlojamiento,
+    mascotas: tv.buscarLabelMascotas,
+  };
+
+  // Localized FAQs
+  const faqs = {
+    nineras: [
+      { q: tv.faqNinerasVerifQ(ciudadCapital), a: tv.faqNinerasVerifA },
+      { q: tv.faqNinerasCostoQ(ciudadCapital), a: tv.faqNinerasCostoA },
+      { q: tv.faqNinerasViajeQ, a: tv.faqNinerasViajeA },
+      { q: tv.faqNinerasGarantiaQ, a: tv.faqNinerasGarantiaA },
+    ],
+    alojamiento: [
+      { q: tv.faqAlojNruQ(ciudadCapital), a: tv.faqAlojNruA },
+      { q: tv.faqAlojPetQ, a: tv.faqAlojPetA },
+      { q: tv.faqAlojCancelQ, a: tv.faqAlojCancelA },
+      { q: tv.faqAlojVerifQ(ciudadCapital), a: tv.faqAlojVerifA },
+    ],
+    mascotas: [
+      { q: tv.faqMascVerifQ(ciudadCapital), a: tv.faqMascVerifA },
+      { q: tv.faqMascFotosQ, a: tv.faqMascFotosA },
+      { q: tv.faqMascJardinQ(ciudadCapital), a: tv.faqMascJardinA },
+    ],
+  }[vertical];
 
   const { servicios, totalProveedores, avgRating, ratingsByProveedor } =
     await fetchLandingData(ciudadCapital, verticalDB);
 
+  // Schema uses ES canonical strings for SEO
   const faqSchema = {
     "@context": "https://schema.org",
     "@type": "FAQPage",
@@ -411,43 +377,30 @@ export default async function LandingPage({ params }) {
           : "20€-40€/día",
   };
 
-  const beneficiosByVertical = {
-    nineras: {
-      icon: "✓",
-      title: "Documentación revisada",
-      text: VERIFICACION_NINERAS_ES,
-      color: "#0e7a5c",
-      light: "#e6f4f0",
-    },
-    alojamiento: {
-      icon: "✓",
-      title: "Identidad + NRU",
-      text: VERIFICACION_ALOJAMIENTO_ES,
-      color: "#0e7a5c",
-      light: "#e6f4f0",
-    },
-    mascotas: {
-      icon: "✓",
-      title: "Documentación revisada",
-      text: VERIFICACION_MASCOTAS_ES,
-      color: "#0e7a5c",
-      light: "#e6f4f0",
-    },
-  };
+  // Localized benefits
+  const beneficioVerifTitle =
+    vertical === "alojamiento" ? tv.beneficioAlojTitle : tv.beneficioVerifTitle;
+  const beneficioVerifText = SUBTITULOS[vertical];
 
   const beneficios = [
-    beneficiosByVertical[vertical],
+    {
+      icon: "✓",
+      title: beneficioVerifTitle,
+      text: beneficioVerifText,
+      color: "#0e7a5c",
+      light: "#e6f4f0",
+    },
     {
       icon: "🔒",
-      title: "Pago protegido",
-      text: "Un solo pago en la plataforma. No pagas hasta que la reserva queda confirmada.",
+      title: tv.beneficioPagoTitle,
+      text: tv.beneficioPagoText,
       color: PRIMARY,
       light: "#e8f0fb",
     },
     {
       icon: "⚡",
-      title: "Garantía 30 min",
-      text: "Si cancelan con menos de 24h, te buscamos alternativa verificada en 30 minutos.",
+      title: tv.beneficioGarantiaTitle,
+      text: tv.beneficioGarantiaText,
       color: "#c47d1a",
       light: "#fdf3e3",
     },
@@ -482,7 +435,7 @@ export default async function LandingPage({ params }) {
               className="text-[12px] font-medium no-underline"
               style={{ color: PRIMARY }}
             >
-              Buscar →
+              {tv.buscarBtn}
             </Link>
           </div>
         </header>
@@ -494,7 +447,7 @@ export default async function LandingPage({ params }) {
               className="inline-block rounded-full px-3 py-1 text-[11px] font-semibold"
               style={{ backgroundColor: theme.light, color: theme.color }}
             >
-              Proveedores verificados · {ciudadCapital}
+              {tv.proveedoresVerificadosLabel} · {ciudadCapital}
             </span>
             <h1
               className="mt-4 text-4xl text-[#1a1a1a] sm:text-5xl"
@@ -512,7 +465,7 @@ export default async function LandingPage({ params }) {
                 type="text"
                 name="ciudad"
                 defaultValue={ciudadCapital}
-                placeholder={`Buscar en ${ciudadCapital}…`}
+                placeholder={tv.buscarEnPlaceholder(ciudadCapital)}
                 className="min-w-[180px] flex-1 border px-3 py-2.5 text-[13px] outline-none"
                 style={{ backgroundColor: "#fff", borderColor: BORDER, borderRadius: 8 }}
               />
@@ -521,7 +474,7 @@ export default async function LandingPage({ params }) {
                 className="rounded-lg px-5 py-2.5 text-[13px] font-semibold text-white"
                 style={{ backgroundColor: PRIMARY }}
               >
-                Buscar →
+                {tv.buscarBtn}
               </button>
             </form>
 
@@ -530,19 +483,19 @@ export default async function LandingPage({ params }) {
                 <p className="text-2xl font-semibold" style={{ color: PRIMARY }}>
                   {totalProveedores}
                 </p>
-                <p className="text-[12px] text-[#888]">proveedores disponibles</p>
+                <p className="text-[12px] text-[#888]">{tv.proveedoresDisponibles}</p>
               </div>
               <div>
                 <p className="text-2xl font-semibold" style={{ color: PRIMARY }}>
                   {avgRating ?? "—"}
                 </p>
-                <p className="text-[12px] text-[#888]">valoración media</p>
+                <p className="text-[12px] text-[#888]">{tv.valoracionMedia}</p>
               </div>
               <div>
                 <p className="text-2xl font-semibold" style={{ color: PRIMARY }}>
-                  30 min
+                  {tv.garantiaMin}
                 </p>
-                <p className="text-[12px] text-[#888]">garantía de respuesta</p>
+                <p className="text-[12px] text-[#888]">{tv.garantiaRespuesta}</p>
               </div>
             </div>
           </div>
@@ -552,7 +505,7 @@ export default async function LandingPage({ params }) {
         <section className="px-6 py-12">
           <div className="mx-auto max-w-5xl">
             <h2 className="text-xl font-semibold text-[#1a1a1a]">
-              Proveedores verificados en {ciudadCapital}
+              {tv.proveedoresEn(ciudadCapital)}
             </h2>
             {servicios.length === 0 ? (
               <div
@@ -560,10 +513,10 @@ export default async function LandingPage({ params }) {
                 style={{ borderColor: BORDER }}
               >
                 <p className="text-base font-medium text-[#1a1a1a]">
-                  Próximamente en {ciudadCapital}
+                  {tv.proximamente(ciudadCapital)}
                 </p>
                 <p className="mt-2 text-sm text-[#888]">
-                  Aún no hay proveedores publicados en esta ciudad. Sé el primero en unirte.
+                  {tv.sinProveedores}
                 </p>
                 <Link
                   href="/ser-proveedor"
@@ -581,6 +534,8 @@ export default async function LandingPage({ params }) {
                     service={service}
                     theme={theme}
                     rating={ratingsByProveedor[service.proveedor_id]}
+                    verificadoTooltip={verificadoBadgeTooltip}
+                    verificadoLabel={tv.verificado}
                   />
                 ))}
               </ul>
@@ -592,7 +547,7 @@ export default async function LandingPage({ params }) {
                   className="text-sm font-semibold no-underline"
                   style={{ color: PRIMARY }}
                 >
-                  Ver todos en {ciudadCapital} →
+                  {tv.verTodos(ciudadCapital)}
                 </Link>
               </div>
             )}
@@ -606,7 +561,7 @@ export default async function LandingPage({ params }) {
         >
           <div className="mx-auto max-w-5xl">
             <h2 className="text-center text-xl font-semibold text-[#1a1a1a]">
-              Por qué Home&Heart
+              {tv.porQueHH}
             </h2>
             <div className="mt-8 grid gap-4 sm:grid-cols-3">
               {beneficios.map((b) => (
@@ -632,7 +587,7 @@ export default async function LandingPage({ params }) {
         {/* FAQ */}
         <section className="px-6 py-12">
           <div className="mx-auto max-w-3xl">
-            <h2 className="text-xl font-semibold text-[#1a1a1a]">Preguntas frecuentes</h2>
+            <h2 className="text-xl font-semibold text-[#1a1a1a]">{tv.preguntasFrecuentes}</h2>
             <div className="mt-6">
               <FaqAccordion items={faqs} />
             </div>
@@ -649,10 +604,10 @@ export default async function LandingPage({ params }) {
               className="text-2xl text-[#1a1a1a] sm:text-3xl"
               style={{ fontFamily: SERIF, fontWeight: 300 }}
             >
-              Encuentra {BUSCAR_LABEL[vertical]} en {ciudadCapital}
+              {tv.ctaTitulo(BUSCAR_LABEL[vertical], ciudadCapital)}
             </h2>
             <p className="mt-3 text-sm text-[#666]">
-              Reserva online con pago protegido y la Garantía Home&Heart.
+              {tv.ctaDesc}
             </p>
             <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
               <Link
@@ -660,7 +615,7 @@ export default async function LandingPage({ params }) {
                 className="rounded-lg px-6 py-3 text-sm font-semibold text-white no-underline"
                 style={{ backgroundColor: PRIMARY }}
               >
-                Buscar {BUSCAR_LABEL[vertical]} en {ciudadCapital} →
+                {tv.ctaBuscar(BUSCAR_LABEL[vertical], ciudadCapital)}
               </Link>
               <Link
                 href="/ser-proveedor"

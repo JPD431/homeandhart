@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+import Link from "next/link";
 import { useLang } from "@/app/lib/LangContext";
 import { useTranslation } from "@/app/lib/i18n";
 import { BRAND, SERIF } from "./brand";
@@ -29,6 +31,7 @@ export default function NosotrosSection() {
           className="grid items-center lg:grid-cols-2"
           style={{ gap: "64px" }}
         >
+          {/* Left: text + values */}
           <div>
             <p
               className="text-[11px] uppercase"
@@ -53,57 +56,61 @@ export default function NosotrosSection() {
             >
               {n.subtitulo}
             </p>
-            <a
+            <Link
               href="/nuestra-historia"
               className="mt-6 inline-block text-sm transition-opacity hover:opacity-80"
               style={{ color: BRAND.primary, fontWeight: 500 }}
             >
               {n.historia}
-            </a>
+            </Link>
+
+            {/* FAMILY values as compact row */}
+            <div className="mt-8 grid grid-cols-3 gap-2 sm:grid-cols-6">
+              {VALUES.map((value) => (
+                <div
+                  key={value.letter}
+                  className="flex flex-col items-center rounded-xl border bg-white py-3 text-center"
+                  style={{ borderColor: BRAND.border }}
+                >
+                  <span
+                    style={{
+                      fontFamily: SERIF,
+                      fontSize: "22px",
+                      color: BRAND.primary,
+                      opacity: 0.3,
+                      lineHeight: 1,
+                    }}
+                  >
+                    {value.letter}
+                  </span>
+                  <span
+                    className="mt-1 text-[10px] font-medium text-[#555]"
+                    style={{ lineHeight: 1.2 }}
+                  >
+                    {value.title}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
 
-          <div className="grid grid-cols-3 grid-rows-2 gap-3 sm:gap-4">
-            {VALUES.map((value) => (
-              <article
-                key={value.letter}
-                className="border bg-white"
-                style={{
-                  borderColor: BRAND.border,
-                  borderRadius: "13px",
-                  padding: "14px",
-                }}
-              >
-                <p
-                  className="mb-1 leading-none"
-                  style={{
-                    fontFamily: SERIF,
-                    fontSize: "26px",
-                    color: BRAND.primary,
-                    opacity: 0.22,
-                    lineHeight: 1,
-                    marginBottom: "4px",
-                  }}
-                >
-                  {value.letter}
-                </p>
-                <p
-                  className="text-[#111]"
-                  style={{
-                    fontSize: "12px",
-                    fontWeight: 500,
-                    marginBottom: "3px",
-                  }}
-                >
-                  {value.title}
-                </p>
-                <p
-                  className="text-[#aaa]"
-                  style={{ fontSize: "11px", lineHeight: 1.4 }}
-                >
-                  {n[value.descKey]}
-                </p>
-              </article>
-            ))}
+          {/* Right: team photo */}
+          <div
+            className="relative overflow-hidden"
+            style={{
+              borderRadius: "20px",
+              aspectRatio: "3/4",
+              boxShadow: "0 8px 32px rgba(0,0,0,0.10)",
+            }}
+          >
+            <Image
+              src="/team.jpg"
+              alt="Equipo Home&Heart"
+              fill
+              sizes="(max-width: 1024px) 100vw, 50vw"
+              style={{ objectFit: "cover", objectPosition: "center top" }}
+              priority={false}
+            />
           </div>
         </div>
       </div>
