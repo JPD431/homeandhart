@@ -29,12 +29,7 @@ import { getVerificadoBadgeTooltip } from "@/app/lib/verification-copy";
 import { translations } from "@/app/lib/i18n";
 
 /** ISR: no pre-renderizar todos los proveedores en build. */
-export const revalidate = 3600;
-export const dynamicParams = true;
-
-export async function generateStaticParams() {
-  return [];
-}
+export const dynamic = "force-dynamic";
 
 // Colors and non-translatable theme parts stay at module level
 const VERTICAL_COLORS = {

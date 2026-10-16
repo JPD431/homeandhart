@@ -72,12 +72,7 @@ function isValidRoute(ciudad, vertical) {
  * Se generan bajo demanda y se cachean con ISR (revalidate).
  * SEO: las URLs siguen indexables; el HTML se cachea tras el primer hit.
  */
-export const revalidate = 3600;
-export const dynamicParams = true;
-
-export async function generateStaticParams() {
-  return [];
-}
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }) {
   const { ciudad, vertical } = await params;
