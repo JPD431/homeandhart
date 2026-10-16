@@ -18,11 +18,12 @@ export async function generateStaticParams() {
 marked.setOptions({ gfm: true, breaks: true });
 
 function getImageUrl(categoria, slug, width = 800, height = 400) {
-  const seed = slug.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  const safeSlug = slug || "home-heart";
+  const seed = safeSlug.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
   const imageId = (seed % 1000) + 1;
   void categoria;
   void imageId;
-  return `https://picsum.photos/seed/${slug}/${width}/${height}`;
+  return `https://picsum.photos/seed/${safeSlug}/${width}/${height}`;
 }
 
 function getPostImageUrl(post, width = 900, height = 400) {
@@ -34,7 +35,7 @@ export async function generateMetadata({ params }) {
   const supabase = getPublicSupabase();
   const { data: post } = await supabase
     .from("blog_posts")
-    .select("titulo, subtitulo, imagen_url, categoria")
+    .select("slug, titulo, subtitulo, imagen_url, categoria")
     .eq("slug", slug)
     .eq("publicado", true)
     .maybeSingle();
