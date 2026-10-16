@@ -1,7 +1,7 @@
 export const metadata = {
-  title: "Garantía Home&Heart · Alternativa verificada en 30 minutos",
+  title: "Garantía Home&Heart · Alternativa verificada si tu proveedor cancela",
   description:
-    "Si tu proveedor cancela con menos de 24h, te encontramos una alternativa verificada en menos de 30 minutos.",
+    "Si tu proveedor cancela con menos de 24h, buscamos una alternativa verificada lo antes posible (nuestro objetivo: 30 minutos).",
 };
 
 export default function GarantiaLayout({ children }) {

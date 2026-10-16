@@ -30,7 +30,7 @@ export const metadata = {
     template: "%s · Home&Heart",
   },
   description:
-    "Alojamiento, niñeras y cuidadores de mascotas con documentación revisada por nuestro equipo. Todo coordinado, un solo pago protegido. Garantía de 30 minutos.",
+    "Alojamiento, niñeras y cuidadores de mascotas con documentación revisada por nuestro equipo. Todo coordinado, un solo pago protegido. Garantía de sustitución si tu proveedor cancela.",
   keywords: [
     "niñera Madrid",
     "cuidador mascotas Madrid",

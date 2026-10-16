@@ -118,7 +118,7 @@ function clientePrimeraReservaHtml(data) {
       </p>
       <div style="margin:20px 0 0;padding:18px;background:${BRAND_LIGHT};border-radius:8px;">
         <p style="margin:0;font-size:14px;color:#444;line-height:1.7;">
-          <strong>🛡️ Garantía 30 min:</strong> si el proveedor cancela con menos de 24h, te buscamos alternativas al mismo precio.
+          <strong>🛡️ Garantía Home&Heart:</strong> si el proveedor cancela con menos de 24h, te buscamos alternativas verificadas lo antes posible.
         </p>
         <p style="margin:12px 0 0;font-size:14px;color:#444;line-height:1.7;">
           <strong>💳 Pago retenido:</strong> el dinero solo se libera cuando confirmas que todo fue bien.
