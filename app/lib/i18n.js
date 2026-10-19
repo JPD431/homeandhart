@@ -114,18 +114,6 @@ export const translations = {
       masc2: "Fotos y actualizaciones",
       masc3: "Cobertura veterinaria",
     },
-    nosotros: {
-      titulo: "Construido por familias, para familias",
-      subtitulo:
-        "Sabemos lo que es viajar con niños y mascotas. Por eso creamos Home&Heart.",
-      historia: "Conoce nuestra historia →",
-      faith: "Confianza real.",
-      attention: "Cada detalle.",
-      magic: "Viajes tranquilos.",
-      integrity: "Sin sorpresas.",
-      links: "Vínculos reales.",
-      youFirst: "Personas primero.",
-    },
     activityBar: {
       texto: "María acaba de reservar cuidado de niños en Madrid",
     },
@@ -149,12 +137,6 @@ export const translations = {
       garantiaLink: "Saber más sobre la garantía →",
       badgeVerificadoTooltip:
         "Identidad verificada por nuestro equipo. Según el servicio, también revisamos antecedentes penales (niñeras y mascotas), certificado de delitos sexuales (niñeras) o licencia turística (alojamiento).",
-    },
-    landingReviews: {
-      label: "LO QUE DICEN LAS FAMILIAS",
-      titulo: "Reseñas de familias reales",
-      valoracionMedia: "Valoración media",
-      resenas: (n) => `${n} reseña${n === 1 ? "" : "s"}`,
     },
     historiaPage: {
       titulo: "Nuestra historia",
@@ -1704,18 +1686,6 @@ export const translations = {
       masc2: "Photos and updates",
       masc3: "Vet coverage",
     },
-    nosotros: {
-      titulo: "Built by families, for families",
-      subtitulo:
-        "We know what it is like to travel with children and pets. That is why we created Home&Heart.",
-      historia: "Our story →",
-      faith: "Real trust.",
-      attention: "Every detail.",
-      magic: "Peaceful trips.",
-      integrity: "No surprises.",
-      links: "Real connections.",
-      youFirst: "People first.",
-    },
     activityBar: {
       texto: "María just booked childcare in Madrid",
     },
@@ -1739,12 +1709,6 @@ export const translations = {
       garantiaLink: "Learn more about the guarantee →",
       badgeVerificadoTooltip:
         "Identity reviewed by our team. Depending on the service, we also review criminal record certificates (childcare and pet care), a sexual offences certificate (childcare), or the tourist registration number (accommodation).",
-    },
-    landingReviews: {
-      label: "WHAT FAMILIES SAY",
-      titulo: "Reviews from real families",
-      valoracionMedia: "Average rating",
-      resenas: (n) => `${n} review${n === 1 ? "" : "s"}`,
     },
     historiaPage: {
       titulo: "Our story",
