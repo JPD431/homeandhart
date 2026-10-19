@@ -45,7 +45,7 @@ const HERO_EXTRA = {
     headlineMain: "Todo lo que necesita tu familia, ",
     headlineEm: "aquí.",
     ciudad: "Ciudad",
-    buscarBtn: "Buscar →",
+    buscarBtn: "Buscar",
     disponibles: (n) => `${n} disponibles`,
     desde: (n) => `desde ${n}€`,
   },
@@ -53,7 +53,7 @@ const HERO_EXTRA = {
     headlineMain: "Everything your family needs, ",
     headlineEm: "here.",
     ciudad: "City",
-    buscarBtn: "Search →",
+    buscarBtn: "Search",
     disponibles: (n) => `${n} available`,
     desde: (n) => `from €${n}`,
   },
@@ -463,7 +463,7 @@ export default function Hero() {
 
             <button
               type="submit"
-              className="w-full min-h-[72px] shrink-0 px-8 text-sm font-semibold tracking-wide text-white transition-opacity hover:opacity-90 md:w-auto md:min-h-0 md:h-full"
+              className="flex w-full min-h-[72px] shrink-0 items-center justify-center px-8 text-center text-sm font-semibold tracking-wide text-white transition-opacity hover:opacity-90 md:w-auto md:min-h-0 md:self-stretch"
               style={{
                 backgroundColor: "#1d4f91",
                 borderRadius: 0,
