@@ -322,6 +322,7 @@ export default function Navbar() {
         { href: "/blog", label: "Blog" },
         { href: "/garantia", label: t.navbar.garantia },
         { href: "/#como-funciona", label: t.navbar.comoFunciona },
+        { href: "/nuestra-historia", label: t.navbar.nosotros },
         { href: "/ser-proveedor", label: t.navbar.serProveedor },
       ];
     }
@@ -341,6 +342,7 @@ export default function Navbar() {
       { href: "/historial", label: t.navbar.historial },
       { href: "/familia", label: t.navbar.familia },
       { href: "/garantia", label: t.navbar.garantia },
+      { href: "/nuestra-historia", label: t.navbar.nosotros },
     ];
 
     if (esClientePuro && !onboardingIncompleto) {
