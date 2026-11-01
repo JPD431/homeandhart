@@ -103,7 +103,7 @@ export default function AdminCancelacionesTab({ onSuccess, onError }) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold text-[#1a1a1a]">Cancelaciones</h2>
-          <p className="mt-1 text-xs text-[#888]">
+          <p className="mt-1 text-xs text-[#6b6b6b]">
             Registro interno. Eximir = fuerza mayor (no cuenta para el usuario).
             No cambia reembolsos ni garantía ya aplicados.
           </p>
@@ -134,7 +134,7 @@ export default function AdminCancelacionesTab({ onSuccess, onError }) {
       </div>
 
       {loading ? (
-        <p className="mt-8 text-center text-sm text-[#888]">Cargando…</p>
+        <p className="mt-8 text-center text-sm text-[#6b6b6b]">Cargando…</p>
       ) : rows.length === 0 ? (
         <p
           className="mt-8 rounded-2xl border bg-white px-6 py-10 text-center text-sm text-[#666]"
@@ -150,7 +150,7 @@ export default function AdminCancelacionesTab({ onSuccess, onError }) {
           <table className="w-full min-w-[960px] text-left text-sm">
             <thead>
               <tr
-                className="border-b text-xs font-semibold uppercase tracking-wide text-[#888]"
+                className="border-b text-xs font-semibold uppercase tracking-wide text-[#6b6b6b]"
                 style={{ borderColor: BRAND.border }}
               >
                 <th className="px-4 py-3">Fecha</th>
@@ -204,11 +204,11 @@ export default function AdminCancelacionesTab({ onSuccess, onError }) {
                       <p className="font-medium text-[#1a1a1a]">
                         {row.servicio_titulo || "Servicio"}
                       </p>
-                      <p className="text-xs text-[#888]">
+                      <p className="text-xs text-[#6b6b6b]">
                         {formatFechas(row.fecha_inicio, row.fecha_fin)}
                         {row.booking_estado ? ` · ${row.booking_estado}` : ""}
                       </p>
-                      <p className="mt-0.5 text-[10px] text-[#aaa]">
+                      <p className="mt-0.5 text-[10px] text-[#6b6b6b]">
                         {row.booking_id?.slice(0, 8)}…
                       </p>
                     </td>
@@ -217,7 +217,7 @@ export default function AdminCancelacionesTab({ onSuccess, onError }) {
                         {row.motivo || "Sin motivo indicado al cancelar"}
                       </p>
                       {row.nota_admin && (
-                        <p className="mt-1 text-[11px] text-[#888]">
+                        <p className="mt-1 text-[11px] text-[#6b6b6b]">
                           Nota admin: {row.nota_admin}
                         </p>
                       )}

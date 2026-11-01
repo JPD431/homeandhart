@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/app/components/LocaleLink";
 import { Suspense, useCallback, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import CalendarioDisponibilidad from "@/app/components/CalendarioDisponibilidad";
@@ -100,7 +100,7 @@ function AnuncioBookingPanelInner({
             >
               {displayPrice}
             </p>
-            <p className="text-[13px] text-[#aaa] line-through">
+            <p className="text-[13px] text-[#6b6b6b] line-through">
               {formatServiceCardPrice(service.precio, priceSuffix, lang)}
             </p>
             {service.oferta_descuento ? (
@@ -137,7 +137,7 @@ function AnuncioBookingPanelInner({
 
       {isOwnerPreview ? (
         <p
-          className="mt-5 rounded-lg border px-3 py-2.5 text-center text-[11px] text-[#888]"
+          className="mt-5 rounded-lg border px-3 py-2.5 text-center text-[11px] text-[#6b6b6b]"
           style={{ borderColor: "#e8e4de", backgroundColor: "#fafaf9" }}
         >
           {t.anuncio.reservaDisponiblePublicar}
@@ -153,7 +153,7 @@ function AnuncioBookingPanelInner({
           </Link>
 
           {!fechaDesde && (
-            <p className="mt-2 text-center text-[10px] text-[#aaa]">
+            <p className="mt-2 text-center text-[10px] text-[#6b6b6b]">
               {t.anuncio.tambienFechas}
             </p>
           )}
@@ -201,7 +201,7 @@ function AnuncioBookingPanelFallback({
       </div>
       {isOwnerPreview ? (
         <p
-          className="mt-5 rounded-lg border px-3 py-2.5 text-center text-[11px] text-[#888]"
+          className="mt-5 rounded-lg border px-3 py-2.5 text-center text-[11px] text-[#6b6b6b]"
           style={{ borderColor: "#e8e4de", backgroundColor: "#fafaf9" }}
         >
           {t.anuncio.reservaDisponiblePublicar}

@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import Link from "@/app/components/LocaleLink";
+import { useCleanPathname } from "@/app/lib/use-clean-pathname";
 import { useCallback, useEffect, useState } from "react";
 import { BRAND } from "@/app/components/brand";
 
@@ -15,7 +15,7 @@ const BORDER = "#e8e4de";
  * @param {{ className?: string }} props
  */
 export default function OnboardingPendienteBanner({ className = "" }) {
-  const pathname = usePathname();
+  const pathname = useCleanPathname();
   const [dismissed, setDismissed] = useState(true);
 
   useEffect(() => {
@@ -53,11 +53,11 @@ export default function OnboardingPendienteBanner({ className = "" }) {
       >
         Continuar
       </Link>
-      <span className="mx-1.5 text-[#ccc]">·</span>
+      <span className="mx-1.5 text-[#6b6b6b]">·</span>
       <button
         type="button"
         onClick={handleDismiss}
-        className="border-0 bg-transparent p-0 text-xs font-medium text-[#888] underline-offset-2 hover:underline"
+        className="border-0 bg-transparent p-0 text-xs font-medium text-[#6b6b6b] underline-offset-2 hover:underline"
         style={{ cursor: "pointer" }}
       >
         Ahora no

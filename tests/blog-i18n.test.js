@@ -9,8 +9,8 @@ vi.mock("@/app/lib/LangContext", () => ({
 }));
 vi.mock("@/app/components/Navbar", () => ({ default: () => null }));
 
-import BlogArticleView from "@/app/blog/[slug]/BlogArticleView";
-import BlogIndexView from "@/app/blog/BlogIndexView";
+import BlogArticleView from "@/app/[lang]/blog/[slug]/BlogArticleView";
+import BlogIndexView from "@/app/[lang]/blog/BlogIndexView";
 import { formatBlogDate } from "@/app/lib/blog-seed";
 
 const render = (component, props) =>

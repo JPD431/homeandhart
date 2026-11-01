@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/app/components/LocaleLink";
 import { useLang } from "@/app/lib/LangContext";
 import { useTranslation } from "@/app/lib/i18n";
 import { BRAND, SERIF } from "./brand";
@@ -14,7 +14,7 @@ function FooterColumn({ title, links }) {
           <li key={link.label}>
             <Link
               href={link.href}
-              className="text-xs text-[#888] transition-colors hover:text-[#1d4f91]"
+              className="text-xs text-[#6b6b6b] transition-colors hover:text-[#1d4f91]"
             >
               {link.label}
             </Link>
@@ -35,6 +35,12 @@ export default function Footer() {
     { label: t.footer.mascotas, href: "/buscar?vertical=mascotas" },
   ];
 
+  const ciudadesLinks = [
+    { label: t.footer.ninerasMadrid, href: "/madrid/nineras" },
+    { label: t.footer.alojamientoMadrid, href: "/madrid/alojamiento" },
+    { label: t.footer.mascotasMadrid, href: "/madrid/mascotas" },
+  ];
+
   const empresaLinks = [
     { label: t.footer.nosotros, href: "/nuestra-historia" },
     { label: t.footer.comoFunciona, href: "/#como-funciona" },
@@ -50,6 +56,7 @@ export default function Footer() {
 
   return (
     <footer
+      aria-label="Home&Heart"
       className="bg-white"
       style={{
         borderTop: `0.5px solid ${BRAND.border}`,
@@ -57,7 +64,7 @@ export default function Footer() {
       }}
     >
       <div
-        className="mx-auto grid gap-8 sm:grid-cols-2 lg:grid-cols-4"
+        className="mx-auto grid gap-8 sm:grid-cols-2 lg:grid-cols-5"
         style={{ maxWidth: "960px", gap: "32px" }}
       >
         <div>
@@ -65,17 +72,18 @@ export default function Footer() {
             Home<span className="italic text-[#1d4f91]">&</span>Heart
           </p>
           <p
-            className="mt-2 text-[11px] italic text-[#888]"
+            className="mt-2 text-[11px] italic text-[#6b6b6b]"
             style={{ fontFamily: SERIF }}
           >
             {t.footer.slogan}
           </p>
-          <p className="mt-3 text-xs leading-relaxed text-[#888]">
+          <p className="mt-3 text-xs leading-relaxed text-[#6b6b6b]">
             {t.ecosystem.subtitulo}
           </p>
         </div>
 
         <FooterColumn title={t.footer.servicios} links={serviciosLinks} />
+        <FooterColumn title={t.footer.ciudades} links={ciudadesLinks} />
         <FooterColumn title={t.footer.empresa} links={empresaLinks} />
         <FooterColumn title={t.footer.legal} links={legalLinks} />
       </div>
@@ -88,10 +96,10 @@ export default function Footer() {
           paddingTop: "18px",
         }}
       >
-        <p className="text-[11px] text-[#888]">
+        <p className="text-[11px] text-[#6b6b6b]">
           © {new Date().getFullYear()} Home&Heart · {t.footer.derechos}
         </p>
-        <p className="text-[11px] text-[#888]">
+        <p className="text-[11px] text-[#6b6b6b]">
           {t.footer.jurisdiccion}
         </p>
       </div>

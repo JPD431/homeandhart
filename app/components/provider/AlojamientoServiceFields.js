@@ -50,7 +50,7 @@ export default function AlojamientoServiceFields({
               className={inputClass}
               style={{ borderColor: BRAND.border }}
             />
-            <p className="mt-1 text-[10px] text-[#888]">Check-in</p>
+            <p className="mt-1 text-[10px] text-[#6b6b6b]">Check-in</p>
           </div>
           <div>
             <label className="mb-1.5 block text-xs font-medium text-[#444]">Hora de salida</label>
@@ -61,7 +61,7 @@ export default function AlojamientoServiceFields({
               className={inputClass}
               style={{ borderColor: BRAND.border }}
             />
-            <p className="mt-1 text-[10px] text-[#888]">Check-out</p>
+            <p className="mt-1 text-[10px] text-[#6b6b6b]">Check-out</p>
           </div>
         </div>
       </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/app/components/LocaleLink";
 import { useEffect, useMemo, useState } from "react";
 import { BRAND, SERIF } from "@/app/components/brand";
 import {
@@ -58,7 +58,7 @@ function MonthCalendar({
       <p className="mb-3 text-center text-sm font-semibold text-[#1a1a1a]">
         {monthLabel}
       </p>
-      <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-semibold uppercase tracking-wide text-[#888]">
+      <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-semibold uppercase tracking-wide text-[#6b6b6b]">
         {t.calendario.dias.map((label) => (
           <span key={label} className="py-1">
             {label}

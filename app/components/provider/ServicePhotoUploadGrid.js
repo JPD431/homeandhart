@@ -27,7 +27,7 @@ export default function ServicePhotoUploadGrid({
       {label ? (
         <p className="mb-2 text-xs font-medium text-[#444]">{label}</p>
       ) : null}
-      <p className="mb-2 text-[11px] text-[#888]">
+      <p className="mb-2 text-[11px] text-[#6b6b6b]">
         La primera foto es la portada del anuncio. Máximo {maxCount} fotos.
       </p>
       <div className="flex flex-wrap gap-2">
@@ -100,7 +100,7 @@ export default function ServicePhotoUploadGrid({
             type="button"
             onClick={onAdd}
             disabled={disabled || uploading}
-            className="flex h-28 w-28 flex-col items-center justify-center rounded-xl border border-dashed text-xs text-[#888] disabled:opacity-60"
+            className="flex h-28 w-28 flex-col items-center justify-center rounded-xl border border-dashed text-xs text-[#6b6b6b] disabled:opacity-60"
             style={{ borderColor: BRAND.border }}
           >
             <span className="text-2xl">+</span>

@@ -3,6 +3,8 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { BRAND } from "@/app/components/brand";
 import { searchCiudadesEspana } from "@/app/lib/mapboxGeocoding";
+import { useLang } from "@/app/lib/LangContext";
+import { useTranslation } from "@/app/lib/i18n";
 
 const DEBOUNCE_MS = 300;
 
@@ -13,7 +15,10 @@ export default function CiudadAutocompleteInput({
   className = "",
   inputClassName = "",
   id,
+  ariaLabel,
 }) {
+  const { lang } = useLang();
+  const ta = useTranslation(lang).a11y;
   const listboxId = useId();
   const rootRef = useRef(null);
   const [suggestions, setSuggestions] = useState([]);
@@ -114,6 +119,7 @@ export default function CiudadAutocompleteInput({
     <div ref={rootRef} className={`relative ${className}`.trim()}>
       <input
         id={id}
+        aria-label={ariaLabel}
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -124,7 +130,7 @@ export default function CiudadAutocompleteInput({
         placeholder={placeholder}
         role="combobox"
         aria-expanded={showList}
-        aria-controls={showList ? listboxId : undefined}
+        aria-controls={listboxId}
         aria-autocomplete="list"
         aria-activedescendant={
           showList && activeIndex >= 0
@@ -136,12 +142,17 @@ export default function CiudadAutocompleteInput({
         style={{ color: "#2a3a4a" }}
       />
 
-      {showList && (
-        <ul
-          id={listboxId}
-          role="listbox"
-          className="absolute left-0 right-0 top-full z-50 mt-1 max-h-56 overflow-y-auto border bg-white py-1 shadow-lg"
-          style={{ borderColor: BRAND.border, borderRadius: 6 }}
+      <p className="sr-only" role="status" aria-live="polite">
+        {showList ? ta.sugerenciasN(suggestions.length) : ""}
+      </p>
+
+      <ul
+        id={listboxId}
+        role="listbox"
+        aria-label={ta.sugerenciasCiudad}
+        hidden={!showList}
+        className="absolute left-0 right-0 top-full z-50 mt-1 max-h-56 overflow-y-auto border bg-white py-1 shadow-lg"
+        style={{ borderColor: BRAND.border, borderRadius: 6 }}
         >
           {suggestions.map((suggestion, index) => {
             const isActive = index === activeIndex;
@@ -167,7 +178,7 @@ export default function CiudadAutocompleteInput({
                     {suggestion.nombre}
                   </span>
                   {suggestion.etiqueta !== suggestion.nombre && (
-                    <span className="mt-0.5 block text-[10px] text-[#888]">
+                    <span className="mt-0.5 block text-[10px] text-[#6b6b6b]">
                       {suggestion.etiqueta}
                     </span>
                   )}
@@ -176,11 +187,10 @@ export default function CiudadAutocompleteInput({
             );
           })}
         </ul>
-      )}
 
       {loading && value.trim().length >= 2 && !showList && (
         <p
-          className="pointer-events-none absolute left-0 top-full mt-1 px-1 text-[10px] text-[#bbb]"
+          className="pointer-events-none absolute left-0 top-full mt-1 px-1 text-[10px] text-[#6b6b6b]"
           aria-hidden
         >
           …

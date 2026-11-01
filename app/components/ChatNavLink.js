@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/app/components/LocaleLink";
 import { useEffect, useState } from "react";
 import { BRAND } from "@/app/components/brand";
 import { supabase } from "@/app/lib/supabase";

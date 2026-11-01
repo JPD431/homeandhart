@@ -53,6 +53,8 @@ export default function InstallPWA() {
 
   return (
     <div
+      role="region"
+      aria-label="Home&Heart"
       style={{
         position: "fixed",
         bottom: 0,
@@ -77,7 +79,7 @@ export default function InstallPWA() {
           <div style={{ fontSize: 14, fontWeight: 500, color: "#2a3a4a" }}>
             Añade Home&Heart a tu móvil
           </div>
-          <div style={{ fontSize: 11, color: "#888" }}>Accede más rápido como una app</div>
+          <div style={{ fontSize: 11, color: "#6b6b6b" }}>Accede más rápido como una app</div>
         </div>
         <button
           type="button"
@@ -86,7 +88,7 @@ export default function InstallPWA() {
             background: "none",
             border: "none",
             fontSize: 18,
-            color: "#bbb",
+            color: "#6b6b6b",
             cursor: "pointer",
             padding: 4,
           }}
@@ -120,7 +122,7 @@ export default function InstallPWA() {
               <div style={{ fontSize: 10, fontWeight: 500, color: "#2a3a4a", marginBottom: 2 }}>
                 Paso 1
               </div>
-              <div style={{ fontSize: 10, color: "#888", lineHeight: 1.4 }}>
+              <div style={{ fontSize: 10, color: "#6b6b6b", lineHeight: 1.4 }}>
                 Toca <strong>⋯</strong> o el botón compartir de Safari
               </div>
             </div>
@@ -138,7 +140,7 @@ export default function InstallPWA() {
               <div style={{ fontSize: 10, fontWeight: 500, color: "#2a3a4a", marginBottom: 2 }}>
                 Paso 2
               </div>
-              <div style={{ fontSize: 10, color: "#888", lineHeight: 1.4 }}>
+              <div style={{ fontSize: 10, color: "#6b6b6b", lineHeight: 1.4 }}>
                 &quot;Añadir a pantalla de inicio&quot;
               </div>
             </div>

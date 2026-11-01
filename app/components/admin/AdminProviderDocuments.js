@@ -159,7 +159,7 @@ function DocumentRow({
         <p className="font-medium text-[#1a1a1a]">
           {definition.label}
           {hint && (
-            <span className="ml-1 text-xs font-normal text-[#888]">
+            <span className="ml-1 text-xs font-normal text-[#6b6b6b]">
               ({hint})
             </span>
           )}
@@ -439,10 +439,10 @@ export default function AdminProviderDocuments({
   if (verticales.length === 0) {
     return (
       <div className="mt-4">
-        <p className="text-xs font-semibold uppercase tracking-wide text-[#888]">
+        <p className="text-xs font-semibold uppercase tracking-wide text-[#6b6b6b]">
           Documentos
         </p>
-        <p className="mt-1 text-sm text-[#888]">
+        <p className="mt-1 text-sm text-[#6b6b6b]">
           Sin servicios registrados — no hay documentos aplicables todavía.
         </p>
       </div>
@@ -451,7 +451,7 @@ export default function AdminProviderDocuments({
 
   return (
     <div className="mt-4">
-      <p className="text-xs font-semibold uppercase tracking-wide text-[#888]">
+      <p className="text-xs font-semibold uppercase tracking-wide text-[#6b6b6b]">
         Documentos
       </p>
 
@@ -485,7 +485,7 @@ export default function AdminProviderDocuments({
       <div className="mt-3">
         <p className="mb-2 text-xs font-semibold text-[#444]">Obligatorios</p>
         {mandatory.length === 0 ? (
-          <p className="text-sm text-[#888]">Ninguno aplicable.</p>
+          <p className="text-sm text-[#6b6b6b]">Ninguno aplicable.</p>
         ) : (
           <ul className="flex flex-col gap-2">
             {mandatory.map((def) => {
@@ -550,7 +550,7 @@ export default function AdminProviderDocuments({
         const s = getDocumentStatus(def.id, context, verticales);
         return s.uploaded;
       }) && (
-        <p className="mt-2 text-xs text-[#888]">
+        <p className="mt-2 text-xs text-[#6b6b6b]">
           Sin documentos opcionales subidos.
         </p>
       )}

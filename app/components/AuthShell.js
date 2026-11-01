@@ -1,6 +1,7 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/app/components/LocaleLink";
+import { useEffect, useRef } from "react";
 import { useLang } from "@/app/lib/LangContext";
 import { useTranslation } from "@/app/lib/i18n";
 
@@ -25,7 +26,7 @@ export const labelStyle = {
   fontSize: 8,
   textTransform: "uppercase",
   letterSpacing: "0.08em",
-  color: "#bbb",
+  color: "#6b6b6b",
   marginBottom: 6,
   fontWeight: 600,
 };
@@ -39,7 +40,7 @@ export function AuthShell({ children }) {
       className="font-sans"
       style={{ minHeight: "100vh", background: WARM }}
     >
-      <div
+      <header
         style={{
           height: 57,
           display: "flex",
@@ -65,16 +66,18 @@ export function AuthShell({ children }) {
             style={{
               display: "block",
               fontSize: 10,
-              color: "#bbb",
+              color: "#6b6b6b",
               marginTop: 2,
             }}
           >
             {t.footer.slogan}
           </span>
         </Link>
-      </div>
+      </header>
 
-      <div
+      <main
+        id="contenido"
+        tabIndex={-1}
         style={{
           display: "grid",
           gridTemplateColumns: "1fr 1fr",
@@ -137,7 +140,7 @@ export function AuthShell({ children }) {
                 fontSize: 9,
                 textTransform: "uppercase",
                 letterSpacing: "0.14em",
-                color: "rgba(255,255,255,0.45)",
+                color: "rgba(255, 255, 255, 0.95)",
                 marginBottom: 10,
                 fontWeight: 600,
               }}
@@ -159,7 +162,7 @@ export function AuthShell({ children }) {
             <p
               style={{
                 fontSize: 11,
-                color: "rgba(255,255,255,0.45)",
+                color: "rgba(255, 255, 255, 0.95)",
                 lineHeight: 1.7,
                 marginTop: 14,
               }}
@@ -204,7 +207,7 @@ export function AuthShell({ children }) {
                 style={{
                   margin: 0,
                   fontSize: 12,
-                  color: "rgba(255,255,255,0.75)",
+                  color: "rgba(255, 255, 255, 0.95)",
                   lineHeight: 1.6,
                 }}
               >
@@ -225,7 +228,55 @@ export function AuthShell({ children }) {
         >
           <div style={{ width: "100%", maxWidth: 380 }}>{children}</div>
         </div>
-      </div>
+      </main>
     </div>
+  );
+}
+
+const messageBase = {
+  padding: "10px 12px",
+  borderRadius: 6,
+  fontSize: 12,
+};
+
+/** Error de formulario: se anuncia (role="alert") y recibe el foco al aparecer. */
+export function AuthError({ id, children, style }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    ref.current?.focus();
+  }, [children]);
+  return (
+    <p
+      ref={ref}
+      id={id}
+      role="alert"
+      tabIndex={-1}
+      style={{
+        ...messageBase,
+        background: "#fef2f2",
+        color: "#b91c1c",
+        ...style,
+      }}
+    >
+      {children}
+    </p>
+  );
+}
+
+/** Mensaje de estado/éxito (role="status"): se anuncia sin interrumpir. */
+export function AuthStatus({ id, children, style }) {
+  return (
+    <p
+      id={id}
+      role="status"
+      style={{
+        ...messageBase,
+        background: "#ecfdf5",
+        color: "#047857",
+        ...style,
+      }}
+    >
+      {children}
+    </p>
   );
 }

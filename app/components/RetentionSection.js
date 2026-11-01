@@ -85,7 +85,7 @@ export default function RetentionSection() {
     >
       <div className="mx-auto max-w-6xl">
         <header className="text-center">
-          <p
+          <h2
             id="retention-slogan"
             className="italic text-white"
             style={{
@@ -96,12 +96,12 @@ export default function RetentionSection() {
             }}
           >
             {t.footer.slogan}
-          </p>
+          </h2>
           <p
             className="mx-auto mt-6 text-base leading-relaxed sm:text-lg"
             style={{
               maxWidth: "480px",
-              color: "rgba(255, 255, 255, 0.6)",
+              color: "rgba(255, 255, 255, 0.95)",
             }}
           >
             {r.titulo}
@@ -133,7 +133,7 @@ export default function RetentionSection() {
                 </h3>
                 <p
                   className="mt-2 text-sm leading-relaxed"
-                  style={{ color: "rgba(255, 255, 255, 0.55)" }}
+                  style={{ color: "rgba(255, 255, 255, 0.95)" }}
                 >
                   {card.description}
                 </p>
@@ -160,7 +160,7 @@ export default function RetentionSection() {
             </h3>
             <p
               className="mt-2 max-w-md text-sm leading-relaxed sm:text-base"
-              style={{ color: "rgba(255, 255, 255, 0.6)" }}
+              style={{ color: "rgba(255, 255, 255, 0.95)" }}
             >
               {r.ctadesc}
             </p>

@@ -22,7 +22,7 @@ export default function DireccionContactoFields({ d, upd, vertical }) {
             fontSize: 13,
           }}
         />
-        <p style={{ fontSize: 10, color: "#aaa", marginTop: 4 }}>
+        <p style={{ fontSize: 10, color: "#6b6b6b", marginTop: 4 }}>
           {DIRECCION_LABELS.direccionHint}
         </p>
       </div>

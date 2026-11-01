@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/app/components/LocaleLink";
 import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
+import { useCleanPathname } from "@/app/lib/use-clean-pathname";
 import { supabase } from "@/app/lib/supabase";
 import {
   LEGAL_DOC_PATHS,
@@ -36,7 +36,7 @@ function shouldSkipPath(pathname) {
  * (cuentas antiguas o tras cambio de versión de documentos).
  */
 export default function LegalConsentGate() {
-  const pathname = usePathname();
+  const pathname = useCleanPathname();
   const [open, setOpen] = useState(false);
   const [aceptaTerminos, setAceptaTerminos] = useState(false);
   const [aceptaPrivacidad, setAceptaPrivacidad] = useState(false);

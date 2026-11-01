@@ -241,7 +241,7 @@ export default function AdminUsersTab({ onSuccess, onError }) {
         <div className="flex-1">
           <label
             htmlFor="admin-users-search"
-            className="text-xs font-semibold uppercase tracking-wide text-[#888]"
+            className="text-xs font-semibold uppercase tracking-wide text-[#6b6b6b]"
           >
             Buscar por nombre o email
           </label>
@@ -278,7 +278,7 @@ export default function AdminUsersTab({ onSuccess, onError }) {
       </div>
 
       {meta && (
-        <p className="mt-3 text-xs text-[#888]">
+        <p className="mt-3 text-xs text-[#6b6b6b]">
           Mostrando hasta {meta.limit} usuarios
           {meta.pendientes > 0 && filtro === "todos"
             ? ` · ${meta.pendientes} con DNI pendiente de revisión`
@@ -290,7 +290,7 @@ export default function AdminUsersTab({ onSuccess, onError }) {
       )}
 
       {loading ? (
-        <p className="mt-8 text-center text-sm text-[#888]">Cargando usuarios…</p>
+        <p className="mt-8 text-center text-sm text-[#6b6b6b]">Cargando usuarios…</p>
       ) : loadError ? (
         <div className="mt-8 text-center">
           <p className="text-sm text-[#b91c1c]">{loadError}</p>
@@ -318,7 +318,7 @@ export default function AdminUsersTab({ onSuccess, onError }) {
           <table className="w-full min-w-[960px] text-left text-sm">
             <thead>
               <tr
-                className="border-b text-xs font-semibold uppercase tracking-wide text-[#888]"
+                className="border-b text-xs font-semibold uppercase tracking-wide text-[#6b6b6b]"
                 style={{ borderColor: BRAND.border }}
               >
                 <th className="px-4 py-3">Usuario</th>
@@ -352,7 +352,7 @@ export default function AdminUsersTab({ onSuccess, onError }) {
                   >
                     <td className="px-4 py-3">
                       <p className="font-medium text-[#1a1a1a]">{fullName(user)}</p>
-                      <p className="text-xs text-[#888]">{user.email || "—"}</p>
+                      <p className="text-xs text-[#6b6b6b]">{user.email || "—"}</p>
                     </td>
                     <td className="px-4 py-3">
                       <span
@@ -375,7 +375,7 @@ export default function AdminUsersTab({ onSuccess, onError }) {
                       >
                         {user.cancelaciones_count || 0}
                       </span>
-                      <p className="text-[10px] text-[#aaa]">no exentas</p>
+                      <p className="text-[10px] text-[#6b6b6b]">no exentas</p>
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex flex-col gap-1">
@@ -413,7 +413,7 @@ export default function AdminUsersTab({ onSuccess, onError }) {
                           </span>
                         )}
                         {user.dni_estado === "verificado" && user.dni_verificado_at && (
-                          <p className="text-[10px] text-[#888]">
+                          <p className="text-[10px] text-[#6b6b6b]">
                             {formatDate(user.dni_verificado_at)}
                           </p>
                         )}
@@ -506,7 +506,7 @@ export default function AdminUsersTab({ onSuccess, onError }) {
         </div>
       )}
 
-      <p className="mt-4 text-xs text-[#888]">
+      <p className="mt-4 text-xs text-[#6b6b6b]">
         Flujo: abre el DNI → compara con la foto de perfil → comprueba la fecha
         de nacimiento → marca el checkbox 18+ → Verificar DNI. La verificación
         del DNI es independiente de la aprobación del proveedor (pestañas
@@ -546,7 +546,7 @@ export default function AdminUsersTab({ onSuccess, onError }) {
             </div>
             <div className="grid gap-4 md:grid-cols-2">
               <div>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#888]">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#6b6b6b]">
                   Foto de perfil
                 </p>
                 <div
@@ -561,14 +561,14 @@ export default function AdminUsersTab({ onSuccess, onError }) {
                       className="max-h-[420px] w-full object-contain"
                     />
                   ) : (
-                    <p className="px-4 text-center text-sm text-[#888]">
+                    <p className="px-4 text-center text-sm text-[#6b6b6b]">
                       Sin foto de perfil
                     </p>
                   )}
                 </div>
               </div>
               <div>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#888]">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#6b6b6b]">
                   Documento (DNI)
                 </p>
                 <div

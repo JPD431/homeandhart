@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/app/components/LocaleLink";
 import { useEffect, useState } from "react";
 import AyudaLink from "@/app/components/AyudaLink";
 import { hasDniUploaded } from "@/app/lib/dni";

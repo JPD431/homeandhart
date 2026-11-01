@@ -120,7 +120,7 @@ function BookingLineItem({
       </span>
       <div className="min-w-0 flex-1">
         <p className="text-sm font-semibold text-[#1a1a1a]">{name}</p>
-        <p className="mt-0.5 text-xs text-[#888]">{detail}</p>
+        <p className="mt-0.5 text-xs text-[#6b6b6b]">{detail}</p>
         <span
           className="mt-2 inline-block rounded-md px-2 py-0.5 text-[10px] font-medium"
           style={{ backgroundColor: BRAND.light, color: BRAND.primary }}
@@ -220,7 +220,7 @@ export default function CheckoutSection() {
                 padding: "18px",
               }}
             >
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-[#888]">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-[#6b6b6b]">
                 {c.antesAhora}
               </p>
               <ul className="mt-4 flex flex-col gap-3">
@@ -229,10 +229,10 @@ export default function CheckoutSection() {
                     key={row.before}
                     className="flex flex-wrap items-center gap-2 text-sm"
                   >
-                    <span className="text-[#999] line-through decoration-[#ccc]">
+                    <span className="text-[#6b6b6b] line-through decoration-[#ccc]">
                       {row.before}
                     </span>
-                    <span className="text-[#bbb]" aria-hidden>
+                    <span className="text-[#6b6b6b]" aria-hidden>
                       →
                     </span>
                     <span
@@ -257,7 +257,7 @@ export default function CheckoutSection() {
               style={{
                 borderColor: BRAND.border,
                 backgroundColor: BRAND.warm,
-                color: "#888",
+                color: "#6b6b6b",
               }}
             >
               {c.ejemploLabel}
@@ -274,7 +274,7 @@ export default function CheckoutSection() {
               </h3>
               <p
                 className="mt-1 text-sm"
-                style={{ color: "rgba(255, 255, 255, 0.65)" }}
+                style={{ color: "rgba(255, 255, 255, 0.95)" }}
               >
                 {c.servicios3}
               </p>
@@ -294,7 +294,7 @@ export default function CheckoutSection() {
                 </p>
               </div>
 
-              <p className="mb-2 mt-6 text-[10px] font-semibold uppercase tracking-wider text-[#888]">
+              <p className="mb-2 mt-6 text-[10px] font-semibold uppercase tracking-wider text-[#6b6b6b]">
                 {c.alojDemo}
               </p>
               <BookingLineItem
@@ -305,7 +305,7 @@ export default function CheckoutSection() {
                 price="210€"
               />
 
-              <p className="mb-2 mt-4 text-[10px] font-semibold uppercase tracking-wider text-[#888]">
+              <p className="mb-2 mt-4 text-[10px] font-semibold uppercase tracking-wider text-[#6b6b6b]">
                 {c.serviciosCuidado}
               </p>
               <BookingLineItem
@@ -328,8 +328,8 @@ export default function CheckoutSection() {
                 style={{ borderColor: BRAND.border }}
               >
                 <div>
-                  <p className="text-sm text-[#888]">Total</p>
-                  <p className="mt-0.5 text-xs text-[#999]">
+                  <p className="text-sm text-[#6b6b6b]">Total</p>
+                  <p className="mt-0.5 text-xs text-[#6b6b6b]">
                     {c.unPago}
                   </p>
                 </div>
@@ -352,7 +352,7 @@ export default function CheckoutSection() {
                 {c.reservar}
               </button>
 
-              <p className="mt-4 text-center text-[11px] text-[#888]">
+              <p className="mt-4 text-center text-[11px] text-[#6b6b6b]">
                 {c.pagoRetenido}
               </p>
             </div>

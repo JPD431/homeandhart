@@ -75,7 +75,7 @@ export default function DoubleCTASection() {
           >
             <p
               className="text-[11px] font-semibold uppercase tracking-[0.15em]"
-              style={{ color: "rgba(255, 255, 255, 0.5)" }}
+              style={{ color: "rgba(255, 255, 255, 0.95)" }}
             >
               {d.siViajas}
             </p>
@@ -87,7 +87,7 @@ export default function DoubleCTASection() {
             </h3>
             <p
               className="mt-2 text-sm leading-relaxed"
-              style={{ color: "rgba(255, 255, 255, 0.65)" }}
+              style={{ color: "rgba(255, 255, 255, 0.95)" }}
             >
               {d.siViajasDesc}
             </p>
@@ -135,7 +135,7 @@ export default function DoubleCTASection() {
               padding: "36px",
             }}
           >
-            <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-[#aaa]">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-[#6b6b6b]">
               {d.siCiudad}
             </p>
             <h3
@@ -201,7 +201,7 @@ export default function DoubleCTASection() {
             className="mx-auto mt-3 text-sm leading-relaxed sm:text-base"
             style={{
               maxWidth: "360px",
-              color: "rgba(255, 255, 255, 0.6)",
+              color: "rgba(255, 255, 255, 0.95)",
             }}
           >
             {d.proveedorDesc}
@@ -212,7 +212,7 @@ export default function DoubleCTASection() {
               className="rounded-full border px-5 py-2.5 text-sm transition-opacity hover:opacity-90"
               style={{
                 borderColor: "rgba(255, 255, 255, 0.25)",
-                color: "rgba(255, 255, 255, 0.8)",
+                color: "rgba(255, 255, 255, 0.95)",
               }}
             >
               {d.saberMas}

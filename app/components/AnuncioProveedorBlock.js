@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/app/components/LocaleLink";
 import ProveedorPreguntarButton from "@/app/components/ProveedorPreguntarButton";
 import { SERIF } from "@/app/components/brand";
 import { useLang } from "@/app/lib/LangContext";
@@ -64,7 +64,7 @@ export default function AnuncioProveedorBlock({
     >
       <h2
         id="anuncio-proveedor-heading"
-        className="text-[13px] font-semibold uppercase tracking-wide text-[#888]"
+        className="text-[13px] font-semibold uppercase tracking-wide text-[#6b6b6b]"
         style={{ fontFamily: SERIF }}
       >
         {t.anuncio.tuProveedor}
@@ -98,14 +98,14 @@ export default function AnuncioProveedorBlock({
           {valoracionMedia ? (
             <p className="mt-1 text-[12px]" style={{ color: STAR_COLOR }}>
               ★ {valoracionMedia}
-              <span className="text-[#888]">
+              <span className="text-[#6b6b6b]">
                 {" "}
                 · {numReviews}{" "}
                 {numReviews !== 1 ? t.anuncio.resenas : t.anuncio.resena}
               </span>
             </p>
           ) : (
-            <p className="mt-1 text-[12px] text-[#aaa]">{t.anuncio.sinValoraciones}</p>
+            <p className="mt-1 text-[12px] text-[#6b6b6b]">{t.anuncio.sinValoraciones}</p>
           )}
 
           {bio ? (

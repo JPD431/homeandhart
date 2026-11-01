@@ -121,7 +121,7 @@ export default function FamiliaInviteBanner({ onAccepted, compact = false }) {
         </button>
       </div>
       {invitaciones.length > 1 && (
-        <p className="mt-2 text-xs text-[#888]">
+        <p className="mt-2 text-xs text-[#6b6b6b]">
           Tienes {invitaciones.length} invitaciones pendientes. Responde a una cada vez.
         </p>
       )}

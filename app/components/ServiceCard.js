@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/app/components/LocaleLink";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import ServiceCardPhotoCarousel from "@/app/components/ServiceCardPhotoCarousel";
@@ -223,14 +223,14 @@ export default function ServiceCard({
 
       <div className="flex min-h-[108px] flex-1 flex-col px-3 py-2">
         <div className="flex min-h-[18px] items-center justify-between gap-2">
-          <p className="min-w-0 truncate text-[12px] font-semibold leading-tight text-[#1a1a1a]">
+          <h2 className="min-w-0 truncate text-[12px] font-semibold leading-tight text-[#1a1a1a]">
             {isPreview ? (
               <>
                 <span className="font-medium text-[#2a3a4a]">
                   {formatServiceCardShortName(profile.nombre, profile.apellido) ||
                     "Proveedor"}
                 </span>
-                <span className="font-normal text-[#888]"> · {zone}</span>
+                <span className="font-normal text-[#6b6b6b]"> · {zone}</span>
               </>
             ) : showAnuncioLinks ? (
               <Link
@@ -243,7 +243,7 @@ export default function ServiceCard({
                   {formatServiceCardShortName(profile.nombre, profile.apellido) ||
                     "Proveedor"}
                 </span>
-                <span className="font-normal text-[#888]"> · {zone}</span>
+                <span className="font-normal text-[#6b6b6b]"> · {zone}</span>
               </Link>
             ) : (
               <>
@@ -255,16 +255,16 @@ export default function ServiceCard({
                   {formatServiceCardShortName(profile.nombre, profile.apellido) ||
                     "Proveedor"}
                 </Link>
-                <span className="font-normal text-[#888]"> · {zone}</span>
+                <span className="font-normal text-[#6b6b6b]"> · {zone}</span>
               </>
             )}
-          </p>
+          </h2>
           {valoracionMedia ? (
             <span className="shrink-0 text-[10px] text-[#c47d1a]">
               ★ {valoracionMedia}
             </span>
           ) : (
-            <span className="shrink-0 text-[9px] text-[#ccc]">
+            <span className="shrink-0 text-[9px] text-[#6b6b6b]">
               {emptyRatingLabel}
             </span>
           )}
@@ -276,12 +276,12 @@ export default function ServiceCard({
               <Link
                 href={anuncioHref}
                 onClick={(e) => e.stopPropagation()}
-                className="block truncate text-[10px] leading-4 text-[#aaa] no-underline hover:text-[#666]"
+                className="block truncate text-[10px] leading-4 text-[#6b6b6b] no-underline hover:text-[#666]"
               >
                 {service.titulo}
               </Link>
             ) : (
-              <p className="truncate text-[10px] leading-4 text-[#aaa]">
+              <p className="truncate text-[10px] leading-4 text-[#6b6b6b]">
                 {service.titulo}
               </p>
             )
@@ -352,7 +352,7 @@ export default function ServiceCard({
                   <Link
                     href={`/proveedor/${profile.id}`}
                     onClick={(e) => e.stopPropagation()}
-                    className="mt-1 block text-center text-[10px] text-[#999] no-underline hover:text-[#666]"
+                    className="mt-1 block text-center text-[10px] text-[#6b6b6b] no-underline hover:text-[#666]"
                   >
                     Ver perfil del proveedor
                   </Link>

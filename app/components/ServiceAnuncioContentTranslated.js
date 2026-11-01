@@ -3,7 +3,7 @@
 import ServiceAnuncioContent from "@/app/components/ServiceAnuncioContent";
 import { getServiceDescription } from "@/app/lib/service-card-display";
 import { useContext } from "react";
-import { ProveedorTranslateContext } from "@/app/proveedor/[id]/ProveedorTraduccion";
+import { ProveedorTranslateContext } from "@/app/[lang]/proveedor/[id]/ProveedorTraduccion";
 
 function normalizeServiceId(serviceId) {
   return String(serviceId);

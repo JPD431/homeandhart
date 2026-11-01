@@ -27,7 +27,7 @@ export default function ProviderDocumentRow({
     !definition.required && definition.requiredForPublish === true;
 
   let statusLabel = DOCUMENT_LABELS.opcional;
-  let statusColor = "#888";
+  let statusColor = "#6b6b6b";
 
   if (uploading) {
     statusLabel = DOCUMENT_LABELS.subiendo;
@@ -42,7 +42,7 @@ export default function ProviderDocumentRow({
     statusColor = ORANGE;
   } else if (state === "optional_empty") {
     statusLabel = DOCUMENT_LABELS.opcional;
-    statusColor = "#888";
+    statusColor = "#6b6b6b";
   }
 
   const showUpload = !isTextField && onUpload;
@@ -60,18 +60,18 @@ export default function ProviderDocumentRow({
         <p className="text-sm font-medium text-[#1a1a1a]">
           {definition.label}
           {publishOnly && !uploaded && (
-            <span className="ml-1 text-xs font-normal text-[#888]">
+            <span className="ml-1 text-xs font-normal text-[#6b6b6b]">
               (necesario para publicar)
             </span>
           )}
           {definition.scope === "opcional" && (
-            <span className="ml-1 text-xs font-normal text-[#888]">
+            <span className="ml-1 text-xs font-normal text-[#6b6b6b]">
               (opcional)
             </span>
           )}
         </p>
         {hint && (
-          <p className="mt-0.5 text-xs text-[#888]">{hint}</p>
+          <p className="mt-0.5 text-xs text-[#6b6b6b]">{hint}</p>
         )}
         <p className="mt-0.5 text-xs" style={{ color: statusColor }}>
           {statusLabel}

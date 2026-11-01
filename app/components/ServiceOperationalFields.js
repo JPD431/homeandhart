@@ -207,7 +207,7 @@ export default function ServiceOperationalFields({
           {SERVICE_LABELS.operativo.title}
         </p>
         {sectionSubtitle ? (
-          <p className="mb-3 text-xs text-[#888]">{sectionSubtitle}</p>
+          <p className="mb-3 text-xs text-[#6b6b6b]">{sectionSubtitle}</p>
         ) : null}
         {fields}
       </div>
@@ -227,13 +227,13 @@ export default function ServiceOperationalFields({
         <div>
           <p className="text-xs font-semibold text-[#444]">{SERVICE_LABELS.operativo.title}</p>
           {sectionSubtitle ? (
-            <p className="mt-1 text-xs text-[#888]">{sectionSubtitle}</p>
+            <p className="mt-1 text-xs text-[#6b6b6b]">{sectionSubtitle}</p>
           ) : null}
           {!open && (
-            <p className="mt-1 text-xs text-[#888]">{operationalSummary(details)}</p>
+            <p className="mt-1 text-xs text-[#6b6b6b]">{operationalSummary(details)}</p>
           )}
         </div>
-        <span className="text-sm text-[#888]" aria-hidden>
+        <span className="text-sm text-[#6b6b6b]" aria-hidden>
           {open ? "▲" : "▼"}
         </span>
       </button>

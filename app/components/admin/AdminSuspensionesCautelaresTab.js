@@ -250,7 +250,7 @@ export default function AdminSuspensionesCautelaresTab({
   function renderReservas(list) {
     if (!list?.length) {
       return (
-        <p className="mt-2 text-xs text-[#888]">
+        <p className="mt-2 text-xs text-[#6b6b6b]">
           Sin reservas marcadas para revisión de seguridad.
         </p>
       );
@@ -279,7 +279,7 @@ export default function AdminSuspensionesCautelaresTab({
                       ? ` · ${Number(b.precio_total).toFixed(2)}€`
                       : ""}
                   </p>
-                  <p className="font-mono text-[10px] text-[#aaa]">{b.id}</p>
+                  <p className="font-mono text-[10px] text-[#6b6b6b]">{b.id}</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <button
@@ -341,7 +341,7 @@ export default function AdminSuspensionesCautelaresTab({
         className="mt-5 rounded-2xl border bg-white p-5"
         style={{ borderColor: BRAND.border }}
       >
-        <p className="text-xs font-semibold uppercase tracking-wide text-[#888]">
+        <p className="text-xs font-semibold uppercase tracking-wide text-[#6b6b6b]">
           Suspender manualmente
         </p>
         <p className="mt-1 text-xs text-[#666]">
@@ -383,7 +383,7 @@ export default function AdminSuspensionesCautelaresTab({
       </form>
 
       {loading ? (
-        <p className="mt-8 text-center text-sm text-[#888]">Cargando…</p>
+        <p className="mt-8 text-center text-sm text-[#6b6b6b]">Cargando…</p>
       ) : suspensiones.length === 0 ? (
         <p
           className="mt-6 rounded-2xl border bg-white px-6 py-10 text-center text-sm text-[#666]"
@@ -408,7 +408,7 @@ export default function AdminSuspensionesCautelaresTab({
                       {fullName(p)}
                     </h2>
                     <p className="text-sm text-[#666]">{p.email || "—"}</p>
-                    <p className="mt-1 font-mono text-[10px] text-[#aaa]">
+                    <p className="mt-1 font-mono text-[10px] text-[#6b6b6b]">
                       {p.id}
                     </p>
                     <div className="mt-2 flex flex-wrap gap-1.5">
@@ -428,14 +428,14 @@ export default function AdminSuspensionesCautelaresTab({
                       )}
                     </div>
                   </div>
-                  <p className="text-xs text-[#888]">
+                  <p className="text-xs text-[#6b6b6b]">
                     Desde {formatDate(p.suspendido_cautelar_at)}
                   </p>
                 </div>
 
                 <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-[#888]">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-[#6b6b6b]">
                       Motivo
                     </p>
                     <p className="mt-1 text-[#1a1a1a]">
@@ -443,7 +443,7 @@ export default function AdminSuspensionesCautelaresTab({
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-[#888]">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-[#6b6b6b]">
                       Disparado por
                     </p>
                     <p className="mt-1 text-[#1a1a1a]">
@@ -457,12 +457,12 @@ export default function AdminSuspensionesCautelaresTab({
                     className="mt-4 rounded-xl border px-3 py-2.5 text-sm"
                     style={{ borderColor: BRAND.border, backgroundColor: "#fafafa" }}
                   >
-                    <p className="text-xs font-semibold uppercase tracking-wide text-[#888]">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-[#6b6b6b]">
                       Reporte origen
                     </p>
                     <p className="mt-1 font-medium text-[#1a1a1a]">
                       {p.reporte.motivo}
-                      <span className="ml-2 text-xs font-normal text-[#888]">
+                      <span className="ml-2 text-xs font-normal text-[#6b6b6b]">
                         · {p.reporte.estado} · {formatDate(p.reporte.created_at)}
                       </span>
                     </p>
@@ -471,7 +471,7 @@ export default function AdminSuspensionesCautelaresTab({
                         {p.reporte.descripcion}
                       </p>
                     )}
-                    <p className="mt-1 font-mono text-[10px] text-[#aaa]">
+                    <p className="mt-1 font-mono text-[10px] text-[#6b6b6b]">
                       report_id: {p.reporte.id}
                       {p.reporte.booking_id
                         ? ` · booking: ${p.reporte.booking_id}`
@@ -481,7 +481,7 @@ export default function AdminSuspensionesCautelaresTab({
                 )}
 
                 <div className="mt-4">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-[#888]">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[#6b6b6b]">
                     Reservas a revisión
                   </p>
                   {renderReservas(p.reservas_revision)}
@@ -540,7 +540,7 @@ export default function AdminSuspensionesCautelaresTab({
 
       {huerfanas.length > 0 && (
         <div className="mt-8">
-          <p className="text-xs font-semibold uppercase tracking-wide text-[#888]">
+          <p className="text-xs font-semibold uppercase tracking-wide text-[#6b6b6b]">
             Reservas a revisión (proveedor ya no suspendido o sin match)
           </p>
           {renderReservas(huerfanas)}

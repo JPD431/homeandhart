@@ -8,7 +8,7 @@ export default function LegalPageLayout({
   sections,
 }) {
   return (
-    <main className="min-h-screen bg-white text-[#1a1a1a]">
+    <main id="contenido" className="min-h-screen bg-white text-[#1a1a1a]">
       <Navbar />
       <article
         className="mx-auto max-w-3xl px-4 py-12 sm:px-6 sm:py-16 lg:px-8"
@@ -21,7 +21,7 @@ export default function LegalPageLayout({
           >
             {title}
           </h1>
-          <p className="mt-3 text-sm text-[#888]">{updatedAt}</p>
+          <p className="mt-3 text-sm text-[#6b6b6b]">{updatedAt}</p>
         </header>
 
         <div className="mt-10 flex flex-col gap-10">

@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/app/components/LocaleLink";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BRAND } from "@/app/components/brand";
@@ -247,7 +247,7 @@ export default function NotificationBell({ compact = false }) {
 
           <div className="max-h-[min(420px,70vh)] overflow-y-auto">
             {loading ? (
-              <p className="px-4 py-8 text-center text-sm text-[#888]">
+              <p className="px-4 py-8 text-center text-sm text-[#6b6b6b]">
                 Cargando…
               </p>
             ) : notifications.length === 0 ? (
@@ -258,7 +258,7 @@ export default function NotificationBell({ compact = false }) {
                 <p className="mt-2 text-sm text-[#666]">
                   No tienes notificaciones
                 </p>
-                <p className="mt-1 text-xs text-[#aaa]">
+                <p className="mt-1 text-xs text-[#6b6b6b]">
                   Te avisaremos aquí cuando haya novedades en tus reservas.
                 </p>
               </div>
@@ -289,7 +289,7 @@ export default function NotificationBell({ compact = false }) {
                         >
                           {n.titulo}
                         </span>
-                        <span className="shrink-0 text-[10px] text-[#aaa]">
+                        <span className="shrink-0 text-[10px] text-[#6b6b6b]">
                           {formatRelativeTime(n.created_at)}
                         </span>
                       </div>
@@ -304,7 +304,7 @@ export default function NotificationBell({ compact = false }) {
                       aria-label="Eliminar notificación"
                       disabled={deletingId === n.id}
                       onClick={(e) => handleDeleteNotification(e, n)}
-                      className="flex shrink-0 items-start border-0 bg-transparent px-3 py-3 text-lg leading-none text-[#bbb] transition-colors hover:text-[#666] disabled:opacity-40"
+                      className="flex shrink-0 items-start border-0 bg-transparent px-3 py-3 text-lg leading-none text-[#6b6b6b] transition-colors hover:text-[#666] disabled:opacity-40"
                       style={{ cursor: "pointer" }}
                     >
                       ×

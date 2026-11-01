@@ -30,3 +30,12 @@ export const LEGAL_DOC_PATHS = {
   terminos: "/legal/terminos",
   privacidad: "/legal/privacidad",
 };
+
+/**
+ * TODO(LEGAL): mientras Términos, Privacidad y Aviso legal sean texto de relleno,
+ * LEGAL_FINAL = false => noindex y fuera del sitemap (también en /en/...).
+ * Cuando el abogado entregue los textos definitivos: súbelos, actualiza
+ * LEGAL_DOCS_VERSION y cambia esta constante a true. Cookies describe el uso real
+ * y no depende de ella.
+ */
+export const LEGAL_FINAL = false;
