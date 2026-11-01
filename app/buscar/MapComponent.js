@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { resolveServiceCardPricing } from "@/app/lib/service-card-display";
@@ -43,19 +43,33 @@ export default function RealMap({
   const centersCache = useRef(new Map());
   const renderGen = useRef(0);
 
+  const [mapUnavailable, setMapUnavailable] = useState(
+    !process.env.NEXT_PUBLIC_MAPBOX_TOKEN,
+  );
+
   useEffect(() => {
     if (map.current) return;
 
-    mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+    const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+    if (!token) return;
 
-    map.current = new mapboxgl.Map({
-      container: mapContainer.current,
-      style: "mapbox://styles/mapbox/light-v11",
-      center: [-3.7038, 40.4168],
-      zoom: 12,
-    });
-
-    map.current.addControl(new mapboxgl.NavigationControl(), "top-right");
+    try {
+      mapboxgl.accessToken = token;
+      const instance = new mapboxgl.Map({
+        container: mapContainer.current,
+        style: "mapbox://styles/mapbox/light-v11",
+        center: [-3.7038, 40.4168],
+        zoom: 12,
+      });
+      instance.addControl(new mapboxgl.NavigationControl(), "top-right");
+      // Un fallo de red/token en Mapbox no debe tumbar la página.
+      instance.on("error", (e) => console.warn("Mapbox:", e?.error?.message));
+      map.current = instance;
+    } catch (err) {
+      console.warn("No se pudo inicializar el mapa:", err);
+      map.current = null;
+      queueMicrotask(() => setMapUnavailable(true));
+    }
   }, []);
 
   useEffect(() => {
@@ -187,6 +201,28 @@ export default function RealMap({
       cancelled = true;
     };
   }, [results, extra, hoveredIndex, selectedIndex, onPinHover, onPinLeave, onPinSelect]);
+
+  if (mapUnavailable) {
+    return (
+      <div
+        role="status"
+        style={{
+          width: "100%",
+          height: "100%",
+          background: "#eef2f7",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: 16,
+          textAlign: "center",
+          fontSize: 13,
+          color: "#6b7a8c",
+        }}
+      >
+        Mapa no disponible por el momento. Puedes seguir viendo los resultados en la lista.
+      </div>
+    );
+  }
 
   return <div ref={mapContainer} style={{ width: "100%", height: "100%" }} />;
 }

@@ -18,6 +18,8 @@ import {
 } from "@/app/lib/legal-versions";
 import { useLang } from "@/app/lib/LangContext";
 import { useTranslation } from "@/app/lib/i18n";
+import { authErrorMessage } from "@/app/lib/auth-errors";
+import { MIN_PASSWORD_LENGTH } from "@/app/lib/password-policy";
 
 const PRIMARY = "#1d4f91";
 const DARK = "#163a6b";
@@ -294,7 +296,7 @@ function RegistroForm() {
       return;
     }
 
-    if (password.length < 6) {
+    if (password.length < MIN_PASSWORD_LENGTH) {
       setError(t.registro.errorContrasenaCorta);
       return;
     }
@@ -351,7 +353,7 @@ function RegistroForm() {
 
     if (signUpError) {
       setLoading(false);
-      setError(signUpError.message);
+      setError(authErrorMessage(signUpError, t));
       return;
     }
 
@@ -409,7 +411,7 @@ function RegistroForm() {
     setResendLoading(false);
 
     if (resendError) {
-      setError(resendError.message);
+      setError(authErrorMessage(resendError, t));
       return;
     }
 
@@ -530,7 +532,11 @@ function RegistroForm() {
         {t.registro.formSubtitulo}
       </p>
 
-      <form onSubmit={handleSubmit} style={{ marginTop: 24 }}>
+      <form
+        onSubmit={handleSubmit}
+        onChange={() => error && setError("")}
+        style={{ marginTop: 24 }}
+      >
         <div className="mb-4 grid grid-cols-1 gap-2.5 md:grid-cols-2">
           {roles.map((option) => {
             const isSelected = role === option.id;
@@ -538,7 +544,10 @@ function RegistroForm() {
               <button
                 key={option.id}
                 type="button"
-                onClick={() => setRole(option.id)}
+                onClick={() => {
+                  setRole(option.id);
+                  setError("");
+                }}
                 className="min-h-[44px] text-left"
                 style={{
                   padding: "12px 14px",
@@ -630,6 +639,7 @@ function RegistroForm() {
             id="password"
             type="password"
             required
+            minLength={MIN_PASSWORD_LENGTH}
             autoComplete="new-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}

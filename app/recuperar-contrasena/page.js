@@ -3,20 +3,15 @@
 import Link from "next/link";
 import { useState } from "react";
 import { supabase } from "@/app/lib/supabase";
-import { BRAND } from "@/app/components/brand";
+import {
+  AuthShell,
+  PRIMARY,
+  inputStyle,
+  labelStyle,
+} from "@/app/components/AuthShell";
 import { useLang } from "@/app/lib/LangContext";
 import { useTranslation } from "@/app/lib/i18n";
-
-function Logo() {
-  return (
-    <Link
-      href="/"
-      className="mb-6 inline-block text-xl font-semibold tracking-tight text-[#1a1a1a] no-underline"
-    >
-      Home<span className="italic text-[#1d4f91]">&</span>Heart
-    </Link>
-  );
-}
+import { authErrorMessage } from "@/app/lib/auth-errors";
 
 export default function RecuperarContrasenaPage() {
   const { lang } = useLang();
@@ -45,7 +40,7 @@ export default function RecuperarContrasenaPage() {
     setLoading(false);
 
     if (resetError) {
-      setError(resetError.message);
+      setError(authErrorMessage(resetError, t));
       return;
     }
 
@@ -53,73 +48,108 @@ export default function RecuperarContrasenaPage() {
   }
 
   return (
-    <div
-      className="flex min-h-screen items-center justify-center px-4 py-12 font-sans"
-      style={{ backgroundColor: BRAND.warm }}
-    >
-      <div
-        className="w-full max-w-md rounded-2xl border bg-white p-8 shadow-sm sm:p-10"
-        style={{ borderColor: BRAND.border }}
+    <AuthShell>
+      <h1
+        style={{
+          fontFamily: "Georgia, serif",
+          fontSize: 24,
+          fontWeight: 300,
+          color: "#1a1a1a",
+          margin: 0,
+        }}
       >
-        <Logo />
+        {t.recuperarContrasena.titulo}
+      </h1>
+      <p style={{ fontSize: 12, color: "#aaa", marginTop: 6 }}>
+        {t.recuperarContrasena.subtitulo}
+      </p>
 
-        <h1 className="text-2xl font-bold text-[#1a1a1a]">{t.recuperarContrasena.titulo}</h1>
-        <p className="mt-2 text-sm text-[#666]">
-          {t.recuperarContrasena.subtitulo}
-        </p>
+      <form onSubmit={handleSubmit} style={{ marginTop: 28 }}>
+        <div style={{ marginBottom: 16 }}>
+          <label htmlFor="email" style={labelStyle}>
+            Email
+          </label>
+          <input
+            id="email"
+            type="email"
+            required
+            autoComplete="email"
+            value={email}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              setError("");
+            }}
+            style={inputStyle}
+          />
+        </div>
 
-        <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4">
-          <div>
-            <label
-              htmlFor="email"
-              className="mb-1.5 block text-sm font-medium text-[#444]"
-            >
-              Email
-            </label>
-            <input
-              id="email"
-              type="email"
-              required
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-xl border px-4 py-3 text-sm text-[#1a1a1a] outline-none focus:ring-2 focus:ring-[#1d4f91]/30"
-              style={{ borderColor: BRAND.border }}
-            />
-          </div>
-
-          {success && (
-            <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">
-              {t.recuperarContrasena.emailEnviado}
-            </p>
-          )}
-
-          {error && (
-            <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-              {error}
-            </p>
-          )}
-
-          <button
-            type="submit"
-            disabled={loading || success}
-            className="mt-2 w-full rounded-xl py-3.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
-            style={{ backgroundColor: BRAND.primary }}
+        {success && (
+          <p
+            style={{
+              marginBottom: 16,
+              padding: "10px 12px",
+              borderRadius: 6,
+              background: "#f0fdf4",
+              fontSize: 12,
+              color: "#15803d",
+            }}
           >
-            {loading ? t.recuperarContrasena.enviando : t.recuperarContrasena.enviarInstrucciones}
-          </button>
-        </form>
+            {t.recuperarContrasena.emailEnviado}
+          </p>
+        )}
 
-        <p className="mt-6 text-center text-sm text-[#666]">
+        {error && (
+          <p
+            style={{
+              marginBottom: 16,
+              padding: "10px 12px",
+              borderRadius: 6,
+              background: "#fef2f2",
+              fontSize: 12,
+              color: "#b91c1c",
+            }}
+          >
+            {error}
+          </p>
+        )}
+
+        <button
+          type="submit"
+          disabled={loading || success}
+          style={{
+            width: "100%",
+            background: PRIMARY,
+            color: "#fff",
+            border: "none",
+            borderRadius: 6,
+            padding: "12px 16px",
+            fontSize: 13,
+            fontWeight: 500,
+            cursor: loading ? "wait" : "pointer",
+            opacity: loading || success ? 0.7 : 1,
+          }}
+        >
+          {loading
+            ? t.recuperarContrasena.enviando
+            : t.recuperarContrasena.enviarInstrucciones}
+        </button>
+
+        <p
+          style={{
+            fontSize: 12,
+            color: "#888",
+            textAlign: "center",
+            margin: "24px 0 0",
+          }}
+        >
           <Link
             href="/login"
-            className="font-medium no-underline hover:underline"
-            style={{ color: BRAND.primary }}
+            style={{ color: PRIMARY, textDecoration: "none" }}
           >
             {t.recuperarContrasena.volver}
           </Link>
         </p>
-      </div>
-    </div>
+      </form>
+    </AuthShell>
   );
 }

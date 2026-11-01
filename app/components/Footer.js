@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useLang } from "@/app/lib/LangContext";
 import { useTranslation } from "@/app/lib/i18n";
 import { BRAND, SERIF } from "./brand";
@@ -11,12 +12,12 @@ function FooterColumn({ title, links }) {
       <ul className="mt-3 flex flex-col gap-2">
         {links.map((link) => (
           <li key={link.label}>
-            <a
+            <Link
               href={link.href}
               className="text-xs text-[#888] transition-colors hover:text-[#1d4f91]"
             >
               {link.label}
-            </a>
+            </Link>
           </li>
         ))}
       </ul>
@@ -29,14 +30,14 @@ export default function Footer() {
   const t = useTranslation(lang);
 
   const serviciosLinks = [
-    { label: t.footer.alojamiento, href: "#" },
-    { label: t.footer.ninos, href: "#" },
-    { label: t.footer.mascotas, href: "#" },
+    { label: t.footer.alojamiento, href: "/buscar?vertical=alojamiento" },
+    { label: t.footer.ninos, href: "/buscar?vertical=ninos" },
+    { label: t.footer.mascotas, href: "/buscar?vertical=mascotas" },
   ];
 
   const empresaLinks = [
     { label: t.footer.nosotros, href: "/nuestra-historia" },
-    { label: t.footer.comoFunciona, href: "#" },
+    { label: t.footer.comoFunciona, href: "/#como-funciona" },
     { label: t.footer.garantia, href: "/garantia" },
     { label: t.footer.contacto, href: "/ayuda" },
   ];
@@ -88,7 +89,7 @@ export default function Footer() {
         }}
       >
         <p className="text-[11px] text-[#888]">
-          © 2025 Home&Heart · {t.footer.derechos}
+          © {new Date().getFullYear()} Home&Heart · {t.footer.derechos}
         </p>
         <p className="text-[11px] text-[#888]">
           {t.footer.jurisdiccion}

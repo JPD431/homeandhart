@@ -1,9 +1,10 @@
 import Navbar from "@/app/components/Navbar";
 import { BRAND, SERIF } from "@/app/components/brand";
+import { legalUpdatedLabel } from "@/app/lib/legal-versions";
 
 export default function LegalPageLayout({
   title,
-  updatedAt = "Última actualización: junio 2025",
+  updatedAt = legalUpdatedLabel(),
   sections,
 }) {
   return (

@@ -7,6 +7,7 @@ import { supabase } from "@/app/lib/supabase";
 import { BRAND } from "@/app/components/brand";
 import { useLang } from "@/app/lib/LangContext";
 import { useTranslation } from "@/app/lib/i18n";
+import { MIN_PASSWORD_LENGTH } from "@/app/lib/password-policy";
 
 function Logo() {
   return (
@@ -40,7 +41,7 @@ export default function NuevaContrasenaPage() {
       return;
     }
 
-    if (password.length < 6) {
+    if (password.length < MIN_PASSWORD_LENGTH) {
       setError(nc.errorCorta);
       return;
     }

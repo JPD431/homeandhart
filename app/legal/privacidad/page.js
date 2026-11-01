@@ -1,3 +1,5 @@
+// TODO(LEGAL): texto provisional. Debe redactarlo un abogado antes de publicar.
+// Fecha/versión: ver LEGAL_DOCS_VERSION en app/lib/legal-versions.js.
 import LegalPageLayout from "@/app/components/LegalPageLayout";
 
 const PLACEHOLDER =
@@ -16,7 +18,7 @@ const sections = [
 ];
 
 export const metadata = {
-  title: "Política de privacidad · Home&Heart",
+  title: "Política de privacidad",
 };
 
 export default function PrivacidadPage() {

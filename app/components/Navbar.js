@@ -555,7 +555,7 @@ export default function Navbar() {
                 <Link
                   key={`${link.href}-${link.label}`}
                   href={link.href}
-                  className="no-underline transition-colors hover:text-[#1d4f91]"
+                  className="whitespace-nowrap no-underline transition-colors hover:text-[#1d4f91]"
                   style={link.primary ? { color: BRAND.primary } : undefined}
                 >
                   {link.label}
@@ -850,13 +850,13 @@ export default function Navbar() {
                 </Link>
                 <Link
                   href="/login"
-                  className="inline-flex min-h-[44px] items-center rounded-lg px-4 text-sm font-medium text-[#444] no-underline transition-colors hover:bg-[#f7f5f2]"
+                  className="inline-flex min-h-[44px] items-center whitespace-nowrap rounded-lg px-4 text-sm font-medium text-[#444] no-underline transition-colors hover:bg-[#f7f5f2]"
                 >
                   {t.navbar.iniciarSesion}
                 </Link>
                 <Link
                   href="/registro"
-                  className="inline-flex min-h-[44px] items-center rounded-lg px-4 text-sm font-medium text-white no-underline transition-opacity hover:opacity-90"
+                  className="inline-flex min-h-[44px] items-center whitespace-nowrap rounded-lg px-4 text-sm font-medium text-white no-underline transition-opacity hover:opacity-90"
                   style={{ backgroundColor: BRAND.primary }}
                 >
                   {t.navbar.registrarse}
@@ -942,6 +942,16 @@ export default function Navbar() {
               </nav>
 
               <div
+                className="flex items-center justify-between border-t px-5 py-3"
+                style={{ borderColor: BORDER }}
+              >
+                <span className="text-sm font-medium text-[#2a3a4a]">
+                  {t.navbar.ariaIdioma}
+                </span>
+                <LangSwitcher />
+              </div>
+
+              <div
                 className="flex flex-col gap-2 border-t p-4"
                 style={{ borderColor: BORDER }}
               >
@@ -980,6 +990,14 @@ export default function Navbar() {
                   </>
                 ) : (
                   <>
+                    <Link
+                      href="/chat"
+                      onClick={closeMobileMenu}
+                      className="flex min-h-[44px] items-center justify-center rounded-lg border text-sm font-medium text-[#444] no-underline"
+                      style={{ borderColor: BORDER }}
+                    >
+                      {t.navbar.mensajes}
+                    </Link>
                     <Link
                       href="/login"
                       onClick={closeMobileMenu}

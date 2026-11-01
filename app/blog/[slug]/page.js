@@ -40,13 +40,13 @@ export async function generateMetadata({ params }) {
     .eq("publicado", true)
     .maybeSingle();
 
-  if (!post) return { title: "Artículo no encontrado · Home&Heart" };
+  if (!post) return { title: "Artículo no encontrado" };
 
   const description = post.subtitulo || post.titulo;
   const ogImage = getPostImageUrl(post, 900, 400);
 
   return {
-    title: `${post.titulo} · Home&Heart`,
+    title: post.titulo,
     description,
     openGraph: {
       title: post.titulo,

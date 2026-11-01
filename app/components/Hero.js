@@ -207,7 +207,6 @@ export default function Hero() {
   const extra = HERO_EXTRA[lang] || HERO_EXTRA.es;
   const pickerRef = useRef(null);
 
-  const [user, setUser] = useState(null);
   const [activeTab, setActiveTab] = useState("todo");
   const [query, setQuery] = useState("");
   const [fechaDesde, setFechaDesde] = useState("");
@@ -226,12 +225,6 @@ export default function Hero() {
     id,
     label: t.hero[id],
   }));
-
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user: authUser } }) => {
-      setUser(authUser ?? null);
-    });
-  }, []);
 
   useEffect(() => {
     async function loadVerticalStats() {
@@ -309,10 +302,6 @@ export default function Hero() {
   }
 
   function handleVerticalClick(vertical) {
-    if (!user) {
-      router.push("/registro");
-      return;
-    }
     router.push(`/buscar?vertical=${vertical}`);
   }
 

@@ -11,7 +11,7 @@ const sections = [
 ];
 
 export const metadata = {
-  title: "Aviso legal · Home&Heart",
+  title: "Aviso legal",
 };
 
 export default function AvisoLegalPage() {

@@ -140,14 +140,13 @@ const sections = [
 ];
 
 export const metadata = {
-  title: "Política de cookies · Home&Heart",
+  title: "Política de cookies",
 };
 
 export default function CookiesPage() {
   return (
     <LegalPageLayout
       title="Política de cookies"
-      updatedAt={`Versión de trabajo · aviso ${COOKIE_NOTICE_VERSION} · julio 2026`}
       sections={sections}
     />
   );

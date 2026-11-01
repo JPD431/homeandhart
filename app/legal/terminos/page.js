@@ -1,3 +1,5 @@
+// TODO(LEGAL): texto provisional. Debe redactarlo un abogado antes de publicar.
+// Fecha/versión: ver LEGAL_DOCS_VERSION en app/lib/legal-versions.js.
 import LegalPageLayout from "@/app/components/LegalPageLayout";
 
 const PLACEHOLDER =
@@ -18,7 +20,7 @@ const sections = [
 ];
 
 export const metadata = {
-  title: "Términos de uso · Home&Heart",
+  title: "Términos de uso",
 };
 
 export default function TerminosPage() {

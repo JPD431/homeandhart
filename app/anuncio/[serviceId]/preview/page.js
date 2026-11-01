@@ -24,7 +24,7 @@ export async function generateMetadata({ params }) {
 
   if (!user) {
     return {
-      title: "Vista previa · Home&Heart",
+      title: "Vista previa",
       robots: { index: false, follow: false },
     };
   }

@@ -2,6 +2,8 @@
 
 import { useEffect } from "react";
 import Link from "next/link";
+import Navbar from "@/app/components/Navbar";
+import Footer from "@/app/components/Footer";
 
 const PRIMARY = "#1d4f91";
 const WARM = "#f7f5f2";
@@ -22,8 +24,10 @@ export default function Error({ error, reset }) {
   }, [error]);
 
   return (
+    <>
+    <Navbar />
     <div
-      className="flex min-h-[70vh] flex-col items-center justify-center px-6 py-16 text-center"
+      className="flex flex-1 flex-col items-center justify-center px-6 py-16 text-center"
       style={{ backgroundColor: WARM, color: "#1a1a1a" }}
     >
       <p
@@ -67,5 +71,7 @@ export default function Error({ error, reset }) {
         </Link>
       </div>
     </div>
+    <Footer />
+    </>
   );
 }
