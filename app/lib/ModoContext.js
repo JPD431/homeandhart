@@ -9,7 +9,8 @@ import {
   useRef,
   useState,
 } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
+import { useCleanPathname } from "@/app/lib/use-clean-pathname";
 import { needsProviderOnboarding } from "@/app/lib/onboarding";
 import {
   readStoredModoClient,
@@ -29,7 +30,7 @@ function writeStoredModo(modo) {
 
 export function ModoProvider({ children }) {
   const router = useRouter();
-  const pathname = usePathname();
+  const pathname = useCleanPathname();
 
   /** Siempre 'cliente' en SSR y primer paint → evita hydration mismatch */
   const [modo, setModoState] = useState("cliente");

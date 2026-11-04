@@ -13,7 +13,7 @@ vi.mock("next/navigation", () => ({
 }));
 vi.mock("@/app/lib/supabase", () => ({ supabase: {} }));
 
-import { AnuncioBackLink, AnuncioHeading } from "@/app/anuncio/AnuncioHeading";
+import { AnuncioBackLink, AnuncioHeading } from "@/app/[lang]/anuncio/AnuncioHeading";
 import AnuncioPreviewBanner from "@/app/components/AnuncioPreviewBanner";
 import AnuncioProveedorBlock from "@/app/components/AnuncioProveedorBlock";
 import CalendarioDisponibilidad from "@/app/components/CalendarioDisponibilidad";

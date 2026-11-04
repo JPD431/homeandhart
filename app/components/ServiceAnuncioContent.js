@@ -145,7 +145,7 @@ export default function ServiceAnuncioContent({
 
       {capacidadRows.length > 0 && (
         <div>
-          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-[#888]">
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-[#6b6b6b]">
             {t.anuncio.capacidad}
           </p>
           <div className="flex flex-wrap gap-2">
@@ -167,7 +167,7 @@ export default function ServiceAnuncioContent({
 
       {mascotasRows.length > 0 && (
         <div>
-          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-[#888]">
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-[#6b6b6b]">
             {t.anuncio.servicio}
           </p>
           <div className="flex flex-wrap gap-2">
@@ -187,7 +187,7 @@ export default function ServiceAnuncioContent({
 
       {amenityGroups.length > 0 && (
         <div>
-          <p className="mb-3 text-[10px] font-semibold uppercase tracking-wide text-[#888]">
+          <p className="mb-3 text-[10px] font-semibold uppercase tracking-wide text-[#6b6b6b]">
             {t.anuncio.comodidades}
           </p>
           <div className="flex flex-col gap-4">

@@ -1,7 +1,10 @@
 "use client";
 
-import Link from "next/link";
-import { useRouter, usePathname } from "next/navigation";
+import Link from "@/app/components/LocaleLink";
+import { useRouter } from "next/navigation";
+import { useCleanPathname } from "@/app/lib/use-clean-pathname";
+import { usePathname } from "next/navigation";
+import { switchLocalePath } from "@/app/lib/locale";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLang } from "@/app/lib/LangContext";
 import { useTranslation } from "@/app/lib/i18n";
@@ -64,13 +67,21 @@ function ChatIcon({ className }) {
 }
 
 function ChatNavButton({ unreadCount, onNavigate }) {
+  const { lang } = useLang();
+  const t = useTranslation(lang);
+  const pathname = useCleanPathname();
+  const active = pathname === "/chat" || pathname.startsWith("/chat/");
   return (
     <Link
       href="/chat"
       onClick={onNavigate}
       className="relative flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full text-[#444] no-underline transition-colors hover:bg-[#f7f5f2]"
-      style={{ background: "#fff", border: `0.5px solid ${BORDER}` }}
-      aria-label="Mensajes"
+      aria-current={active ? "page" : undefined}
+      style={{
+        background: active ? BRAND.light : "#fff",
+        border: active ? `2px solid ${BRAND.primary}` : `0.5px solid ${BORDER}`,
+      }}
+      aria-label={t.navbar.mensajes}
     >
       <ChatIcon className="h-5 w-5" />
       {unreadCount > 0 && (
@@ -85,10 +96,21 @@ function ChatNavButton({ unreadCount, onNavigate }) {
   );
 }
 
-function LangSwitcher() {
-  const { lang, setLang } = useLang();
-  const t = useTranslation(lang);
+/** Ruta activa para el menú: ignora query y hash; "/" solo coincide exacta. */
+function isLinkActive(href, pathname) {
+  if (href.includes("#")) return false;
+  const path = href.split("?")[0];
+  if (path === "/") return pathname === "/";
+  return pathname === path || pathname.startsWith(`${path}/`);
+}
 
+function LangSwitcher() {
+  const { lang } = useLang();
+  const t = useTranslation(lang);
+  const rawPathname = usePathname();
+
+  // Enlaces reales a la URL equivalente en cada idioma (rastreables); la
+  // preferencia se guarda en cookie al hacer clic.
   return (
     <div
       className="flex items-center gap-0.5 rounded-lg border p-0.5"
@@ -97,18 +119,30 @@ function LangSwitcher() {
       aria-label={t.navbar.ariaIdioma}
     >
       {["es", "en"].map((code) => (
-        <button
+        <a
           key={code}
-          type="button"
-          onClick={() => setLang(code)}
-          className="min-h-[44px] min-w-[44px] rounded-md px-3 text-xs font-semibold uppercase transition-colors"
-          style={{
-            color: lang === code ? BRAND.primary : "#888",
+          href={switchLocalePath(rawPathname ?? "/", code)}
+          hrefLang={code}
+          lang={code}
+          onClick={(e) => {
+            document.cookie = `lang=${code};path=/;max-age=31536000;SameSite=Lax`;
+            if (code === lang) {
+              e.preventDefault();
+              return;
+            }
+            e.currentTarget.href = `${switchLocalePath(rawPathname ?? "/", code)}${window.location.search}${window.location.hash}`;
           }}
-          aria-pressed={lang === code}
+          className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md px-3 text-xs font-semibold uppercase no-underline transition-colors"
+          style={{
+            color: lang === code ? BRAND.primary : "#5c5c5c",
+            backgroundColor: lang === code ? BRAND.light : undefined,
+            textDecoration: lang === code ? "underline" : undefined,
+            textUnderlineOffset: 4,
+          }}
+          aria-current={lang === code ? "true" : undefined}
         >
           {code}
-        </button>
+        </a>
       ))}
     </div>
   );
@@ -156,7 +190,7 @@ function SectionLabel({ children }) {
   return (
     <p
       className="px-4 pb-1 pt-3 text-[8px] font-semibold uppercase tracking-widest"
-      style={{ color: "#bbb" }}
+      style={{ color: "#6b6b6b" }}
     >
       {children}
     </p>
@@ -276,7 +310,7 @@ function AdminDropdownLinks({ onNavigate, t }) {
 
 export default function Navbar() {
   const router = useRouter();
-  const pathname = usePathname();
+  const pathname = useCleanPathname();
   const { lang } = useLang();
   const t = useTranslation(lang);
 
@@ -305,11 +339,73 @@ export default function Navbar() {
 
   const closeDropdown = useCallback(() => setDropdownOpen(false), []);
   const closeMobileMenu = useCallback(() => setMobileMenuOpen(false), []);
+  const mobileMenuRef = useRef(null);
+  const menuButtonRef = useRef(null);
+
+  // Menú móvil modal: foco dentro, Tab cíclico, resto inert, Escape cierra,
+  // scroll del fondo bloqueado y foco de vuelta al botón ☰ al cerrar.
+  useEffect(() => {
+    if (!mobileMenuOpen) return undefined;
+    const dialog = mobileMenuRef.current;
+    const menuButton = menuButtonRef.current;
+    if (!dialog) return undefined;
+
+    const inerted = [];
+    let node = dialog;
+    while (node && node !== document.body) {
+      const parent = node.parentElement;
+      if (!parent) break;
+      for (const sibling of parent.children) {
+        if (sibling !== node && !sibling.hasAttribute("data-menu-keep") && !sibling.inert) {
+          sibling.inert = true;
+          inerted.push(sibling);
+        }
+      }
+      node = parent;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const focusables = () =>
+      [...dialog.querySelectorAll("a[href], button:not([disabled]), input, select, textarea, [tabindex]:not([tabindex='-1'])")];
+    focusables()[0]?.focus();
+
+    function onKeyDown(e) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setMobileMenuOpen(false);
+        return;
+      }
+      if (e.key !== "Tab") return;
+      const items = focusables();
+      if (items.length === 0) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (e.shiftKey && (document.activeElement === first || !dialog.contains(document.activeElement))) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && (document.activeElement === last || !dialog.contains(document.activeElement))) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+    document.addEventListener("keydown", onKeyDown);
+
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      inerted.forEach((el) => {
+        el.inert = false;
+      });
+      document.body.style.overflow = previousOverflow;
+      menuButton?.focus();
+    };
+  }, [mobileMenuOpen]);
 
   const navLinks = useMemo(() => {
     if (isAdmin) {
       return [
-        { href: "/admin", label: "Panel admin", primary: true },
+        { href: "/admin", label: "Panel admin" },
         { href: "/", label: t.navbar.inicio },
         { href: "/blog", label: "Blog" },
       ];
@@ -317,7 +413,7 @@ export default function Navbar() {
 
     if (!user) {
       return [
-        { href: "/", label: t.navbar.inicio, primary: true },
+        { href: "/", label: t.navbar.inicio },
         { href: "/buscar", label: t.navbar.servicios },
         { href: "/blog", label: "Blog" },
         { href: "/garantia", label: t.navbar.garantia },
@@ -329,7 +425,7 @@ export default function Navbar() {
 
     if (modo === "proveedor" && !esClientePuro) {
       return [
-        { href: "/dashboard?tab=proveedor", label: t.navbar.panel, primary: true },
+        { href: "/dashboard?tab=proveedor", label: t.navbar.panel },
         { href: "/estadisticas", label: t.navbar.ingresos },
         { href: "/editar-perfil?tab=servicios", label: t.navbar.misServicios },
         { href: "/chat", label: t.navbar.mensajes },
@@ -337,7 +433,7 @@ export default function Navbar() {
     }
 
     const links = [
-      { href: "/buscar", label: t.navbar.servicios, primary: true },
+      { href: "/buscar", label: t.navbar.servicios },
       { href: "/dashboard?tab=cliente", label: t.navbar.misReservas },
       { href: "/historial", label: t.navbar.historial },
       { href: "/familia", label: t.navbar.familia },
@@ -529,9 +625,11 @@ export default function Navbar() {
               </div>
             )}
             <button
+              ref={menuButtonRef}
               type="button"
               onClick={() => setMobileMenuOpen(true)}
               aria-label={t.navbar.ariaAbrirMenu}
+              aria-haspopup="dialog"
               aria-expanded={mobileMenuOpen}
               style={{
                 minHeight: 44,
@@ -549,18 +647,22 @@ export default function Navbar() {
           <div className="hidden items-center gap-3 md:flex">
             <nav
               className="flex items-center gap-6 text-sm font-medium text-[#444]"
-              aria-label="Principal"
+              aria-label={t.navbar.navPrincipal}
             >
-              {navLinks.map((link) => (
-                <Link
-                  key={`${link.href}-${link.label}`}
-                  href={link.href}
-                  className="no-underline transition-colors hover:text-[#1d4f91]"
-                  style={link.primary ? { color: BRAND.primary } : undefined}
-                >
-                  {link.label}
-                </Link>
-              ))}
+              {navLinks.map((link) => {
+                const active = isLinkActive(link.href, pathname);
+                return (
+                  <Link
+                    key={`${link.href}-${link.label}`}
+                    href={link.href}
+                    aria-current={active ? "page" : undefined}
+                    className={`inline-flex min-h-6 items-center whitespace-nowrap transition-colors hover:text-[#1d4f91] ${active ? "font-semibold underline decoration-2 underline-offset-8" : "no-underline"}`}
+                    style={active ? { color: BRAND.primary } : undefined}
+                  >
+                    {link.label}
+                  </Link>
+                );
+              })}
             </nav>
 
             {onboardingIncompleto && !isAdmin ? (
@@ -636,7 +738,7 @@ export default function Navbar() {
                     <span className="hidden max-w-[100px] truncate text-xs font-medium text-[#2a3a4a] sm:inline">
                       {perfil?.nombre || "Mi cuenta"}
                     </span>
-                    <span style={{ fontSize: 10, color: "#bbb" }}>▾</span>
+                    <span style={{ fontSize: 10, color: "#6b6b6b" }}>▾</span>
                   </div>
 
                   {dropdownOpen && (
@@ -679,7 +781,7 @@ export default function Navbar() {
                           <p className="truncate text-sm font-semibold text-[#1a1a1a]">
                             {displayName}
                           </p>
-                          <p className="truncate text-[11px] text-[#888]">
+                          <p className="truncate text-[11px] text-[#6b6b6b]">
                             {user.email}
                           </p>
                           <span
@@ -711,7 +813,7 @@ export default function Navbar() {
                             display: "flex",
                             justifyContent: "space-between",
                             fontSize: 9,
-                            color: "#bbb",
+                            color: "#6b6b6b",
                             marginBottom: 4,
                           }}
                         >
@@ -850,13 +952,13 @@ export default function Navbar() {
                 </Link>
                 <Link
                   href="/login"
-                  className="inline-flex min-h-[44px] items-center rounded-lg px-4 text-sm font-medium text-[#444] no-underline transition-colors hover:bg-[#f7f5f2]"
+                  className="inline-flex min-h-[44px] items-center whitespace-nowrap rounded-lg px-4 text-sm font-medium text-[#444] no-underline transition-colors hover:bg-[#f7f5f2]"
                 >
                   {t.navbar.iniciarSesion}
                 </Link>
                 <Link
                   href="/registro"
-                  className="inline-flex min-h-[44px] items-center rounded-lg px-4 text-sm font-medium text-white no-underline transition-opacity hover:opacity-90"
+                  className="inline-flex min-h-[44px] items-center whitespace-nowrap rounded-lg px-4 text-sm font-medium text-white no-underline transition-opacity hover:opacity-90"
                   style={{ backgroundColor: BRAND.primary }}
                 >
                   {t.navbar.registrarse}
@@ -870,16 +972,20 @@ export default function Navbar() {
           <>
             <button
               type="button"
+              data-menu-keep
+              tabIndex={-1}
+              aria-hidden="true"
               className="fixed inset-0 z-[60] bg-black/30 md:hidden"
-              aria-label={t.navbar.ariaCerrarMenu}
               onClick={closeMobileMenu}
             />
             <div
+              ref={mobileMenuRef}
+              data-menu-keep
               className="fixed inset-x-0 top-0 z-[70] max-h-[90vh] overflow-y-auto border-b bg-white shadow-lg md:hidden"
               style={{ borderColor: BORDER }}
               role="dialog"
               aria-modal="true"
-              aria-label="Menú de navegación"
+              aria-label={t.navbar.menuNavegacion}
             >
               <div
                 className="flex min-h-[44px] items-center justify-between border-b px-4"
@@ -924,22 +1030,39 @@ export default function Navbar() {
                 )
               )}
 
-              <nav className="flex flex-col py-2" aria-label="Principal móvil">
-                {navLinks.map((link) => (
+              <nav className="flex flex-col py-2" aria-label={t.navbar.navMovil}>
+                {navLinks.map((link) => {
+                  const active = isLinkActive(link.href, pathname);
+                  return (
                   <Link
                     key={`${link.href}-${link.label}`}
                     href={link.href}
+                    aria-current={active ? "page" : undefined}
                     onClick={closeMobileMenu}
                     className="flex min-h-[44px] items-center border-b px-5 text-[15px] font-medium text-[#2a3a4a] no-underline transition-colors hover:bg-[#f7f5f2]"
                     style={{
                       borderColor: "#f0ede8",
-                      color: link.primary ? BRAND.primary : "#2a3a4a",
+                      color: active ? BRAND.primary : "#2a3a4a",
+                      fontWeight: active ? 700 : undefined,
+                      textDecoration: active ? "underline" : undefined,
+                      textUnderlineOffset: 6,
                     }}
                   >
                     {link.label}
                   </Link>
-                ))}
+                  );
+                })}
               </nav>
+
+              <div
+                className="flex items-center justify-between border-t px-5 py-3"
+                style={{ borderColor: BORDER }}
+              >
+                <span className="text-sm font-medium text-[#2a3a4a]">
+                  {t.navbar.ariaIdioma}
+                </span>
+                <LangSwitcher />
+              </div>
 
               <div
                 className="flex flex-col gap-2 border-t p-4"
@@ -980,6 +1103,14 @@ export default function Navbar() {
                   </>
                 ) : (
                   <>
+                    <Link
+                      href="/chat"
+                      onClick={closeMobileMenu}
+                      className="flex min-h-[44px] items-center justify-center rounded-lg border text-sm font-medium text-[#444] no-underline"
+                      style={{ borderColor: BORDER }}
+                    >
+                      {t.navbar.mensajes}
+                    </Link>
                     <Link
                       href="/login"
                       onClick={closeMobileMenu}

@@ -56,7 +56,7 @@ function MonthTarifasGrid({
       <p className="mb-3 text-center text-sm font-semibold text-[#1a1a1a]">
         {monthLabel}
       </p>
-      <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-semibold uppercase tracking-wide text-[#888]">
+      <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-semibold uppercase tracking-wide text-[#6b6b6b]">
         {WEEKDAY_LABELS.map((label) => (
           <span key={label} className="py-1">
             {label}
@@ -85,9 +85,9 @@ function MonthTarifasGrid({
           let borderColor = BRAND.border;
           let boxShadow;
           let textDecoration = "none";
-          let dayColor = isPast ? "#ccc" : "#1a1a1a";
+          let dayColor = isPast ? "#6b6b6b" : "#1a1a1a";
           let subLabel = null;
-          let subColor = "#888";
+          let subColor = "#6b6b6b";
 
           if (isReserva) {
             bg = RESERVA_BG;
@@ -154,13 +154,13 @@ function MonthTarifasGrid({
                 <span
                   className="mt-0.5 text-[9px] font-medium leading-tight"
                   style={{
-                    color: hasCustom && !isPast ? PRIMARY : "#888",
+                    color: hasCustom && !isPast ? PRIMARY : "#6b6b6b",
                   }}
                 >
                   {formatPrecio(displayPrecio)}€
                 </span>
               ) : (
-                <span className="mt-0.5 text-[8px] font-medium leading-tight text-[#aaa]">
+                <span className="mt-0.5 text-[8px] font-medium leading-tight text-[#6b6b6b]">
                   Libre
                 </span>
               )}
@@ -440,7 +440,7 @@ export default function CalendarioTarifas({
 
   if (!serviceId) {
     return (
-      <p className="text-sm text-[#888]">
+      <p className="text-sm text-[#6b6b6b]">
         Guarda el servicio antes de configurar el calendario.
       </p>
     );
@@ -540,7 +540,7 @@ export default function CalendarioTarifas({
         >
           <ChevronIcon direction="left" />
         </button>
-        <span className="text-xs text-[#888]">
+        <span className="text-xs text-[#6b6b6b]">
           {loading
             ? "Cargando…"
             : effectiveModo === "bloqueo"

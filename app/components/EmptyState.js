@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/app/components/LocaleLink";
 
 /**
  * Estado vacío guiado: explicación + CTA opcional.
@@ -43,7 +43,7 @@ export default function EmptyState({
           style={{
             margin: title ? "6px 0 0" : 0,
             fontSize: compact ? 11 : 13,
-            color: "#888",
+            color: "#6b6b6b",
             lineHeight: 1.5,
           }}
         >

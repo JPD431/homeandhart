@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/app/components/LocaleLink";
 import { useEffect, useMemo, useState } from "react";
 import { BRAND } from "@/app/components/brand";
 import { loadProviderDocuments } from "@/app/lib/provider-uploads";
@@ -276,7 +276,7 @@ export default function ProviderListingChecklist({ perfil, BRAND: brandProp }) {
                   >
                     {item.label}
                     {item.optional ? (
-                      <span style={{ color: "#888", fontWeight: 400 }}>
+                      <span style={{ color: "#6b6b6b", fontWeight: 400 }}>
                         {" "}
                         · opcional
                       </span>

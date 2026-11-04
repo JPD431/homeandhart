@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/app/components/LocaleLink";
 import { useState } from "react";
 import { BRAND } from "@/app/components/brand";
 
@@ -24,7 +24,7 @@ export default function ProveedorEmergenciaToggle({ checked, onChange }) {
           <button
             type="button"
             onClick={() => setInfoOpen(true)}
-            className="text-xs text-[#888] underline-offset-2 transition-colors hover:text-[#1d4f91] hover:underline"
+            className="text-xs text-[#6b6b6b] underline-offset-2 transition-colors hover:text-[#1d4f91] hover:underline"
           >
             ¿Qué es la red de emergencia?
           </button>

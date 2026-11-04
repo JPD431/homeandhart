@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/app/components/LocaleLink";
 import { useCallback, useEffect, useRef, useState } from "react";
 import PhotoArchProgressBar from "@/app/components/PhotoArchProgressBar";
 import { getServiceCardTheme } from "@/app/lib/service-card-display";

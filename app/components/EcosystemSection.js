@@ -47,7 +47,7 @@ export default function EcosystemSection() {
           <div>
             <p
               className="text-[11px] font-semibold uppercase tracking-[0.2em] sm:text-xs"
-              style={{ color: "rgba(255, 255, 255, 0.5)" }}
+              style={{ color: "rgba(255, 255, 255, 0.95)" }}
             >
               {t.ecosystem.label}
             </p>
@@ -61,7 +61,7 @@ export default function EcosystemSection() {
           </div>
           <p
             className="text-base leading-relaxed sm:text-lg lg:pb-1"
-            style={{ color: "rgba(255, 255, 255, 0.6)" }}
+            style={{ color: "rgba(255, 255, 255, 0.95)" }}
           >
             {t.ecosystem.subtitulo}
           </p>
@@ -80,8 +80,8 @@ export default function EcosystemSection() {
                 <span
                   className="inline-flex w-fit rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-wider sm:text-[11px]"
                   style={{
-                    backgroundColor: "rgba(255, 255, 255, 0.12)",
-                    color: "rgba(255, 255, 255, 0.7)",
+                    backgroundColor: "rgba(0, 0, 0, 0.22)",
+                    color: "rgba(255, 255, 255, 0.95)",
                   }}
                 >
                   {e.disponible}
@@ -97,7 +97,7 @@ export default function EcosystemSection() {
                 </h3>
                 <p
                   className="mt-2 text-sm leading-relaxed sm:text-base"
-                  style={{ color: "rgba(255, 255, 255, 0.6)" }}
+                  style={{ color: "rgba(255, 255, 255, 0.95)" }}
                 >
                   {e[service.descKey]}
                 </p>
@@ -106,7 +106,7 @@ export default function EcosystemSection() {
                     <li
                       key={key}
                       className="flex items-start gap-2.5 text-sm sm:text-[15px]"
-                      style={{ color: "rgba(255, 255, 255, 0.8)" }}
+                      style={{ color: "rgba(255, 255, 255, 0.95)" }}
                     >
                       <span
                         className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-[rgba(255,255,255,0.4)]"

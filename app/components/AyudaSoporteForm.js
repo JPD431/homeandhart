@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { BRAND } from "@/app/components/brand";
+import { useLang } from "@/app/lib/LangContext";
+import { useTranslation } from "@/app/lib/i18n";
 
 /**
  * Formulario ligero de ayuda general → POST /api/soporte.
@@ -11,6 +13,8 @@ export default function AyudaSoporteForm({
   defaultAsunto = "",
   compact = false,
 }) {
+  const { lang } = useLang();
+  const f = useTranslation(lang).ayuda.form;
   const [asunto, setAsunto] = useState(defaultAsunto);
   const [mensaje, setMensaje] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -34,12 +38,12 @@ export default function AyudaSoporteForm({
       });
       const payload = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error(payload.error || "No se pudo enviar el mensaje.");
+        throw new Error(payload.error || f.errorEnvio);
       }
       setSuccess(true);
       setMensaje("");
     } catch (err) {
-      setError(err.message || "Error al enviar.");
+      setError(err.message || f.errorGenerico);
     } finally {
       setSubmitting(false);
     }
@@ -48,6 +52,7 @@ export default function AyudaSoporteForm({
   if (success) {
     return (
       <div
+        role="status"
         style={{
           padding: compact ? "12px 14px" : "16px",
           borderRadius: 10,
@@ -56,10 +61,10 @@ export default function AyudaSoporteForm({
         }}
       >
         <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#085041" }}>
-          Mensaje enviado ✓
+          {f.enviado}
         </p>
         <p style={{ margin: "6px 0 0", fontSize: 12, color: "#085041", lineHeight: 1.5 }}>
-          Te responderemos por email lo antes posible.
+          {f.respuesta}
         </p>
       </div>
     );
@@ -85,7 +90,7 @@ export default function AyudaSoporteForm({
           color: "#2a3a4a",
         }}
       >
-        Contactar con soporte
+        {f.titulo}
       </p>
       <p
         style={{
@@ -95,7 +100,7 @@ export default function AyudaSoporteForm({
           lineHeight: 1.45,
         }}
       >
-        Cuéntanos tu duda (cuenta, activación, pagos…). Te respondemos por email.
+        {f.intro}
       </p>
 
       <label
@@ -108,7 +113,7 @@ export default function AyudaSoporteForm({
           color: "#444",
         }}
       >
-        Asunto
+        {f.asunto}
       </label>
       <input
         id="ayuda-asunto"
@@ -117,7 +122,10 @@ export default function AyudaSoporteForm({
         onChange={(e) => setAsunto(e.target.value)}
         maxLength={160}
         required
-        placeholder="Ej. No puedo activar mi anuncio"
+        placeholder={f.asuntoPh}
+        aria-required="true"
+        aria-invalid={error ? "true" : undefined}
+        aria-describedby={error ? "ayuda-error" : undefined}
         style={{
           width: "100%",
           marginTop: 4,
@@ -140,7 +148,7 @@ export default function AyudaSoporteForm({
           color: "#444",
         }}
       >
-        Mensaje
+        {f.mensaje}
       </label>
       <textarea
         id="ayuda-mensaje"
@@ -149,7 +157,10 @@ export default function AyudaSoporteForm({
         rows={compact ? 3 : 5}
         maxLength={4000}
         required
-        placeholder="Describe qué te ocurre…"
+        placeholder={f.mensajePh}
+        aria-required="true"
+        aria-invalid={error ? "true" : undefined}
+        aria-describedby={error ? "ayuda-error" : undefined}
         style={{
           width: "100%",
           marginTop: 4,
@@ -163,7 +174,11 @@ export default function AyudaSoporteForm({
       />
 
       {error && (
-        <p style={{ margin: "8px 0 0", fontSize: 12, color: "#b91c1c" }}>
+        <p
+          id="ayuda-error"
+          role="alert"
+          style={{ margin: "8px 0 0", fontSize: 12, color: "#b91c1c" }}
+        >
           {error}
         </p>
       )}

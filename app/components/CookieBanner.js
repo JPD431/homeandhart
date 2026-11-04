@@ -1,12 +1,14 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/app/components/LocaleLink";
 import { useEffect, useState } from "react";
 import { BRAND } from "@/app/components/brand";
 import {
   COOKIE_NOTICE_STORAGE_KEY,
   COOKIE_NOTICE_VERSION,
 } from "@/app/lib/cookie-notice";
+import { useLang } from "@/app/lib/LangContext";
+import { useTranslation } from "@/app/lib/i18n";
 
 function hasAcceptedCurrentNotice() {
   try {
@@ -42,6 +44,8 @@ function saveAcceptedNotice() {
 }
 
 export default function CookieBanner() {
+  const { lang } = useLang();
+  const c = useTranslation(lang).cookieBanner;
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
@@ -80,26 +84,23 @@ export default function CookieBanner() {
             id="cookie-banner-title"
             className="text-sm font-semibold text-[#1a1a1a]"
           >
-            Cookies y servicios necesarios
+            {c.titulo}
           </p>
           <p
             id="cookie-banner-desc"
             className="mt-1 text-sm leading-relaxed text-[#5c5c5c]"
           >
-            Usamos cookies y almacenamiento esenciales para que la plataforma
-            funcione (sesión de inicio de sesión y preferencias). También
-            cargamos servicios de terceros solo cuando hace falta:{" "}
-            <strong className="font-medium text-[#444]">Stripe</strong> para
-            procesar pagos al reservar, y{" "}
-            <strong className="font-medium text-[#444]">Mapbox</strong> para
-            mostrar mapas al buscar. No usamos cookies de publicidad ni
-            herramientas de seguimiento o analytics de terceros.{" "}
+            {c.textoA}{" "}
+            <strong className="font-medium text-[#444]">Stripe</strong>{" "}
+            {c.textoB}{" "}
+            <strong className="font-medium text-[#444]">Mapbox</strong>{" "}
+            {c.textoC}{" "}
             <Link
               href="/legal/cookies"
               className="font-medium underline underline-offset-2"
               style={{ color: BRAND.primary }}
             >
-              Política de cookies
+              {c.politica}
             </Link>
             .
           </p>
@@ -110,7 +111,7 @@ export default function CookieBanner() {
             className="flex min-h-[44px] w-full items-center justify-center rounded-full border px-4 py-2 text-center text-sm font-medium no-underline transition-colors hover:bg-[#f7f7f7] sm:w-auto"
             style={{ borderColor: BRAND.border, color: BRAND.primary }}
           >
-            Más información
+            {c.masInfo}
           </Link>
           <button
             type="button"
@@ -118,7 +119,7 @@ export default function CookieBanner() {
             className="min-h-[44px] w-full rounded-full px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 sm:w-auto"
             style={{ backgroundColor: BRAND.primary }}
           >
-            Aceptar
+            {c.aceptar}
           </button>
         </div>
       </div>

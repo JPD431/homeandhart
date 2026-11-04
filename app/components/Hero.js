@@ -4,9 +4,9 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import CalendarioRangoFechas from "@/app/components/CalendarioRangoFechas";
 import CiudadAutocompleteInput from "@/app/components/CiudadAutocompleteInput";
-import Navbar from "@/app/components/Navbar";
-import { formatShortDate } from "@/app/components/calendario-shared";
+import { formatShortDate, parseDateStr } from "@/app/components/calendario-shared";
 import { useLang } from "@/app/lib/LangContext";
+import { localizeHref } from "@/app/lib/locale";
 import { useTranslation } from "@/app/lib/i18n";
 import { supabase } from "@/app/lib/supabase";
 import { BRAND, SERIF } from "./brand";
@@ -32,8 +32,8 @@ const VERTICAL_CARDS = [
   },
   {
     id: "mascotas",
-    bg: "#c47d1a",
-    borderTop: "#92400e",
+    bg: "#9a5b0c",
+    borderTop: "#7a4509",
     titleKey: "mascotas",
     labelKey: "mascotas",
     priceUnit: { es: "por día", en: "per day" },
@@ -69,43 +69,53 @@ function VerticalDivider() {
   );
 }
 
-function SearchField({ label, children, onClick }) {
+function SearchField({ label, htmlFor, children, onClick }) {
+  // El clic en el contenedor solo es una comodidad para ratón; el control real
+  // (botón/select/input) es el que recibe el foco y tiene nombre accesible.
   return (
     <div
-      role={onClick ? "button" : undefined}
-      tabIndex={onClick ? 0 : undefined}
       onClick={onClick}
-      onKeyDown={
-        onClick
-          ? (e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                onClick();
-              }
-            }
-          : undefined
-      }
       className={`flex min-h-[72px] min-w-0 flex-1 flex-col justify-center px-6 py-4 md:py-3 transition-colors ${onClick ? "cursor-pointer hover:bg-[#faf9f7]" : ""}`}
     >
-      <span
+      <label
+        htmlFor={htmlFor}
         className="text-[10px] font-semibold uppercase tracking-widest"
-        style={{ color: "#888" }}
+        style={{ color: "#6b6b6b" }}
       >
         {label}
-      </span>
-      <div className="mt-1.5 min-h-[22px] overflow-visible">{children}</div>
+      </label>
+      <div className="mt-1.5 min-h-[24px] overflow-visible">{children}</div>
     </div>
   );
 }
 
-function DateTrigger({ value, placeholder }) {
+function DateTrigger({
+  id,
+  value,
+  placeholder,
+  ariaLabel,
+  expanded,
+  onOpen,
+  lang,
+  triggerRef,
+}) {
   return (
-    <span
-      className="block w-full text-sm"
-      style={{ color: value ? "#1a1a1a" : "#aaa" }}
+    <button
+      ref={triggerRef}
+      id={id}
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        onOpen();
+      }}
+      aria-label={ariaLabel}
+      aria-haspopup="dialog"
+      aria-expanded={expanded}
+      className="block min-h-[24px] w-full text-left text-sm"
+      style={{ color: value ? "#1a1a1a" : "#6b6b6b" }}
     >
-      {value ? formatShortDate(value) : placeholder}
-    </span>
+      {value ? formatShortDate(value, lang) : placeholder}
+    </button>
   );
 }
 
@@ -160,28 +170,28 @@ function VerticalCard({
     >
       <span
         className="absolute right-5 top-5"
-        style={{ color: "rgba(255,255,255,.2)" }}
+        style={{ color: "rgba(255, 255, 255, 0.95)" }}
       >
         <ArrowIcon />
       </span>
 
-      <p
-        className="text-[9px] font-semibold uppercase tracking-widest"
-        style={{ color: "rgba(255,255,255,.45)" }}
+      <span
+        className="block text-[10px] font-semibold uppercase tracking-widest"
+        style={{ color: "rgba(255,255,255,.95)" }}
       >
         {label}
-      </p>
+      </span>
 
-      <h3
-        className="mt-2 leading-snug text-white"
+      <span
+        className="mt-2 block leading-snug text-white"
         style={{ fontFamily: SERIF, fontWeight: 300, fontSize: 22 }}
       >
         {title}
-      </h3>
+      </span>
 
-      <p className="mt-2 text-[11px]" style={{ color: "rgba(255,255,255,.4)" }}>
+      <span className="mt-2 block text-[11px]" style={{ color: "rgba(255,255,255,.95)" }}>
         {availabilityText}
-      </p>
+      </span>
 
       {hasAvailability && minPrice != null && (
         <>
@@ -191,7 +201,7 @@ function VerticalCard({
           >
             {extra.desde(minPrice)}
           </p>
-          <p className="mt-1 text-[10px]" style={{ color: "rgba(255,255,255,.4)" }}>
+          <p className="mt-1 text-[10px]" style={{ color: "rgba(255,255,255,.95)" }}>
             {priceUnit}
           </p>
         </>
@@ -206,8 +216,10 @@ export default function Hero() {
   const t = useTranslation(lang);
   const extra = HERO_EXTRA[lang] || HERO_EXTRA.es;
   const pickerRef = useRef(null);
+  const llegadaRef = useRef(null);
+  const salidaRef = useRef(null);
+  const lastTriggerRef = useRef(null);
 
-  const [user, setUser] = useState(null);
   const [activeTab, setActiveTab] = useState("todo");
   const [query, setQuery] = useState("");
   const [fechaDesde, setFechaDesde] = useState("");
@@ -216,22 +228,24 @@ export default function Hero() {
   const [verticalStats, setVerticalStats] = useState({});
   const [statsLoaded, setStatsLoaded] = useState(false);
 
+  function fullDate(dateStr) {
+    return new Intl.DateTimeFormat(lang === "en" ? "en-GB" : "es-ES", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    }).format(parseDateStr(dateStr));
+  }
+
   const trustChips = [
     { color: "#0e7a5c", text: t.hero.trustGarantia },
     { color: "#c47d1a", text: t.hero.trustPago },
-    { color: "#888", text: t.hero.trustSinComisiones },
+    { color: "#6b6b6b", text: t.hero.trustSinComisiones },
   ];
 
   const tabs = TAB_IDS.map((id) => ({
     id,
     label: t.hero[id],
   }));
-
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user: authUser } }) => {
-      setUser(authUser ?? null);
-    });
-  }, []);
 
   useEffect(() => {
     async function loadVerticalStats() {
@@ -281,12 +295,29 @@ export default function Hero() {
       }
     }
 
+    function handleEscape(e) {
+      if (e.key === "Escape") {
+        setCalendarOpen(false);
+        lastTriggerRef.current?.focus();
+      }
+    }
+
+    document.addEventListener("keydown", handleEscape);
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleEscape);
+    };
   }, [calendarOpen]);
 
-  function openCalendar() {
+  function openCalendar(triggerRef) {
+    lastTriggerRef.current = triggerRef?.current ?? null;
     setCalendarOpen(true);
+  }
+
+  function closeCalendar({ restoreFocus = false } = {}) {
+    setCalendarOpen(false);
+    if (restoreFocus) lastTriggerRef.current?.focus();
   }
 
   function handleRangeChange({ desde, hasta }) {
@@ -305,15 +336,11 @@ export default function Hero() {
     if (activeTab !== "todo") params.set("vertical", activeTab);
 
     const qs = params.toString();
-    router.push(qs ? `/buscar?${qs}` : "/buscar");
+    router.push(localizeHref(qs ? `/buscar?${qs}` : "/buscar", lang));
   }
 
   function handleVerticalClick(vertical) {
-    if (!user) {
-      router.push("/registro");
-      return;
-    }
-    router.push(`/buscar?vertical=${vertical}`);
+    router.push(localizeHref(`/buscar?vertical=${vertical}`, lang));
   }
 
   function getCardTitle(card) {
@@ -330,7 +357,6 @@ export default function Hero() {
 
   return (
     <div style={{ backgroundColor: "#f7f5f2" }}>
-      <Navbar />
 
       <section
         className="mx-auto max-w-6xl text-center"
@@ -371,7 +397,7 @@ export default function Hero() {
 
         <p
           className="mx-auto mt-4 text-[13px] leading-[1.7]"
-          style={{ color: "#888", maxWidth: 480 }}
+          style={{ color: "#6b6b6b", maxWidth: 480 }}
         >
           {t.hero.subtitulo}
         </p>
@@ -387,7 +413,7 @@ export default function Hero() {
               statsLoaded={statsLoaded}
               lang={lang}
               extra={extra}
-              proximamenteLabel={t.hero.proximamenteEnZona}
+              proximamenteLabel={t.hero.verProveedores}
               title={getCardTitle(card)}
               label={getCardLabel(card)}
               onClick={handleVerticalClick}
@@ -397,20 +423,20 @@ export default function Hero() {
       </section>
 
       <div ref={pickerRef} className="relative">
+        <h2 className="sr-only">{t.hero.buscar}</h2>
         <form
           onSubmit={handleSearch}
-          className="border-y bg-white"
+          className="mx-auto flex max-w-6xl flex-col border-y bg-white md:flex-row md:items-stretch"
           style={{ borderColor: "#e8e4de", boxShadow: "0 4px 16px rgba(0,0,0,0.07)" }}
         >
-          <div className="mx-auto flex max-w-6xl flex-col md:flex-row md:items-stretch">
-            <SearchField label={extra.ciudad}>
+            <SearchField label={extra.ciudad} htmlFor="hero-ciudad">
               <CiudadAutocompleteInput
                 id="hero-ciudad"
                 value={query}
                 onChange={setQuery}
                 placeholder={t.hero.placeholder}
                 className="w-full"
-                inputClassName="w-full bg-transparent text-sm outline-none placeholder:text-[#aaa]"
+                inputClassName="min-h-[24px] w-full bg-transparent text-sm outline-none placeholder:text-[#6b6b6b]"
               />
             </SearchField>
 
@@ -421,8 +447,25 @@ export default function Hero() {
             />
             <VerticalDivider />
 
-            <SearchField label={t.hero.llegada} onClick={openCalendar}>
-              <DateTrigger value={fechaDesde} placeholder={t.hero.annadeFecha} />
+            <SearchField
+              label={t.hero.llegada}
+              htmlFor="hero-llegada"
+              onClick={() => openCalendar(llegadaRef)}
+            >
+              <DateTrigger
+                id="hero-llegada"
+                triggerRef={llegadaRef}
+                value={fechaDesde}
+                lang={lang}
+                placeholder={t.hero.annadeFecha}
+                ariaLabel={
+                  fechaDesde
+                    ? t.a11y.llegadaValor(fullDate(fechaDesde))
+                    : t.a11y.llegadaVacia
+                }
+                expanded={calendarOpen}
+                onOpen={() => openCalendar(llegadaRef)}
+              />
             </SearchField>
 
             <div
@@ -432,8 +475,25 @@ export default function Hero() {
             />
             <VerticalDivider />
 
-            <SearchField label={t.hero.salida} onClick={openCalendar}>
-              <DateTrigger value={fechaHasta} placeholder={t.hero.annadeFecha} />
+            <SearchField
+              label={t.hero.salida}
+              htmlFor="hero-salida"
+              onClick={() => openCalendar(salidaRef)}
+            >
+              <DateTrigger
+                id="hero-salida"
+                triggerRef={salidaRef}
+                value={fechaHasta}
+                lang={lang}
+                placeholder={t.hero.annadeFecha}
+                ariaLabel={
+                  fechaHasta
+                    ? t.a11y.salidaValor(fullDate(fechaHasta))
+                    : t.a11y.salidaVacia
+                }
+                expanded={calendarOpen}
+                onOpen={() => openCalendar(salidaRef)}
+              />
             </SearchField>
 
             <div
@@ -445,12 +505,13 @@ export default function Hero() {
 
             <SearchField
               label={t.hero.queNecesitas.replace("¿", "").replace("?", "")}
+              htmlFor="hero-vertical"
             >
               <select
                 id="hero-vertical"
                 value={activeTab}
                 onChange={(e) => setActiveTab(e.target.value)}
-                className="w-full cursor-pointer appearance-none bg-transparent text-sm font-medium outline-none"
+                className="min-h-[24px] w-full cursor-pointer appearance-none bg-transparent text-sm font-medium outline-none"
                 style={{ color: "#1a1a1a" }}
               >
                 {tabs.map((tab) => (
@@ -471,11 +532,12 @@ export default function Hero() {
             >
               {extra.buscarBtn}
             </button>
-          </div>
         </form>
 
         {calendarOpen && (
           <div
+            role="dialog"
+            aria-label={t.a11y.selectorFechas}
             className="absolute left-0 right-0 z-50 border-b bg-white p-5 shadow-xl"
             style={{ borderColor: BRAND.border }}
           >
@@ -484,7 +546,8 @@ export default function Hero() {
                 fechaInicio={fechaDesde}
                 fechaFin={fechaHasta}
                 onChange={handleRangeChange}
-                onRangeComplete={() => setCalendarOpen(false)}
+                onRangeComplete={() => closeCalendar({ restoreFocus: true })}
+                autoFocus
               />
             </div>
           </div>
@@ -503,7 +566,7 @@ export default function Hero() {
                 style={{ backgroundColor: item.color }}
                 aria-hidden
               />
-              <span className="text-[11px]" style={{ color: "#aaa" }}>
+              <span className="text-[11px]" style={{ color: "#6b6b6b" }}>
                 {item.text}
               </span>
             </div>

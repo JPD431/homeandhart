@@ -98,7 +98,7 @@ export default function ModalidadCobroFields({
                   <span className="block text-sm font-semibold text-[#1a1a1a]">
                     {opt.label}
                     {opt.value === legacy ? (
-                      <span className="ml-2 text-[10px] font-medium text-[#888]">
+                      <span className="ml-2 text-[10px] font-medium text-[#6b6b6b]">
                         (precio de reserva actual)
                       </span>
                     ) : null}
@@ -153,7 +153,7 @@ export default function ModalidadCobroFields({
                         className={inputClass}
                         style={{ borderColor: BRAND.border }}
                       />
-                      <p className="mt-1 text-[10px] text-[#888]">
+                      <p className="mt-1 text-[10px] text-[#6b6b6b]">
                         Solo informativo para el cliente.
                       </p>
                     </div>
@@ -177,7 +177,7 @@ export default function ModalidadCobroFields({
                       className={inputClass}
                       style={{ borderColor: BRAND.border }}
                     />
-                    <p className="mt-1 text-[10px] text-[#888]">
+                    <p className="mt-1 text-[10px] text-[#6b6b6b]">
                       Vacío = sin suplemento por {unitWord} extra en esta
                       modalidad.
                     </p>

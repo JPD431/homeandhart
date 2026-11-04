@@ -1,0 +1,451 @@
+"use client";
+
+import Link from "@/app/components/LocaleLink";
+import { useParams, useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import Navbar from "@/app/components/Navbar";
+import { VerticalIcon as VerticalGlyph } from "@/app/components/vertical-icons";
+import { BRAND, SERIF } from "@/app/components/brand";
+import { getFamiliaInitials, getFamiliaMiembros } from "@/app/lib/familia";
+import {
+  VERTICAL_THEME,
+  buildTimelineItems,
+  formatDateRange,
+  formatEuro,
+  getBookingEstado,
+  userCanAccessViaje,
+} from "@/app/lib/viajes";
+import BookingStatusBadge from "@/app/components/BookingStatusBadge";
+import { supabase } from "@/app/lib/supabase";
+import { useLang } from "@/app/lib/LangContext";
+import { useTranslation } from "@/app/lib/i18n";
+
+export default function ViajePage() {
+  const router = useRouter();
+  const params = useParams();
+  const viajeId = params.id;
+  const { lang } = useLang();
+  const t = useTranslation(lang);
+
+  const [loading, setLoading] = useState(true);
+  const [viaje, setViaje] = useState(null);
+  const [bookings, setBookings] = useState([]);
+  const [miembros, setMiembros] = useState([]);
+  const [shareMessage, setShareMessage] = useState("");
+
+  useEffect(() => {
+    async function load() {
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError || !user) {
+        router.replace("/login");
+        return;
+      }
+
+      const { data: viajeData, error: viajeError } = await supabase
+        .from("viajes")
+        .select("*")
+        .eq("id", viajeId)
+        .single();
+
+      if (viajeError || !viajeData) {
+        router.replace("/dashboard");
+        return;
+      }
+
+      const canAccess = await userCanAccessViaje(
+        supabase,
+        viajeData,
+        user.id,
+      );
+      if (!canAccess) {
+        router.replace("/dashboard");
+        return;
+      }
+
+      setViaje(viajeData);
+
+      if (viajeData.familia_id) {
+        const lista = await getFamiliaMiembros(supabase, viajeData.familia_id);
+        setMiembros(lista.filter((m) => m.estado === "activo"));
+      }
+
+      const { data: reservasData } = await supabase
+        .from("viaje_reservas")
+        .select(
+          `
+          booking_id,
+          bookings:booking_id (
+            id,
+            fecha_inicio,
+            fecha_fin,
+            hora,
+            precio_total,
+            estado,
+            services:service_id (
+              titulo,
+              vertical,
+              profiles_public:proveedor_id (nombre, apellido)
+            )
+          )
+        `,
+        )
+        .eq("viaje_id", viajeId);
+
+      const linked = (reservasData ?? [])
+        .map((r) => r.bookings)
+        .filter(Boolean);
+
+      setBookings(linked);
+      setLoading(false);
+    }
+
+    if (viajeId) load();
+  }, [viajeId, router]);
+
+  const timelineItems = useMemo(
+    () => buildTimelineItems(bookings, viaje?.ciudad),
+    [bookings, viaje?.ciudad],
+  );
+
+  const costSummary = useMemo(() => {
+    return bookings.map((booking) => {
+      const service = booking.services ?? {};
+      return {
+        id: booking.id,
+        titulo: service.titulo || t.viajeDetalle.servicio,
+        precio: Number(booking.precio_total) || 0,
+      };
+    });
+  }, [bookings, t]);
+
+  const totalCost = useMemo(
+    () => costSummary.reduce((sum, item) => sum + item.precio, 0),
+    [costSummary],
+  );
+
+  const pendientesCount = useMemo(
+    () =>
+      bookings.filter((b) => getBookingEstado(b) === "pendiente").length,
+    [bookings],
+  );
+
+  async function handleShare() {
+    const url = window.location.href;
+    try {
+      await navigator.clipboard.writeText(url);
+      setShareMessage(t.viajeDetalle.linkCopiado);
+    } catch {
+      setShareMessage(t.viajeDetalle.errorCopiar);
+    }
+    setTimeout(() => setShareMessage(""), 2500);
+  }
+
+  if (loading) {
+    return (
+      <div
+        className="min-h-screen font-sans"
+        style={{ backgroundColor: BRAND.warm }}
+      >
+        <Navbar />
+        <main id="contenido" className="mx-auto max-w-5xl px-4 py-16 text-center text-sm text-[#666]">
+          {t.viajeDetalle.cargando}
+        </main>
+      </div>
+    );
+  }
+
+  if (!viaje) return null;
+
+  return (
+    <div
+      className="min-h-screen font-sans"
+      style={{ backgroundColor: BRAND.warm, color: "#1a1a1a" }}
+    >
+      <Navbar />
+
+      <header
+        className="border-b bg-white px-4 py-6 sm:px-6"
+        style={{ borderColor: BRAND.border }}
+      >
+        <div className="mx-auto max-w-5xl">
+          <Link
+            href="/dashboard"
+            className="text-sm no-underline transition-opacity hover:opacity-80"
+            style={{ color: BRAND.primary }}
+          >
+            {t.viajeDetalle.misViajes}
+          </Link>
+
+          <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h1
+                className="text-2xl font-bold text-[#1a1a1a] sm:text-3xl"
+                style={{ fontFamily: SERIF }}
+              >
+                {viaje.nombre}
+              </h1>
+              <p className="mt-1 text-sm text-[#666]">
+                {formatDateRange(viaje.fecha_inicio, viaje.fecha_fin)}
+                {viaje.ciudad ? ` · ${viaje.ciudad}` : ""}
+              </p>
+              {miembros.length > 0 && (
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  {miembros.map((miembro) => {
+                    const perfil = miembro.profiles_public;
+                    const avatarUrl =
+                      perfil?.foto_perfil || perfil?.avatar_url || null;
+                    const initials = getFamiliaInitials(
+                      perfil?.nombre,
+                      perfil?.apellido,
+                    );
+                    const nombre =
+                      [perfil?.nombre, perfil?.apellido]
+                        .filter(Boolean)
+                        .join(" ") || t.viajeDetalle.miembro;
+
+                    return avatarUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        key={miembro.id}
+                        src={avatarUrl}
+                        alt=""
+                        title={nombre}
+                        className="h-9 w-9 rounded-full object-cover ring-2 ring-white"
+                      />
+                    ) : (
+                      <span
+                        key={miembro.id}
+                        title={nombre}
+                        className="flex h-9 w-9 items-center justify-center rounded-full text-xs font-semibold ring-2 ring-white"
+                        style={{
+                          backgroundColor: BRAND.light,
+                          color: BRAND.primary,
+                        }}
+                      >
+                        {initials}
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+            <div className="flex flex-col items-start gap-1 sm:items-end">
+              <button
+                type="button"
+                onClick={handleShare}
+                className="rounded-xl border px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-[#e8f0fb]"
+                style={{ borderColor: BRAND.primary, color: BRAND.primary }}
+              >
+                {t.viajeDetalle.compartir}
+              </button>
+              {shareMessage && (
+                <span className="text-xs text-green-700">{shareMessage}</span>
+              )}
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main id="contenido" className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
+        <div className="grid gap-6 lg:grid-cols-3">
+          <div className="lg:col-span-2">
+            <h2
+              className="text-lg font-semibold text-[#1a1a1a]"
+              style={{ fontFamily: SERIF }}
+            >
+              {t.viajeDetalle.timelineTitulo}
+            </h2>
+
+            {timelineItems.length === 0 ? (
+              <p
+                className="mt-4 rounded-2xl border bg-white px-6 py-10 text-center text-sm text-[#666]"
+                style={{ borderColor: BRAND.border }}
+              >
+                {t.viajeDetalle.sinServicios}
+              </p>
+            ) : (
+              <ul className="relative mt-6 flex flex-col gap-4">
+                <div
+                  className="absolute bottom-2 left-5 top-2 w-0.5"
+                  style={{ backgroundColor: BRAND.border }}
+                  aria-hidden
+                />
+                {timelineItems.map((item, index) => {
+                  if (item.type === "gap") {
+                    const buscarUrl = `/buscar?ciudad=${encodeURIComponent(item.ciudad || "")}&desde=${item.gapStart}&hasta=${item.gapEnd}`;
+                    return (
+                      <li key={`gap-${index}`} className="relative pl-12">
+                        <span
+                          className="absolute left-3 top-4 h-4 w-4 rounded-full border-2 border-white"
+                          style={{ backgroundColor: "#c47d1a" }}
+                        />
+                        <div
+                          className="rounded-xl border border-dashed bg-white px-4 py-4"
+                          style={{ borderColor: "#c47d1a" }}
+                        >
+                          <p className="text-sm font-medium text-[#92400e]">
+                            {t.viajeDetalle.sinCobertura}
+                          </p>
+                          <p className="mt-1 text-xs text-[#6b6b6b]">
+                            {formatDateRange(item.gapStart, item.gapEnd)}
+                          </p>
+                          <Link
+                            href={buscarUrl}
+                            className="mt-3 inline-block rounded-xl px-4 py-2 text-sm font-semibold text-white no-underline transition-opacity hover:opacity-90"
+                            style={{ backgroundColor: BRAND.primary }}
+                          >
+                            {t.viajeDetalle.buscarProveedor}
+                          </Link>
+                        </div>
+                      </li>
+                    );
+                  }
+
+                  const booking = item.booking;
+                  const service = booking.services ?? {};
+                  const proveedor = service.profiles_public ?? {};
+                  const vertical = service.vertical || "alojamiento";
+                  const theme =
+                    VERTICAL_THEME[vertical] ?? VERTICAL_THEME.alojamiento;
+                  const estado = getBookingEstado(booking);
+                  const proveedorNombre =
+                    [proveedor.nombre, proveedor.apellido]
+                      .filter(Boolean)
+                      .join(" ") || t.viajeDetalle.proveedor;
+
+                  return (
+                    <li key={booking.id} className="relative pl-12">
+                      <span
+                        className="absolute left-3 top-5 h-4 w-4 rounded-full border-2 border-white"
+                        style={{ backgroundColor: theme.color }}
+                      />
+                      <div
+                        className="rounded-2xl border bg-white p-5"
+                        style={{ borderColor: BRAND.border }}
+                      >
+                        <div className="flex flex-wrap items-start gap-3">
+                          <span
+                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
+                            style={{ backgroundColor: theme.light }}
+                          >
+                            <VerticalGlyph
+                              vertical={vertical}
+                              className="h-5 w-5"
+                              color={theme.color}
+                            />
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="font-semibold text-[#1a1a1a]">
+                                {service.titulo || theme.label}
+                              </p>
+                              <BookingStatusBadge
+                                status={estado}
+                                role="cliente"
+                                size="sm"
+                              />
+                            </div>
+                            <p className="mt-0.5 text-sm text-[#666]">
+                              {proveedorNombre}
+                            </p>
+                            <p className="mt-1 text-xs text-[#6b6b6b]">
+                              {formatDateRange(
+                                booking.fecha_inicio,
+                                booking.fecha_fin,
+                              )}
+                              {booking.hora ? ` · ${booking.hora}` : ""}
+                            </p>
+                            <p
+                              className="mt-2 text-lg font-bold"
+                              style={{ color: theme.color }}
+                            >
+                              {formatEuro(booking.precio_total)}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+
+          <aside className="lg:col-span-1">
+            <div
+              className="sticky top-6 rounded-2xl border bg-white p-6"
+              style={{ borderColor: BRAND.border }}
+            >
+              <h2
+                className="text-lg font-semibold text-[#1a1a1a]"
+                style={{ fontFamily: SERIF }}
+              >
+                {t.viajeDetalle.resumen}
+              </h2>
+
+              <div className="mt-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-[#6b6b6b]">
+                  {t.viajeDetalle.estadoGeneral}
+                </p>
+                {pendientesCount === 0 && bookings.length > 0 ? (
+                  <p className="mt-2 text-sm font-semibold text-green-700">
+                    {t.viajeDetalle.todoConfirmado}
+                  </p>
+                ) : pendientesCount > 0 ? (
+                  <p className="mt-2 text-sm font-semibold text-[#92400e]">
+                    {t.viajeDetalle.serviciosPendientes(pendientesCount)}
+                  </p>
+                ) : (
+                  <p className="mt-2 text-sm text-[#666]">
+                    {t.viajeDetalle.sinServiciosAun}
+                  </p>
+                )}
+              </div>
+
+              <div className="mt-6">
+                <p className="text-xs font-semibold uppercase tracking-wide text-[#6b6b6b]">
+                  {t.viajeDetalle.costes}
+                </p>
+                {costSummary.length === 0 ? (
+                  <p className="mt-2 text-sm text-[#666]">—</p>
+                ) : (
+                  <ul className="mt-3 flex flex-col gap-2">
+                    {costSummary.map((item) => (
+                      <li
+                        key={item.id}
+                        className="flex items-center justify-between gap-2 text-sm"
+                      >
+                        <span className="truncate text-[#444]">
+                          {item.titulo}
+                        </span>
+                        <span
+                          className="shrink-0 font-semibold"
+                          style={{ color: BRAND.primary }}
+                        >
+                          {formatEuro(item.precio)}
+                        </span>
+                      </li>
+                    ))}
+                    <li
+                      className="flex items-center justify-between gap-2 border-t pt-3 text-sm font-bold"
+                      style={{ borderColor: BRAND.border }}
+                    >
+                      <span className="text-[#1a1a1a]">{t.viajeDetalle.totalViaje}</span>
+                      <span style={{ color: BRAND.primary }}>
+                        {formatEuro(totalCost)}
+                      </span>
+                    </li>
+                  </ul>
+                )}
+              </div>
+            </div>
+          </aside>
+        </div>
+      </main>
+    </div>
+  );
+}

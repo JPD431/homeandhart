@@ -221,7 +221,7 @@ export default function AdminServiciosRevisionTab({
                     </span>
                   )}
                 </p>
-                <p className="mt-1 text-xs text-[#888]">
+                <p className="mt-1 text-xs text-[#6b6b6b]">
                   Creado: {formatDate(svc.created_at)}
                 </p>
                 {svc.vertical === "alojamiento" && (

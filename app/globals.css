@@ -30,3 +30,43 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Accesibilidad (WCAG 2.2 AA) ------------------------------------------- */
+:root {
+  /* Texto secundario: 5,3:1 sobre #fff y 4,9:1 sobre #f7f5f2 (antes #888/#999/#aaa/#bbb). */
+  --color-muted: #6b6b6b;
+  --focus-ring: #1d4f91;
+}
+
+html {
+  /* 2.4.11: el foco nunca queda tapado por la cabecera sticky. */
+  scroll-padding-top: 5rem;
+}
+
+:focus-visible {
+  /* Anillo azul con halo blanco: >=3:1 sobre fondos claros y sobre tarjetas azules/naranjas. */
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px #fff;
+  scroll-margin-top: 5rem;
+}
+
+main:focus {
+  outline: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+::placeholder {
+  color: var(--color-muted);
+  opacity: 1;
+}
