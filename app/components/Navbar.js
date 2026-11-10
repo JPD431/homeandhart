@@ -420,6 +420,7 @@ export default function Navbar() {
         { href: "/#como-funciona", label: t.navbar.comoFunciona },
         { href: "/nuestra-historia", label: t.navbar.nosotros },
         { href: "/ser-proveedor", label: t.navbar.serProveedor },
+        { href: "/ayuda", label: t.navbar.ayuda },
       ];
     }
 
@@ -429,6 +430,7 @@ export default function Navbar() {
         { href: "/estadisticas", label: t.navbar.ingresos },
         { href: "/editar-perfil?tab=servicios", label: t.navbar.misServicios },
         { href: "/chat", label: t.navbar.mensajes },
+        { href: "/ayuda", label: t.navbar.ayuda },
       ];
     }
 
@@ -447,6 +449,8 @@ export default function Navbar() {
         label: t.navbar.ofrecerServicios,
       });
     }
+
+    links.push({ href: "/ayuda", label: t.navbar.ayuda });
 
     return links;
   }, [
