@@ -2,6 +2,7 @@
 
 import { useLang } from "@/app/lib/LangContext";
 import { useTranslation } from "@/app/lib/i18n";
+import Link from "./LocaleLink";
 import { BRAND, SERIF } from "./brand";
 import {
   LodgingIcon,
@@ -341,16 +342,16 @@ export default function CheckoutSection() {
                 </p>
               </div>
 
-              <button
-                type="button"
-                className="mt-5 w-full py-3.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+              <Link
+                href="/registro"
+                className="mt-5 block w-full py-3.5 text-center text-sm font-semibold text-white transition-opacity hover:opacity-90"
                 style={{
                   backgroundColor: BRAND.primary,
                   borderRadius: "12px",
                 }}
               >
                 {c.reservar}
-              </button>
+              </Link>
 
               <p className="mt-4 text-center text-[11px] text-[#6b6b6b]">
                 {c.pagoRetenido}
