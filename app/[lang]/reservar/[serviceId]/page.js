@@ -58,6 +58,13 @@ import {
   resolveBillingForService,
 } from "@/app/lib/pricing-reserva";
 import {
+  formatReservationDatesBlockedMessage,
+  getLocalTodayStr,
+  getMinHoraForFecha,
+  getReservationDatesStatus,
+  normalizeTimeInputValue,
+} from "@/app/lib/reservation-dates-ready";
+import {
   formatHuespedesPrecioDesglose,
   getUnidadesPrecioCopy,
   serviceHasHuespedesModelo,
@@ -162,20 +169,32 @@ function parseInheritedSearchDate(value) {
 function validateBookingDates(vertical, fechaInicio, hora, t) {
   if (!fechaInicio) return null;
 
-  const hoyStr = new Date().toISOString().split("T")[0];
+  const ahora = new Date();
+  const hoyStr = getLocalTodayStr(ahora);
   if (fechaInicio < hoyStr) {
     return t ? t.reservar.errFechaEnPasado : "La fecha de inicio no puede ser en el pasado";
   }
 
-  if (hora) {
-    const ahora = new Date();
-    const hoyStrLocal = `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, "0")}-${String(ahora.getDate()).padStart(2, "0")}`;
-    if (fechaInicio === hoyStrLocal) {
-      const [h, m] = hora.split(":").map(Number);
+  const normalizedHora = normalizeTimeInputValue(hora);
+  if (normalizedHora) {
+    if (fechaInicio === hoyStr) {
+      const [h, m] = normalizedHora.split(":").map(Number);
       const horaSeleccionada = h * 60 + m;
       const horaActual = ahora.getHours() * 60 + ahora.getMinutes();
       if (horaSeleccionada <= horaActual) {
-        return t ? t.reservar.errHoraPasada(hora) : `La hora ${hora} ya ha pasado. Por favor elige una hora futura.`;
+        return t
+          ? t.reservar.errHoraPasada(normalizedHora)
+          : `La hora ${normalizedHora} ya ha pasado. Por favor elige una hora futura.`;
+      }
+      const minHora = getMinHoraForFecha(fechaInicio, ahora);
+      if (minHora) {
+        const [mh, mm] = minHora.split(":").map(Number);
+        const minMinutes = mh * 60 + mm;
+        if (horaSeleccionada < minMinutes) {
+          return t
+            ? t.reservar.errHoraMinima(minHora)
+            : `La hora debe ser al menos 1 hora desde ahora. Hora mínima: ${minHora}`;
+        }
       }
     }
   }
@@ -839,17 +858,6 @@ function buildDateContextFromCartEntry(entry) {
   };
 }
 
-function getMinHoraForFecha(fecha) {
-  if (!fecha) return undefined;
-  const hoy = new Date().toISOString().split("T")[0];
-  if (fecha === hoy) {
-    const ahora = new Date();
-    ahora.setHours(ahora.getHours() + 1);
-    return `${String(ahora.getHours()).padStart(2, "0")}:${String(ahora.getMinutes()).padStart(2, "0")}`;
-  }
-  return undefined;
-}
-
 /**
  * Paso 2b: bloque de inputs de una línea del carrito (complementarios).
  * Lee/escribe cartByServiceId vía onPatch.
@@ -1025,12 +1033,29 @@ function CartLineBookingFields({
                 </label>
                 <input
                   type="time"
+                  required
                   min={getMinHoraForFecha(entry.fechaInicio)}
                   value={entry.hora || ""}
-                  onChange={(e) => onPatch({ hora: e.target.value })}
+                  onChange={(e) =>
+                    onPatch({ hora: normalizeTimeInputValue(e.target.value) })
+                  }
+                  onInput={(e) =>
+                    onPatch({ hora: normalizeTimeInputValue(e.target.value) })
+                  }
+                  aria-invalid={!entry.hora}
                   className={inputClass}
-                  style={{ borderColor: "#e8e4de", borderRadius: 6 }}
+                  style={{
+                    borderColor: entry.hora ? "#e8e4de" : "#d4a017",
+                    borderRadius: 6,
+                    opacity: entry.hora ? 1 : 0.72,
+                  }}
                 />
+                {!entry.hora ? (
+                  <p className="mt-1 text-[10px] leading-snug text-[#92400e]">
+                    {t?.reservar?.seleccionaHoraValida ??
+                      "Selecciona una hora (si ves 12:30 sin haberla elegido, el campo está vacío)."}
+                  </p>
+                ) : null}
               </div>
             )}
             {(billingNeedsDuracionHoras(billing) ||
@@ -2817,16 +2842,7 @@ export default function ReservarPage() {
   const verticals = useMemo(() => getVerticalsT(t), [t]);
   const verticalConfig = verticals[vertical] ?? verticals.alojamiento;
 
-  const getMinHora = () => {
-    if (!fechaInicio) return undefined;
-    const hoy = new Date().toISOString().split("T")[0];
-    if (fechaInicio === hoy) {
-      const ahora = new Date();
-      ahora.setHours(ahora.getHours() + 1);
-      return `${String(ahora.getHours()).padStart(2, "0")}:${String(ahora.getMinutes()).padStart(2, "0")}`;
-    }
-    return undefined;
-  };
+  const getMinHora = () => getMinHoraForFecha(fechaInicio);
   const profile = service?.profiles_public ?? {};
   const unitPrice = Number(service?.precio) || 0;
   // Ofertas de chat (query precio_especial) NO rebajan el cobro: no hay fila en BD.
@@ -3430,38 +3446,50 @@ export default function ReservarPage() {
           : incompletePriceLine.detail
         : priceSummary.detail);
 
-  const datesReady = useMemo(() => {
-    if (!fechaInicio) return false;
-    if (showModalidadSelector && !modalidadCobro) return false;
-    if (needsLugarSelector(service?.modalidad) && !lugarServicio) return false;
+  const datesReadyStatus = useMemo(
+    () =>
+      getReservationDatesStatus({
+        fechaInicio,
+        fechaFin,
+        hora,
+        duracionHoras,
+        vertical,
+        modalidadCobro,
+        showModalidadSelector,
+        mainBilling,
+        serviceModalidad: service?.modalidad,
+        lugarServicio,
+      }),
+    [
+      fechaInicio,
+      fechaFin,
+      hora,
+      duracionHoras,
+      vertical,
+      modalidadCobro,
+      showModalidadSelector,
+      mainBilling,
+      service?.modalidad,
+      lugarServicio,
+    ],
+  );
+  const datesReady = datesReadyStatus.ready;
+  const datesBlockedMessage = useMemo(
+    () => formatReservationDatesBlockedMessage(datesReadyStatus, t?.reservar),
+    [datesReadyStatus, t],
+  );
 
-    const billing = mainBilling;
-    if (billing.kind === "modalidad") {
-      if (billingNeedsFechaFin(billing, vertical) && !fechaFin) return false;
-      if (billingNeedsHora(billing) && !hora) return false;
-      if (billingNeedsDuracionHoras(billing) && !duracionHoras) return false;
-      return true;
-    }
-
-    if (vertical === "ninos") {
-      return Boolean(hora && duracionHoras);
-    }
-    if (vertical === "alojamiento" || vertical === "mascotas") {
-      return Boolean(fechaFin);
-    }
-    return true;
-  }, [
-    fechaInicio,
-    fechaFin,
-    hora,
-    duracionHoras,
-    vertical,
-    modalidadCobro,
-    showModalidadSelector,
-    mainBilling,
-    service?.modalidad,
-    lugarServicio,
-  ]);
+  // Si la hora en estado es inválida (p. ej. por debajo del mínimo de hoy), avisar
+  // en lugar de dejar la sección 3 bloqueada en silencio.
+  useEffect(() => {
+    if (datesReadyStatus.horaInvalid !== "past_min") return;
+    if (!datesReadyStatus.minHora) return;
+    setErrorMessage(
+      t?.reservar?.errHoraMinima
+        ? t.reservar.errHoraMinima(datesReadyStatus.minHora)
+        : `La hora debe ser al menos 1 hora desde ahora. Hora mínima: ${datesReadyStatus.minHora}`,
+    );
+  }, [datesReadyStatus.horaInvalid, datesReadyStatus.minHora, t]);
 
   const payBlockedReason = useMemo(() => {
     if (clienteNoVerificado) return dniBlockMessage || "Verifica tu identidad";
@@ -4573,10 +4601,26 @@ export default function ReservarPage() {
                         required
                         min={getMinHora()}
                         value={hora}
-                        onChange={(e) => setHora(e.target.value)}
+                        onChange={(e) =>
+                          setHora(normalizeTimeInputValue(e.target.value))
+                        }
+                        onInput={(e) =>
+                          setHora(normalizeTimeInputValue(e.target.value))
+                        }
+                        aria-invalid={!hora}
                         className={inputClass}
-                        style={{ borderColor: "#e8e4de", borderRadius: 6 }}
+                        style={{
+                          borderColor: hora ? "#e8e4de" : "#d4a017",
+                          borderRadius: 6,
+                          opacity: hora ? 1 : 0.72,
+                        }}
                       />
+                      {!hora ? (
+                        <p className="mt-1 text-[10px] leading-snug text-[#92400e]">
+                          {t?.reservar?.seleccionaHoraValida ??
+                            "Selecciona una hora (si ves 12:30 sin haberla elegido, el campo está vacío)."}
+                        </p>
+                      ) : null}
                     </div>
                   )}
                   {(billingNeedsDuracionHoras(mainBilling) ||
@@ -4722,13 +4766,6 @@ export default function ReservarPage() {
                     </p>
                   )}
                 </div>
-                {console.log("DEBUG checkout:", {
-                  precioListo,
-                  total: priceSummary.total,
-                  ready: priceSummary.ready,
-                  calendarioError,
-                  disponibilidadChecking,
-                })}
                 {precioListo && priceSummary.total > 0 && (
                   <label className="mt-4 flex min-h-[44px] cursor-pointer items-start gap-3 py-1">
                     <input
@@ -5161,8 +5198,10 @@ export default function ReservarPage() {
                   </button>
                 </>
               ) : (
-                <p className="text-[11px] text-[#6b6b6b]">
-                  {t?.reservar?.completaFechasParaVer ?? "Completa las fechas de tu reserva para ver servicios adicionales disponibles."}
+                <p className="text-[11px] text-[#92400e]">
+                  {datesBlockedMessage ||
+                    (t?.reservar?.completaFechasParaVer ??
+                      "Completa las fechas de tu reserva para ver servicios adicionales disponibles.")}
                 </p>
               )}
             </section>
