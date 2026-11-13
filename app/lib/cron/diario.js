@@ -1,6 +1,7 @@
 import { runActualizarEstados } from "@/app/lib/cron/actualizar-estados";
 import { runCalcularRespuesta } from "@/app/lib/cron/calcular-respuesta";
 import { runEmailSequences } from "@/app/lib/cron/email-sequences";
+import { runExpirarPendientes } from "@/app/lib/cron/expirar-pendientes";
 import { runCancelHoldsHuerfanos } from "@/app/lib/cron/holds-huerfanos";
 
 async function runTask(name, fn) {
@@ -32,12 +33,17 @@ export async function runCronDiario() {
     "holds-huerfanos",
     runCancelHoldsHuerfanos,
   );
+  const expirar_pendientes = await runTask(
+    "expirar-pendientes",
+    runExpirarPendientes,
+  );
 
   const tasks = {
     actualizar_estados,
     calcular_respuesta,
     email_sequences,
     holds_huerfanos,
+    expirar_pendientes,
   };
 
   const allOk = Object.values(tasks).every((t) => t.status === "ok");
@@ -57,6 +63,7 @@ function buildCronSummary(tasks) {
   const es = tasks.email_sequences;
   const cr = tasks.calcular_respuesta;
   const hh = tasks.holds_huerfanos;
+  const ep = tasks.expirar_pendientes;
 
   if (ae?.status === "ok" && ae.result) {
     const { iniciadas = 0, completadas = 0, liberadas = 0 } = ae.result;
@@ -94,6 +101,14 @@ function buildCronSummary(tasks) {
     parts.push(`${hh.result.canceled ?? 0} holds huérfanos cancelados`);
   } else if (hh?.status === "error") {
     parts.push(`holds-huerfanos: error (${hh.error})`);
+  }
+
+  if (ep?.status === "ok" && ep.result) {
+    parts.push(
+      `${ep.result.expired ?? 0} reservas pendientes expiradas`,
+    );
+  } else if (ep?.status === "error") {
+    parts.push(`expirar-pendientes: error (${ep.error})`);
   }
 
   return parts.length > 0

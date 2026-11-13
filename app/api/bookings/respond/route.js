@@ -10,11 +10,8 @@ import {
 import { loadBookingContactClienteAdmin } from "@/app/lib/booking-contact-cliente";
 import { shouldShowClienteDireccionToProvider } from "@/app/lib/lugar-servicio";
 import { sendPlatformEmail } from "@/app/lib/send-platform-email";
-import {
-  aplicarReembolsoStripeBooking,
-  calcularReembolsoTotal,
-} from "@/app/lib/stripe-reembolso";
 import { capturarPaymentIntentAlConfirmar } from "@/app/lib/capturar-al-confirmar";
+import { cancelPaymentIntentOnReject } from "@/app/lib/cancel-payment-intent-on-reject";
 
 const supabaseAdmin = createServiceClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -38,50 +35,6 @@ function buildProveedorIngresoEmailFields(booking, proveedorProfile) {
 }
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-
-/**
- * Libera el hold de ESTA línea al rechazar (F6 + M9).
- * Idempotente por bookingId. Si el PI es compartido con otras reservas activas,
- * hace capture parcial (no cancela el PI entero).
- */
-async function cancelPaymentIntentOnReject(booking) {
-  const paymentIntentId = booking?.payment_intent_id;
-  if (!paymentIntentId) {
-    return { ok: true, action: "sin_pi" };
-  }
-
-  const { tarjeta } = calcularReembolsoTotal(booking);
-  // Solo crédito / sin tarjeta: no tocar el PI (puede estar compartido).
-  if (tarjeta <= 0) {
-    return { ok: true, action: "sin_cargo_tarjeta" };
-  }
-
-  const result = await aplicarReembolsoStripeBooking(
-    stripe,
-    paymentIntentId,
-    tarjeta,
-    {
-      idempotencyKey: `cancel-pi:respond-reject:${booking.id}`,
-      supabaseAdmin,
-      bookingId: booking.id,
-    },
-  );
-
-  if (result.stripe_ok === false) {
-    return {
-      ok: false,
-      action: result.stripe_action,
-      pi_status: result.pi_status,
-      error: result.stripe_error,
-    };
-  }
-
-  return {
-    ok: true,
-    action: result.stripe_action,
-    pi_status: result.pi_status,
-  };
-}
 
 async function contarBookingsPorPaymentIntent(paymentIntentId) {
   if (!paymentIntentId) return 1;
@@ -249,8 +202,13 @@ export async function POST(request) {
       if (action === "rechazar" && current.payment_intent_id) {
         try {
           await cancelPaymentIntentOnReject(
-            current.payment_intent_id,
-            bookingId,
+            {
+              id: bookingId,
+              payment_intent_id: current.payment_intent_id,
+              precio_total: booking.precio_total,
+              credito_aplicado: booking.credito_aplicado,
+            },
+            { stripe, supabaseAdmin },
           );
         } catch (err) {
           console.error(
@@ -298,7 +256,10 @@ export async function POST(request) {
         );
       }
 
-      const cancelResult = await cancelPaymentIntentOnReject(booking);
+      const cancelResult = await cancelPaymentIntentOnReject(booking, {
+        stripe,
+        supabaseAdmin,
+      });
       if (!cancelResult.ok) {
         console.error(
           "[bookings/respond] No se pudo cancelar PaymentIntent al rechazar:",
