@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "@/app/components/LocaleLink";
 import { useLang } from "@/app/lib/LangContext";
 import { useTranslation } from "@/app/lib/i18n";
 import { BRAND, SERIF } from "./brand";
@@ -165,9 +166,9 @@ export default function RetentionSection() {
               {r.ctadesc}
             </p>
           </div>
-          <button
-            type="button"
-            className="shrink-0 rounded-xl px-6 py-3 text-sm transition-opacity hover:opacity-90 sm:text-base"
+          <Link
+            href="/registro"
+            className="inline-block shrink-0 rounded-xl px-6 py-3 text-center text-sm transition-opacity hover:opacity-90 sm:text-base"
             style={{
               backgroundColor: "#fff",
               color: BRAND.primary,
@@ -175,7 +176,7 @@ export default function RetentionSection() {
             }}
           >
             {r.ctaBtn}
-          </button>
+          </Link>
         </div>
       </div>
     </section>

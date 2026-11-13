@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "@/app/components/LocaleLink";
 import { useLang } from "@/app/lib/LangContext";
 import { useTranslation } from "@/app/lib/i18n";
 import { BRAND, SERIF } from "./brand";
@@ -98,9 +99,9 @@ export default function DoubleCTASection() {
                 </Pill>
               ))}
             </div>
-            <button
-              type="button"
-              className="relative z-10 mt-6 px-5 py-2.5 text-sm transition-opacity hover:opacity-90"
+            <Link
+              href="/buscar"
+              className="relative z-10 mt-6 inline-block px-5 py-2.5 text-center text-sm transition-opacity hover:opacity-90"
               style={{
                 backgroundColor: "#fff",
                 color: BRAND.primary,
@@ -109,7 +110,7 @@ export default function DoubleCTASection() {
               }}
             >
               {d.buscar}
-            </button>
+            </Link>
             <span
               className="pointer-events-none absolute select-none text-white"
               style={{
@@ -154,16 +155,16 @@ export default function DoubleCTASection() {
                 </Pill>
               ))}
             </div>
-            <button
-              type="button"
-              className="relative z-10 mt-6 px-5 py-2.5 text-sm text-white transition-opacity hover:opacity-90"
+            <Link
+              href="/buscar"
+              className="relative z-10 mt-6 inline-block px-5 py-2.5 text-center text-sm text-white transition-opacity hover:opacity-90"
               style={{
                 backgroundColor: BRAND.primary,
                 borderRadius: "22px",
               }}
             >
               {d.verProveedores}
-            </button>
+            </Link>
             <span
               className="pointer-events-none absolute select-none"
               style={{
@@ -207,19 +208,19 @@ export default function DoubleCTASection() {
             {d.proveedorDesc}
           </p>
           <div className="mt-6 flex flex-wrap items-center justify-center gap-2.5">
-            <button
-              type="button"
-              className="rounded-full border px-5 py-2.5 text-sm transition-opacity hover:opacity-90"
+            <Link
+              href="/ser-proveedor"
+              className="inline-block rounded-full border px-5 py-2.5 text-center text-sm transition-opacity hover:opacity-90"
               style={{
                 borderColor: "rgba(255, 255, 255, 0.25)",
                 color: "rgba(255, 255, 255, 0.95)",
               }}
             >
               {d.saberMas}
-            </button>
-            <button
-              type="button"
-              className="rounded-full px-5 py-2.5 text-sm transition-opacity hover:opacity-90"
+            </Link>
+            <Link
+              href="/ser-proveedor"
+              className="inline-block rounded-full px-5 py-2.5 text-center text-sm transition-opacity hover:opacity-90"
               style={{
                 backgroundColor: "#fff",
                 color: BRAND.primary,
@@ -227,7 +228,7 @@ export default function DoubleCTASection() {
               }}
             >
               {d.crearPerfil}
-            </button>
+            </Link>
           </div>
         </div>
         </div>
