@@ -14,6 +14,8 @@ import { useParams, useRouter, useSearchParams, usePathname } from "next/navigat
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CalendarioRangoFechas from "@/app/components/CalendarioRangoFechas";
 import { BRAND, SERIF } from "@/app/components/brand";
+import { buildLoginUrl } from "@/app/lib/auth-redirect";
+import { stripLocale } from "@/app/lib/locale";
 import {
   DNI_SUBIR_RUTA,
   getClienteReservaDniBlockMessage,
@@ -2489,7 +2491,9 @@ export default function ReservarPage() {
       } = await supabase.auth.getUser();
 
       if (userError || !user) {
-        router.replace("/login");
+        const { path } = stripLocale(window.location.pathname);
+        const destino = path + window.location.search;
+        router.replace(buildLoginUrl(destino));
         return;
       }
 
