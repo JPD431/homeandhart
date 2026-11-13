@@ -102,7 +102,7 @@ function BookingCard({
   t,
 }) {
   const estado = getBookingEstado(booking);
-  const statusMeta = getBookingStatusMeta(booking.estado || estado, {
+  const statusMeta = getBookingStatusMeta(booking, {
     role: "cliente",
   });
   const service = booking.services ?? {};
@@ -176,7 +176,7 @@ function BookingCard({
 
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
           <BookingStatusBadge
-            status={booking.estado || estado}
+            status={booking}
             role="cliente"
             size="sm"
           />

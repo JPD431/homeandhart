@@ -5436,7 +5436,11 @@ export default function ReservarPage() {
                 className="mt-4 rounded-lg p-3 text-[10px] leading-relaxed text-[#666]"
                 style={{ backgroundColor: "#f7f5f2" }}
               >
-                {t?.reservar?.pagoBloqueado ?? "🛡️ Pago retenido hasta que el servicio se completa. Reembolso total si algo falla."}
+                {service?.reserva_inmediata
+                  ? (t?.reservar?.pagoBloqueado ??
+                    "🛡️ Pago retenido hasta que el servicio se completa. Reembolso total si algo falla.")
+                  : (t?.reservar?.pagoAConfirmar48h ??
+                    "Reserva a confirmar: el proveedor tiene 48 horas para aceptar. Hasta entonces el pago queda retenido y no se cobra nada. Si no responde a tiempo, la reserva caduca y se libera el pago.")}
               </div>
 
               {clienteNoVerificado && dniBlockMessage && (

@@ -155,7 +155,22 @@ const BOOKING_STATUS_CATALOG = {
     actionsCliente: ["ver_detalle", "buscar"],
     actionsProveedor: ["ver_detalle"],
   },
+  /** Display-only: estado BD sigue siendo «rechazada» + resolucion_tipo. */
+  caducada: {
+    label: "Caducada",
+    bg: "#f3f4f6",
+    color: "#6b7280",
+    descriptionCliente:
+      "El proveedor no respondió a tiempo. No se te ha cobrado nada; puedes buscar otro proveedor.",
+    descriptionProveedor:
+      "Esta solicitud caducó por falta de respuesta. El pago del cliente se liberó.",
+    actionsCliente: ["ver_detalle", "buscar"],
+    actionsProveedor: ["ver_detalle"],
+  },
 };
+
+/** Valor de bookings.resolucion_tipo cuando el cron caduca una pendiente. */
+export const RESOLUCION_EXPIRADA_SIN_RESPUESTA = "expirada_sin_respuesta";
 
 /** @deprecated Prefer getBookingStatusMeta — mantenido por compatibilidad. */
 export const BOOKING_STATUS_STYLES = Object.fromEntries(
@@ -171,11 +186,19 @@ export const BOOKING_STATUS_STYLES = Object.fromEntries(
  * @param {{ role?: 'cliente' | 'proveedor' }} [options]
  */
 export function getBookingStatusMeta(estadoOrBooking, { role = "cliente" } = {}) {
-  const raw =
-    typeof estadoOrBooking === "object" && estadoOrBooking != null
-      ? (estadoOrBooking.estado ?? estadoOrBooking.status)
-      : estadoOrBooking;
-  const key = raw || "pendiente";
+  const isObj =
+    typeof estadoOrBooking === "object" && estadoOrBooking != null;
+  const raw = isObj
+    ? (estadoOrBooking.estado ?? estadoOrBooking.status)
+    : estadoOrBooking;
+  let key = raw || "pendiente";
+  if (
+    key === "rechazada" &&
+    isObj &&
+    estadoOrBooking.resolucion_tipo === RESOLUCION_EXPIRADA_SIN_RESPUESTA
+  ) {
+    key = "caducada";
+  }
   const entry = BOOKING_STATUS_CATALOG[key] || {
     label: key.replace(/_/g, " "),
     bg: "#f3f4f6",

@@ -1,6 +1,8 @@
 import Stripe from "stripe";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
+import { RESOLUCION_EXPIRADA_SIN_RESPUESTA } from "@/app/lib/booking-display";
 import { cancelPaymentIntentOnReject } from "@/app/lib/cancel-payment-intent-on-reject";
+import { devolverCreditoReservaPendiente } from "@/app/lib/devolver-credito-reserva-pendiente";
 import { notifyBookingEvent } from "@/app/lib/notifications";
 import { sendPlatformEmail } from "@/app/lib/send-platform-email";
 
@@ -12,11 +14,11 @@ export const EXPIRAR_PENDIENTES_LIMIT = 50;
 /**
  * Estado final: reutilizamos «rechazada» (válido en todo el código; sin CHECK
  * que lo impida). Distinción vs rechazo manual del proveedor:
- *   resolucion_tipo = 'expirada_sin_respuesta'
+ *   resolucion_tipo = RESOLUCION_EXPIRADA_SIN_RESPUESTA
  *   resolucion_nota = texto fijo del cron
  */
 export const EXPIRAR_ESTADO = "rechazada";
-export const EXPIRAR_RESOLUCION_TIPO = "expirada_sin_respuesta";
+export const EXPIRAR_RESOLUCION_TIPO = RESOLUCION_EXPIRADA_SIN_RESPUESTA;
 export const EXPIRAR_RESOLUCION_NOTA =
   "Caducada automáticamente: el proveedor no respondió a tiempo";
 
@@ -55,6 +57,7 @@ async function postBookingEmail(payload) {
  *   now?: Date,
  *   limit?: number,
  *   cancelPayment?: typeof cancelPaymentIntentOnReject,
+ *   devolverCredito?: typeof devolverCreditoReservaPendiente,
  *   notify?: typeof notifyBookingEvent,
  *   sendEmail?: typeof postBookingEmail,
  * }} [deps]
@@ -71,6 +74,8 @@ export async function runExpirarPendientes(deps = {}) {
   const stripe =
     deps.stripe ?? new Stripe(process.env.STRIPE_SECRET_KEY);
   const cancelPayment = deps.cancelPayment ?? cancelPaymentIntentOnReject;
+  const devolverCredito =
+    deps.devolverCredito ?? devolverCreditoReservaPendiente;
   const notify = deps.notify ?? notifyBookingEvent;
   const sendEmail = deps.sendEmail ?? postBookingEmail;
 
@@ -105,6 +110,7 @@ export async function runExpirarPendientes(deps = {}) {
         supabaseAdmin,
         stripe,
         cancelPayment,
+        devolverCredito,
         notify,
         sendEmail,
         now,
@@ -128,7 +134,15 @@ export async function runExpirarPendientes(deps = {}) {
 
 async function expireOneBooking(
   booking,
-  { supabaseAdmin, stripe, cancelPayment, notify, sendEmail, now },
+  {
+    supabaseAdmin,
+    stripe,
+    cancelPayment,
+    devolverCredito,
+    notify,
+    sendEmail,
+    now,
+  },
 ) {
   const resolucionAt = (now ?? new Date()).toISOString();
 
@@ -195,6 +209,20 @@ async function expireOneBooking(
     }
 
     return "reverted";
+  }
+
+  try {
+    await devolverCredito(
+      supabaseAdmin,
+      booking,
+      "[cron/expirar-pendientes]",
+    );
+  } catch (creditErr) {
+    console.error(
+      "[cron/expirar-pendientes] Error devolviendo crédito:",
+      creditErr?.message ?? creditErr,
+      { bookingId: booking.id },
+    );
   }
 
   try {

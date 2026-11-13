@@ -205,17 +205,25 @@ function createMockSupabase({ bookings, services, profiles }) {
 
 describe("runExpirarPendientes", () => {
   let cancelPayment;
+  let devolverCredito;
   let notify;
   let sendEmail;
 
   beforeEach(() => {
     cancelPayment = vi.fn(async () => ({ ok: true, action: "canceled" }));
+    devolverCredito = vi.fn(async () => ({
+      credito_devuelto: 0,
+      skipped: true,
+    }));
     notify = vi.fn(async () => ({ ok: true }));
     sendEmail = vi.fn(async () => {});
   });
 
   it("pendiente de más de 48 h expira y libera el pago", async () => {
-    const booking = makeBooking({ created_at: hoursAgo(60) });
+    const booking = makeBooking({
+      created_at: hoursAgo(60),
+      credito_aplicado: 25,
+    });
     const supabase = createMockSupabase({ bookings: [booking] });
 
     const stats = await runExpirarPendientes({
@@ -223,6 +231,7 @@ describe("runExpirarPendientes", () => {
       stripe: {},
       now: NOW,
       cancelPayment,
+      devolverCredito,
       notify,
       sendEmail,
     });
@@ -232,6 +241,11 @@ describe("runExpirarPendientes", () => {
     expect(cancelPayment.mock.calls[0][0].id).toBe("b1");
     expect(cancelPayment.mock.calls[0][1].idempotencyKey).toContain(
       "expirar-pendiente:b1",
+    );
+    expect(devolverCredito).toHaveBeenCalledWith(
+      supabase,
+      expect.objectContaining({ id: "b1", credito_aplicado: 25 }),
+      "[cron/expirar-pendientes]",
     );
     expect(supabase._store.bookings[0].estado).toBe(EXPIRAR_ESTADO);
     expect(supabase._store.bookings[0].resolucion_tipo).toBe(
@@ -262,6 +276,7 @@ describe("runExpirarPendientes", () => {
       stripe: {},
       now: NOW,
       cancelPayment,
+      devolverCredito,
       notify,
       sendEmail,
     });
@@ -269,6 +284,7 @@ describe("runExpirarPendientes", () => {
     expect(stats.scanned).toBe(0);
     expect(stats.expired).toBe(0);
     expect(cancelPayment).not.toHaveBeenCalled();
+    expect(devolverCredito).not.toHaveBeenCalled();
     expect(supabase._store.bookings[0].estado).toBe("pendiente");
   });
 
@@ -284,6 +300,7 @@ describe("runExpirarPendientes", () => {
       stripe: {},
       now: NOW,
       cancelPayment,
+      devolverCredito,
       notify,
       sendEmail,
     });
@@ -305,6 +322,7 @@ describe("runExpirarPendientes", () => {
       stripe: {},
       now: NOW,
       cancelPayment,
+      devolverCredito,
       notify,
       sendEmail,
     });
@@ -325,6 +343,7 @@ describe("runExpirarPendientes", () => {
       stripe: {},
       now: NOW,
       cancelPayment,
+      devolverCredito,
       notify,
       sendEmail,
     };
@@ -353,6 +372,7 @@ describe("runExpirarPendientes", () => {
       stripe: {},
       now: NOW,
       cancelPayment,
+      devolverCredito,
       notify,
       sendEmail,
     });
@@ -361,6 +381,7 @@ describe("runExpirarPendientes", () => {
     expect(stats.expired).toBe(0);
     expect(supabase._store.bookings[0].estado).toBe("pendiente");
     expect(supabase._store.bookings[0].resolucion_tipo).toBeNull();
+    expect(devolverCredito).not.toHaveBeenCalled();
     expect(sendEmail).not.toHaveBeenCalled();
   });
 
