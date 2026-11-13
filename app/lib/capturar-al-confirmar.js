@@ -7,6 +7,68 @@
  */
 
 /**
+ * Columnas obligatorias del `.select(...)` tras `.insert(bookingRows)` en
+ * complete/route.js. Debe incluir `estado` para capturar reservas inmediatas.
+ */
+export const COMPLETE_INSERT_SELECT_COLUMNS = [
+  "id",
+  "service_id",
+  "estado",
+  "fecha_inicio",
+  "fecha_fin",
+  "lugar_servicio",
+  "direccion_cliente_a_definir",
+  "payment_intent_id",
+];
+
+export const COMPLETE_INSERT_SELECT =
+  COMPLETE_INSERT_SELECT_COLUMNS.join(", ");
+
+/**
+ * Rellena `estado` si el select de insert no lo devolvió, cruzando con
+ * bookingRows por service_id.
+ * @param {Array<object>} insertedBookings
+ * @param {Array<{ service_id?: string, estado?: string }>|null|undefined} bookingRows
+ */
+export function enrichInsertedBookingsEstado(insertedBookings, bookingRows = []) {
+  const estadoByServiceId = new Map();
+  for (const row of bookingRows ?? []) {
+    if (row?.service_id != null && row.estado != null) {
+      estadoByServiceId.set(row.service_id, row.estado);
+    }
+  }
+
+  return (insertedBookings ?? []).map((b) => ({
+    ...b,
+    estado: b.estado ?? estadoByServiceId.get(b.service_id) ?? null,
+  }));
+}
+
+/**
+ * PIs a capturar al crear reservas inmediatas (estado confirmada).
+ * @param {Array<object>} insertedBookings — forma del select de insert
+ * @param {Array<object>} [bookingRows] — filas enviadas al insert (fallback estado)
+ */
+export function collectImmediateCapturePiIds(
+  insertedBookings,
+  bookingRows = [],
+) {
+  const enriched = enrichInsertedBookingsEstado(insertedBookings, bookingRows);
+  return [
+    ...new Set(
+      enriched
+        .filter(
+          (b) =>
+            b.estado === "confirmada" &&
+            typeof b.payment_intent_id === "string" &&
+            b.payment_intent_id.length > 0,
+        )
+        .map((b) => b.payment_intent_id),
+    ),
+  ];
+}
+
+/**
  * @param {import("stripe").Stripe} stripe
  * @param {string | null | undefined} paymentIntentId
  * @param {{ idempotencyKey?: string }} [opts]

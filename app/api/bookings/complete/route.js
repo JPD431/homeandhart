@@ -43,7 +43,9 @@ import {
 } from "@/app/lib/sin-comision-claim";
 import { CANCELABLE_PI_STATUSES } from "@/app/lib/stripe-reembolso";
 import {
+  COMPLETE_INSERT_SELECT,
   capturarPaymentIntentAlConfirmar,
+  collectImmediateCapturePiIds,
   liberarPaymentIntentsTrasFalloConfirmacion,
 } from "@/app/lib/capturar-al-confirmar";
 import { enforceRateLimit } from "@/app/lib/rate-limit";
@@ -1217,6 +1219,7 @@ async function finalizeInsertedBookings({
   sinComisionIdempotencyKey = null,
   insertedBookings,
   insertedBookingIds,
+  bookingRows = null,
   rollbackPaymentIntentIds = null,
   rollbackPaymentIntentId = null,
   fechaInicio,
@@ -1308,18 +1311,11 @@ async function finalizeInsertedBookings({
 
   // Reserva inmediata (confirmada al crear): capturar ahora. Pendientes
   // mantienen el hold hasta que el proveedor acepte (respond).
-  const immediatePiIds = [
-    ...new Set(
-      insertedBookings
-        .filter(
-          (b) =>
-            b.estado === "confirmada" &&
-            typeof b.payment_intent_id === "string" &&
-            b.payment_intent_id.length > 0,
-        )
-        .map((b) => b.payment_intent_id),
-    ),
-  ];
+  // Si el select no devolvió estado, se rellena desde bookingRows.
+  const immediatePiIds = collectImmediateCapturePiIds(
+    insertedBookings,
+    bookingRows,
+  );
 
   for (const paymentIntentId of immediatePiIds) {
     const capture = await capturarPaymentIntentAlConfirmar(
@@ -1757,7 +1753,7 @@ async function completePerServicePayments(userId, body) {
   const { data: insertedBookings, error: insertError } = await supabaseAdmin
     .from("bookings")
     .insert(bookingRows)
-    .select("id, service_id, fecha_inicio, fecha_fin, lugar_servicio, direccion_cliente_a_definir, payment_intent_id");
+    .select(COMPLETE_INSERT_SELECT);
 
   if (insertError) {
     await abortIncompleteComplete({
@@ -1798,6 +1794,7 @@ async function completePerServicePayments(userId, body) {
     sinComisionIdempotencyKey,
     insertedBookings,
     insertedBookingIds,
+    bookingRows,
     rollbackPaymentIntentIds,
     fechaInicio: mainCtx?.fecha_inicio ?? fecha_inicio,
     fechaFin: mainCtx?.fecha_fin ?? fecha_fin,
@@ -2302,7 +2299,7 @@ export async function POST(request) {
     const { data: insertedBookings, error: insertError } = await supabaseAdmin
       .from("bookings")
       .insert(bookingRows)
-      .select("id, service_id, fecha_inicio, fecha_fin, lugar_servicio, direccion_cliente_a_definir, payment_intent_id");
+      .select(COMPLETE_INSERT_SELECT);
 
     if (insertError) {
       await abortIncompleteComplete({
@@ -2332,6 +2329,7 @@ export async function POST(request) {
       sinComisionIdempotencyKey,
       insertedBookings,
       insertedBookingIds,
+      bookingRows,
       rollbackPaymentIntentIds: [payment_intent_id],
       fechaInicio:
         contextByServiceId.get(main_service_id)?.fecha_inicio ?? fecha_inicio,

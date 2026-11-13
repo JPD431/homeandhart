@@ -1,8 +1,14 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
+  COMPLETE_INSERT_SELECT,
+  COMPLETE_INSERT_SELECT_COLUMNS,
   capturarPaymentIntentAlConfirmar,
+  collectImmediateCapturePiIds,
+  enrichInsertedBookingsEstado,
   liberarPaymentIntentsTrasFalloConfirmacion,
 } from "@/app/lib/capturar-al-confirmar";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 
 function makeStripe({
   status = "requires_capture",
@@ -176,5 +182,101 @@ describe("completar con PI ya capturado (solo transfer)", () => {
       "pi_test_1",
     );
     expect(again.already_captured).toBe(true);
+  });
+});
+
+describe("collectImmediateCapturePiIds (forma real del select de insert)", () => {
+  /** Columnas exactas que debe devolver `.insert(bookingRows).select(...)`. */
+  const SELECT_SHAPE = COMPLETE_INSERT_SELECT_COLUMNS;
+
+  function rowFromSelect(partial) {
+    const base = Object.fromEntries(SELECT_SHAPE.map((col) => [col, null]));
+    return { ...base, ...partial };
+  }
+
+  it("COMPLETE_INSERT_SELECT incluye estado (falla si alguien lo quita)", () => {
+    expect(COMPLETE_INSERT_SELECT_COLUMNS).toContain("estado");
+    expect(COMPLETE_INSERT_SELECT).toMatch(/\bestado\b/);
+
+    const completeRoute = readFileSync(
+      path.resolve("app/api/bookings/complete/route.js"),
+      "utf8",
+    );
+    // Ambos inserts deben usar la constante (no un select hardcodeado sin estado).
+    const selectCalls = [
+      ...completeRoute.matchAll(/\.insert\(bookingRows\)\s*\n\s*\.select\(([^)]+)\)/g),
+    ].map((m) => m[1]);
+    expect(selectCalls.length).toBeGreaterThanOrEqual(2);
+    for (const arg of selectCalls) {
+      expect(arg).toMatch(/COMPLETE_INSERT_SELECT/);
+    }
+  });
+
+  it("captura solo PIs de reservas confirmada (inmediata), no pendientes", () => {
+    const insertedBookings = [
+      rowFromSelect({
+        id: "b-imm",
+        service_id: "svc-imm",
+        estado: "confirmada",
+        payment_intent_id: "pi_inmediata",
+        fecha_inicio: "2026-12-01",
+        fecha_fin: "2026-12-02",
+      }),
+      rowFromSelect({
+        id: "b-pend",
+        service_id: "svc-pend",
+        estado: "pendiente",
+        payment_intent_id: "pi_pendiente",
+        fecha_inicio: "2026-12-01",
+        fecha_fin: "2026-12-02",
+      }),
+    ];
+
+    const ids = collectImmediateCapturePiIds(insertedBookings);
+    expect(ids).toEqual(["pi_inmediata"]);
+    expect(ids).not.toContain("pi_pendiente");
+  });
+
+  it("si el select omite estado (undefined), lo rellena desde bookingRows", () => {
+    // Forma defectuosa: select sin estado (bug que motivó este fix).
+    const insertedWithoutEstado = [
+      {
+        id: "b-imm",
+        service_id: "svc-imm",
+        fecha_inicio: "2026-12-01",
+        fecha_fin: "2026-12-02",
+        lugar_servicio: null,
+        direccion_cliente_a_definir: null,
+        payment_intent_id: "pi_inmediata",
+        // estado ausente
+      },
+      {
+        id: "b-pend",
+        service_id: "svc-pend",
+        fecha_inicio: "2026-12-01",
+        fecha_fin: "2026-12-02",
+        lugar_servicio: null,
+        direccion_cliente_a_definir: null,
+        payment_intent_id: "pi_pendiente",
+      },
+    ];
+
+    expect(collectImmediateCapturePiIds(insertedWithoutEstado)).toEqual([]);
+
+    const bookingRows = [
+      { service_id: "svc-imm", estado: "confirmada", payment_intent_id: "pi_inmediata" },
+      { service_id: "svc-pend", estado: "pendiente", payment_intent_id: "pi_pendiente" },
+    ];
+
+    const enriched = enrichInsertedBookingsEstado(
+      insertedWithoutEstado,
+      bookingRows,
+    );
+    expect(enriched[0].estado).toBe("confirmada");
+    expect(enriched[1].estado).toBe("pendiente");
+
+    expect(
+      collectImmediateCapturePiIds(insertedWithoutEstado, bookingRows),
+    ).toEqual(["pi_inmediata"]);
   });
 });
