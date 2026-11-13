@@ -20,8 +20,14 @@ vi.mock("stripe", () => ({
 import {
   EXPIRAR_ESTADO,
   EXPIRAR_RESOLUCION_TIPO,
+  buildBrokenExpirarPendientesOrFilter,
+  cutoffCreatedAtIso,
+  fetchPendientesExpirables,
+  postgrestUnquotedOrValueAfterLt,
   runExpirarPendientes,
+  todayUtcDateString,
 } from "@/app/lib/cron/expirar-pendientes";
+import { buildCronSummary, taskSucceeded } from "@/app/lib/cron/diario";
 
 const NOW = new Date("2026-11-13T12:00:00.000Z");
 const CUTOFF = new Date(NOW.getTime() - 48 * 60 * 60 * 1000);
@@ -85,7 +91,11 @@ function createMockSupabase({ bookings, services, profiles }) {
   function buildQuery(ctx) {
     const api = {
       eq(col, val) {
-        ctx.filters[col] = val;
+        ctx.filters[col] = { op: "eq", val };
+        return api;
+      },
+      lt(col, val) {
+        ctx.filters[col] = { op: "lt", val };
         return api;
       },
       or(expr) {
@@ -118,30 +128,27 @@ function createMockSupabase({ bookings, services, profiles }) {
       },
     };
 
-    function matchesOr(row, orExpr) {
-      if (!orExpr) return true;
-      // created_at.lt.ISO,fecha_inicio.lt.YYYY-MM-DD
-      const parts = orExpr.split(",");
-      return parts.some((part) => {
-        if (part.startsWith("created_at.lt.")) {
-          const iso = part.slice("created_at.lt.".length);
-          return row.created_at < iso;
-        }
-        if (part.startsWith("fecha_inicio.lt.")) {
-          const day = part.slice("fecha_inicio.lt.".length);
-          return row.fecha_inicio && row.fecha_inicio < day;
-        }
-        return false;
-      });
+    function matchesFilter(row, col, spec) {
+      if (spec == null) return true;
+      if (typeof spec !== "object" || !spec.op) {
+        return row[col] === spec;
+      }
+      if (spec.op === "eq") return row[col] === spec.val;
+      if (spec.op === "lt") {
+        const left = row[col];
+        if (left == null) return false;
+        return String(left) < String(spec.val);
+      }
+      return false;
     }
 
     function run() {
       if (ctx.table === "bookings" && ctx.mode === "select") {
         let rows = store.bookings.filter((b) => {
-          for (const [k, v] of Object.entries(ctx.filters)) {
-            if (b[k] !== v) return false;
+          for (const [k, spec] of Object.entries(ctx.filters)) {
+            if (!matchesFilter(b, k, spec)) return false;
           }
-          return matchesOr(b, ctx.orFilter);
+          return true;
         });
         if (ctx.lim != null) rows = rows.slice(0, ctx.lim);
         return { data: rows.map((r) => ({ ...r })), error: null };
@@ -151,8 +158,8 @@ function createMockSupabase({ bookings, services, profiles }) {
         const matched = [];
         for (const b of store.bookings) {
           let ok = true;
-          for (const [k, v] of Object.entries(ctx.filters)) {
-            if (b[k] !== v) ok = false;
+          for (const [k, spec] of Object.entries(ctx.filters)) {
+            if (!matchesFilter(b, k, spec)) ok = false;
           }
           if (!ok) continue;
           Object.assign(b, ctx.patch);
@@ -163,8 +170,9 @@ function createMockSupabase({ bookings, services, profiles }) {
 
       if (ctx.table === "disponibilidad" && ctx.mode === "delete") {
         store.disponibilidad = store.disponibilidad.filter((d) => {
-          for (const [k, v] of Object.entries(ctx.filters)) {
-            if (d[k] === v) return false;
+          for (const [k, spec] of Object.entries(ctx.filters)) {
+            const val = typeof spec === "object" && spec?.op ? spec.val : spec;
+            if (d[k] === val) return false;
           }
           return true;
         });
@@ -173,8 +181,8 @@ function createMockSupabase({ bookings, services, profiles }) {
 
       if (ctx.table === "services" && ctx.mode === "select") {
         const rows = store.services.filter((s) => {
-          for (const [k, v] of Object.entries(ctx.filters)) {
-            if (s[k] !== v) return false;
+          for (const [k, spec] of Object.entries(ctx.filters)) {
+            if (!matchesFilter(s, k, spec)) return false;
           }
           return true;
         });
@@ -183,8 +191,8 @@ function createMockSupabase({ bookings, services, profiles }) {
 
       if (ctx.table === "profiles" && ctx.mode === "select") {
         const rows = store.profiles.filter((p) => {
-          for (const [k, v] of Object.entries(ctx.filters)) {
-            if (p[k] !== v) return false;
+          for (const [k, spec] of Object.entries(ctx.filters)) {
+            if (!matchesFilter(p, k, spec)) return false;
           }
           return true;
         });
@@ -387,5 +395,111 @@ describe("runExpirarPendientes", () => {
 
   it("created_at cutoff usa 48 h reales", () => {
     expect(CUTOFF.toISOString()).toBe("2026-11-11T12:00:00.000Z");
+  });
+
+  it("caso preview: pendiente con created_at 9-nov y fecha futura SÍ se encuentra y expira", async () => {
+    // Reproducción del fallo en preview: created_at forzado a 2026-11-09,
+    // fecha_inicio futura, cron el 13-nov → debe expirar (>48 h).
+    const booking = makeBooking({
+      id: "b-preview",
+      precio_total: 91.2,
+      created_at: "2026-11-09T10:00:00+00:00",
+      fecha_inicio: "2026-12-21",
+    });
+    const supabase = createMockSupabase({ bookings: [booking] });
+
+    const cutoffIso = cutoffCreatedAtIso(NOW);
+    const hoy = todayUtcDateString(NOW);
+    const found = await fetchPendientesExpirables(supabase, {
+      cutoffIso,
+      hoy,
+      limit: 50,
+    });
+    expect(found.map((b) => b.id)).toEqual(["b-preview"]);
+
+    const stats = await runExpirarPendientes({
+      supabaseAdmin: supabase,
+      stripe: {},
+      now: NOW,
+      cancelPayment,
+      devolverCredito,
+      notify,
+      sendEmail,
+    });
+    expect(stats.scanned).toBe(1);
+    expect(stats.expired).toBe(1);
+    expect(supabase._store.bookings[0].estado).toBe(EXPIRAR_ESTADO);
+  });
+});
+
+describe("regresión: .or() con ISO sin comillas no encuentra candidatas", () => {
+  it("PostgREST corta el valor en el primer ':' dentro de or=()", () => {
+    const cutoffIso = cutoffCreatedAtIso(NOW); // 2026-11-11T12:00:00.000Z
+    const hoy = todayUtcDateString(NOW);
+    const broken = buildBrokenExpirarPendientesOrFilter(cutoffIso, hoy);
+
+    expect(broken).toContain("created_at.lt.2026-11-11T12:");
+    expect(postgrestUnquotedOrValueAfterLt(broken, "created_at")).toBe(
+      "2026-11-11T12",
+    );
+  });
+
+  it("el filtro or=() sin comillas no es usable: ISO tiene ':' y '.' reservados", () => {
+    const cutoffIso = cutoffCreatedAtIso(NOW);
+    const hoy = todayUtcDateString(NOW);
+    const broken = buildBrokenExpirarPendientesOrFilter(cutoffIso, hoy);
+    const truncated = postgrestUnquotedOrValueAfterLt(broken, "created_at");
+
+    // Docs PostgREST: :, . reservados dentro de or=() → hay que citar el valor.
+    expect(cutoffIso).toMatch(/:/);
+    expect(cutoffIso).toMatch(/\./);
+    expect(broken).not.toMatch(/created_at\.lt\."/);
+    expect(truncated).not.toBe(cutoffIso);
+    expect(truncated).toBe("2026-11-11T12");
+
+    // Con el valor truncado, una comparación naive falla para la fila real
+    // (created_at con offset +00:00 no es < "2026-11-11T12" de forma fiable
+    // en el servidor; el filtro roto devolvía 0 candidatas).
+    const createdAt = "2026-11-09T10:00:00+00:00";
+    expect(createdAt < cutoffIso).toBe(true);
+    // El valor truncado pierde la zona/segundos: no es el cutoff que queremos.
+    expect(Date.parse(truncated)).toBeNaN();
+  });
+});
+
+describe("buildCronSummary · expirar-pendientes", () => {
+  it("incluye revisadas/expiradas/saltadas/revertidas y marca errores", () => {
+    const tasks = {
+      actualizar_estados: { status: "ok", result: { iniciadas: 0, completadas: 0, liberadas: 0 } },
+      calcular_respuesta: { status: "ok", result: {} },
+      email_sequences: { status: "ok", result: { stats: {} } },
+      holds_huerfanos: { status: "ok", result: { canceled: 0 } },
+      expirar_pendientes: {
+        status: "ok",
+        result: {
+          scanned: 3,
+          expired: 1,
+          skipped: 1,
+          reverted: 1,
+          errors: ["b9:stripe down"],
+        },
+      },
+    };
+
+    const summary = buildCronSummary(tasks);
+    expect(summary).toContain(
+      "expirar-pendientes: 3 revisadas, 1 expiradas, 1 saltadas, 1 revertidas",
+    );
+    expect(summary).toContain("1 error al expirar: b9:stripe down");
+    expect(taskSucceeded(tasks.expirar_pendientes)).toBe(false);
+  });
+
+  it("sin errores parciales taskSucceeded es true", () => {
+    expect(
+      taskSucceeded({
+        status: "ok",
+        result: { scanned: 0, expired: 0, skipped: 0, reverted: 0, errors: [] },
+      }),
+    ).toBe(true);
   });
 });

@@ -22,12 +22,93 @@ export const EXPIRAR_RESOLUCION_TIPO = RESOLUCION_EXPIRADA_SIN_RESPUESTA;
 export const EXPIRAR_RESOLUCION_NOTA =
   "Caducada automáticamente: el proveedor no respondió a tiempo";
 
-function todayUtcDateString(now = new Date()) {
+export function todayUtcDateString(now = new Date()) {
   return now.toISOString().split("T")[0];
 }
 
-function cutoffCreatedAtIso(now = new Date(), hours = EXPIRAR_PENDIENTES_HORAS) {
+export function cutoffCreatedAtIso(
+  now = new Date(),
+  hours = EXPIRAR_PENDIENTES_HORAS,
+) {
   return new Date(now.getTime() - hours * 60 * 60 * 1000).toISOString();
+}
+
+/**
+ * Filtro `.or()` INCORRECTO (bug histórico): un ISO con `:` dentro de `or=()`
+ * usa caracteres reservados de PostgREST y el filtro no matchea filas.
+ * Se exporta solo para el test de regresión.
+ */
+export function buildBrokenExpirarPendientesOrFilter(cutoffIso, hoyUtc) {
+  return `created_at.lt.${cutoffIso},fecha_inicio.lt.${hoyUtc}`;
+}
+
+/**
+ * Simula el parseo de PostgREST de un valor sin comillas dentro de or=():
+ * el valor se corta en el primer `:`.
+ */
+export function postgrestUnquotedOrValueAfterLt(orExpr, column) {
+  const prefix = `${column}.lt.`;
+  const idx = orExpr.indexOf(prefix);
+  if (idx < 0) return null;
+  let rest = orExpr.slice(idx + prefix.length);
+  const comma = rest.indexOf(",");
+  if (comma >= 0) rest = rest.slice(0, comma);
+  if (rest.startsWith('"')) {
+    const end = rest.indexOf('"', 1);
+    return end >= 0 ? rest.slice(1, end) : rest.slice(1);
+  }
+  const colon = rest.indexOf(":");
+  return colon >= 0 ? rest.slice(0, colon) : rest;
+}
+
+const CANDIDATE_SELECT =
+  "id, service_id, cliente_id, payment_intent_id, estado, fecha_inicio, fecha_fin, precio_total, credito_aplicado, created_at";
+
+/**
+ * Candidatas a expirar: pendientes con created_at < cutoff O fecha_inicio < hoy.
+ *
+ * No usamos `.or(created_at.lt.<ISO>,…)`: los `:` del ISO son reservados en
+ * `or=()` de PostgREST y el filtro devolvía 0 filas en silencio.
+ * Dos queries con `.lt()` (param separado) son fiables.
+ */
+export async function fetchPendientesExpirables(
+  supabaseAdmin,
+  { cutoffIso, hoy, limit = EXPIRAR_PENDIENTES_LIMIT } = {},
+) {
+  const [byAge, byFecha] = await Promise.all([
+    supabaseAdmin
+      .from("bookings")
+      .select(CANDIDATE_SELECT)
+      .eq("estado", "pendiente")
+      .lt("created_at", cutoffIso)
+      .order("created_at", { ascending: true })
+      .limit(limit),
+    supabaseAdmin
+      .from("bookings")
+      .select(CANDIDATE_SELECT)
+      .eq("estado", "pendiente")
+      .lt("fecha_inicio", hoy)
+      .order("created_at", { ascending: true })
+      .limit(limit),
+  ]);
+
+  if (byAge.error) {
+    throw new Error(byAge.error.message || String(byAge.error));
+  }
+  if (byFecha.error) {
+    throw new Error(byFecha.error.message || String(byFecha.error));
+  }
+
+  const byId = new Map();
+  for (const row of [...(byAge.data ?? []), ...(byFecha.data ?? [])]) {
+    if (row?.id) byId.set(row.id, row);
+  }
+
+  return Array.from(byId.values())
+    .sort((a, b) =>
+      String(a.created_at || "").localeCompare(String(b.created_at || "")),
+    )
+    .slice(0, limit);
 }
 
 async function postBookingEmail(payload) {
@@ -82,26 +163,20 @@ export async function runExpirarPendientes(deps = {}) {
   const hoy = todayUtcDateString(now);
   const cutoffIso = cutoffCreatedAtIso(now);
 
-  const { data: candidates, error: listError } = await supabaseAdmin
-    .from("bookings")
-    .select(
-      "id, service_id, cliente_id, payment_intent_id, estado, fecha_inicio, fecha_fin, precio_total, credito_aplicado, created_at",
-    )
-    .eq("estado", "pendiente")
-    .or(`created_at.lt.${cutoffIso},fecha_inicio.lt.${hoy}`)
-    .order("created_at", { ascending: true })
-    .limit(limit);
-
-  if (listError) {
-    throw new Error(listError.message);
-  }
+  const candidates = await fetchPendientesExpirables(supabaseAdmin, {
+    cutoffIso,
+    hoy,
+    limit,
+  });
 
   const stats = {
-    scanned: candidates?.length ?? 0,
+    scanned: candidates.length,
     expired: 0,
     skipped: 0,
     reverted: 0,
     errors: [],
+    cutoff_iso: cutoffIso,
+    hoy,
   };
 
   for (const booking of candidates ?? []) {

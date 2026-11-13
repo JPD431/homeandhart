@@ -46,7 +46,7 @@ export async function runCronDiario() {
     expirar_pendientes,
   };
 
-  const allOk = Object.values(tasks).every((t) => t.status === "ok");
+  const allOk = Object.values(tasks).every((t) => taskSucceeded(t));
 
   return {
     success: allOk,
@@ -57,7 +57,15 @@ export async function runCronDiario() {
   };
 }
 
-function buildCronSummary(tasks) {
+/** true solo si la tarea no falló y no reporta errores parciales. */
+export function taskSucceeded(task) {
+  if (!task || task.status !== "ok") return false;
+  const errors = task.result?.errors ?? task.result?.stats?.errors;
+  if (Array.isArray(errors) && errors.length > 0) return false;
+  return true;
+}
+
+export function buildCronSummary(tasks) {
   const parts = [];
   const ae = tasks.actualizar_estados;
   const es = tasks.email_sequences;
@@ -104,9 +112,22 @@ function buildCronSummary(tasks) {
   }
 
   if (ep?.status === "ok" && ep.result) {
+    const {
+      scanned = 0,
+      expired = 0,
+      skipped = 0,
+      reverted = 0,
+      errors = [],
+    } = ep.result;
     parts.push(
-      `${ep.result.expired ?? 0} reservas pendientes expiradas`,
+      `expirar-pendientes: ${scanned} revisadas, ${expired} expiradas, ${skipped} saltadas, ${reverted} revertidas`,
     );
+    if (Array.isArray(errors) && errors.length > 0) {
+      const detail = errors.slice(0, 5).join("; ");
+      parts.push(
+        `${errors.length} error${errors.length === 1 ? "" : "es"} al expirar: ${detail}`,
+      );
+    }
   } else if (ep?.status === "error") {
     parts.push(`expirar-pendientes: error (${ep.error})`);
   }
