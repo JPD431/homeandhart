@@ -14,6 +14,7 @@ import {
   aplicarReembolsoStripeBooking,
   calcularReembolsoTotal,
 } from "@/app/lib/stripe-reembolso";
+import { capturarPaymentIntentAlConfirmar } from "@/app/lib/capturar-al-confirmar";
 
 const supabaseAdmin = createServiceClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -315,8 +316,46 @@ export async function POST(request) {
     }
   }
 
-  // Accept: no captura aquí (manual capture posterior). El claim a confirmada
-  // impide que un reject posterior libere el hold.
+  // Accept: capturar el hold al confirmar (el dinero queda en plataforma
+  // hasta el transfer al completar el servicio).
+  if (action === "aceptar" && booking.payment_intent_id) {
+    const capture = await capturarPaymentIntentAlConfirmar(
+      stripe,
+      booking.payment_intent_id,
+      { idempotencyKey: `capture-on-confirm:${booking.payment_intent_id}` },
+    );
+
+    if (!capture.ok) {
+      const { error: revertError } = await supabaseAdmin
+        .from("bookings")
+        .update({ estado: "pendiente" })
+        .eq("id", bookingId)
+        .eq("estado", "confirmada");
+
+      if (revertError) {
+        console.error(
+          "[bookings/respond] Fallo al revertir confirmada→pendiente tras captura fallida:",
+          revertError,
+          {
+            bookingId,
+            payment_intent_id: booking.payment_intent_id,
+            capture_error: capture.error,
+          },
+        );
+      }
+
+      return NextResponse.json(
+        {
+          error:
+            capture.error ||
+            "No se pudo cobrar la reserva. Inténtalo de nuevo en unos minutos.",
+          error_code: capture.error_code || "pi_capture_failed",
+          pi_status: capture.pi_status ?? null,
+        },
+        { status: 409 },
+      );
+    }
+  }
 
   if (action === "rechazar") {
     try {

@@ -17,6 +17,9 @@ const MAX_PAGES = 5;
 /**
  * Cancela PaymentIntents en requires_capture (u otros cancelables) creados hace
  * más de HOLD_MAX_AGE_HOURS sin fila en bookings.payment_intent_id.
+ *
+ * No toca PIs ya capturados ("succeeded"): tras confirmar la reserva el cobro
+ * queda en plataforma hasta el transfer; esos no son holds huérfanos.
  */
 export async function runCancelHoldsHuerfanos() {
   const cutoffUnix = Math.floor(Date.now() / 1000) - HOLD_MAX_AGE_HOURS * 3600;

@@ -42,6 +42,12 @@ import {
   releaseReservaSinComision,
 } from "@/app/lib/sin-comision-claim";
 import { CANCELABLE_PI_STATUSES } from "@/app/lib/stripe-reembolso";
+import {
+  COMPLETE_INSERT_SELECT,
+  capturarPaymentIntentAlConfirmar,
+  collectImmediateCapturePiIds,
+  liberarPaymentIntentsTrasFalloConfirmacion,
+} from "@/app/lib/capturar-al-confirmar";
 import { enforceRateLimit } from "@/app/lib/rate-limit";
 
 const MAX_CREDITO_PORCENTAJE = 0.6;
@@ -1213,6 +1219,7 @@ async function finalizeInsertedBookings({
   sinComisionIdempotencyKey = null,
   insertedBookings,
   insertedBookingIds,
+  bookingRows = null,
   rollbackPaymentIntentIds = null,
   rollbackPaymentIntentId = null,
   fechaInicio,
@@ -1300,6 +1307,68 @@ async function finalizeInsertedBookings({
       { error: disponibilidadError.message },
       { status: 500 },
     );
+  }
+
+  // Reserva inmediata (confirmada al crear): capturar ahora. Pendientes
+  // mantienen el hold hasta que el proveedor acepte (respond).
+  // Si el select no devolvió estado, se rellena desde bookingRows.
+  const immediatePiIds = collectImmediateCapturePiIds(
+    insertedBookings,
+    bookingRows,
+  );
+
+  for (const paymentIntentId of immediatePiIds) {
+    const capture = await capturarPaymentIntentAlConfirmar(
+      stripe,
+      paymentIntentId,
+      { idempotencyKey: `capture-on-confirm:${paymentIntentId}` },
+    );
+
+    if (!capture.ok) {
+      await rollbackInsertedBookings(
+        insertedBookingIds,
+        [], // no cancelar holds aquí: liberamos abajo (incluye refund si ya capturado)
+      );
+      await liberarPaymentIntentsTrasFalloConfirmacion(
+        stripe,
+        immediatePiIds,
+        { reason: "complete-immediate-capture-fail" },
+      );
+      if (sinComisionIdempotencyKey) {
+        try {
+          await releaseReservaSinComision(
+            supabaseAdmin,
+            sinComisionIdempotencyKey,
+          );
+        } catch (releaseErr) {
+          console.error(
+            "[bookings/complete] Error liberando claim sin comisión tras fallo captura inmediata:",
+            releaseErr?.message ?? releaseErr,
+          );
+        }
+      }
+      if (creditoIdempotencyKey) {
+        try {
+          await releaseCreditoDebito(supabaseAdmin, creditoIdempotencyKey);
+        } catch (releaseErr) {
+          console.error(
+            "[bookings/complete] Error liberando crédito tras fallo captura inmediata:",
+            releaseErr?.message ?? releaseErr,
+          );
+        }
+      }
+
+      return NextResponse.json(
+        {
+          error:
+            capture.error ||
+            "No se pudo cobrar la reserva inmediata. Inténtalo de nuevo.",
+          error_code: capture.error_code || "pi_capture_failed",
+          pi_status: capture.pi_status ?? null,
+        },
+        { status: 409 },
+      );
+    }
   }
 
   await sendPostCompleteBookingEmails({
@@ -1684,7 +1753,7 @@ async function completePerServicePayments(userId, body) {
   const { data: insertedBookings, error: insertError } = await supabaseAdmin
     .from("bookings")
     .insert(bookingRows)
-    .select("id, service_id, fecha_inicio, fecha_fin, lugar_servicio, direccion_cliente_a_definir, payment_intent_id");
+    .select(COMPLETE_INSERT_SELECT);
 
   if (insertError) {
     await abortIncompleteComplete({
@@ -1725,6 +1794,7 @@ async function completePerServicePayments(userId, body) {
     sinComisionIdempotencyKey,
     insertedBookings,
     insertedBookingIds,
+    bookingRows,
     rollbackPaymentIntentIds,
     fechaInicio: mainCtx?.fecha_inicio ?? fecha_inicio,
     fechaFin: mainCtx?.fecha_fin ?? fecha_fin,
@@ -2229,7 +2299,7 @@ export async function POST(request) {
     const { data: insertedBookings, error: insertError } = await supabaseAdmin
       .from("bookings")
       .insert(bookingRows)
-      .select("id, service_id, fecha_inicio, fecha_fin, lugar_servicio, direccion_cliente_a_definir, payment_intent_id");
+      .select(COMPLETE_INSERT_SELECT);
 
     if (insertError) {
       await abortIncompleteComplete({
@@ -2259,6 +2329,7 @@ export async function POST(request) {
       sinComisionIdempotencyKey,
       insertedBookings,
       insertedBookingIds,
+      bookingRows,
       rollbackPaymentIntentIds: [payment_intent_id],
       fechaInicio:
         contextByServiceId.get(main_service_id)?.fecha_inicio ?? fecha_inicio,

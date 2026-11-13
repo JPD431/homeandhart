@@ -267,8 +267,8 @@ export async function capturarYTransferirPago(
       }
     }
   } else if (piStatus === "succeeded") {
-    // Idempotencia: ya capturado (reintento tras fallo de transferencia).
-    // Seguimos con el reparto / marcado de pago_liberado_at.
+    // Ya capturado al confirmar (respond/inmediata) o reintento tras fallo
+    // de transferencia: solo transfer, sin capturar otra vez.
   } else {
     return {
       success: false,
