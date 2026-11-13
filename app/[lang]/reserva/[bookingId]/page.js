@@ -188,7 +188,7 @@ export default function ReservaDetallePage() {
               const { data: siblings } = await supabase
                 .from("bookings")
                 .select(
-                  "id, precio_total, precio_base, credito_aplicado, estado, services:service_id(titulo, vertical)",
+                  "id, precio_total, precio_base, credito_aplicado, estado, resolucion_tipo, services:service_id(titulo, vertical)",
                 )
                 .eq("grupo_reserva", row.grupo_reserva)
                 .neq("id", row.id)
@@ -429,7 +429,7 @@ export default function ReservaDetallePage() {
   }
 
   const estado = getBookingEstado(booking);
-  const statusMeta = getBookingStatusMeta(booking.estado || estado, {
+  const statusMeta = getBookingStatusMeta(booking, {
     role: viewerRole || "cliente",
   });
   const service = booking.services ?? {};
@@ -561,7 +561,7 @@ export default function ReservaDetallePage() {
                 </p>
               </div>
               <BookingStatusBadge
-                status={booking.estado || estado}
+                status={booking}
                 role={viewerRole || "cliente"}
               />
             </div>
@@ -746,7 +746,7 @@ export default function ReservaDetallePage() {
                             {sibService?.titulo || t.reserva.servicioFallback}
                             <span className="ml-2 text-[11px] text-[#6b6b6b]">
                               {
-                                getBookingStatusMeta(sib.estado, {
+                                getBookingStatusMeta(sib, {
                                   role: viewerRole || "cliente",
                                 }).label
                               }

@@ -511,7 +511,7 @@ function TabCliente({ perfil, reservas, favoritos, viajes, router, BRAND, copiar
             </div>
           )}
           {reservas.slice(0, 5).map(r => {
-            const meta = getBookingStatusMeta(r.estado, { role: 'cliente' });
+            const meta = getBookingStatusMeta(r, { role: 'cliente' });
             const proveedorId = r.services?.proveedor_id;
             const showMensaje =
               meta.actions.includes('mensaje') && Boolean(proveedorId);
@@ -546,7 +546,7 @@ function TabCliente({ perfil, reservas, favoritos, viajes, router, BRAND, copiar
                   ) : null}
                 </div>
               </div>
-              <BookingStatusBadge status={r.estado} role="cliente" size="sm" />
+              <BookingStatusBadge status={r} role="cliente" size="sm" />
             </div>
             );
           })}
@@ -973,7 +973,7 @@ function ReservaRecibidaCard({
   highlighted = false,
   t,
 }) {
-  const statusMeta = getBookingStatusMeta(booking.estado, { role: 'proveedor' });
+  const statusMeta = getBookingStatusMeta(booking, { role: 'proveedor' });
   const isPendiente = booking.estado === 'pendiente';
   const isConfirmada = booking.estado === 'confirmada';
   const isIncidencia = booking.estado === 'incidencia';
@@ -1084,7 +1084,7 @@ function ReservaRecibidaCard({
             </div>
           )}
         </div>
-        <BookingStatusBadge status={booking.estado} role="proveedor" size="sm" />
+        <BookingStatusBadge status={booking} role="proveedor" size="sm" />
       </div>
       <p
         style={{
@@ -1314,7 +1314,7 @@ function ReservasRecibidas({ perfil, BRAND, highlightBookingId, router, t }) {
 
         const { data: bookingsData, error: bookingsError } = await supabase
           .from('bookings')
-          .select('id, cliente_id, service_id, fecha_inicio, fecha_fin, hora, precio_total, precio_base, cliente_sin_comision, proveedor_sin_comision, estado, mensaje, created_at, pago_liberado_at, importe_transferido, lugar_servicio, direccion_cliente_a_definir')
+          .select('id, cliente_id, service_id, fecha_inicio, fecha_fin, hora, precio_total, precio_base, cliente_sin_comision, proveedor_sin_comision, estado, resolucion_tipo, mensaje, created_at, pago_liberado_at, importe_transferido, lugar_servicio, direccion_cliente_a_definir')
           .in('service_id', serviceIds)
           .order('created_at', { ascending: false });
 

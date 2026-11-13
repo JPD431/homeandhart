@@ -344,7 +344,7 @@ export default function ViajePage() {
                                 {service.titulo || theme.label}
                               </p>
                               <BookingStatusBadge
-                                status={estado}
+                                status={booking}
                                 role="cliente"
                                 size="sm"
                               />

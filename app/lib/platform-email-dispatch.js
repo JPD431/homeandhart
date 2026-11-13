@@ -810,6 +810,32 @@ function reservaRechazadaEmailHtml(data) {
   });
 }
 
+function reservaExpiradaEmailHtml(data) {
+  const fechaLabel = formatFechaReservaEmail(data.fecha_inicio, data.fecha_fin);
+  const buscarUrl = `${BASE_URL}/buscar`;
+
+  return emailLayout({
+    title: "Tu reserva ha caducado — Home&Heart",
+    bodyHtml: `
+      <h1 style="margin:0;font-size:22px;color:${BRAND_PRIMARY};font-weight:600;text-align:center;">Tu reserva ha caducado</h1>
+      <p style="margin:20px 0 0;font-size:15px;color:#444;line-height:1.7;">
+        Hola ${data.cliente_nombre ?? "Cliente"},
+      </p>
+      <p style="margin:16px 0 0;font-size:14px;color:#444;line-height:1.7;">
+        <strong>${data.proveedor_nombre || "El proveedor"}</strong> no respondió a tiempo a tu solicitud de
+        <strong>${data.servicio_titulo || "servicio"}</strong> para el <strong>${fechaLabel}</strong>.
+        Por eso la reserva ha caducado automáticamente.
+      </p>
+      ${detailsBlock(data)}
+      <p style="margin:20px 0 0;font-size:14px;color:#444;line-height:1.7;">
+        <strong>No se te ha cobrado nada.</strong> Hemos liberado el pago retenido de forma segura;
+        puedes buscar otro proveedor cuando quieras.
+      </p>
+      ${ctaButton(buscarUrl, "Buscar otras opciones")}
+    `,
+  });
+}
+
 function proveedorEmailHtml(data) {
   const mensajeBlock = data.mensaje
     ? `<p style="margin:16px 0 0;font-size:14px;color:#444;line-height:1.6;"><strong>Mensaje del cliente:</strong> ${data.mensaje}</p>`
@@ -1203,6 +1229,47 @@ async function sendReservaRechazadaEmail(data) {
     to: payload.cliente_email,
     subject: "Tu solicitud no pudo confirmarse — Home&Heart",
     html: reservaRechazadaEmailHtml(payload),
+  });
+
+  if (result.error) {
+    return { error: result.error.message };
+  }
+
+  return { success: true };
+}
+
+async function sendReservaExpiradaEmail(data) {
+  const payload = { ...data };
+
+  if (payload.cliente_id && !payload.cliente_email) {
+    payload.cliente_email = await resolverEmailUsuario(payload.cliente_id);
+  }
+
+  if (!payload.cliente_nombre && payload.cliente_id) {
+    payload.cliente_nombre =
+      (await resolverNombreUsuario(payload.cliente_id)) || "Cliente";
+  }
+
+  const required = [
+    "cliente_email",
+    "cliente_nombre",
+    "proveedor_nombre",
+    "servicio_titulo",
+    "fecha_inicio",
+    "precio_total",
+  ];
+
+  for (const field of required) {
+    if (payload[field] == null || payload[field] === "") {
+      return { error: `Falta el campo requerido: ${field}` };
+    }
+  }
+
+  const result = await resend.emails.send({
+    from: FROM,
+    to: payload.cliente_email,
+    subject: "Tu reserva ha caducado — Home&Heart",
+    html: reservaExpiradaEmailHtml(payload),
   });
 
   if (result.error) {
@@ -1825,6 +1892,16 @@ export async function dispatchPlatformEmail(payload = {}) {
 
     if (tipo === "reserva_rechazada") {
       const result = await sendReservaRechazadaEmail(data);
+
+      if (result.error) {
+        return { ok: false, status: 400, error: result.error };
+      }
+
+      return { ok: true, status: 200, data: { success: true } };
+    }
+
+    if (tipo === "reserva_expirada") {
+      const result = await sendReservaExpiradaEmail(data);
 
       if (result.error) {
         return { ok: false, status: 400, error: result.error };

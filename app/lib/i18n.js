@@ -1586,6 +1586,8 @@ export const translations = {
       sinGastosGestion: (n) => `🎁 Sin gastos de gestión · te quedan ${n} reservas gratis`,
       gastosGestionIncluidos: "Gastos de gestión incluidos",
       pagoBloqueado: "🛡️ Pago retenido hasta que el servicio se completa. Reembolso total si algo falla.",
+      pagoAConfirmar48h:
+        "Reserva a confirmar: el proveedor tiene 48 horas para aceptar. Hasta entonces el pago queda retenido y no se cobra nada. Si no responde a tiempo, la reserva caduca y se libera el pago.",
       volverASubir: "Volver a subir →",
       subirDni: "Subir DNI →",
       verEstado: "Ver estado →",
@@ -3216,6 +3218,8 @@ export const translations = {
       sinGastosGestion: (n) => `🎁 No management fees · ${n} free bookings left`,
       gastosGestionIncluidos: "Management fees included",
       pagoBloqueado: "🛡️ Payment held until the service is complete. Full refund if anything goes wrong.",
+      pagoAConfirmar48h:
+        "Booking pending confirmation: the provider has 48 hours to accept. Until then the payment is held and nothing is charged. If they don’t respond in time, the booking expires and the hold is released.",
       volverASubir: "Re-upload →",
       subirDni: "Upload ID →",
       verEstado: "View status →",

@@ -253,6 +253,40 @@ export async function notifyBookingEvent(admin, {
         entity_id: bookingId,
       });
 
+    case "reserva_expirada_cliente":
+      if (!clienteId) {
+        console.error(LOG_PREFIX, "reserva_expirada_cliente sin clienteId", {
+          bookingId,
+        });
+        return { ok: false, reason: "no_cliente" };
+      }
+      return createNotification(admin, {
+        user_id: clienteId,
+        tipo: "reserva_expirada_cliente",
+        titulo: "Reserva caducada",
+        mensaje: `${proveedorNombre || "El proveedor"} no respondió a tiempo a tu solicitud de ${servicio}${fechasSuffix}. No se te ha cobrado nada; puedes buscar otro proveedor.`,
+        href: hrefClienteReserva,
+        entity_type: "booking",
+        entity_id: bookingId,
+      });
+
+    case "reserva_expirada_proveedor":
+      if (!proveedorId) {
+        console.error(LOG_PREFIX, "reserva_expirada_proveedor sin proveedorId", {
+          bookingId,
+        });
+        return { ok: false, reason: "no_proveedor" };
+      }
+      return createNotification(admin, {
+        user_id: proveedorId,
+        tipo: "reserva_expirada_proveedor",
+        titulo: "Reserva caducada",
+        mensaje: `La reserva de ${servicio}${fechasSuffix} ha caducado por falta de respuesta.`,
+        href: hrefProveedorReserva,
+        entity_type: "booking",
+        entity_id: bookingId,
+      });
+
     default:
       console.warn(LOG_PREFIX, "tipo de reserva desconocido:", tipo);
       return { ok: false, reason: "unknown_tipo" };
@@ -274,10 +308,15 @@ export function resolveNotificationHref(notification) {
   if (
     (tipo === "reserva_confirmada" ||
       tipo === "reserva_rechazada" ||
-      tipo === "reserva_cancelada_proveedor") &&
+      tipo === "reserva_cancelada_proveedor" ||
+      tipo === "reserva_expirada_cliente") &&
     entityId
   ) {
     return `/reserva/${entityId}`;
+  }
+
+  if (tipo === "reserva_expirada_proveedor" && entityId) {
+    return `/dashboard?tab=proveedor&booking=${entityId}`;
   }
 
   if (tipo === "deja_resena" && entityId) {

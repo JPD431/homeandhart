@@ -10,11 +10,9 @@ import {
 import { loadBookingContactClienteAdmin } from "@/app/lib/booking-contact-cliente";
 import { shouldShowClienteDireccionToProvider } from "@/app/lib/lugar-servicio";
 import { sendPlatformEmail } from "@/app/lib/send-platform-email";
-import {
-  aplicarReembolsoStripeBooking,
-  calcularReembolsoTotal,
-} from "@/app/lib/stripe-reembolso";
 import { capturarPaymentIntentAlConfirmar } from "@/app/lib/capturar-al-confirmar";
+import { cancelPaymentIntentOnReject } from "@/app/lib/cancel-payment-intent-on-reject";
+import { devolverCreditoReservaPendiente } from "@/app/lib/devolver-credito-reserva-pendiente";
 
 const supabaseAdmin = createServiceClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -38,50 +36,6 @@ function buildProveedorIngresoEmailFields(booking, proveedorProfile) {
 }
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-
-/**
- * Libera el hold de ESTA línea al rechazar (F6 + M9).
- * Idempotente por bookingId. Si el PI es compartido con otras reservas activas,
- * hace capture parcial (no cancela el PI entero).
- */
-async function cancelPaymentIntentOnReject(booking) {
-  const paymentIntentId = booking?.payment_intent_id;
-  if (!paymentIntentId) {
-    return { ok: true, action: "sin_pi" };
-  }
-
-  const { tarjeta } = calcularReembolsoTotal(booking);
-  // Solo crédito / sin tarjeta: no tocar el PI (puede estar compartido).
-  if (tarjeta <= 0) {
-    return { ok: true, action: "sin_cargo_tarjeta" };
-  }
-
-  const result = await aplicarReembolsoStripeBooking(
-    stripe,
-    paymentIntentId,
-    tarjeta,
-    {
-      idempotencyKey: `cancel-pi:respond-reject:${booking.id}`,
-      supabaseAdmin,
-      bookingId: booking.id,
-    },
-  );
-
-  if (result.stripe_ok === false) {
-    return {
-      ok: false,
-      action: result.stripe_action,
-      pi_status: result.pi_status,
-      error: result.stripe_error,
-    };
-  }
-
-  return {
-    ok: true,
-    action: result.stripe_action,
-    pi_status: result.pi_status,
-  };
-}
 
 async function contarBookingsPorPaymentIntent(paymentIntentId) {
   if (!paymentIntentId) return 1;
@@ -246,17 +200,37 @@ export async function POST(request) {
     // Idempotencia: mismo action ya aplicado.
     if (current?.estado === nuevoEstado) {
       // Reject reintento: asegurar cancel del PI (idempotente) por si falló tras el claim.
-      if (action === "rechazar" && current.payment_intent_id) {
+      if (action === "rechazar") {
+        if (current.payment_intent_id) {
+          try {
+            await cancelPaymentIntentOnReject(
+              {
+                id: bookingId,
+                payment_intent_id: current.payment_intent_id,
+                precio_total: booking.precio_total,
+                credito_aplicado: booking.credito_aplicado,
+              },
+              { stripe, supabaseAdmin },
+            );
+          } catch (err) {
+            console.error(
+              "[bookings/respond] Error reintentando cancel PI (already_processed):",
+              current.payment_intent_id,
+              err?.message ?? err,
+            );
+          }
+        }
         try {
-          await cancelPaymentIntentOnReject(
-            current.payment_intent_id,
-            bookingId,
+          await devolverCreditoReservaPendiente(
+            supabaseAdmin,
+            booking,
+            "[bookings/respond]",
           );
-        } catch (err) {
+        } catch (creditErr) {
           console.error(
-            "[bookings/respond] Error reintentando cancel PI (already_processed):",
-            current.payment_intent_id,
-            err?.message ?? err,
+            "[bookings/respond] Error reintentando devolver crédito (already_processed):",
+            creditErr?.message ?? creditErr,
+            { bookingId },
           );
         }
       }
@@ -298,7 +272,10 @@ export async function POST(request) {
         );
       }
 
-      const cancelResult = await cancelPaymentIntentOnReject(booking);
+      const cancelResult = await cancelPaymentIntentOnReject(booking, {
+        stripe,
+        supabaseAdmin,
+      });
       if (!cancelResult.ok) {
         console.error(
           "[bookings/respond] No se pudo cancelar PaymentIntent al rechazar:",
@@ -312,6 +289,23 @@ export async function POST(request) {
         "Error cancelando PaymentIntent al rechazar reserva:",
         booking.payment_intent_id,
         err?.message ?? err,
+      );
+    }
+  }
+
+  // Rechazo: devolver crédito aplicado (idempotente). También si no había PI.
+  if (action === "rechazar") {
+    try {
+      await devolverCreditoReservaPendiente(
+        supabaseAdmin,
+        booking,
+        "[bookings/respond]",
+      );
+    } catch (creditErr) {
+      console.error(
+        "[bookings/respond] Error devolviendo crédito al rechazar:",
+        creditErr?.message ?? creditErr,
+        { bookingId: booking.id },
       );
     }
   }
