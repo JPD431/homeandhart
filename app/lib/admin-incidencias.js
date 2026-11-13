@@ -11,12 +11,14 @@ export const VERTICAL_LABELS = {
 };
 
 export const PI_STATUS_LABELS = {
-  requires_capture: "Retenido (sin capturar)",
+  requires_capture: "Retenido (pendiente de confirmar)",
   requires_confirmation: "Pendiente de confirmación",
   requires_action: "Requiere acción",
   requires_payment_method: "Sin método de pago",
   processing: "Procesando",
-  succeeded: "Capturado",
+  // Tras aceptar / reserva inmediata el PI queda capturado en plataforma
+  // hasta el transfer al proveedor al completar el servicio.
+  succeeded: "Cobrado (en plataforma)",
   canceled: "Cancelado",
 };
 

@@ -82,8 +82,8 @@ async function handlePaymentIntentSucceeded(event) {
   }
 
   if (bookings.length === 0) {
-    // Puede ser carrera con complete (PI confirmado antes del insert).
-    // No alertamos: ruido alto. Solo log.
+    // Carrera rara: captura al confirmar suele ocurrir CON booking ya creado
+    // (respond aceptar / complete inmediata). Si no hay fila, solo log.
     console.log(
       "[stripe/webhook] payment_intent.succeeded sin bookings en BD",
       { payment_intent_id: paymentIntentId, event_id: event.id },

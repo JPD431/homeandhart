@@ -42,6 +42,10 @@ import {
   releaseReservaSinComision,
 } from "@/app/lib/sin-comision-claim";
 import { CANCELABLE_PI_STATUSES } from "@/app/lib/stripe-reembolso";
+import {
+  capturarPaymentIntentAlConfirmar,
+  liberarPaymentIntentsTrasFalloConfirmacion,
+} from "@/app/lib/capturar-al-confirmar";
 import { enforceRateLimit } from "@/app/lib/rate-limit";
 
 const MAX_CREDITO_PORCENTAJE = 0.6;
@@ -1300,6 +1304,75 @@ async function finalizeInsertedBookings({
       { error: disponibilidadError.message },
       { status: 500 },
     );
+  }
+
+  // Reserva inmediata (confirmada al crear): capturar ahora. Pendientes
+  // mantienen el hold hasta que el proveedor acepte (respond).
+  const immediatePiIds = [
+    ...new Set(
+      insertedBookings
+        .filter(
+          (b) =>
+            b.estado === "confirmada" &&
+            typeof b.payment_intent_id === "string" &&
+            b.payment_intent_id.length > 0,
+        )
+        .map((b) => b.payment_intent_id),
+    ),
+  ];
+
+  for (const paymentIntentId of immediatePiIds) {
+    const capture = await capturarPaymentIntentAlConfirmar(
+      stripe,
+      paymentIntentId,
+      { idempotencyKey: `capture-on-confirm:${paymentIntentId}` },
+    );
+
+    if (!capture.ok) {
+      await rollbackInsertedBookings(
+        insertedBookingIds,
+        [], // no cancelar holds aquí: liberamos abajo (incluye refund si ya capturado)
+      );
+      await liberarPaymentIntentsTrasFalloConfirmacion(
+        stripe,
+        immediatePiIds,
+        { reason: "complete-immediate-capture-fail" },
+      );
+      if (sinComisionIdempotencyKey) {
+        try {
+          await releaseReservaSinComision(
+            supabaseAdmin,
+            sinComisionIdempotencyKey,
+          );
+        } catch (releaseErr) {
+          console.error(
+            "[bookings/complete] Error liberando claim sin comisión tras fallo captura inmediata:",
+            releaseErr?.message ?? releaseErr,
+          );
+        }
+      }
+      if (creditoIdempotencyKey) {
+        try {
+          await releaseCreditoDebito(supabaseAdmin, creditoIdempotencyKey);
+        } catch (releaseErr) {
+          console.error(
+            "[bookings/complete] Error liberando crédito tras fallo captura inmediata:",
+            releaseErr?.message ?? releaseErr,
+          );
+        }
+      }
+
+      return NextResponse.json(
+        {
+          error:
+            capture.error ||
+            "No se pudo cobrar la reserva inmediata. Inténtalo de nuevo.",
+          error_code: capture.error_code || "pi_capture_failed",
+          pi_status: capture.pi_status ?? null,
+        },
+        { status: 409 },
+      );
+    }
   }
 
   await sendPostCompleteBookingEmails({
