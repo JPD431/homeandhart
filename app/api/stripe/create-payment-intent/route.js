@@ -2,6 +2,11 @@ import Stripe from "stripe";
 import { authorizeAuthenticatedClient } from "@/app/lib/stripe-api-auth";
 import { assertUserIsDniVerified } from "@/app/lib/dni";
 import { assertUserHasTelefono } from "@/app/lib/profile-telefono";
+import {
+  isPagoPermitido,
+  PAGOS_CERRADOS_CODE,
+  PAGOS_CERRADOS_ERROR,
+} from "@/app/lib/pagos-modo-cerrado";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { enforceRateLimit } from "@/app/lib/rate-limit";
 
@@ -33,6 +38,17 @@ export async function POST(request) {
     const auth = await authorizeAuthenticatedClient(request, { clienteId });
     if (!auth.ok) {
       return Response.json({ error: auth.error }, { status: auth.status });
+    }
+
+    // Modo cerrado: solo emails en PAGOS_SOLO_EMAILS (cron interno exento).
+    if (auth.source !== "cron") {
+      // Email del JWT de sesión (getUser); nunca del body.
+      if (!isPagoPermitido(auth.user?.email)) {
+        return Response.json(
+          { error: PAGOS_CERRADOS_ERROR, code: PAGOS_CERRADOS_CODE },
+          { status: 403 },
+        );
+      }
     }
 
     // Crons internos no se rate-limitan; clientes sí (15/min).

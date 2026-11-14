@@ -28,6 +28,7 @@ El archivo está en `.gitignore`: nunca se sube. Pídelo a quien lo tenga o cré
 | `NEXT_PUBLIC_URL` | Sí | URL base (`http://localhost:3000` en local) |
 | `STRIPE_SECRET_KEY` | Sí | Pagos (usa `sk_test_…` fuera de producción) |
 | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Sí | Pagos en el navegador |
+| `PAGOS_SOLO_EMAILS` | No | Modo cerrado: emails (coma) que pueden iniciar pagos reales. Vacío/ausente = abierto a todos |
 | `STRIPE_WEBHOOK_SECRET` | Pagos | Firma del webhook `/api/stripe/webhook` (`whsec_…`) |
 | `STRIPE_WEBHOOK_SECRET_2` | No | Segundo secreto de webhook, si hay un segundo endpoint |
 | `RESEND_API_KEY` | Emails | Envío de emails desde `soporte@homeandheart.es` |

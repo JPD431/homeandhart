@@ -49,6 +49,11 @@ import {
   liberarPaymentIntentsTrasFalloConfirmacion,
 } from "@/app/lib/capturar-al-confirmar";
 import { enforceRateLimit } from "@/app/lib/rate-limit";
+import {
+  isPagoPermitido,
+  PAGOS_CERRADOS_CODE,
+  PAGOS_CERRADOS_ERROR,
+} from "@/app/lib/pagos-modo-cerrado";
 
 const MAX_CREDITO_PORCENTAJE = 0.6;
 
@@ -1823,6 +1828,14 @@ export async function POST(request) {
 
     if (userError || !user) {
       return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+    }
+
+    // Modo cerrado: email de la sesión (getUser); nunca del body.
+    if (!isPagoPermitido(user.email)) {
+      return NextResponse.json(
+        { error: PAGOS_CERRADOS_ERROR, code: PAGOS_CERRADOS_CODE },
+        { status: 403 },
+      );
     }
 
     const userId = user.id;

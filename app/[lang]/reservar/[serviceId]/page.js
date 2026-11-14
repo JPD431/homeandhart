@@ -1187,6 +1187,16 @@ function validateBundlePaymentPlan(plan) {
   return null;
 }
 
+function messageForPaymentApiError(err, t) {
+  if (err?.code === "PAGOS_CERRADOS") {
+    return (
+      t?.reservar?.pagosCerrados ??
+      "Próximamente: los pagos se abrirán en breve"
+    );
+  }
+  return friendlyStripePaymentError(err);
+}
+
 async function createServicePaymentIntent({
   amount,
   serviceId,
@@ -1645,7 +1655,7 @@ function SavedCardCheckout({
       if (createdPiId) {
         await cancelOrphanPaymentIntent(createdPiId);
       }
-      setError(friendlyStripePaymentError(err));
+      setError(messageForPaymentApiError(err, t));
     } finally {
       setPaying(false);
     }
@@ -1858,17 +1868,23 @@ function CheckoutForm({
     } catch (err) {
       // Pago retenido pero reserva no creada → cancelar hold y regenerar PI.
       await cancelOrphanPaymentIntent(confirmedId);
-      const detail =
-        typeof err?.message === "string" &&
-        err.message &&
-        !/payment_intent|client_secret|stripe\.com/i.test(err.message)
-          ? err.message
-          : null;
-      const msg = detail
-        ? `No se pudo guardar la reserva (${detail}). Hemos liberado la retención: puedes reintentar el pago; tus datos se mantienen.`
-        : "El pago se retuvo pero no se pudo guardar la reserva. Hemos liberado la retención: reintenta el pago; tus datos se mantienen.";
-      setError(msg);
-      setErrorMessage(msg);
+      if (err?.code === "PAGOS_CERRADOS") {
+        const msg = messageForPaymentApiError(err, t);
+        setError(msg);
+        setErrorMessage(msg);
+      } else {
+        const detail =
+          typeof err?.message === "string" &&
+          err.message &&
+          !/payment_intent|client_secret|stripe\.com/i.test(err.message)
+            ? err.message
+            : null;
+        const msg = detail
+          ? `No se pudo guardar la reserva (${detail}). Hemos liberado la retención: puedes reintentar el pago; tus datos se mantienen.`
+          : "El pago se retuvo pero no se pudo guardar la reserva. Hemos liberado la retención: reintenta el pago; tus datos se mantienen.";
+        setError(msg);
+        setErrorMessage(msg);
+      }
       onNeedNewPaymentIntent?.();
     } finally {
       setPaying(false);
@@ -2008,7 +2024,7 @@ function BundleSavedCardCheckout({
         throw confirmErr;
       }
     } catch (err) {
-      setError(friendlyStripePaymentError(err));
+      setError(messageForPaymentApiError(err, t));
     } finally {
       setPaying(false);
     }
@@ -2227,7 +2243,7 @@ function BundleNewCardCheckoutForm({
         throw confirmErr;
       }
     } catch (err) {
-      const msg = friendlyStripePaymentError(err);
+      const msg = messageForPaymentApiError(err, t);
       setErrorMessage(msg);
       setError(msg);
     } finally {
@@ -3825,8 +3841,11 @@ export default function ReservarPage() {
           setClientSecret(null);
           setPaymentIntentId(null);
           setErrorMessage(
-            friendlyStripePaymentError(
-              data.error || "No se pudo preparar el pago.",
+            messageForPaymentApiError(
+              data.code
+                ? data
+                : data.error || "No se pudo preparar el pago.",
+              t,
             ),
           );
           return;
@@ -3868,6 +3887,7 @@ export default function ReservarPage() {
     disponibilidadChecking,
     selectedServices.length,
     paymentRetryKey,
+    t,
   ]);
 
   // Si el usuario abandona el checkout, cancela el PI preparado (sin reserva).
@@ -3949,7 +3969,14 @@ export default function ReservarPage() {
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok || data.error) {
-        throw new Error(data.error || (t?.reservar?.errCompletarReserva ?? "No se pudo completar la reserva."));
+        throw Object.assign(
+          new Error(
+            data.error ||
+              (t?.reservar?.errCompletarReserva ??
+                "No se pudo completar la reserva."),
+          ),
+          data,
+        );
       }
 
       paymentFinalizedRef.current = true;
@@ -4048,7 +4075,14 @@ export default function ReservarPage() {
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok || data.error) {
-        throw new Error(data.error || (t?.reservar?.errCompletarReserva ?? "No se pudo completar la reserva."));
+        throw Object.assign(
+          new Error(
+            data.error ||
+              (t?.reservar?.errCompletarReserva ??
+                "No se pudo completar la reserva."),
+          ),
+          data,
+        );
       }
 
       paymentFinalizedRef.current = true;
