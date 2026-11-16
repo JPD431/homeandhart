@@ -434,6 +434,15 @@ function validateAntelacion(svc, fechaInicio, hora, mainVertical, t) {
   return null;
 }
 
+/** Detecta el mensaje de antelación mínima (UI); no cambia la validación. */
+function isAntelacionDetail(detail) {
+  if (typeof detail !== "string" || !detail.trim()) return false;
+  return (
+    /requiere reservar con al menos .+ de antelaci[oó]n/i.test(detail) ||
+    /requires booking at least .+ in advance/i.test(detail)
+  );
+}
+
 function formatAntelacionInfo(antelacionMinima, t) {
   const h =
     antelacionMinima != null && antelacionMinima !== ""
@@ -1286,11 +1295,7 @@ async function ensureStripeCustomer({
     throw new Error(customerData.error || "No se pudo preparar el cliente de pago.");
   }
 
-  await supabase
-    .from("profiles")
-    .update({ stripe_customer_id: customerData.customer_id })
-    .eq("id", userId);
-
+  // stripe_customer_id lo guarda /api/stripe/customer (service role).
   onCustomerId?.(customerData.customer_id);
   return customerData.customer_id;
 }
@@ -1335,11 +1340,7 @@ async function attachPaymentMethodToCustomer({
       throw new Error(attachData.error);
     }
   }
-
-  await supabase
-    .from("profiles")
-    .update({ stripe_customer_id: customerId })
-    .eq("id", userId);
+  // stripe_customer_id lo guarda /api/stripe/customer (service role).
 }
 
 const inputClass =
@@ -1859,11 +1860,7 @@ function CheckoutForm({
             customer_id: customerId,
           }),
         });
-
-        await supabase
-          .from("profiles")
-          .update({ stripe_customer_id: customerId })
-          .eq("id", userId);
+        // stripe_customer_id lo guarda /api/stripe/customer (service role).
       }
     } catch (err) {
       // Pago retenido pero reserva no creada → cancelar hold y regenerar PI.
@@ -2581,12 +2578,7 @@ export default function ReservarPage() {
           setSelectedPaymentMethod(customerData.paymentMethods?.[0] ?? null);
           setUseNewCard(!(customerData.paymentMethods?.length > 0));
 
-          if (customerData.customer_id !== perfilClienteData?.stripe_customer_id) {
-            await supabase
-              .from("profiles")
-              .update({ stripe_customer_id: customerData.customer_id })
-              .eq("id", user.id);
-          }
+          // stripe_customer_id lo guarda /api/stripe/customer (service role).
         }
       } catch {
         setSavedPaymentMethods([]);
@@ -4335,7 +4327,22 @@ export default function ReservarPage() {
     serviceStartAt,
     service.cancellation_policy,
   );
-  const freeCancelDateStr = formatCancelDeadline(freeCancelDeadline, t);
+  const freeCancelDateStr =
+    freeCancelDeadline && freeCancelDeadline.getTime() > Date.now()
+      ? formatCancelDeadline(freeCancelDeadline, t)
+      : null;
+
+  function lineStatusLabel(line) {
+    if (line?.ready) return "OK";
+    if (line?.detail) return line.detail;
+    return t?.reservar?.faltanDatos ?? "Faltan datos";
+  }
+
+  const antelacionBlockedDetail =
+    incompletePriceLine && isAntelacionDetail(incompletePriceLine.detail)
+      ? incompletePriceLine.detail
+      : null;
+
   function goToBuscarBundle() {
     writeBundleStateToSession(
       buildBundleStateSnapshot({
@@ -4409,23 +4416,40 @@ export default function ReservarPage() {
           <div className="flex flex-col gap-5">
             {/* Sección 1 — Tu reserva */}
             <section
-              className="rounded-[10px] border bg-white p-5"
+              className="overflow-hidden rounded-[10px] border bg-white p-5"
               style={{ borderColor: "#e8e4de" }}
             >
+              {antelacionBlockedDetail ? (
+                <div
+                  role="alert"
+                  className="-mx-5 -mt-5 mb-4 w-[calc(100%+2.5rem)] border-b px-4 py-3.5 text-base font-bold leading-snug sm:px-5"
+                  style={{
+                    backgroundColor: "#fef2f2",
+                    borderColor: "#fca5a5",
+                    color: "#991b1b",
+                  }}
+                >
+                  <span aria-hidden className="mr-1.5">
+                    ⚠️
+                  </span>
+                  {antelacionBlockedDetail}
+                </div>
+              ) : null}
               <SectionHeader number={1} title={t?.reservar?.tuReserva ?? "Tu reserva"} />
               {(() => {
                 const mainLine = priceSummary.lines.find((l) => l.id === service.id);
                 const mainOk = mainLine?.ready;
+                if (antelacionBlockedDetail && !mainOk) return null;
                 return (
                   <div className="mb-3 flex items-center gap-2">
                     <span
-                      className="rounded px-2 py-0.5 text-[10px] font-semibold"
+                      className="max-w-full whitespace-normal rounded px-2 py-0.5 text-[10px] font-semibold leading-snug"
                       style={{
                         backgroundColor: mainOk ? "#e6f4f0" : "#fdf3e3",
                         color: mainOk ? "#0e7a5c" : "#92400e",
                       }}
                     >
-                      {mainOk ? "OK" : (t?.reservar?.faltanDatos ?? "Faltan datos")}
+                      {lineStatusLabel(mainLine)}
                     </span>
                   </div>
                 );
@@ -4971,7 +4995,7 @@ export default function ReservarPage() {
                                 </div>
                               </div>
                               <span
-                                className="shrink-0 rounded px-2 py-0.5 text-[10px] font-semibold"
+                                className="max-w-[12rem] shrink whitespace-normal rounded px-2 py-0.5 text-[10px] font-semibold leading-snug"
                                 style={{
                                   backgroundColor: lineReady
                                     ? "#d8f0e8"
@@ -4979,7 +5003,7 @@ export default function ReservarPage() {
                                   color: lineReady ? "#0e7a5c" : "#92400e",
                                 }}
                               >
-                                {lineReady ? "OK" : (t?.reservar?.faltanDatos ?? "Faltan datos")}
+                                {lineStatusLabel(line)}
                               </span>
                               <span
                                 style={{
@@ -5306,7 +5330,7 @@ export default function ReservarPage() {
                         {mainPriceLine ? formatEuro(mainPriceLine.total) : "—"}
                       </span>
                     </div>
-                  ) : (
+                  ) : antelacionBlockedDetail ? null : (
                     <div className="mt-4 flex items-center justify-between gap-2 text-[11px]">
                       <span className="truncate text-[#444]">
                         {mainPriceLine?.name || (t?.reservar?.servicioPrincipal ?? "Servicio principal")}
@@ -5319,7 +5343,7 @@ export default function ReservarPage() {
                       >
                         {mainPriceLine?.ready
                           ? formatEuro(mainPriceLine.total)
-                          : (t?.reservar?.faltanDatos ?? "Faltan datos")}
+                          : lineStatusLabel(mainPriceLine)}
                       </span>
                     </div>
                   )}
@@ -5359,7 +5383,9 @@ export default function ReservarPage() {
                               color: line.ready ? "#1a1a1a" : "#92400e",
                             }}
                           >
-                            {line.ready ? formatEuro(line.total) : (t?.reservar?.faltanDatos ?? "Faltan datos")}
+                            {line.ready
+                              ? formatEuro(line.total)
+                              : lineStatusLabel(line)}
                           </span>
                           <button
                             type="button"
@@ -5458,10 +5484,32 @@ export default function ReservarPage() {
                         </p>
                       )}
                     </div>
+                  ) : antelacionBlockedDetail ? (
+                    <p
+                      className="mt-3 text-sm font-bold leading-snug"
+                      style={{ color: "#991b1b" }}
+                      role="status"
+                    >
+                      <span aria-hidden className="mr-1">
+                        ⚠️
+                      </span>
+                      {antelacionBlockedDetail}
+                    </p>
                   ) : (
                     <p className="mt-3 text-[11px] text-[#6b6b6b]">{precioDetail}</p>
                   )}
                 </>
+              ) : antelacionBlockedDetail ? (
+                <p
+                  className="mt-4 text-sm font-bold leading-snug"
+                  style={{ color: "#991b1b" }}
+                  role="status"
+                >
+                  <span aria-hidden className="mr-1">
+                    ⚠️
+                  </span>
+                  {antelacionBlockedDetail}
+                </p>
               ) : (
                 <p className="mt-4 text-[11px] text-[#6b6b6b]">{precioDetail}</p>
               )}

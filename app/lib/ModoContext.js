@@ -20,10 +20,6 @@ import { supabase } from "@/app/lib/supabase";
 
 const ModoContext = createContext(null);
 
-function readStoredModo() {
-  return readStoredModoClient() ?? "cliente";
-}
-
 function writeStoredModo(modo) {
   writeStoredModoClient(modo);
 }
@@ -79,6 +75,15 @@ export function ModoProvider({ children }) {
     setProfileReady(true);
   }, []);
 
+  const refreshPerfil = useCallback(async () => {
+    const {
+      data: { user: authUser },
+    } = await supabase.auth.getUser();
+    setUser(authUser);
+    setProfileReady(false);
+    await loadProfile(authUser);
+  }, [loadProfile]);
+
   useEffect(() => {
     async function init() {
       const {
@@ -129,29 +134,36 @@ export function ModoProvider({ children }) {
     };
   }, [user?.id]);
 
-  /** Restaurar modo persistido una sola vez tras hidratación + perfil */
+  /** Restaurar modo persistido tras hidratación + perfil */
   const restoredRef = useRef(false);
+  const prevPuedeAlternarRef = useRef(false);
 
   useEffect(() => {
     setHydrated(true);
   }, []);
 
   useEffect(() => {
-    if (!hydrated || !profileReady || !user) return;
+    if (!hydrated || !profileReady || !user || !perfil) return;
+
+    // Proveedor recién completó el alta: permitir alternar y abrir en Proveedor
+    // salvo que el usuario hubiera elegido Cliente a mano.
+    if (puedeAlternarModo && !prevPuedeAlternarRef.current) {
+      restoredRef.current = false;
+    }
+    prevPuedeAlternarRef.current = puedeAlternarModo;
 
     if (restoredRef.current) return;
-
-    if (!perfil) return;
-
     restoredRef.current = true;
 
     if (!puedeAlternarModo) {
+      // Alta a medias: UI en cliente, pero no pisar la preferencia guardada.
       setModoState("cliente");
       return;
     }
 
-    const stored = readStoredModo();
-    const nextModo = stored === "proveedor" ? "proveedor" : "cliente";
+    // Rol proveedor: por defecto modo Proveedor; solo Cliente si lo eligió a mano.
+    const stored = readStoredModoClient();
+    const nextModo = stored === "cliente" ? "cliente" : "proveedor";
     setModoState(nextModo);
     writeStoredModo(nextModo);
   }, [hydrated, profileReady, puedeAlternarModo, user, perfil]);
@@ -162,8 +174,8 @@ export function ModoProvider({ children }) {
 
     function onPageShow(event) {
       if (!event.persisted) return;
-      const stored = readStoredModo();
-      setModoState(stored === "proveedor" ? "proveedor" : "cliente");
+      const stored = readStoredModoClient();
+      setModoState(stored === "cliente" ? "cliente" : "proveedor");
     }
 
     window.addEventListener("pageshow", onPageShow);
@@ -173,6 +185,7 @@ export function ModoProvider({ children }) {
   useEffect(() => {
     if (!user) {
       restoredRef.current = false;
+      prevPuedeAlternarRef.current = false;
       setModoState("cliente");
     }
   }, [user]);
@@ -214,6 +227,7 @@ export function ModoProvider({ children }) {
       onboardingIncompleto,
       enAdmin,
       isAdmin,
+      refreshPerfil,
     }),
     [
       modo,
@@ -230,6 +244,7 @@ export function ModoProvider({ children }) {
       onboardingIncompleto,
       enAdmin,
       isAdmin,
+      refreshPerfil,
     ],
   );
 

@@ -135,6 +135,10 @@ import {
   resolveRevisionEstadoOnSave,
 } from "@/app/lib/service-revision";
 import { REVISION_EN_REVISION } from "@/app/lib/onboarding-persist";
+import {
+  openStripeDashboard,
+  startStripeConnectOnboarding,
+} from "@/app/lib/stripe-connect-client";
 
 /** Params antiguos de pestañas por vertical → redirigen a ?tab=servicios */
 const LEGACY_VERTICAL_TAB_PARAMS = ["alojamiento", "ninos", "mascotas"];
@@ -1188,6 +1192,8 @@ function EditarPerfilContent() {
   const [providerDocuments, setProviderDocuments] = useState([]);
   const [documentosReminderVertical, setDocumentosReminderVertical] = useState(null);
   const [exportingData, setExportingData] = useState(false);
+  const [cobrosConnectLoading, setCobrosConnectLoading] = useState(false);
+  const [cobrosConnectError, setCobrosConnectError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -1601,15 +1607,74 @@ function EditarPerfilContent() {
             ) : (
               <>
                 {COBROS_REQUERIDOS_MSG}{" "}
-                <Link
-                  href="/dashboard?tab=proveedor"
+                <button
+                  type="button"
+                  disabled={cobrosConnectLoading}
+                  onClick={async () => {
+                    setCobrosConnectError("");
+                    setCobrosConnectLoading(true);
+                    const result = await startStripeConnectOnboarding();
+                    if (!result.ok) {
+                      setCobrosConnectError(result.error);
+                      setCobrosConnectLoading(false);
+                      return;
+                    }
+                    window.location.href = result.url;
+                  }}
                   className="font-semibold underline"
-                  style={{ color: PRIMARY }}
+                  style={{
+                    color: PRIMARY,
+                    background: "transparent",
+                    border: "none",
+                    padding: 0,
+                    cursor: cobrosConnectLoading ? "not-allowed" : "pointer",
+                  }}
                 >
-                  {t.editarPerfil.irConfigCobros}
-                </Link>
+                  {cobrosConnectLoading
+                    ? t.dashboard?.conectando || "Conectando…"
+                    : t.editarPerfil.irConfigCobros}
+                </button>
+                {cobrosConnectError ? (
+                  <span className="mt-1 block text-[#b91c1c]">
+                    {cobrosConnectError}
+                  </span>
+                ) : null}
               </>
             )}
+          </div>
+        )}
+        {perfil?.role === "proveedor" && perfil?.cobros_activos === true && (
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={cobrosConnectLoading}
+              onClick={async () => {
+                setCobrosConnectError("");
+                setCobrosConnectLoading(true);
+                const result = await openStripeDashboard();
+                if (!result.ok) {
+                  setCobrosConnectError(result.error);
+                  setCobrosConnectLoading(false);
+                  return;
+                }
+                window.location.href = result.url;
+              }}
+              className="rounded-lg border px-3 py-2 text-xs font-semibold"
+              style={{
+                borderColor: BRAND.border,
+                color: PRIMARY,
+                background: "#fff",
+                cursor: cobrosConnectLoading ? "not-allowed" : "pointer",
+                opacity: cobrosConnectLoading ? 0.7 : 1,
+              }}
+            >
+              {cobrosConnectLoading
+                ? t.dashboard?.conectando || "Conectando…"
+                : t.dashboard?.gestionarCobros || "Gestionar cobros"}
+            </button>
+            {cobrosConnectError ? (
+              <span className="text-xs text-[#b91c1c]">{cobrosConnectError}</span>
+            ) : null}
           </div>
         )}
         <ul className="flex flex-col gap-3">
@@ -2316,7 +2381,22 @@ function EditarPerfilContent() {
       setEditingId(null);
       setDirty(false);
 
-      const revisionFeedback = buildServicesSaveFeedback(revisionOutcomes);
+      const docsPendientesValidacion =
+        perfil?.dni_estado === "pendiente" ||
+        servicesAfterSave.some(
+          (s) =>
+            (s.vertical === "ninos" &&
+              perfil?.ninos_documentacion_aprobada !== true) ||
+            (s.vertical === "mascotas" &&
+              perfil?.mascotas_documentacion_aprobada !== true) ||
+            (s.vertical === "alojamiento" &&
+              s.nru_estado &&
+              s.nru_estado !== "verificado" &&
+              (s.nru || s.details?.nru)),
+        );
+      const revisionFeedback = buildServicesSaveFeedback(revisionOutcomes, {
+        docsPendientesValidacion,
+      });
 
       if (reminderVertical) {
         const postSaveContext = {

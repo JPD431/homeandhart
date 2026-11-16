@@ -16,7 +16,7 @@ import {
 } from "@/app/lib/service-card-display";
 
 export const COBROS_REQUERIDOS_MSG =
-  "Configura tus cobros antes de activar un servicio. Ve a tu panel de proveedor y pulsa «Configurar cobros».";
+  "Configura tus cobros antes de activar un servicio. Pulsa «Ir a configurar cobros» para abrir el alta de Stripe.";
 
 export const REVISION_PENDIENTE_MSG =
   "Tus servicios están en revisión. Te avisaremos por email cuando los aprobemos.";

@@ -380,7 +380,13 @@ export default function ProviderFirstStepsChecklist({
       )}
 
       <SectionTitle color="#5c4a32">Lo que debes hacer tú</SectionTitle>
-      <StepList steps={proveedorSteps} BRAND={BRAND} showCta />
+      <StepList
+        steps={proveedorSteps}
+        BRAND={BRAND}
+        showCta
+        onConfigureCobros={onConfigureCobros}
+        configureCobrosLoading={configureCobrosLoading}
+      />
 
       <SectionTitle color="#5c4a32">En revisión por el equipo</SectionTitle>
       <p style={{ margin: "0 0 4px", fontSize: 11, color: "#8a7355", lineHeight: 1.4 }}>
@@ -425,7 +431,13 @@ function SectionTitle({ children, color }) {
   );
 }
 
-function StepList({ steps, BRAND, showCta }) {
+function StepList({
+  steps,
+  BRAND,
+  showCta,
+  onConfigureCobros,
+  configureCobrosLoading,
+}) {
   if (steps.length === 0) return null;
   return (
     <ol style={{ margin: "8px 0 0", padding: 0, listStyle: "none" }}>
@@ -487,19 +499,41 @@ function StepList({ steps, BRAND, showCta }) {
                 {step.hint}
               </p>
             )}
-            {showCta && !step.done && step.href && step.cta && (
-              <Link
-                href={step.href}
-                style={{
-                  display: "inline-block",
-                  marginTop: 4,
-                  fontSize: 11,
-                  fontWeight: 600,
-                  color: BRAND.blue,
-                }}
-              >
-                {step.cta} →
-              </Link>
+            {showCta && !step.done && step.cta && (
+              step.id === "cobros" && typeof onConfigureCobros === "function" ? (
+                <button
+                  type="button"
+                  onClick={onConfigureCobros}
+                  disabled={configureCobrosLoading}
+                  style={{
+                    display: "inline-block",
+                    marginTop: 4,
+                    padding: 0,
+                    border: "none",
+                    background: "transparent",
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: BRAND.blue,
+                    cursor: configureCobrosLoading ? "not-allowed" : "pointer",
+                    opacity: configureCobrosLoading ? 0.7 : 1,
+                  }}
+                >
+                  {configureCobrosLoading ? "Conectando…" : `${step.cta} →`}
+                </button>
+              ) : step.href ? (
+                <Link
+                  href={step.href}
+                  style={{
+                    display: "inline-block",
+                    marginTop: 4,
+                    fontSize: 11,
+                    fontWeight: 600,
+                    color: BRAND.blue,
+                  }}
+                >
+                  {step.cta} →
+                </Link>
+              ) : null
             )}
           </div>
         </li>

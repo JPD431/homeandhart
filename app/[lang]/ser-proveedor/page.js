@@ -95,6 +95,8 @@ import {
 } from "@/app/lib/provider-verticals";
 import { useLang } from "@/app/lib/LangContext";
 import { useTranslation } from "@/app/lib/i18n";
+import { useModo } from "@/app/lib/ModoContext";
+import { startStripeConnectOnboarding } from "@/app/lib/stripe-connect-client";
 
 const DARK_BLUE = "#163a6b";
 
@@ -367,8 +369,11 @@ export default function SerProveedorPage() {
   const router = useRouter();
   const { lang } = useLang();
   const t = useTranslation(lang);
+  const { refreshPerfil, setModo } = useModo();
   const profilePhotoRef = useRef(null);
   const documentInputRef = useRef(null);
+  const [cobrosConnectLoading, setCobrosConnectLoading] = useState(false);
+  const [cobrosConnectError, setCobrosConnectError] = useState("");
 
   const [currentStepKey, setCurrentStepKey] = useState(STEP_KEY.PERFIL);
   const [verticalesSeleccionados, setVerticalesSeleccionados] = useState([]);
@@ -984,6 +989,13 @@ export default function SerProveedorPage() {
       setDraftServiceIds(finalDraftIds);
 
       await finalizeOnboarding(uid, verticalesSeleccionados, finalDraftIds);
+      // Refresca ModoContext sin recargar: quita "alta a medias" y permite alternar.
+      try {
+        await refreshPerfil();
+        setModo("proveedor", { redirect: false });
+      } catch (refreshErr) {
+        console.warn("[ser-proveedor] refreshPerfil tras alta:", refreshErr);
+      }
 
       const notifyIds = Object.values(finalDraftIds).filter(Boolean);
       if (notifyIds.length > 0) {
@@ -1947,24 +1959,104 @@ export default function SerProveedorPage() {
                     >
                       {t.serProveedor.equipoCompleta}
                     </p>
-                  ) : (
-                    <a
-                      href={step.href}
+                  ) : step.id === "cobros" ? (
+                    <button
+                      type="button"
+                      disabled={cobrosConnectLoading}
+                      onClick={async () => {
+                        setCobrosConnectError("");
+                        setCobrosConnectLoading(true);
+                        const result = await startStripeConnectOnboarding();
+                        if (!result.ok) {
+                          setCobrosConnectError(result.error);
+                          setCobrosConnectLoading(false);
+                          return;
+                        }
+                        window.location.href = result.url;
+                      }}
                       style={{
                         display: "inline-block",
                         marginTop: 4,
+                        padding: 0,
+                        border: "none",
+                        background: "transparent",
                         fontSize: 12,
                         fontWeight: 600,
                         color: PRIMARY,
+                        cursor: cobrosConnectLoading
+                          ? "not-allowed"
+                          : "pointer",
+                      }}
+                    >
+                      {cobrosConnectLoading
+                        ? "Conectando…"
+                        : t.serProveedor.irCompletar}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => router.push(step.href)}
+                      style={{
+                        display: "inline-block",
+                        marginTop: 4,
+                        padding: 0,
+                        border: "none",
+                        background: "transparent",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: PRIMARY,
+                        cursor: "pointer",
                       }}
                     >
                       {t.serProveedor.irCompletar}
-                    </a>
+                    </button>
                   )}
                 </div>
               </li>
             ))}
           </ul>
+          {cobrosConnectError ? (
+            <p
+              style={{
+                maxWidth: 420,
+                margin: "0 auto 12px",
+                padding: "10px 12px",
+                borderRadius: 6,
+                background: "#fee2e2",
+                color: "#b91c1c",
+                fontSize: 12,
+                lineHeight: 1.45,
+                textAlign: "left",
+              }}
+            >
+              {cobrosConnectError}
+            </p>
+          ) : null}
+          {pending.some((s) => s.actor === "proveedor") ? (
+            <p
+              style={{
+                maxWidth: 420,
+                margin: "0 auto 16px",
+                fontSize: 13,
+                color: "#5c4a32",
+                lineHeight: 1.5,
+                textAlign: "left",
+                background: "#fdf8f0",
+                border: "1px solid #e8e4de",
+                borderRadius: 8,
+                padding: "12px 14px",
+              }}
+            >
+              Aún te falta:{" "}
+              <strong>
+                {pending
+                  .filter((s) => s.actor === "proveedor")
+                  .map((s) => s.label)
+                  .join("; ")}
+              </strong>
+              . Completa estos pasos para poder recibir reservas.
+            </p>
+          ) : null}
           <div
             style={{
               background: "#e6f4f0",
@@ -1991,7 +2083,29 @@ export default function SerProveedorPage() {
           >
             <button
               type="button"
-              onClick={() => router.push("/dashboard?tab=proveedor")}
+              onClick={async () => {
+                const firstProveedor = pending.find(
+                  (s) => s.actor === "proveedor",
+                );
+                if (!firstProveedor) {
+                  router.push("/dashboard?tab=proveedor");
+                  return;
+                }
+                if (firstProveedor.id === "cobros") {
+                  setCobrosConnectError("");
+                  setCobrosConnectLoading(true);
+                  const result = await startStripeConnectOnboarding();
+                  if (!result.ok) {
+                    setCobrosConnectError(result.error);
+                    setCobrosConnectLoading(false);
+                    return;
+                  }
+                  window.location.href = result.url;
+                  return;
+                }
+                router.push(firstProveedor.href || "/dashboard?tab=proveedor");
+              }}
+              disabled={cobrosConnectLoading}
               style={{
                 background: "#1d4f91",
                 color: "#fff",
@@ -1999,9 +2113,10 @@ export default function SerProveedorPage() {
                 padding: "12px 28px",
                 borderRadius: 6,
                 fontSize: 13,
-                cursor: "pointer",
+                cursor: cobrosConnectLoading ? "not-allowed" : "pointer",
                 fontWeight: 600,
                 minWidth: 220,
+                opacity: cobrosConnectLoading ? 0.7 : 1,
               }}
             >
               {t.serProveedor.completarFalta}
