@@ -135,7 +135,10 @@ import {
   resolveRevisionEstadoOnSave,
 } from "@/app/lib/service-revision";
 import { REVISION_EN_REVISION } from "@/app/lib/onboarding-persist";
-import { startStripeConnectOnboarding } from "@/app/lib/stripe-connect-client";
+import {
+  openStripeDashboard,
+  startStripeConnectOnboarding,
+} from "@/app/lib/stripe-connect-client";
 
 /** Params antiguos de pestañas por vertical → redirigen a ?tab=servicios */
 const LEGACY_VERTICAL_TAB_PARAMS = ["alojamiento", "ninos", "mascotas"];
@@ -1638,6 +1641,40 @@ function EditarPerfilContent() {
                 ) : null}
               </>
             )}
+          </div>
+        )}
+        {perfil?.role === "proveedor" && perfil?.cobros_activos === true && (
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={cobrosConnectLoading}
+              onClick={async () => {
+                setCobrosConnectError("");
+                setCobrosConnectLoading(true);
+                const result = await openStripeDashboard();
+                if (!result.ok) {
+                  setCobrosConnectError(result.error);
+                  setCobrosConnectLoading(false);
+                  return;
+                }
+                window.location.href = result.url;
+              }}
+              className="rounded-lg border px-3 py-2 text-xs font-semibold"
+              style={{
+                borderColor: BRAND.border,
+                color: PRIMARY,
+                background: "#fff",
+                cursor: cobrosConnectLoading ? "not-allowed" : "pointer",
+                opacity: cobrosConnectLoading ? 0.7 : 1,
+              }}
+            >
+              {cobrosConnectLoading
+                ? t.dashboard?.conectando || "Conectando…"
+                : t.dashboard?.gestionarCobros || "Gestionar cobros"}
+            </button>
+            {cobrosConnectError ? (
+              <span className="text-xs text-[#b91c1c]">{cobrosConnectError}</span>
+            ) : null}
           </div>
         )}
         <ul className="flex flex-col gap-3">

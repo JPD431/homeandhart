@@ -2799,7 +2799,7 @@ export async function dispatchPlatformEmail(payload = {}) {
               Tu pago de <strong>${importe}</strong> por <strong>«${titulo}»</strong> ya está liberado.
               Lo enviaremos a tu cuenta bancaria a través de Stripe, nuestro servicio de pagos.
               Tu primer cobro puede tardar entre 7 y 14 días; los siguientes, unos 3 días hábiles.
-              Puedes ver el saldo y las fechas en Gestionar cobros, dentro de tu panel.
+              Puedes ver tus cobros en Ver estadísticas, dentro de tu panel.
               No tienes que hacer nada.
             </p>
             <p style="margin:0;text-align:center;">

@@ -77,7 +77,7 @@ const BOOKING_STATUS_CATALOG = {
     descriptionCliente:
       "Servicio finalizado. Puedes descargar la factura, dejar una reseña o reportar un problema si algo falló.",
     descriptionProveedor:
-      "Servicio completado. Tu pago ya está liberado. Lo enviaremos a tu cuenta bancaria: el primer cobro puede tardar entre 7 y 14 días; los siguientes, unos 3 días hábiles. Para ver el saldo y las fechas, entra en Gestionar cobros en tu panel de proveedor.",
+      "Servicio completado. Tu pago ya está liberado. Lo enviaremos a tu cuenta bancaria: el primer cobro puede tardar entre 7 y 14 días; los siguientes, unos 3 días hábiles. Puedes ver tus cobros en Ver estadísticas, dentro de tu panel de proveedor.",
     actionsCliente: [
       "ver_detalle",
       "factura",

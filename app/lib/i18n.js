@@ -1278,7 +1278,7 @@ export const translations = {
       sinComisionProveedor: "🎁 Reserva sin comisión de proveedor",
       pagoLiberado: "Pago liberado el",
       completadaPagoProveedor: (importe) =>
-        `Servicio completado. Tu pago de ${importe} ya está liberado. Lo enviaremos a tu cuenta bancaria: el primer cobro puede tardar entre 7 y 14 días; los siguientes, unos 3 días hábiles. Para ver el saldo y las fechas, entra en Gestionar cobros en tu panel de proveedor.`,
+        `Servicio completado. Tu pago de ${importe} ya está liberado. Lo enviaremos a tu cuenta bancaria: el primer cobro puede tardar entre 7 y 14 días; los siguientes, unos 3 días hábiles. Puedes ver tus cobros en Ver estadísticas, dentro de tu panel de proveedor.`,
       reservaAgrupada: "Reserva agrupada",
       agrupadaDesc: "Esta reserva forma parte de un grupo con otros servicios pagados juntos.",
       esteServicio: "Este servicio",
@@ -2913,7 +2913,7 @@ export const translations = {
       sinComisionProveedor: "🎁 No-commission booking",
       pagoLiberado: "Payment released on",
       completadaPagoProveedor: (importe) =>
-        `Service completed. Your payment of ${importe} has been released. We will send it to your bank account: the first payout may take 7 to 14 days; later ones about 3 business days. To see your balance and dates, open Manage payouts in your provider panel.`,
+        `Service completed. Your payment of ${importe} has been released. We will send it to your bank account: the first payout may take 7 to 14 days; later ones about 3 business days. You can see your payouts in View stats, inside your provider panel.`,
       reservaAgrupada: "Grouped booking",
       agrupadaDesc: "This booking is part of a group with other services paid together.",
       esteServicio: "This service",

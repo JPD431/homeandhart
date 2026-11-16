@@ -27,7 +27,10 @@ import {
   getBookingStatusMeta,
 } from '@/app/lib/booking-display';
 import { supabase } from '@/app/lib/supabase';
-import { startStripeConnectOnboarding } from '@/app/lib/stripe-connect-client';
+import {
+  openStripeDashboard,
+  startStripeConnectOnboarding,
+} from '@/app/lib/stripe-connect-client';
 import { friendlyLoadError, withLoadTimeout } from '@/app/lib/with-load-timeout';
 import { useLang } from '@/app/lib/LangContext';
 import { useTranslation } from '@/app/lib/i18n';
@@ -687,6 +690,22 @@ function TabProveedor({ perfil, userEmail, router, BRAND, highlightBookingId, t 
     window.location.href = result.url;
   }
 
+  async function handleGestionarCobros() {
+    setConnectLoading(true);
+    setConnectError('');
+    const result = await openStripeDashboard({
+      errorInicio: t.dashboard.cobrosErrorInicio,
+      errorUrl: t.dashboard.cobrosErrorUrl,
+      errorConexion: t.dashboard.cobrosErrorConexion,
+    });
+    if (!result.ok) {
+      setConnectError(result.error);
+      setConnectLoading(false);
+      return;
+    }
+    window.location.href = result.url;
+  }
+
   const cobrosCard = !cobrosActivos ? (
     <div
       style={{
@@ -870,7 +889,7 @@ function TabProveedor({ perfil, userEmail, router, BRAND, highlightBookingId, t 
             </p>
             <button
               type="button"
-              onClick={handleConfigureCobros}
+              onClick={handleGestionarCobros}
               disabled={connectLoading}
               style={{
                 minHeight: 36,
