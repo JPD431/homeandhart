@@ -1,7 +1,11 @@
 /** Helpers compartidos para historial, detalle y dashboard de reserva. */
 
 import { getBookingPrecioBase, roundMoney } from "@/app/lib/ingresos-proveedor";
-import { COMMISSION_RATE } from "@/app/lib/pricing-reserva";
+import {
+  COMMISSION_RATE,
+  daysBetween as pricingDaysBetween,
+  getEstanciaUnit,
+} from "@/app/lib/pricing-reserva";
 import { puedeReportarIncidencia } from "@/app/lib/booking-incidencia";
 
 /**
@@ -73,7 +77,7 @@ const BOOKING_STATUS_CATALOG = {
     descriptionCliente:
       "Servicio finalizado. Puedes descargar la factura, dejar una reseña o reportar un problema si algo falló.",
     descriptionProveedor:
-      "Servicio completado. El pago se libera según el flujo de la plataforma.",
+      "Servicio completado. Tu pago ya está liberado. Lo enviaremos a tu cuenta bancaria: el primer cobro puede tardar entre 7 y 14 días; los siguientes, unos 3 días hábiles. Para ver el saldo y las fechas, entra en Gestionar cobros en tu panel de proveedor.",
     actionsCliente: [
       "ver_detalle",
       "factura",
@@ -378,25 +382,22 @@ export function formatBookingDateShort(dateStr) {
   return `${d} ${BOOKING_MONTH_NAMES[m - 1]?.slice(0, 3) ?? ""}`;
 }
 
-function daysBetween(start, end) {
-  if (!start || !end) return null;
-  const a = new Date(`${start}T12:00:00`);
-  const b = new Date(`${end}T12:00:00`);
-  const diff = Math.round((b - a) / (1000 * 60 * 60 * 24));
-  return diff >= 0 ? diff + 1 : null;
-}
-
 export function getBookingDurationLabel(booking, vertical) {
   if (vertical === "ninos" && booking.duracion_horas) {
     return `${booking.duracion_horas}h`;
   }
   if (vertical === "alojamiento" || vertical === "mascotas") {
-    const days = daysBetween(
+    const count = pricingDaysBetween(
       booking.fecha_inicio,
       booking.fecha_fin || booking.fecha_inicio,
     );
-    if (days) {
-      return `${days} ${days === 1 ? "noche" : vertical === "mascotas" ? "días" : "noches"}`;
+    if (count > 0) {
+      const unit = getEstanciaUnit(
+        vertical,
+        count,
+        booking.modalidad_cobro ?? null,
+      );
+      return `${count} ${unit}`;
     }
   }
   return null;

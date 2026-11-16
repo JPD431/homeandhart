@@ -202,11 +202,14 @@ export function getServiceAvailabilityDisplay(revisionEstado, disponible) {
 /**
  * Mensaje post-guardado según outcomes de uno o varios servicios.
  * @param {Array<{ revision_estado: string|null, complete: boolean, missing: string[], keptPublished?: boolean }>} outcomes
+ * @param {{ docsPendientesValidacion?: boolean }} [options]
  */
-export function buildServicesSaveFeedback(outcomes) {
+export function buildServicesSaveFeedback(outcomes, options = {}) {
   const list = Array.isArray(outcomes) ? outcomes.filter(Boolean) : [];
   if (list.length === 0) {
-    return "Cambios guardados correctamente ✓";
+    return options.docsPendientesValidacion
+      ? "Documentos guardados correctamente. Pendientes de validación por nuestro equipo."
+      : "Cambios guardados correctamente ✓";
   }
 
   const drafts = list.filter(
@@ -247,6 +250,9 @@ export function buildServicesSaveFeedback(outcomes) {
     drafts.length === 0 &&
     publishedIncomplete.length === 0
   ) {
+    if (options.docsPendientesValidacion) {
+      return "Documentos guardados correctamente. Pendientes de validación por nuestro equipo.";
+    }
     return "Cambios guardados. Tu servicio sigue publicado.";
   }
 
@@ -255,6 +261,9 @@ export function buildServicesSaveFeedback(outcomes) {
     inReview.length === 0 &&
     drafts.length === 0
   ) {
+    if (options.docsPendientesValidacion) {
+      return "Documentos guardados correctamente. Pendientes de validación por nuestro equipo.";
+    }
     const missing = [
       ...new Set(publishedIncomplete.flatMap((o) => o.missing || [])),
     ];

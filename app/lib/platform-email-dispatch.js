@@ -2793,13 +2793,14 @@ export async function dispatchPlatformEmail(payload = {}) {
           bodyHtml: `
             <h1 style="margin:0 0 16px;font-size:20px;color:${BRAND_PRIMARY};">Has recibido un pago</h1>
             <p style="margin:0 0 12px;font-size:14px;line-height:1.6;color:#444;">
-              Hola <strong>${nombre}</strong>, tu pago de <strong>${importe}</strong> por
-              <strong>«${titulo}»</strong> está en camino a tu cuenta.
+              Hola <strong>${nombre}</strong>,
             </p>
             <p style="margin:0 0 12px;font-size:14px;line-height:1.6;color:#444;">
-              El importe ya está liberado en Home&Heart y se transfiere a tu cuenta de Stripe Connect.
-              Desde ahí, Stripe lo enviará a tu cuenta bancaria según su calendario de payouts
-              (no es un ingreso inmediato en tu banco).
+              Tu pago de <strong>${importe}</strong> por <strong>«${titulo}»</strong> ya está liberado.
+              Lo enviaremos a tu cuenta bancaria a través de Stripe, nuestro servicio de pagos.
+              Tu primer cobro puede tardar entre 7 y 14 días; los siguientes, unos 3 días hábiles.
+              Puedes ver el saldo y las fechas en Gestionar cobros, dentro de tu panel.
+              No tienes que hacer nada.
             </p>
             <p style="margin:0;text-align:center;">
               <a href="${dashboardUrl}" style="display:inline-block;background-color:${BRAND_PRIMARY};color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:8px;font-size:15px;font-weight:600;">

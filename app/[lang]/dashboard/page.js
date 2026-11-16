@@ -3,7 +3,6 @@ import { useState, useEffect, Suspense, useCallback } from 'react';
 import Link from "@/app/components/LocaleLink";
 import { useRouter, useSearchParams } from 'next/navigation';
 import Navbar from '@/app/components/Navbar';
-import OnboardingPendienteBanner from '@/app/components/OnboardingPendienteBanner';
 import FamiliaInviteBanner from '@/app/components/FamiliaInviteBanner';
 import AyudaLink from '@/app/components/AyudaLink';
 import ReportarIncidenciaForm from '@/app/components/ReportarIncidenciaForm';
@@ -28,6 +27,7 @@ import {
   getBookingStatusMeta,
 } from '@/app/lib/booking-display';
 import { supabase } from '@/app/lib/supabase';
+import { startStripeConnectOnboarding } from '@/app/lib/stripe-connect-client';
 import { friendlyLoadError, withLoadTimeout } from '@/app/lib/with-load-timeout';
 import { useLang } from '@/app/lib/LangContext';
 import { useTranslation } from '@/app/lib/i18n';
@@ -55,7 +55,7 @@ function DashboardContent() {
   const stripeParam = searchParams.get('stripe');
   const tabParam = searchParams.get('tab');
   const bookingHighlight = searchParams.get('booking');
-  const { modo, setModo, puedeAlternarModo, isAdmin, onboardingIncompleto } = useModo();
+  const { modo, setModo, puedeAlternarModo, isAdmin } = useModo();
   const { lang } = useLang();
   const t = useTranslation(lang);
   const [user, setUser] = useState(null);
@@ -251,8 +251,6 @@ function DashboardContent() {
   return (
     <div style={{background: BRAND.warm, minHeight: '100vh'}}>
       <Navbar />
-
-      {onboardingIncompleto && !isAdmin && <OnboardingPendienteBanner />}
 
       <div style={{ padding: '12px 16px 0', maxWidth: 960, margin: '0 auto' }}>
         <FamiliaInviteBanner compact />
@@ -676,24 +674,88 @@ function TabProveedor({ perfil, userEmail, router, BRAND, highlightBookingId, t 
   async function handleConfigureCobros() {
     setConnectLoading(true);
     setConnectError('');
-    try {
-      const res = await fetch('/api/stripe/connect/create-account', { method: 'POST' });
-      const data = await res.json();
-      if (!res.ok || data.error) {
-        setConnectError(data.error || t.dashboard.cobrosErrorInicio);
-        return;
-      }
-      if (data.url) {
-        window.location.href = data.url;
-        return;
-      }
-      setConnectError(t.dashboard.cobrosErrorUrl);
-    } catch {
-      setConnectError(t.dashboard.cobrosErrorConexion);
-    } finally {
+    const result = await startStripeConnectOnboarding({
+      errorInicio: t.dashboard.cobrosErrorInicio,
+      errorUrl: t.dashboard.cobrosErrorUrl,
+      errorConexion: t.dashboard.cobrosErrorConexion,
+    });
+    if (!result.ok) {
+      setConnectError(result.error);
       setConnectLoading(false);
+      return;
     }
+    window.location.href = result.url;
   }
+
+  const cobrosCard = !cobrosActivos ? (
+    <div
+      style={{
+        marginBottom: 16,
+        padding: '16px',
+        borderRadius: 10,
+        border: `1px solid ${
+          perfil?.verificado === true ? BRAND.green : BRAND.blue
+        }`,
+        background: perfil?.verificado === true ? '#e6f4f0' : '#e8f0fb',
+        textAlign: 'left',
+      }}
+    >
+      <p
+        style={{
+          fontSize: 13,
+          fontWeight: 700,
+          color: perfil?.verificado === true ? '#085041' : '#2a3a4a',
+          margin: 0,
+        }}
+      >
+        {perfil?.verificado === true
+          ? t.dashboard.anuncioAprobado
+          : cobrosIncompletos
+            ? t.dashboard.cobrosPendientesCompletar
+            : t.dashboard.cobrosPendientes}
+      </p>
+      <p
+        style={{
+          fontSize: 12,
+          color: perfil?.verificado === true ? '#085041' : '#444',
+          marginTop: 8,
+          marginBottom: 12,
+          lineHeight: 1.5,
+        }}
+      >
+        {perfil?.verificado === true
+          ? cobrosIncompletos
+            ? t.dashboard.cobrosAprobadoCompletar
+            : t.dashboard.cobrosAprobadoConfigurar
+          : cobrosIncompletos
+            ? t.dashboard.cobrosIncompletosDesc
+            : t.dashboard.cobrosSinActivar}
+      </p>
+      <button
+        type="button"
+        onClick={handleConfigureCobros}
+        disabled={connectLoading}
+        style={{
+          minHeight: 44,
+          background: BRAND.blue,
+          color: '#fff',
+          border: 'none',
+          padding: '10px 20px',
+          borderRadius: 4,
+          fontSize: 13,
+          fontWeight: 700,
+          cursor: connectLoading ? 'not-allowed' : 'pointer',
+          opacity: connectLoading ? 0.7 : 1,
+        }}
+      >
+        {connectLoading
+          ? t.dashboard.conectando
+          : cobrosIncompletos
+            ? t.dashboard.completarCobros
+            : t.dashboard.configurarCobros}
+      </button>
+    </div>
+  ) : null;
 
   return (
     <div style={{ maxWidth: 720, margin: '0 auto', padding: '0 4px' }}>
@@ -703,6 +765,8 @@ function TabProveedor({ perfil, userEmail, router, BRAND, highlightBookingId, t 
           href={weakListings[0].href}
         />
       ) : null}
+      {/* Cobros arriba en móvil: visible sin scrollear el checklist */}
+      {cobrosCard}
       <ProviderFirstStepsChecklist
         perfil={perfil}
         accountEmail={userEmail}
@@ -786,75 +850,7 @@ function TabProveedor({ perfil, userEmail, router, BRAND, highlightBookingId, t 
           <div style={{ fontSize: 10, color: '#666', marginTop: 4 }}>{t.dashboard.sinComisionSubtitulo}</div>
         </div>
 
-        {!cobrosActivos ? (
-          <div
-            style={{
-              marginBottom: 16,
-              padding: '16px',
-              borderRadius: 10,
-              border: `1px solid ${
-                perfil?.verificado === true ? BRAND.green : BRAND.blue
-              }`,
-              background: perfil?.verificado === true ? '#e6f4f0' : '#e8f0fb',
-              textAlign: 'left',
-            }}
-          >
-            <p
-              style={{
-                fontSize: 13,
-                fontWeight: 700,
-                color: perfil?.verificado === true ? '#085041' : '#2a3a4a',
-                margin: 0,
-              }}
-            >
-              {perfil?.verificado === true
-                ? t.dashboard.anuncioAprobado
-                : cobrosIncompletos
-                  ? t.dashboard.cobrosPendientesCompletar
-                  : t.dashboard.cobrosPendientes}
-            </p>
-            <p
-              style={{
-                fontSize: 12,
-                color: perfil?.verificado === true ? '#085041' : '#444',
-                marginTop: 8,
-                marginBottom: 12,
-                lineHeight: 1.5,
-              }}
-            >
-              {perfil?.verificado === true
-                ? cobrosIncompletos
-                  ? t.dashboard.cobrosAprobadoCompletar
-                  : t.dashboard.cobrosAprobadoConfigurar
-                : cobrosIncompletos
-                  ? t.dashboard.cobrosIncompletosDesc
-                  : t.dashboard.cobrosSinActivar}
-            </p>
-            <button
-              type="button"
-              onClick={handleConfigureCobros}
-              disabled={connectLoading}
-              style={{
-                minHeight: 44,
-                background: BRAND.blue,
-                color: '#fff',
-                border: 'none',
-                padding: '10px 20px',
-                borderRadius: 4,
-                fontSize: 13,
-                fontWeight: 700,
-                cursor: connectLoading ? 'not-allowed' : 'pointer',
-                opacity: connectLoading ? 0.7 : 1,
-              }}
-            >
-              {connectLoading
-                ? t.dashboard.conectando
-                : cobrosIncompletos
-                  ? t.dashboard.completarCobros
-                  : t.dashboard.configurarCobros}
-            </button>
-          </div>
-        ) : (
+        {cobrosActivos ? (
           <div
             style={{
               marginBottom: 16,
@@ -892,7 +888,7 @@ function TabProveedor({ perfil, userEmail, router, BRAND, highlightBookingId, t 
               {connectLoading ? t.dashboard.conectando : t.dashboard.gestionarCobros}
             </button>
           </div>
-        )}
+        ) : null}
 
         {connectError && (
           <p

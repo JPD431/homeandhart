@@ -1286,11 +1286,7 @@ async function ensureStripeCustomer({
     throw new Error(customerData.error || "No se pudo preparar el cliente de pago.");
   }
 
-  await supabase
-    .from("profiles")
-    .update({ stripe_customer_id: customerData.customer_id })
-    .eq("id", userId);
-
+  // stripe_customer_id lo guarda /api/stripe/customer (service role).
   onCustomerId?.(customerData.customer_id);
   return customerData.customer_id;
 }
@@ -1335,11 +1331,7 @@ async function attachPaymentMethodToCustomer({
       throw new Error(attachData.error);
     }
   }
-
-  await supabase
-    .from("profiles")
-    .update({ stripe_customer_id: customerId })
-    .eq("id", userId);
+  // stripe_customer_id lo guarda /api/stripe/customer (service role).
 }
 
 const inputClass =
@@ -1859,11 +1851,7 @@ function CheckoutForm({
             customer_id: customerId,
           }),
         });
-
-        await supabase
-          .from("profiles")
-          .update({ stripe_customer_id: customerId })
-          .eq("id", userId);
+        // stripe_customer_id lo guarda /api/stripe/customer (service role).
       }
     } catch (err) {
       // Pago retenido pero reserva no creada → cancelar hold y regenerar PI.
@@ -2581,12 +2569,7 @@ export default function ReservarPage() {
           setSelectedPaymentMethod(customerData.paymentMethods?.[0] ?? null);
           setUseNewCard(!(customerData.paymentMethods?.length > 0));
 
-          if (customerData.customer_id !== perfilClienteData?.stripe_customer_id) {
-            await supabase
-              .from("profiles")
-              .update({ stripe_customer_id: customerData.customer_id })
-              .eq("id", user.id);
-          }
+          // stripe_customer_id lo guarda /api/stripe/customer (service role).
         }
       } catch {
         setSavedPaymentMethods([]);
@@ -4335,7 +4318,16 @@ export default function ReservarPage() {
     serviceStartAt,
     service.cancellation_policy,
   );
-  const freeCancelDateStr = formatCancelDeadline(freeCancelDeadline, t);
+  const freeCancelDateStr =
+    freeCancelDeadline && freeCancelDeadline.getTime() > Date.now()
+      ? formatCancelDeadline(freeCancelDeadline, t)
+      : null;
+
+  function lineStatusLabel(line) {
+    if (line?.ready) return "OK";
+    if (line?.detail) return line.detail;
+    return t?.reservar?.faltanDatos ?? "Faltan datos";
+  }
   function goToBuscarBundle() {
     writeBundleStateToSession(
       buildBundleStateSnapshot({
@@ -4419,13 +4411,13 @@ export default function ReservarPage() {
                 return (
                   <div className="mb-3 flex items-center gap-2">
                     <span
-                      className="rounded px-2 py-0.5 text-[10px] font-semibold"
+                      className="max-w-full whitespace-normal rounded px-2 py-0.5 text-[10px] font-semibold leading-snug"
                       style={{
                         backgroundColor: mainOk ? "#e6f4f0" : "#fdf3e3",
                         color: mainOk ? "#0e7a5c" : "#92400e",
                       }}
                     >
-                      {mainOk ? "OK" : (t?.reservar?.faltanDatos ?? "Faltan datos")}
+                      {lineStatusLabel(mainLine)}
                     </span>
                   </div>
                 );
@@ -4971,7 +4963,7 @@ export default function ReservarPage() {
                                 </div>
                               </div>
                               <span
-                                className="shrink-0 rounded px-2 py-0.5 text-[10px] font-semibold"
+                                className="max-w-[12rem] shrink whitespace-normal rounded px-2 py-0.5 text-[10px] font-semibold leading-snug"
                                 style={{
                                   backgroundColor: lineReady
                                     ? "#d8f0e8"
@@ -4979,7 +4971,7 @@ export default function ReservarPage() {
                                   color: lineReady ? "#0e7a5c" : "#92400e",
                                 }}
                               >
-                                {lineReady ? "OK" : (t?.reservar?.faltanDatos ?? "Faltan datos")}
+                                {lineStatusLabel(line)}
                               </span>
                               <span
                                 style={{
@@ -5319,7 +5311,7 @@ export default function ReservarPage() {
                       >
                         {mainPriceLine?.ready
                           ? formatEuro(mainPriceLine.total)
-                          : (t?.reservar?.faltanDatos ?? "Faltan datos")}
+                          : lineStatusLabel(mainPriceLine)}
                       </span>
                     </div>
                   )}
@@ -5359,7 +5351,9 @@ export default function ReservarPage() {
                               color: line.ready ? "#1a1a1a" : "#92400e",
                             }}
                           >
-                            {line.ready ? formatEuro(line.total) : (t?.reservar?.faltanDatos ?? "Faltan datos")}
+                            {line.ready
+                              ? formatEuro(line.total)
+                              : lineStatusLabel(line)}
                           </span>
                           <button
                             type="button"

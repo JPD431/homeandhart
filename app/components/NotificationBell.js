@@ -215,16 +215,16 @@ export default function NotificationBell({ compact = false }) {
 
       {open && (
         <div
-          className="absolute right-0 z-[80] mt-2 w-[min(360px,calc(100vw-2rem))] overflow-hidden rounded-xl border bg-white shadow-lg"
+          className="fixed inset-x-3 top-16 z-[80] flex max-h-[min(80vh,520px)] w-auto flex-col overflow-hidden rounded-xl border bg-white shadow-lg sm:absolute sm:inset-x-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-[360px]"
           style={{ borderColor: BORDER }}
           role="dialog"
           aria-label="Panel de notificaciones"
         >
           <div
-            className="flex items-center justify-between border-b px-4 py-3"
+            className="flex shrink-0 items-center justify-between gap-2 border-b px-4 py-3"
             style={{ borderColor: "#f0ede8" }}
           >
-            <span className="text-sm font-semibold text-[#2a3a4a]">
+            <span className="min-w-0 text-sm font-semibold text-[#2a3a4a]">
               Notificaciones
             </span>
             {unreadCount > 0 && (
@@ -232,7 +232,7 @@ export default function NotificationBell({ compact = false }) {
                 type="button"
                 onClick={handleMarkAllRead}
                 disabled={markingAll}
-                className="text-xs font-medium disabled:opacity-60"
+                className="shrink-0 text-xs font-medium disabled:opacity-60"
                 style={{
                   color: PRIMARY,
                   background: "none",
@@ -245,7 +245,7 @@ export default function NotificationBell({ compact = false }) {
             )}
           </div>
 
-          <div className="max-h-[min(420px,70vh)] overflow-y-auto">
+          <div className="min-h-0 flex-1 overflow-y-auto">
             {loading ? (
               <p className="px-4 py-8 text-center text-sm text-[#6b6b6b]">
                 Cargando…
@@ -282,9 +282,9 @@ export default function NotificationBell({ compact = false }) {
                           : `3px solid ${BRAND.green}`,
                       }}
                     >
-                      <div className="flex items-start justify-between gap-2">
+                      <div className="flex min-w-0 items-start justify-between gap-2">
                         <span
-                          className="text-sm font-semibold"
+                          className="min-w-0 break-words text-sm font-semibold"
                           style={{ color: n.leida ? "#444" : PRIMARY }}
                         >
                           {n.titulo}
@@ -294,7 +294,7 @@ export default function NotificationBell({ compact = false }) {
                         </span>
                       </div>
                       {n.mensaje && (
-                        <p className="mt-1 text-xs leading-relaxed text-[#666]">
+                        <p className="mt-1 break-words text-xs leading-relaxed text-[#666]">
                           {n.mensaje}
                         </p>
                       )}

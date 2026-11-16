@@ -99,6 +99,8 @@ export default function ReservaDetallePage() {
   const [grupoSiblings, setGrupoSiblings] = useState([]);
   const [clienteContacto, setClienteContacto] = useState(null);
   const [clienteProfile, setClienteProfile] = useState(null);
+  const [sinComisionProveedorPerfil, setSinComisionProveedorPerfil] =
+    useState(false);
   const [reviewed, setReviewed] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [completing, setCompleting] = useState(false);
@@ -207,20 +209,35 @@ export default function ReservaDetallePage() {
               if (!cancelled) setReviewed(!!review);
             }
 
-            if (role === "proveedor" && canShowProviderContact(row.estado)) {
-              const res = await fetch(
-                `/api/bookings/cliente-contacto?ids=${row.id}`,
-              );
-              const data = await res.json().catch(() => ({}));
-              if (res.ok && data.contacts?.[row.id]) {
-                if (!cancelled) setClienteContacto(data.contacts[row.id]);
-              }
-              const { data: cli } = await supabase
-                .from("profiles_public")
-                .select("nombre, apellido, dni_verificado")
-                .eq("id", row.cliente_id)
+            if (role === "proveedor") {
+              const { data: proveedorPerfil } = await supabase
+                .from("profiles")
+                .select("reservas_sin_comision_proveedor")
+                .eq("id", user.id)
                 .maybeSingle();
-              if (!cancelled) setClienteProfile(cli ?? null);
+              if (!cancelled) {
+                setSinComisionProveedorPerfil(
+                  Number(proveedorPerfil?.reservas_sin_comision_proveedor) > 0,
+                );
+              }
+
+              if (canShowProviderContact(row.estado)) {
+                const res = await fetch(
+                  `/api/bookings/cliente-contacto?ids=${row.id}`,
+                );
+                const data = await res.json().catch(() => ({}));
+                if (res.ok && data.contacts?.[row.id]) {
+                  if (!cancelled) setClienteContacto(data.contacts[row.id]);
+                }
+                const { data: cli } = await supabase
+                  .from("profiles_public")
+                  .select("nombre, apellido, dni_verificado")
+                  .eq("id", row.cliente_id)
+                  .maybeSingle();
+                if (!cancelled) setClienteProfile(cli ?? null);
+              }
+            } else if (!cancelled) {
+              setSinComisionProveedorPerfil(false);
             }
           })(),
         );
@@ -447,7 +464,28 @@ export default function ReservaDetallePage() {
   const duration = getBookingDurationLabel(booking, vertical);
   const refundBreakdown = getCancelRefundBreakdown(booking);
   const priceBreakdown = getClientPriceBreakdown(booking);
-  const ingresoProveedor = getIngresoProveedorFromBooking(booking);
+  const pendingPago = !booking.pago_liberado_at;
+  const ingresoProveedor =
+    viewerRole === "proveedor" && pendingPago
+      ? getIngresoProveedorFromBooking(booking, {
+          sinComisionProveedor:
+            sinComisionProveedorPerfil ||
+            booking.proveedor_sin_comision === true,
+        })
+      : getIngresoProveedorFromBooking(booking);
+  const showSinComisionBadge =
+    booking.proveedor_sin_comision === true ||
+    (viewerRole === "proveedor" &&
+      pendingPago &&
+      sinComisionProveedorPerfil);
+  const statusDescription =
+    estado === "completada" &&
+    viewerRole === "proveedor" &&
+    typeof t.reserva.completadaPagoProveedor === "function"
+      ? t.reserva.completadaPagoProveedor(
+          formatBookingPrice(ingresoProveedor),
+        )
+      : statusMeta.description;
   const showContact = canShowProviderContact(estado);
   const telefono = service.telefono_contacto || null;
   const showProviderDireccion =
@@ -566,7 +604,7 @@ export default function ReservaDetallePage() {
               />
             </div>
             <p className="mt-3 text-[12px] leading-relaxed text-[#666]">
-              {statusMeta.description}
+              {statusDescription}
             </p>
 
             <Section title={t.reserva.fechasServicio}>
@@ -697,7 +735,7 @@ export default function ReservaDetallePage() {
                       {formatBookingPrice(ingresoProveedor)}
                     </span>
                   </div>
-                  {booking.proveedor_sin_comision && (
+                  {showSinComisionBadge && (
                     <p className="text-[11px]" style={{ color: GREEN }}>
                       {t.reserva.sinComisionProveedor}
                     </p>
@@ -894,7 +932,7 @@ export default function ReservaDetallePage() {
                   color: estado === "incidencia" ? "#b91c1c" : "#4b5563",
                 }}
               >
-                {statusMeta.description}
+                {statusDescription}
               </section>
             )}
 
