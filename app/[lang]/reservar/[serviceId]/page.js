@@ -434,6 +434,15 @@ function validateAntelacion(svc, fechaInicio, hora, mainVertical, t) {
   return null;
 }
 
+/** Detecta el mensaje de antelación mínima (UI); no cambia la validación. */
+function isAntelacionDetail(detail) {
+  if (typeof detail !== "string" || !detail.trim()) return false;
+  return (
+    /requiere reservar con al menos .+ de antelaci[oó]n/i.test(detail) ||
+    /requires booking at least .+ in advance/i.test(detail)
+  );
+}
+
 function formatAntelacionInfo(antelacionMinima, t) {
   const h =
     antelacionMinima != null && antelacionMinima !== ""
@@ -4328,6 +4337,12 @@ export default function ReservarPage() {
     if (line?.detail) return line.detail;
     return t?.reservar?.faltanDatos ?? "Faltan datos";
   }
+
+  const antelacionBlockedDetail =
+    incompletePriceLine && isAntelacionDetail(incompletePriceLine.detail)
+      ? incompletePriceLine.detail
+      : null;
+
   function goToBuscarBundle() {
     writeBundleStateToSession(
       buildBundleStateSnapshot({
@@ -4401,13 +4416,30 @@ export default function ReservarPage() {
           <div className="flex flex-col gap-5">
             {/* Sección 1 — Tu reserva */}
             <section
-              className="rounded-[10px] border bg-white p-5"
+              className="overflow-hidden rounded-[10px] border bg-white p-5"
               style={{ borderColor: "#e8e4de" }}
             >
+              {antelacionBlockedDetail ? (
+                <div
+                  role="alert"
+                  className="-mx-5 -mt-5 mb-4 w-[calc(100%+2.5rem)] border-b px-4 py-3.5 text-base font-bold leading-snug sm:px-5"
+                  style={{
+                    backgroundColor: "#fef2f2",
+                    borderColor: "#fca5a5",
+                    color: "#991b1b",
+                  }}
+                >
+                  <span aria-hidden className="mr-1.5">
+                    ⚠️
+                  </span>
+                  {antelacionBlockedDetail}
+                </div>
+              ) : null}
               <SectionHeader number={1} title={t?.reservar?.tuReserva ?? "Tu reserva"} />
               {(() => {
                 const mainLine = priceSummary.lines.find((l) => l.id === service.id);
                 const mainOk = mainLine?.ready;
+                if (antelacionBlockedDetail && !mainOk) return null;
                 return (
                   <div className="mb-3 flex items-center gap-2">
                     <span
@@ -5298,7 +5330,7 @@ export default function ReservarPage() {
                         {mainPriceLine ? formatEuro(mainPriceLine.total) : "—"}
                       </span>
                     </div>
-                  ) : (
+                  ) : antelacionBlockedDetail ? null : (
                     <div className="mt-4 flex items-center justify-between gap-2 text-[11px]">
                       <span className="truncate text-[#444]">
                         {mainPriceLine?.name || (t?.reservar?.servicioPrincipal ?? "Servicio principal")}
@@ -5452,10 +5484,32 @@ export default function ReservarPage() {
                         </p>
                       )}
                     </div>
+                  ) : antelacionBlockedDetail ? (
+                    <p
+                      className="mt-3 text-sm font-bold leading-snug"
+                      style={{ color: "#991b1b" }}
+                      role="status"
+                    >
+                      <span aria-hidden className="mr-1">
+                        ⚠️
+                      </span>
+                      {antelacionBlockedDetail}
+                    </p>
                   ) : (
                     <p className="mt-3 text-[11px] text-[#6b6b6b]">{precioDetail}</p>
                   )}
                 </>
+              ) : antelacionBlockedDetail ? (
+                <p
+                  className="mt-4 text-sm font-bold leading-snug"
+                  style={{ color: "#991b1b" }}
+                  role="status"
+                >
+                  <span aria-hidden className="mr-1">
+                    ⚠️
+                  </span>
+                  {antelacionBlockedDetail}
+                </p>
               ) : (
                 <p className="mt-4 text-[11px] text-[#6b6b6b]">{precioDetail}</p>
               )}
