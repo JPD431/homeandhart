@@ -58,7 +58,7 @@ function MonthCalendarRange({
   });
 
   return (
-    <div className="min-w-0 flex-1" role="group" aria-label={monthLabel}>
+    <div className="min-w-[16.5rem] flex-1" role="group" aria-label={monthLabel}>
       <p className="mb-3 text-center text-sm font-semibold text-[#1a1a1a]">
         {monthLabel}
       </p>
