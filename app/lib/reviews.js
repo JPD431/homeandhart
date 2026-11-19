@@ -3,6 +3,14 @@ import { getPublicSupabase } from "@/app/lib/supabase-public";
 /** Plazo para dejar reseña tras completar el servicio (independiente del token de pago 24h). */
 export const REVIEW_WINDOW_DAYS = 14;
 
+const BOOKING_UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/** ID de reserva con formato UUID válido (v1–v8). */
+export function isValidBookingUuid(id) {
+  return typeof id === "string" && BOOKING_UUID_RE.test(id.trim());
+}
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
