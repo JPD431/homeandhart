@@ -4414,15 +4414,17 @@ export default function ReservarPage() {
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_380px]">
           {/* Columna izquierda */}
           <div className="flex flex-col gap-5">
-            {/* Sección 1 — Tu reserva */}
+            {/* Sección 1 — Tu reserva
+                Sin overflow-hidden: el CalendarioRangoFechas (absolute) debe
+                poder superponerse a las tarjetas siguientes. */}
             <section
-              className="overflow-hidden rounded-[10px] border bg-white p-5"
+              className="rounded-[10px] border bg-white"
               style={{ borderColor: "#e8e4de" }}
             >
               {antelacionBlockedDetail ? (
                 <div
                   role="alert"
-                  className="-mx-5 -mt-5 mb-4 w-[calc(100%+2.5rem)] border-b px-4 py-3.5 text-base font-bold leading-snug sm:px-5"
+                  className="rounded-t-[10px] border-b px-4 py-3.5 text-base font-bold leading-snug sm:px-5"
                   style={{
                     backgroundColor: "#fef2f2",
                     borderColor: "#fca5a5",
@@ -4435,6 +4437,7 @@ export default function ReservarPage() {
                   {antelacionBlockedDetail}
                 </div>
               ) : null}
+              <div className="p-5">
               <SectionHeader number={1} title={t?.reservar?.tuReserva ?? "Tu reserva"} />
               {(() => {
                 const mainLine = priceSummary.lines.find((l) => l.id === service.id);
@@ -4570,7 +4573,7 @@ export default function ReservarPage() {
               />
 
               {(!showModalidadSelector || modalidadCobro) && (
-              <div className="relative mt-4">
+              <div className="relative z-30 mt-4">
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <button
                     type="button"
@@ -4618,7 +4621,7 @@ export default function ReservarPage() {
 
                 {calendarOpen && (
                   <div
-                    className="absolute left-0 right-0 z-20 mt-2 rounded-lg border bg-white p-4 shadow-lg"
+                    className="absolute left-0 z-30 mt-2 w-full min-w-[18.5rem] rounded-lg border bg-white p-4 shadow-lg lg:min-w-[40rem]"
                     style={{ borderColor: "#e8e4de" }}
                   >
                     <CalendarioRangoFechas
@@ -4797,6 +4800,7 @@ export default function ReservarPage() {
                     : `Oferta activa: ${precioEfectivo}€${verticalConfig.priceSuffix}`}
                 </p>
               )}
+              </div>
             </section>
 
             {/* Sección 2 — Política de cancelación */}
