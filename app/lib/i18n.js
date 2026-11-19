@@ -1029,6 +1029,11 @@ export const translations = {
       unitAlojamiento: "casita",
       unitMascotas: "huella",
       unitNinos: "corazón",
+      noEncontrada: "No se encontró la reserva.",
+      otraCuenta:
+        "Esta reserva pertenece a otra cuenta. Cierra sesión e inicia sesión con la cuenta con la que reservaste para dejar tu reseña.",
+      sesionActual: (email) => `Has iniciado sesión como: ${email}`,
+      cerrarSesionOtraCuenta: "Cerrar sesión e iniciar con otra cuenta",
     },
     nuevaContrasena: {
       titulo: "Nueva contraseña",
@@ -2665,6 +2670,11 @@ export const translations = {
       unitAlojamiento: "house",
       unitMascotas: "paw",
       unitNinos: "heart",
+      noEncontrada: "Booking not found.",
+      otraCuenta:
+        "This booking belongs to another account. Sign out and sign in with the account you used to book to leave your review.",
+      sesionActual: (email) => `You are signed in as: ${email}`,
+      cerrarSesionOtraCuenta: "Sign out and sign in with another account",
     },
     nuevaContrasena: {
       titulo: "New password",

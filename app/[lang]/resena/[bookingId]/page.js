@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { BRAND, SERIF } from "@/app/components/brand";
 import {
   canLeaveReview,
+  isValidBookingUuid,
   reviewEligibilityMessage,
 } from "@/app/lib/reviews";
 import { buildLoginUrl } from "@/app/lib/auth-redirect";
@@ -149,6 +150,9 @@ export default function ResenaPage() {
 
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
+  const [wrongAccount, setWrongAccount] = useState(false);
+  const [sessionEmail, setSessionEmail] = useState("");
+  const [switchingAccount, setSwitchingAccount] = useState(false);
   const [proveedorNombre, setProveedorNombre] = useState("");
   const [servicioTitulo, setServicioTitulo] = useState("");
   const [vertical, setVertical] = useState("alojamiento");
@@ -175,6 +179,15 @@ export default function ResenaPage() {
 
   useEffect(() => {
     async function load() {
+      setWrongAccount(false);
+      setSessionEmail("");
+
+      if (!isValidBookingUuid(bookingId)) {
+        setErrorMessage(t.resena.noEncontrada);
+        setLoading(false);
+        return;
+      }
+
       const {
         data: { user },
         error: userError,
@@ -191,8 +204,11 @@ export default function ResenaPage() {
         .eq("id", bookingId)
         .single();
 
+      // Con sesión, si RLS no devuelve la fila suele ser otra cuenta (no “no existe”).
       if (bookingError || !booking) {
-        setErrorMessage(reviewEligibilityMessage("not_found"));
+        setWrongAccount(true);
+        setSessionEmail(user.email || "");
+        setErrorMessage(t.resena.otraCuenta);
         setLoading(false);
         return;
       }
@@ -254,6 +270,16 @@ export default function ResenaPage() {
 
     load();
   }, [router, bookingId, t]);
+
+  async function handleSwitchAccount() {
+    setSwitchingAccount(true);
+    try {
+      await supabase.auth.signOut();
+      router.replace(buildLoginUrl(`/resena/${bookingId}`));
+    } catch {
+      setSwitchingAccount(false);
+    }
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -334,13 +360,31 @@ export default function ResenaPage() {
         {errorMessage && !existingReview && !successMessage ? (
           <div className="mt-8 text-center">
             <p className="text-sm leading-relaxed text-[#666]">{errorMessage}</p>
-            <Link
-              href="/historial"
-              className="mt-6 inline-block text-sm font-semibold no-underline"
-              style={{ color: BRAND.primary }}
-            >
-              {t.resena.volverHistorial}
-            </Link>
+            {wrongAccount && sessionEmail ? (
+              <p className="mt-3 text-sm font-medium text-[#444]">
+                {t.resena.sesionActual(sessionEmail)}
+              </p>
+            ) : null}
+            <div className="mt-6 flex flex-col items-center gap-3">
+              {wrongAccount ? (
+                <button
+                  type="button"
+                  onClick={handleSwitchAccount}
+                  disabled={switchingAccount}
+                  className="min-h-[44px] w-full max-w-sm rounded-xl px-4 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                  style={{ backgroundColor: BRAND.primary }}
+                >
+                  {t.resena.cerrarSesionOtraCuenta}
+                </button>
+              ) : null}
+              <Link
+                href="/historial"
+                className="inline-block text-sm font-semibold no-underline"
+                style={{ color: BRAND.primary }}
+              >
+                {t.resena.volverHistorial}
+              </Link>
+            </div>
           </div>
         ) : existingReview ? (
           <div className="mt-8 text-center">
